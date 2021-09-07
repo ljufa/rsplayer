@@ -1,0 +1,15 @@
+[Unit]
+Description=dac dplay daemon
+Documentation=https://github.com/ljufa/dplayer
+Wants=network-online.target lircd.service logitechmediaserver.service syslog.service
+After=network-online.target lircd.service logitechmediaserver.service syslog.service
+
+[Service]
+LimitMEMLOCK=655360
+Environment=RUST_BACKTRACE=full
+ExecStart=/home/ubuntu/dplay
+WorkingDirectory=/home/ubuntu
+ExecStartPre=sleep 5
+
+[Install]
+WantedBy=multi-user.target

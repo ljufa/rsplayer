@@ -1,0 +1,50 @@
+[package]
+name = "dplay"
+version = "0.1.0"
+authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+#logging
+log = "0.4"
+env_logger = "0.8.3"
+
+#gpio, i2c
+gpio-cdev = "0.4"
+rpi_embedded = "0.1.0"
+embedded-graphics = "0.6.0"
+linux-embedded-hal = "0.3.0"
+embedded-hal = "0.2.4"
+
+# for lirc socket read
+unix_socket = "0.5.0"
+
+# spotify
+rspotify = { version = "0.10.0", features = ["blocking"]}
+openssl = { version = "0.10", features = ["vendored"] }
+
+#warp
+tokio = { version = "1.5.0", features = ["full"] }
+warp = "0.3"
+futures = { version = "0.3", default-features = false }
+tokio-stream = "0.1.1"
+
+#json serde
+serde = "1.0"
+serde_json = "1.0"
+serde_derive = "1.0"
+
+#other
+failure = "0.1.7"
+mpd = "*"
+unidecode = "0.3.0"
+alsa = "0.4.3"
+url = "2.2.0"
+num-traits = { version = "0.2.12", default-features = false }
+num-derive = { version = "0.3.2", default-features = false }
+strum = "0.20"
+strum_macros = "0.20"
+mockall = "0.8.3"
+mockall_double = "0.2.0"
+pickledb = "0.4.1"
+log4rs = "1.0.0"

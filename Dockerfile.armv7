@@ -1,0 +1,9 @@
+#Thanks to: https://capnfabs.net/posts/cross-compiling-rust-apps-linker-shenanigans-multistrap-chroot/
+FROM rustembedded/cross:armv7-unknown-linux-gnueabihf
+RUN apt-get update
+RUN dpkg --add-architecture armhf
+RUN apt-get update
+RUN apt-get install --assume-yes --no-install-recommends libssl-dev:armhf libasound-dev:armhf
+
+ENV PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
+ENV PKG_CONFIG_ALLOW_CROSS=1
