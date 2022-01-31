@@ -1,7 +1,7 @@
 RELEASE=dplay
 TARGET=aarch64-unknown-linux-gnu
 IMAGE=ljufa/rpi4-build-ak44:aarch64_2
-RPI_HOST=192.168.44.26
+RPI_HOST=192.168.5.59
 RUST_BACKTRACE=full
 OUT=release
 
@@ -26,7 +26,7 @@ test:
 
 release:
 	cargo fmt
-	cross --offline --frozen build --target $(TARGET) --release
+	cross build --target $(TARGET) --release
 
 debug:
 	cargo fmt

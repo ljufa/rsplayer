@@ -162,14 +162,18 @@ impl Player for LogitechMediaServerApi {
             time: None,
         })
     }
+
+    fn shutdown(&mut self) {
+        info!("Shutting down LMS player!");
+        self.stop();
+        self.client.shutdown(std::net::Shutdown::Both);
+        self.squeeze_player_process.kill();
+    }
 }
 
 impl Drop for LogitechMediaServerApi {
     fn drop(&mut self) {
-        info!("Stopping player!");
-        self.stop();
-        self.client.shutdown(std::net::Shutdown::Both);
-        self.squeeze_player_process.kill();
+        self.shutdown()
     }
 }
 

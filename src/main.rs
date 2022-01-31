@@ -37,14 +37,8 @@ use tokio::sync::broadcast;
 
 #[tokio::main]
 async fn main() {
-    log4rs::init_file(
-        format!("{}log4rs.yaml", DPLAY_CONFIG_DIR_PATH),
-        Default::default(),
-    )
-    .unwrap();
-    panic::set_hook(Box::new(|x| {
-        info!("IGNORE PANIC: {}", x);
-    }));
+    env_logger::init();
+    info!("Starting Dplayer!");
 
     let mut config = config::Configuration::new();
     let settings = config.get_settings();
@@ -58,6 +52,10 @@ async fn main() {
     ));
     let audio_card = Arc::new(AudioCard::new(settings.alsa_settings.device_name.clone()));
     audio_card.wait_unlock_audio_dev();
+
+    panic::set_hook(Box::new(|x| {
+        error!("IGNORE PANIC: {}", x);
+    }));
 
     let (input_commands_tx, input_commands_rx) = mpsc::sync_channel(1);
     control::ir_lirc::start(
@@ -74,7 +72,7 @@ async fn main() {
 
     let config = Arc::new(Mutex::new(config));
     let (state_changes_sender, _) = broadcast::channel(20);
-    // poll player and dac and produce event if something is changed
+    // poll player and dac and produce event if something has changed
     StatusMonitor::start(
         player_factory.clone(),
         state_changes_sender.clone(),

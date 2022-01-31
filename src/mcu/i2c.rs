@@ -21,16 +21,11 @@ impl I2CHelper {
         }
     }
 
-    pub(crate) fn write_register(
-        self: &Self,
-        reg_addr: u8,
-        value: u8,
-    ) -> Result<(), failure::Error> {
+    pub(crate) fn write_register(self: &Self, reg_addr: u8, value: u8) {
         thread::sleep(Duration::from_millis(20));
         self.i2c
             .cmd_write(reg_addr, value)
             .expect("Can not write to register");
-        Ok(())
     }
 
     pub(crate) fn change_bit(self: &Self, reg_addr: u8, bit_position: u8, bit_value: bool) {
@@ -53,7 +48,6 @@ impl I2CHelper {
             reg_val,
             new_val
         );
-        self.write_register(reg_addr, new_val)
-            .expect("Failed to write new value into register");
+        self.write_register(reg_addr, new_val);
     }
 }

@@ -129,9 +129,7 @@ pub fn start(
                 }
                 // system commands
                 TogglePlayer => {
-                    state_changes_sender
-                        .send(CommandEvent::Bussy(None))
-                        .unwrap();
+                    state_changes_sender.send(CommandEvent::Busy(None)).unwrap();
                     let mut cfg = config_store.lock().unwrap();
                     let mut ps = cfg.get_streamer_status();
                     match player_factory
@@ -142,7 +140,9 @@ pub fn start(
                         Ok(npt) => {
                             ps.source_player = npt;
                             cfg.save_streamer_state(&ps);
-                            state_changes_sender.send(PlayerChanged(npt)).unwrap();
+                            state_changes_sender
+                                .send(StreamerStatusChanged(ps))
+                                .unwrap();
                         }
                         Err(e) => {
                             state_changes_sender

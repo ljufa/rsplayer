@@ -68,7 +68,16 @@ where
     RST: OutputPin<Error = PinError>,
     CS: OutputPin<Error = PinError>,
 {
-    /// Create a new driver instance that uses SPI connection.
+    /// Create a new [`ST7920<SPI, RST, CS>`] driver instance that uses SPI connection.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use st7920::ST7920;
+    ///
+    /// let result = ST7920::new(spi, GPIO::new(pins.p01), None, false);
+    /// assert_eq!(result, );
+    /// ```
     pub fn new(spi: SPI, rst: RST, cs: Option<CS>, flip: bool) -> Self {
         let buffer = [0; BUFFER_SIZE];
 
@@ -177,24 +186,96 @@ where
         Ok(())
     }
 
-    /// Clear whole display area
+    /// Modify the raw buffer. 1 byte (u8) = 8 pixels
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// let mut st7920 = st7920::ST7920(...);
+    /// // add crazy pattern
+    /// st7920.modify_buffer(|x, y, v| {
+    ///     if x % 2 == y % 2 {
+    ///         v | 0b10101010
+    ///     } else {
+    ///         v
+    ///     }
+    /// });
+    /// st7920.flush();
+    /// ```
+    pub fn modify_buffer(&mut self, f: fn(x: u8, y: u8, v: u8) -> u8) {
+        for i in 0..BUFFER_SIZE {
+            let row = i / ROW_SIZE;
+            let column = i - (row * ROW_SIZE);
+            self.buffer[i] = f(column as u8, row as u8, self.buffer[i]);
+        }
+    }
+
+    /// clears the buffer but don't update the display
+    pub fn clear_buffer(&mut self) {
+        for i in 0..BUFFER_SIZE {
+            self.buffer[i] = 0;
+        }
+    }
+
+    /// Clear whole display area and clears the buffer
     pub fn clear(&mut self, delay: &mut dyn DelayUs<u32>) -> Result<(), Error<SPIError, PinError>> {
+        self.clear_buffer();
+        self.flush(delay)?;
+        Ok(())
+    }
+
+    /// Flush buffer to update region of the display
+    pub fn clear_buffer_region(
+        &mut self,
+        x: u8,
+        mut y: u8,
+        w: u8,
+        h: u8,
+        delay: &mut dyn DelayUs<u32>,
+    ) -> Result<(), Error<SPIError, PinError>> {
         self.enable_cs(delay)?;
 
-        for y in 0..HEIGHT as u8 / 2 {
-            self.set_address(0, y)?;
-
-            for _x in 0..ROW_SIZE {
-                self.write_data(0)?;
-                self.write_data(0)?;
-            }
+        let mut adj_x = x;
+        if self.flip {
+            y = HEIGHT as u8 - (y + h);
+            adj_x = WIDTH as u8 - (x + w);
         }
-        self.buffer = [0; BUFFER_SIZE];
+
+        let start = adj_x / 8;
+        let mut right = adj_x + w;
+        let end = (right / 8) + 1;
+
+        let start_gap = adj_x % 8;
+
+        right = end * 8;
+
+        let end_gap = 8 - (right % 8);
+
+        let mut row_start = y as usize * ROW_SIZE;
+        for _ in y..y + h {
+            for x in start..end {
+                let mut mask = 0xFF_u8;
+                if x == start {
+                    mask = 0xFF_u8 >> start_gap;
+                }
+                if x == end {
+                    mask &= 0xFF_u8 >> end_gap;
+                }
+
+                let pos = row_start + x as usize;
+                self.buffer[pos] &= !mask;
+            }
+
+            row_start += ROW_SIZE;
+        }
+
         self.disable_cs(delay)?;
         Ok(())
     }
 
     /// Draw pixel
+    ///
+    /// Supported values are 0 and (not 0)
     pub fn set_pixel(&mut self, mut x: u8, mut y: u8, val: u8) {
         if self.flip {
             y = (HEIGHT - 1) as u8 - y;
@@ -225,7 +306,7 @@ where
                 self.write_data(self.buffer[row_start + x])?;
             }
         }
-        self.buffer = [0; BUFFER_SIZE];
+
         self.disable_cs(delay)?;
         Ok(())
     }
@@ -247,19 +328,22 @@ where
             adj_x = WIDTH as u8 - (x + w);
         }
 
-        let left = (adj_x / X_ADDR_DIV) * X_ADDR_DIV;
-        let mut right = ((adj_x + w) / X_ADDR_DIV) * X_ADDR_DIV;
-        if right < adj_x + w {
-            right += X_ADDR_DIV; //make sure rightmost pixels are covered
+        let mut left = adj_x - adj_x % X_ADDR_DIV;
+        let mut right = (adj_x + w) - 1;
+        right -= right % X_ADDR_DIV;
+        right += X_ADDR_DIV;
+
+        if left > adj_x {
+            left -= X_ADDR_DIV; //make sure rightmost pixels are covered
         }
 
         let mut row_start = y as usize * ROW_SIZE;
-        for y in y..y + h {
+        self.set_address(adj_x, y)?;
+        for y in y..(y + h) {
             self.set_address(adj_x, y)?;
 
             for x in left / 8..right / 8 {
                 self.write_data(self.buffer[row_start + x as usize])?;
-                //todo send in a single SPI transaction
             }
 
             row_start += ROW_SIZE;
@@ -270,36 +354,73 @@ where
     }
 }
 
-use embedded_graphics;
+// #[cfg(feature = "graphics")]
+use embedded_graphics::{
+    self, draw_target::DrawTarget, geometry::Point, pixelcolor::BinaryColor, prelude::*,
+};
 
-use self::embedded_graphics::{drawable::Pixel, pixelcolor::BinaryColor, prelude::*, DrawTarget};
+// #[cfg(feature = "graphics")]
+impl<SPI, CS, RST, PinError, SPIError> OriginDimensions for ST7920<SPI, CS, RST>
+where
+    SPI: spi::Write<u8, Error = SPIError>,
+    RST: OutputPin<Error = PinError>,
+    CS: OutputPin<Error = PinError>,
+{
+    fn size(&self) -> Size {
+        Size {
+            width: WIDTH,
+            height: HEIGHT,
+        }
+    }
+}
 
-impl<SPI, CS, RST, PinError, SPIError> DrawTarget<BinaryColor> for ST7920<SPI, CS, RST>
+// #[cfg(feature = "graphics")]
+impl<SPI, CS, RST, PinError, SPIError> DrawTarget for ST7920<SPI, CS, RST>
 where
     SPI: spi::Write<u8, Error = SPIError>,
     RST: OutputPin<Error = PinError>,
     CS: OutputPin<Error = PinError>,
 {
     type Error = core::convert::Infallible;
+    type Color = BinaryColor;
 
-    /// Draw a `Pixel` that has a color defined as `Gray8`.
-    fn draw_pixel(&mut self, pixel: Pixel<BinaryColor>) -> Result<(), Self::Error> {
-        let Pixel(coord, color) = pixel;
-        let x = coord.x as u8;
-        let y = coord.y as u8;
-        let c = match color {
-            BinaryColor::Off => 0,
-            BinaryColor::On => 1,
-        };
-        self.set_pixel(x, y, c);
+    fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
+    where
+        I: IntoIterator<Item = Pixel<Self::Color>>,
+    {
+        for p in pixels {
+            let Pixel(coord, color) = p;
+            let x = coord.x as u8;
+            let y = coord.y as u8;
+            let c = match color {
+                BinaryColor::Off => 0,
+                BinaryColor::On => 1,
+            };
+            self.set_pixel(x, y, c);
+        }
+
         Ok(())
     }
+}
 
-    fn size(&self) -> Size {
-        if self.flip {
-            Size::new(HEIGHT, WIDTH)
-        } else {
-            Size::new(WIDTH, HEIGHT)
-        }
+// #[cfg(feature = "graphics")]
+impl<SPI, RST, CS, PinError, SPIError> ST7920<SPI, RST, CS>
+where
+    SPI: spi::Write<u8, Error = SPIError>,
+    RST: OutputPin<Error = PinError>,
+    CS: OutputPin<Error = PinError>,
+{
+    pub fn flush_region_graphics(
+        &mut self,
+        region: (Point, Size),
+        delay: &mut dyn DelayUs<u32>,
+    ) -> Result<(), Error<SPIError, PinError>> {
+        self.flush_region(
+            region.0.x as u8,
+            region.0.y as u8,
+            region.1.width as u8,
+            region.1.height as u8,
+            delay,
+        )
     }
 }

@@ -22,7 +22,7 @@ impl StatusMonitor {
             let mut last_status = None;
             loop {
                 thread::sleep(Duration::from_millis(500));
-                if (audio_card.is_device_in_use()) {
+                if audio_card.is_device_in_use() {
                     let new_status = player_factory
                         .lock()
                         .unwrap()

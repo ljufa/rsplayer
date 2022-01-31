@@ -20,6 +20,7 @@ pub trait Player {
     fn next_track(&mut self) -> Result<CommandEvent>;
     fn prev_track(&mut self) -> Result<CommandEvent>;
     fn stop(&mut self) -> Result<CommandEvent>;
+    fn shutdown(&mut self);
     fn rewind(&mut self, seconds: i8) -> Result<CommandEvent>;
     fn get_status(&mut self) -> Option<PlayerStatus>;
 }
@@ -43,7 +44,7 @@ impl PlayerFactory {
         audio_card: Arc<AudioCard>,
         current_player: &PlayerType,
     ) -> Result<PlayerType> {
-        let _ignore = self.player.stop();
+        self.player.shutdown();
         // time needed to release alsa device lock for next player
         // todo: stop other players if lock can't be released. i.e. if play started externally.
         audio_card.wait_unlock_audio_dev()?;
@@ -61,7 +62,7 @@ impl PlayerFactory {
         audio_card: Arc<AudioCard>,
         player_type: &PlayerType,
     ) -> Result<PlayerType> {
-        let _ignore = self.player.stop();
+        self.player.shutdown();
         audio_card.wait_unlock_audio_dev()?;
         self.player = PlayerFactory::create_player(&self.settings, player_type)?;
         self.player.play()?;

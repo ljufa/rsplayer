@@ -36,8 +36,13 @@ impl Dac {
                 info!("Dac available on i2c bus");
             }
             Err(_e) => {
+                error!("Dac not available on i2c bus, sending power down command.");
                 // if not available powerdown dac pin
                 press_pdn_button();
+
+                self.i2c_helper
+                    .read_register(0)
+                    .expect("Dac not available after restart");
             }
         }
         info!("Dac registry before init");
@@ -46,16 +51,15 @@ impl Dac {
             .into_iter()
             .for_each(|r| info!("{}", r));
 
-        self.reset();
-        self.i2c_helper.write_register(0, 0b1000_1111)?;
-        thread::sleep(Duration::from_millis(20));
-        self.i2c_helper.write_register(1, 0b1010_0010)?;
-
-        self.set_vol(dac_state.volume)?;
-        self.filter(dac_state.filter)?;
-        self.set_gain(dac_state.gain)?;
-        self.hi_load(dac_state.heavy_load)?;
-        self.change_sound_setting(dac_state.sound_sett)?;
+        //self.reset();
+        self.i2c_helper.write_register(0, 0b1000_1111);
+        self.i2c_helper.write_register(1, 0b1010_0010);
+        self.set_vol(dac_state.volume).expect("error");
+        self.filter(dac_state.filter).expect("error");
+        self.set_gain(dac_state.gain).expect("error");
+        self.hi_load(dac_state.heavy_load).expect("error");
+        self.change_sound_setting(dac_state.sound_sett)
+            .expect("error");
         //self.soft_mute(dac_state.muted);
         info!("Dac registry After init");
         self.get_reg_values()
@@ -108,8 +112,8 @@ impl Dac {
     }
 
     pub fn set_vol(self: &Self, value: u8) -> Result<u8, failure::Error> {
-        self.i2c_helper.write_register(3, value)?;
-        self.i2c_helper.write_register(4, value)?;
+        self.i2c_helper.write_register(3, value);
+        self.i2c_helper.write_register(4, value);
         Ok(value)
     }
 
@@ -169,14 +173,14 @@ impl Dac {
 
     pub fn set_gain(self: &Self, level: GainLevel) -> Result<GainLevel, failure::Error> {
         match level {
-            GainLevel::V25 => self.i2c_helper.write_register(7, 0b0000_0101)?,
-            GainLevel::V28 => self.i2c_helper.write_register(7, 0b0000_0001)?,
-            GainLevel::V375 => self.i2c_helper.write_register(7, 0b0000_1001)?,
+            GainLevel::V25 => self.i2c_helper.write_register(7, 0b0000_0101),
+            GainLevel::V28 => self.i2c_helper.write_register(7, 0b0000_0001),
+            GainLevel::V375 => self.i2c_helper.write_register(7, 0b0000_1001),
         }
         Ok(level)
     }
 
-    pub fn reset(self: &Self) {
+    fn reset(self: &Self) {
         self.i2c_helper.change_bit(0, 0, false);
         thread::sleep(Duration::from_millis(20));
         self.i2c_helper.change_bit(0, 0, true);
@@ -194,15 +198,15 @@ impl Dac {
         let reg_val = self.i2c_helper.read_register(2)?;
         if dsd {
             self.soft_mute(true);
-            self.i2c_helper.write_register(2, reg_val | 0b1000_0000)?;
-            self.i2c_helper.write_register(0, 0b0000_0000)?;
-            self.i2c_helper.write_register(0, 0b0000_0001)?;
-            self.i2c_helper.write_register(0, 0b1000_1111)?;
-            self.i2c_helper.write_register(6, 0b1001_1001)?;
-            self.i2c_helper.write_register(9, 0b0000_0001)?;
+            self.i2c_helper.write_register(2, reg_val | 0b1000_0000);
+            self.i2c_helper.write_register(0, 0b0000_0000);
+            self.i2c_helper.write_register(0, 0b0000_0001);
+            self.i2c_helper.write_register(0, 0b1000_1111);
+            self.i2c_helper.write_register(6, 0b1001_1001);
+            self.i2c_helper.write_register(9, 0b0000_0001);
             self.soft_mute(false);
         } else {
-            self.i2c_helper.write_register(2, reg_val & 0b0111_1111)?;
+            self.i2c_helper.write_register(2, reg_val & 0b0111_1111);
         }
         self.reset();
         Ok(DsdChanged(dsd))

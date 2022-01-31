@@ -96,7 +96,6 @@ impl Player for MpdPlayerApi {
         let song = result.unwrap_or_else(|_| return None);
         if song.is_none() {
             warn!("Mpd Song is None");
-
             return None;
         }
         let song = song.unwrap();
@@ -145,6 +144,13 @@ impl Player for MpdPlayerApi {
             // .map_or(None, |f| Some((f.0.to_string(), f.1.to_string()))),
         })
     }
+
+    fn shutdown(&mut self) {
+        info!("Shutting down MPD player!");
+        self.stop();
+        self.mpd_client.close();
+        self.mpd_server_process.kill();
+    }
 }
 fn convert_state(mpd_state: mpd::status::State) -> PlayerState {
     match mpd_state {
@@ -155,10 +161,7 @@ fn convert_state(mpd_state: mpd::status::State) -> PlayerState {
 }
 impl Drop for MpdPlayerApi {
     fn drop(&mut self) {
-        info!("Stopping player!");
-        self.stop();
-        self.mpd_client.close();
-        self.mpd_server_process.kill();
+        self.shutdown()
     }
 }
 

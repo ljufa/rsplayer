@@ -78,9 +78,7 @@ impl SpotifyPlayerApi {
 }
 impl Drop for SpotifyPlayerApi {
     fn drop(&mut self) {
-        info!("Stopping player!");
-        self.stop();
-        self.librespot_process.kill();
+        self.shutdown()
     }
 }
 impl Player for SpotifyPlayerApi {
@@ -208,6 +206,12 @@ impl Player for SpotifyPlayerApi {
             Ok(ps) => Some(ps),
             Err(_) => None,
         }
+    }
+
+    fn shutdown(&mut self) {
+        info!("Shutting down Spotify player!");
+        self.stop();
+        self.librespot_process.kill();
     }
 }
 

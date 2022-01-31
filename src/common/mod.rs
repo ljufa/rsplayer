@@ -1,4 +1,6 @@
 use core::result;
+use std::fmt::format;
+
 use failure::Error;
 use num_derive::{FromPrimitive, ToPrimitive};
 use strum_macros::EnumIter;
@@ -41,12 +43,35 @@ pub struct PlayerStatus {
     pub time: Option<(String, String)>,
 }
 
+impl PlayerStatus {
+    pub fn song_info_string(&self) -> Option<String> {
+        let mut result = "".to_string();
+        if let Some(artist) = self.artist.as_ref() {
+            result.push_str(artist.as_str());
+            result.push_str("-");
+        }
+        if let Some(album) = self.album.as_ref() {
+            result.push_str(album.as_str());
+            result.push_str("-");
+        }
+        if let Some(title) = self.title.as_ref() {
+            result.push_str(title.as_str());
+        }
+        if result.len() > 0 {
+            Some(result)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum PlayerState {
     PLAYING,
     PAUSED,
     STOPPED,
 }
+
 #[derive(
     Debug, Eq, PartialEq, Clone, Hash, Copy, FromPrimitive, ToPrimitive, Serialize, Deserialize,
 )]
@@ -103,7 +128,7 @@ pub enum CommandEvent {
     #[strum(props(config_key = "audio_out"))]
     AudioOutputChanged(AudioOut),
     ShuttingDown,
-    Bussy(Option<String>),
+    Busy(Option<String>),
 }
 
 #[derive(
