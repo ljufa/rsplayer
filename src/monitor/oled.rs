@@ -42,24 +42,6 @@ pub fn start(mut state_changes_receiver: Receiver<CommandEvent>) {
         disp.init(&mut delay).expect("could not init display");
         disp.clear(&mut delay).expect("could not clear display");
 
-        // let _text_large = TextStyleBuilder::new(Font24x32)
-        //     .text_color(BinaryColor::On)
-        //     .build();
-        // let text_medium = TextStyleBuilder::new(Font12x16)
-        //     .text_color(BinaryColor::On)
-        //     .build();
-        // let text_small = TextStyleBuilder::new(Font8x16)
-        //     .text_color(BinaryColor::On)
-        //     .build();
-        // let text_pico_6x12 = TextStyleBuilder::new(Font6x12)
-        //     .text_color(BinaryColor::On)
-        //     .build();
-        // let text_pico_6x8 = TextStyleBuilder::new(Font6x8)
-        //     .text_color(BinaryColor::On)
-        //     .build();
-        // let text_pico_6x6 = TextStyleBuilder::new(Font6x6)
-        //     .text_color(BinaryColor::On)
-        //     .build();
         loop {
             let cmd_ev = state_changes_receiver.try_recv();
             if cmd_ev.is_err() {
@@ -69,63 +51,6 @@ pub fn start(mut state_changes_receiver: Receiver<CommandEvent>) {
             let cmd_ev = cmd_ev.unwrap();
             trace!("Command event received: {:?}", cmd_ev);
             match cmd_ev {
-                // CommandEvent::Error(e) => {
-                //     // disp.clear(&mut delay).expect("Error");
-                //     Text::new(&format!("ERROR:\n{:?}", e).as_str(), Point::new(0, 0))
-                //         .into_styled(text_small)
-                //         .into_iter()
-                //         .draw(&mut disp)
-                //         .unwrap();
-                //     disp.flush(&mut delay).unwrap();
-                // }
-                // CommandEvent::PlayerChanged(player) => {
-                //     // disp.clear(&mut delay).expect("Error");
-                //     Text::new(format!("PLAY->{:?}", player).as_str(), Point::new(0, 20))
-                //         .into_styled(text_medium)
-                //         .into_iter()
-                //         .draw(&mut disp)
-                //         .unwrap();
-                //     disp.flush(&mut delay).unwrap();
-                // }
-                // CommandEvent::AudioOutputChanged(out) => {
-                //     // disp.clear(&mut delay).expect("Error");
-                //     Text::new(format!("OUT->{:?}", out).as_str(), Point::new(0, 20))
-                //         .into_styled(text_medium)
-                //         .into_iter()
-                //         .draw(&mut disp)
-                //         .unwrap();
-                //     disp.flush(&mut delay).unwrap();
-                // }
-                // CommandEvent::FilterChanged(ft) => {
-                //     //disp.clear(&mut delay).expect("Error");
-                //     Text::new(&format!("Filter\n->{:?}", ft).as_str(), Point::new(0, 20))
-                //         .into_styled(text_small)
-                //         .into_iter()
-                //         .draw(&mut disp)
-                //         .unwrap();
-                //     disp.flush(&mut delay).unwrap();
-                // }
-                // CommandEvent::SoundChanged(no) => {
-                //     //disp.clear(&mut delay).expect("Error");
-                //     Text::new(format!("Snd profile->{:?}", no).as_str(), Point::new(0, 20))
-                //         .into_styled(text_small)
-                //         .into_iter()
-                //         .draw(&mut disp)
-                //         .unwrap();
-                //     disp.flush(&mut delay).unwrap();
-                // }
-                // CommandEvent::Busy(msg) => {
-                //     //disp.clear(&mut delay).expect("Error");
-                //     Text::new(
-                //         format!("Busy {:?}", msg.unwrap_or_else(|| String::from(""))).as_str(),
-                //         Point::new(0, 20),
-                //     )
-                //     .into_styled(text_small)
-                //     .into_iter()
-                //     .draw(&mut disp)
-                //     .unwrap();
-                //     disp.flush(&mut delay).unwrap();
-                // }
                 CommandEvent::PlayerStatusChanged(stat) => {
                     draw_player_status(&mut disp, &mut delay, stat);
                 }
@@ -158,35 +83,6 @@ fn draw_streamer_status(
     .expect("Failed to draw text");
     disp.flush_region(1, 1, 100, 12, delay)
         .expect("Failed to flush!");
-    // //3. selected audio output
-    // Text::new(
-    //     format!("->{:?}", stat.selected_audio_out).as_str(),
-    //     Point::new(18, 0),
-    // )
-    // .into_styled(text_pico_6x6)
-    // .into_iter()
-    // .draw(disp)
-    // .unwrap();
-
-    // let dac_status = stat.dac_status.unwrap();
-    // //2. volume level
-    // Text::new(
-    //     format!("@{:?}", &dac_status.volume_level).as_str(),
-    //     Point::new(50, 0),
-    // )
-    // .into_styled(text_pico_6x6)
-    // .into_iter()
-    // .draw(disp)
-    // .unwrap();
-
-    // Text::new(
-    //     &format!("F:{:?}", &dac_status.filter).as_str()[0..6],
-    //     Point::new(70, 0),
-    // )
-    // .into_styled(text_pico_6x6)
-    // .into_iter()
-    // .draw(disp)
-    // .unwrap();
 }
 
 fn draw_player_status(

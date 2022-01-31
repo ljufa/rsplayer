@@ -18,6 +18,9 @@ build_librespot:
 check:
 	STRUM_DEBUG=1 cross check --target $(TARGET) --package dplay:0.1.0 --bin dplay
 
+fix:
+	STRUM_DEBUG=1 cargo fix --target $(TARGET) --allow-dirty --bin dplay --exclude alsa-sys --workspace
+
 clippy:
 	cross clippy --target $(TARGET) --package dplay:0.1.0 --bin dplay
 
