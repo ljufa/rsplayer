@@ -4,3 +4,4 @@
 .history
 .vscode
 rpi_setup/etc/fstab
+rpi_setup/.dplay/configurations.db
