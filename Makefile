@@ -13,7 +13,7 @@ build_librespot:
 	cp dplayer/Cross.toml librespot/
 	cd librespot
 	cross build --target $(TARGET) --release --no-default-features --features alsa-backend
-	rsync --rsync-path="sudo rsync" target/$(TARGET)/$(OUT)/librespot ubuntu@$(RPI_HOST):/home/ubuntu
+	cp -f target/$(TARGET)/$(OUT)/librespot ../dplayer/rpi_setup/.dplay/librespot
 	
 run_docker_ext:
 	docker run --name dash-build --volume ${PWD}:/usr/src/app --detach --rm ljufa/linux-aarch64-gnu-rust:latest

@@ -186,7 +186,7 @@ impl Dac {
         self.i2c_helper.change_bit(0, 0, true);
     }
 
-    pub fn dsd_pcm(self: &Self, dsd: bool) -> Result<CommandEvent, failure::Error> {
+    pub fn dsd_pcm(self: &Self, dsd: bool) {
         // ChangeBit(ak4490, 0x01, 0, true);         // Enable soft mute
         // ChangeBit(ak4490, 0x02, 7, true);         // Set To DSD Mode
         // WriteRegister(ak4490,0x00,B00000000);     // Reset
@@ -195,7 +195,10 @@ impl Dac {
         // WriteRegister(ak4490,0x06,B10001001);     // Set To DSD Data Mute / DSD Mute Control / DSD Mute Release
         // WriteRegister(ak4490,0x09,B00000001);     // Set To DSD Sampling Speed Control
         // ChangeBit(ak4490, 0x01, 0, false);        // Disable soft mute
-        let reg_val = self.i2c_helper.read_register(2)?;
+        let reg_val = self
+            .i2c_helper
+            .read_register(2)
+            .expect("Can not read register 2");
         if dsd {
             self.soft_mute(true);
             self.i2c_helper.write_register(2, reg_val | 0b1000_0000);
@@ -209,7 +212,6 @@ impl Dac {
             self.i2c_helper.write_register(2, reg_val & 0b0111_1111);
         }
         self.reset();
-        Ok(DsdChanged(dsd))
     }
 
     pub fn soft_mute(self: &Self, flag: bool) {

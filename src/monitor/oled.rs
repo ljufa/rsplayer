@@ -71,8 +71,8 @@ fn draw_streamer_status(
     //1. player name
     Text::new(
         format!(
-            "P:{:?} O:{:?} ",
-            status.source_player, status.selected_audio_output
+            "P:{:?} O:{:?} V:{:?}",
+            status.source_player, status.selected_audio_output, status.dac_status.volume
         )
         .as_str(),
         Point::new(1, 10),

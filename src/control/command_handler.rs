@@ -46,7 +46,7 @@ pub fn start(
                                 .unwrap()
                                 .patch_dac_status(Some(nv), None, None);
                         state_changes_sender
-                            .send(CommandEvent::DacStatusChanged(new_dac_status))
+                            .send(CommandEvent::StreamerStatusChanged(new_dac_status))
                             .expect("Send event failed.");
                     }
                 }
@@ -58,7 +58,7 @@ pub fn start(
                                 .unwrap()
                                 .patch_dac_status(Some(nv), None, None);
                         state_changes_sender
-                            .send(CommandEvent::DacStatusChanged(new_dac_status))
+                            .send(CommandEvent::StreamerStatusChanged(new_dac_status))
                             .expect("Send event failed.");
                     }
                 }
@@ -70,7 +70,7 @@ pub fn start(
                                 .unwrap()
                                 .patch_dac_status(Some(nv), None, None);
                         state_changes_sender
-                            .send(CommandEvent::DacStatusChanged(new_dac_status))
+                            .send(CommandEvent::StreamerStatusChanged(new_dac_status))
                             .expect("Send event failed.");
                     }
                 }
@@ -129,19 +129,17 @@ pub fn start(
                 }
                 // system commands
                 TogglePlayer => {
-                    state_changes_sender.send(CommandEvent::Busy(None)).unwrap();
                     let mut cfg = config_store.lock().unwrap();
-                    let mut ps = cfg.get_streamer_status();
+                    let cpt = cfg.get_streamer_status().source_player;
                     match player_factory
                         .lock()
                         .unwrap()
-                        .toggle_player(audio_card.clone(), &ps.source_player)
+                        .toggle_player(audio_card.clone(), &cpt)
                     {
                         Ok(npt) => {
-                            ps.source_player = npt;
-                            cfg.save_streamer_state(&ps);
+                            let new_state = cfg.patch_streamer_status(Some(npt), None);
                             state_changes_sender
-                                .send(StreamerStatusChanged(ps))
+                                .send(StreamerStatusChanged(new_state))
                                 .unwrap();
                         }
                         Err(_e) => {
@@ -160,7 +158,7 @@ pub fn start(
                         .switch_to_player(audio_card.clone(), &pt)
                     {
                         Ok(npt) => {
-                            let new_sstate = cfg.patch_streamer_state(Some(npt), None);
+                            let new_sstate = cfg.patch_streamer_status(Some(npt), None);
                             state_changes_sender
                                 .send(CommandEvent::StreamerStatusChanged(new_sstate))
                                 .unwrap();
@@ -184,7 +182,7 @@ pub fn start(
                     let new_sstate = config_store
                         .lock()
                         .unwrap()
-                        .patch_streamer_state(None, Some(nout));
+                        .patch_streamer_status(None, Some(nout));
                     state_changes_sender
                         .send(StreamerStatusChanged(new_sstate))
                         .unwrap();

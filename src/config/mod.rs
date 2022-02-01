@@ -3,17 +3,17 @@ use std::collections::HashMap;
 use crate::common::{AudioOut, FilterType, GainLevel, PlayerType, DPLAY_CONFIG_DIR_PATH};
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
 
-const PLAYER_STATE_KEY: &str = "player_state";
-const DAC_STATE_KEY: &str = "dac_state";
+const STREAMER_STATUS_KEY: &str = "streamer_status";
 const SETTINGS_KEY: &str = "settings";
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Serialize, Deserialize)]
 pub struct StreamerStatus {
     pub source_player: PlayerType,
     pub selected_audio_output: AudioOut,
+    pub dac_status: DacStatus,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DacStatus {
     pub volume: u8,
     pub filter: FilterType,
@@ -22,7 +22,18 @@ pub struct DacStatus {
     pub heavy_load: bool,
     pub muted: bool,
 }
-
+impl Default for DacStatus {
+    fn default() -> Self {
+        Self {
+            volume: 180,
+            filter: FilterType::SharpRollOff,
+            gain: GainLevel::V375,
+            muted: false,
+            sound_sett: 5,
+            heavy_load: true,
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Settings {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -153,67 +164,23 @@ impl Configuration {
         }
     }
 
-    pub fn get_dac_status(&mut self) -> DacStatus {
-        if let Some(ds) = self.db.get(DAC_STATE_KEY) {
-            ds
-        } else {
-            let default = DacStatus {
-                volume: 180,
-                filter: FilterType::SharpRollOff,
-                gain: GainLevel::V375,
-                muted: false,
-                sound_sett: 5,
-                heavy_load: true,
-            };
-            self.db
-                .set(DAC_STATE_KEY, &default)
-                .expect("Could not store default dac state");
-            default
-        }
-    }
-    pub fn patch_dac_status(
-        &mut self,
-        volume: Option<u8>,
-        filter: Option<FilterType>,
-        sound_sett: Option<u8>,
-    ) -> DacStatus {
-        let mut ds = self.get_dac_status();
-        if let Some(v) = volume {
-            ds.volume = v;
-        }
-        if let Some(f) = filter {
-            ds.filter = f;
-        }
-        if let Some(ss) = sound_sett {
-            ds.sound_sett = ss;
-        }
-        self.db
-            .set(DAC_STATE_KEY, &ds)
-            .expect("Could not patch dac state");
-        ds.clone()
-    }
-
     pub fn get_streamer_status(&mut self) -> StreamerStatus {
-        if let Some(ps) = self.db.get(PLAYER_STATE_KEY) {
+        if let Some(ps) = self.db.get(STREAMER_STATUS_KEY) {
             ps
         } else {
             let default = StreamerStatus {
                 source_player: PlayerType::MPD,
                 selected_audio_output: AudioOut::SPKR,
+                dac_status: DacStatus::default(),
             };
             self.db
-                .set(PLAYER_STATE_KEY, &default)
+                .set(STREAMER_STATUS_KEY, &default)
                 .expect("Could not store default player state");
             default
         }
     }
-    pub fn save_streamer_state(&mut self, player_state: &StreamerStatus) {
-        self.db
-            .set(PLAYER_STATE_KEY, player_state)
-            .expect("Can't store new player state");
-    }
 
-    pub fn patch_streamer_state(
+    pub fn patch_streamer_status(
         &mut self,
         current_player: Option<PlayerType>,
         selected_output: Option<AudioOut>,
@@ -225,7 +192,7 @@ impl Configuration {
         if let Some(o) = selected_output {
             sstate.selected_audio_output = o;
         }
-        self.save_streamer_state(&sstate);
+        self.save_streamer_status(&sstate);
         sstate.clone()
     }
 
@@ -249,9 +216,39 @@ impl Configuration {
             .insert(String::from("AK4490"), String::from("AK4490"));
         result
     }
+
     pub fn save_settings(&mut self, settings: &Settings) {
         self.db
             .set(SETTINGS_KEY, settings)
             .expect("Failed to store settings");
+    }
+
+    fn save_streamer_status(&mut self, streamer_status: &StreamerStatus) {
+        self.db
+            .set(STREAMER_STATUS_KEY, streamer_status)
+            .expect("Can't store new player state");
+    }
+
+    pub fn patch_dac_status(
+        &mut self,
+        volume: Option<u8>,
+        filter: Option<FilterType>,
+        sound_sett: Option<u8>,
+    ) -> StreamerStatus {
+        let mut ss = self.get_streamer_status();
+        let mut ds = ss.dac_status.clone();
+        if let Some(v) = volume {
+            ds.volume = v;
+        }
+        if let Some(f) = filter {
+            ds.filter = f;
+        }
+        if let Some(ss) = sound_sett {
+            ds.sound_sett = ss;
+        }
+        ss.dac_status = ds;
+        self.save_streamer_status(&mut ss);
+        debug!("New patched streamer status {:?}", ss);
+        ss.clone()
     }
 }

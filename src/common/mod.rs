@@ -103,31 +103,14 @@ pub enum Command {
 #[derive(Debug, Clone, Eq, PartialEq, EnumProperty, Serialize, Deserialize)]
 #[strum(serialize_all = "title_case")]
 pub enum CommandEvent {
-    DplayStarted(String),
-    #[strum(props(config_key = "volume"))]
-    VolumeChanged(u8),
     Playing,
     Paused,
     Stopped,
     SwitchedToNextTrack,
     SwitchedToPrevTrack,
-    #[strum(props(config_key = "player_type"))]
-    PlayerChanged(PlayerType),
-    #[strum(props(config_key = "filter"))]
-    FilterChanged(FilterType),
-    #[strum(props(config_key = "sound_setting"))]
-    SoundChanged(u8),
-    GainChanged(GainLevel),
-    HiLoadChanged(bool),
-    DsdChanged(bool),
     PlayerStatusChanged(PlayerStatus),
-    DacStatusChanged(DacStatus),
     StreamerStatusChanged(StreamerStatus),
     Error(String),
-    #[strum(props(config_key = "audio_out"))]
-    AudioOutputChanged(AudioOut),
-    ShuttingDown,
-    Busy(Option<String>),
 }
 
 #[derive(
@@ -141,7 +124,7 @@ pub enum FilterType {
     SuperSlow,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GainLevel {
     V25,
     V28,

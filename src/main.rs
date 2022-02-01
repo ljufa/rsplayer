@@ -44,7 +44,7 @@ async fn main() {
     let settings = config.get_settings();
 
     let dac = Arc::new(Dac::new(
-        config.get_dac_status(),
+        config.get_streamer_status().dac_status,
         &settings
             .dac_settings
             .as_ref()
@@ -99,11 +99,7 @@ async fn main() {
 
     // send play command to start playing on last used player
     input_commands_tx.send(Command::Play).expect("Error");
-    state_changes_sender
-        .send(CommandEvent::DacStatusChanged(
-            config.lock().unwrap().get_dac_status(),
-        ))
-        .expect("Event send failed");
+
     state_changes_sender
         .send(CommandEvent::StreamerStatusChanged(
             config.lock().unwrap().get_streamer_status(),

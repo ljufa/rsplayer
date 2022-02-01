@@ -87,9 +87,6 @@ pub async fn start(
                 CommandEvent::StreamerStatusChanged(sstat) => {
                     notify_users(&users_notify, &sstat).await;
                 }
-                CommandEvent::DacStatusChanged(dacs) => {
-                    notify_users(&users_notify, &dacs).await;
-                }
                 _ => {}
             }
         }
