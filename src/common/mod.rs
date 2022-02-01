@@ -1,5 +1,4 @@
 use core::result;
-use std::fmt::format;
 
 use failure::Error;
 use num_derive::{FromPrimitive, ToPrimitive};

@@ -13,7 +13,7 @@ mod mcu;
 mod monitor;
 mod player;
 
-use common::{CommandEvent, PlayerType};
+use common::CommandEvent;
 use mockall_double::double;
 use monitor::status::StatusMonitor;
 use std::{
@@ -27,12 +27,12 @@ use crate::audio_device::ak4497::Dac;
 #[double]
 use crate::audio_device::alsa::AudioCard;
 use crate::common::Command;
-use crate::common::DPLAY_CONFIG_DIR_PATH;
+
 use crate::player::PlayerFactory;
 extern crate env_logger;
 #[macro_use]
 extern crate log;
-use log4rs;
+
 use tokio::sync::broadcast;
 
 #[tokio::main]

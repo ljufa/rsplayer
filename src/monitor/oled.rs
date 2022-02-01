@@ -4,11 +4,10 @@ use embedded_graphics::{
     mono_font::{ascii::FONT_5X8, ascii::FONT_6X12, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
-    primitives::{Circle, PrimitiveStyle},
     text::Text,
 };
 use embedded_hal::blocking::delay::DelayUs;
-use embedded_hal::prelude::{_embedded_hal_blocking_delay_DelayUs, _embedded_hal_serial_Write};
+
 use linux_embedded_hal::spidev::SpiModeFlags;
 use linux_embedded_hal::spidev::SpidevOptions;
 use linux_embedded_hal::sysfs_gpio::Direction;
@@ -72,7 +71,7 @@ fn draw_streamer_status(
     //1. player name
     Text::new(
         format!(
-            "P:{:?} OUT:{:?} ",
+            "P:{:?} O:{:?} ",
             status.source_player, status.selected_audio_output
         )
         .as_str(),

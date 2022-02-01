@@ -1,6 +1,6 @@
 use crate::player::PlayerFactory;
 use crate::{audio_device::alsa::AudioCard, common::CommandEvent};
-use std::{ops::Deref, time::Duration};
+use std::time::Duration;
 use std::{
     sync::{Arc, Mutex},
     thread,

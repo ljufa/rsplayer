@@ -1,0 +1,26 @@
+# Use the latest rust image for compiling the source
+FROM rust:buster
+
+# Dockerfile for a build server for cross compiling the API Source code to Aarch64
+# to run on a Rasberry PI4
+
+# The root of the cargo project will be mounted here
+WORKDIR /usr/src/app
+
+# Update, Upgrade, Install the Aarch64 compilers. It is required to install pkg-config
+# along with the arm64 libssl-dev packages. This gives us cross compilation targets and the 
+# appropriate pkg-config to compile openssl-sys for rust
+RUN apt-get update && apt-get upgrade -qq &&\
+    apt-get install -qq gcc-aarch64-linux-gnu pkg-config &&\
+    dpkg --add-architecture arm64 && apt-get update && apt-get install -qq libssl-dev:arm64
+
+# Only required if the application needs rust nightly features
+RUN rustup default nightly
+# Add the target
+RUN rustup target add aarch64-unknown-linux-gnu
+
+# Set config for cross compilation
+ENV PKG_CONFIG=/usr/bin/aarch64-linux-gnu-pkg-config
+
+## Leave the container running so we can build against it
+CMD ["sleep", "infinity"]

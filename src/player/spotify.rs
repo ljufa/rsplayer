@@ -9,7 +9,7 @@ use rspotify::blocking::oauth2::{SpotifyClientCredentials, SpotifyOAuth};
 use rspotify::blocking::util::*;
 use rspotify::model::offset;
 
-use crate::common::{CommandEvent, PlayerStatus, PlayerType, Result, DPLAY_CONFIG_DIR_PATH};
+use crate::common::{CommandEvent, PlayerStatus, Result, DPLAY_CONFIG_DIR_PATH};
 use crate::player::Player;
 use log::{info, trace};
 
@@ -174,7 +174,7 @@ impl Player for SpotifyPlayerApi {
                 if !track.artists.is_empty() {
                     artist = track.artists.pop().unwrap().name;
                 }
-                let durati = track.duration_ms.to_string().clone();
+                let _durati = track.duration_ms.to_string().clone();
                 Ok(PlayerStatus {
                     name: Some(format!("{} - {}", artist, track.name)),
                     audio_format_bit: None,

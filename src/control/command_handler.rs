@@ -144,7 +144,7 @@ pub fn start(
                                 .send(StreamerStatusChanged(ps))
                                 .unwrap();
                         }
-                        Err(e) => {
+                        Err(_e) => {
                             state_changes_sender
                                 .send(CommandEvent::Error(String::from("Change failed!")))
                                 .unwrap();
@@ -165,7 +165,7 @@ pub fn start(
                                 .send(CommandEvent::StreamerStatusChanged(new_sstate))
                                 .unwrap();
                         }
-                        Err(e) => {
+                        Err(_e) => {
                             state_changes_sender
                                 .send(CommandEvent::Error(String::from("Change failed!")))
                                 .unwrap();
@@ -181,11 +181,13 @@ pub fn start(
                         out_sel_pin.set_value(0);
                         nout = AudioOut::SPKR;
                     }
-                    config_store
+                    let new_sstate = config_store
                         .lock()
                         .unwrap()
                         .patch_streamer_state(None, Some(nout));
-                    state_changes_sender.send(AudioOutputChanged(nout)).unwrap();
+                    state_changes_sender
+                        .send(StreamerStatusChanged(new_sstate))
+                        .unwrap();
                 }
                 PowerOff => {
                     std::process::Command::new("/sbin/poweroff")

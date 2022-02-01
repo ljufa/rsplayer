@@ -4,7 +4,7 @@ use std::{
     process::Child,
 };
 
-use crate::common::{CommandEvent, PlayerStatus, PlayerType, Result, DPLAY_CONFIG_DIR_PATH};
+use crate::common::{CommandEvent, PlayerStatus, Result, DPLAY_CONFIG_DIR_PATH};
 use crate::player::Player;
 use crate::{
     common::CommandEvent::{Paused, Playing, Stopped, SwitchedToNextTrack, SwitchedToPrevTrack},

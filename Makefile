@@ -15,11 +15,12 @@ build_librespot:
 	cross build --target $(TARGET) --release --no-default-features --features alsa-backend
 	rsync --rsync-path="sudo rsync" target/$(TARGET)/$(OUT)/librespot ubuntu@$(RPI_HOST):/home/ubuntu
 	
-check:
-	STRUM_DEBUG=1 cross check --target $(TARGET) --package dplay:0.1.0 --bin dplay
+run_docker_ext:
+	docker run --name dash-build --volume ${PWD}:/usr/src/app --detach --rm ljufa/linux-aarch64-gnu-rust:latest
 
-fix:
-	STRUM_DEBUG=1 cargo fix --target $(TARGET) --allow-dirty --bin dplay --exclude alsa-sys --workspace
+check_and_fix:
+	docker exec -it dash-build /bin/bash -c "RUSTFLAGS='-C linker=aarch64-linux-gnu-gcc' cargo check --target aarch64-unknown-linux-gnu"
+	docker exec -it dash-build /bin/bash -c "RUSTFLAGS='-C linker=aarch64-linux-gnu-gcc' cargo fix --target aarch64-unknown-linux-gnu --allow-dirty"
 
 clippy:
 	cross clippy --target $(TARGET) --package dplay:0.1.0 --bin dplay

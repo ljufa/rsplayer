@@ -5,7 +5,7 @@ use mpd::{Client, Query, Term};
 
 use crate::{common::PlayerState, player::Player};
 use crate::{
-    common::{CommandEvent, PlayerStatus, PlayerType, Result, DPLAY_CONFIG_DIR_PATH},
+    common::{CommandEvent, PlayerStatus, Result, DPLAY_CONFIG_DIR_PATH},
     config::MpdSettings,
 };
 

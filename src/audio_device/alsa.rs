@@ -1,7 +1,7 @@
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
+use alsa::card;
 use alsa::pcm::State;
-use alsa::{card, pcm::HwParams};
 use failure::Error;
 use mockall::automock;
 
