@@ -19,24 +19,42 @@ impl StatusMonitor {
         audio_card: Arc<AudioCard>,
     ) {
         std::thread::spawn(move || {
-            let mut last_status = None;
+            let mut last_track_info = None;
+            let mut last_player_info = None;
             loop {
-                thread::sleep(Duration::from_millis(500));
+                thread::sleep(Duration::from_millis(1000));
                 if audio_card.is_device_in_use() {
-                    let new_status = player_factory
+                    let new_track_info = player_factory
                         .lock()
                         .unwrap()
                         .get_current_player()
-                        .get_status();
-
-                    if let (Some(ls), Some(ns)) = (last_status.as_ref(), new_status.as_ref()) {
-                        if ls != ns {
+                        .get_current_track_info();
+                    if let (Some(last), Some(new)) =
+                        (last_track_info.as_ref(), new_track_info.as_ref())
+                    {
+                        if last != new {
                             state_changes_tx
-                                .send(CommandEvent::PlayerStatusChanged(ns.clone()))
+                                .send(CommandEvent::CurrentTrackInfoChanged(new.clone()))
                                 .expect("Send command event failed.");
                         }
                     }
-                    last_status = new_status;
+                    last_track_info = new_track_info;
+
+                    let new_player_info = player_factory
+                        .lock()
+                        .unwrap()
+                        .get_current_player()
+                        .get_player_info();
+                    if let (Some(last_p_info), Some(new_p_info)) =
+                        (last_player_info.as_ref(), new_player_info.as_ref())
+                    {
+                        if last_p_info != new_p_info {
+                            state_changes_tx
+                                .send(CommandEvent::PlayerInfoChanged(new_p_info.clone()))
+                                .expect("Sending command event failed");
+                        }
+                    }
+                    last_player_info = new_player_info;
                 }
             }
         });

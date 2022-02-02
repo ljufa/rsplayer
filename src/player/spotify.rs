@@ -9,7 +9,7 @@ use rspotify::blocking::oauth2::{SpotifyClientCredentials, SpotifyOAuth};
 use rspotify::blocking::util::*;
 use rspotify::model::offset;
 
-use crate::common::{CommandEvent, PlayerStatus, Result, DPLAY_CONFIG_DIR_PATH};
+use crate::common::{CommandEvent, CurrentTrackInfo, PlayerInfo, Result, DPLAY_CONFIG_DIR_PATH};
 use crate::player::Player;
 use log::{info, trace};
 
@@ -161,11 +161,17 @@ impl Player for SpotifyPlayerApi {
         })
     }
 
+    fn shutdown(&mut self) {
+        info!("Shutting down Spotify player!");
+        self.stop();
+        self.librespot_process.kill();
+    }
+
     fn rewind(&mut self, _seconds: i8) -> Result<CommandEvent> {
         Ok(CommandEvent::Playing)
     }
 
-    fn get_status(&mut self) -> Option<PlayerStatus> {
+    fn get_current_track_info(&mut self) -> Option<CurrentTrackInfo> {
         match self.try_with_reconnect_result(|sp| {
             let playing = sp.client.current_user_playing_track()?;
             if let Some(playing) = playing {
@@ -175,29 +181,15 @@ impl Player for SpotifyPlayerApi {
                     artist = track.artists.pop().unwrap().name;
                 }
                 let _durati = track.duration_ms.to_string().clone();
-                Ok(PlayerStatus {
+                Ok(CurrentTrackInfo {
                     name: Some(format!("{} - {}", artist, track.name)),
-                    audio_format_bit: None,
-                    audio_format_rate: None,
-                    audio_format_channels: None,
                     album: Some(track.album.name),
                     artist: Some(artist),
                     genre: None,
                     date: track.album.release_date,
                     filename: None,
-                    random: None,
-                    state: Some(if playing.is_playing {
-                        PlayerState::PLAYING
-                    } else {
-                        PlayerState::PAUSED
-                    }),
                     title: Some(track.name.clone()),
                     uri: track.album.images.into_iter().map(|f| f.url).next(),
-                    time: None
-                    // time: playing
-                    //     .progress_ms
-                    //     .clone()
-                    //     .map_or(None, |f| Some((f.to_string(), durati))),
                 })
             } else {
                 Err(failure::err_msg("Can't get spotify track info"))
@@ -208,10 +200,8 @@ impl Player for SpotifyPlayerApi {
         }
     }
 
-    fn shutdown(&mut self) {
-        info!("Shutting down Spotify player!");
-        self.stop();
-        self.librespot_process.kill();
+    fn get_player_info(&mut self) -> Option<PlayerInfo> {
+        None
     }
 }
 

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 #[double]
 use crate::audio_device::alsa::AudioCard;
-use crate::common::{CommandEvent, PlayerStatus, PlayerType, Result};
+use crate::common::{CommandEvent, CurrentTrackInfo, PlayerInfo, PlayerType, Result};
 use crate::config::Settings;
 use crate::player::lms::LogitechMediaServerApi;
 use crate::player::mpd::MpdPlayerApi;
@@ -22,7 +22,8 @@ pub trait Player {
     fn stop(&mut self) -> Result<CommandEvent>;
     fn shutdown(&mut self);
     fn rewind(&mut self, seconds: i8) -> Result<CommandEvent>;
-    fn get_status(&mut self) -> Option<PlayerStatus>;
+    fn get_current_track_info(&mut self) -> Option<CurrentTrackInfo>;
+    fn get_player_info(&mut self) -> Option<PlayerInfo>;
 }
 
 pub struct PlayerFactory {

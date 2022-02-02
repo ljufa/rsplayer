@@ -1,39 +1,13 @@
 use std::collections::HashMap;
 
-use crate::common::{AudioOut, FilterType, GainLevel, PlayerType, DPLAY_CONFIG_DIR_PATH};
+use crate::common::{
+    AudioOut, FilterType, GainLevel, PlayerType, StreamerStatus, DPLAY_CONFIG_DIR_PATH,
+};
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
 
 const STREAMER_STATUS_KEY: &str = "streamer_status";
 const SETTINGS_KEY: &str = "settings";
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Serialize, Deserialize)]
-pub struct StreamerStatus {
-    pub source_player: PlayerType,
-    pub selected_audio_output: AudioOut,
-    pub dac_status: DacStatus,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DacStatus {
-    pub volume: u8,
-    pub filter: FilterType,
-    pub sound_sett: u8,
-    pub gain: GainLevel,
-    pub heavy_load: bool,
-    pub muted: bool,
-}
-impl Default for DacStatus {
-    fn default() -> Self {
-        Self {
-            volume: 180,
-            filter: FilterType::SharpRollOff,
-            gain: GainLevel::V375,
-            muted: false,
-            sound_sett: 5,
-            heavy_load: true,
-        }
-    }
-}
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Settings {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -168,11 +142,7 @@ impl Configuration {
         if let Some(ps) = self.db.get(STREAMER_STATUS_KEY) {
             ps
         } else {
-            let default = StreamerStatus {
-                source_player: PlayerType::MPD,
-                selected_audio_output: AudioOut::SPKR,
-                dac_status: DacStatus::default(),
-            };
+            let default = StreamerStatus::default();
             self.db
                 .set(STREAMER_STATUS_KEY, &default)
                 .expect("Could not store default player state");

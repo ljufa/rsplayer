@@ -1,8 +1,7 @@
 use std::thread;
 use std::time::Duration;
 
-use crate::common::{CommandEvent, FilterType, GainLevel};
-use crate::config::DacStatus;
+use crate::common::{CommandEvent, DacStatus, FilterType, GainLevel};
 use crate::mcu::gpio;
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_DAC_PDN_RST;
 use crate::mcu::i2c::I2CHelper;

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use embedded_graphics::{
-    mono_font::{ascii::FONT_5X8, ascii::FONT_6X12, MonoTextStyle},
+    mono_font::{ascii::FONT_4X6, ascii::FONT_5X8, ascii::FONT_6X12, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
     text::Text,
@@ -17,8 +17,8 @@ use linux_embedded_hal::{Delay, Pin};
 use tokio::sync::broadcast::Receiver;
 use unidecode::unidecode;
 
-use crate::common::{CommandEvent, PlayerStatus};
-use crate::config::StreamerStatus;
+use crate::common::{CommandEvent, CurrentTrackInfo, PlayerInfo, StreamerStatus};
+
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
 use crate::monitor::myst7920::ST7920;
 
@@ -50,11 +50,14 @@ pub fn start(mut state_changes_receiver: Receiver<CommandEvent>) {
             let cmd_ev = cmd_ev.unwrap();
             trace!("Command event received: {:?}", cmd_ev);
             match cmd_ev {
-                CommandEvent::PlayerStatusChanged(stat) => {
-                    draw_player_status(&mut disp, &mut delay, stat);
+                CommandEvent::CurrentTrackInfoChanged(stat) => {
+                    draw_track_info(&mut disp, &mut delay, stat);
                 }
                 CommandEvent::StreamerStatusChanged(sstatus) => {
-                    draw_streamer_status(&mut disp, &mut delay, sstatus);
+                    draw_streamer_info(&mut disp, &mut delay, sstatus);
+                }
+                CommandEvent::PlayerInfoChanged(pinfo) => {
+                    draw_player_info(&mut disp, &mut delay, pinfo);
                 }
                 _ => {}
             }
@@ -62,7 +65,7 @@ pub fn start(mut state_changes_receiver: Receiver<CommandEvent>) {
     });
 }
 
-fn draw_streamer_status(
+fn draw_streamer_info(
     disp: &mut ST7920<Spidev, Pin, Pin>,
     delay: &mut dyn DelayUs<u32>,
     status: StreamerStatus,
@@ -84,13 +87,13 @@ fn draw_streamer_status(
         .expect("Failed to flush!");
 }
 
-fn draw_player_status(
+fn draw_track_info(
     disp: &mut ST7920<Spidev, Pin, Pin>,
     delay: &mut dyn DelayUs<u32>,
-    status: PlayerStatus,
+    status: CurrentTrackInfo,
 ) {
     //4. song
-    let name = status.song_info_string();
+    let name = status.info_string();
     let mut title = "".to_string();
     if let Some(name) = name {
         const MAX_LEN: usize = 76;
@@ -116,4 +119,30 @@ fn draw_player_status(
     );
     t.draw(disp).expect("Failed to draw player status");
     disp.flush_region(1, 12, 120, 40, delay).unwrap();
+}
+
+fn draw_player_info(
+    disp: &mut ST7920<Spidev, Pin, Pin>,
+    delay: &mut dyn DelayUs<u32>,
+    player_info: PlayerInfo,
+) {
+    disp.clear_buffer_region(1, 50, 100, 12, delay);
+    //1. player name
+    Text::new(
+        format!(
+            "T:{:?}/{:?}|F:{:?}|B:{:?}|C:{:?}",
+            player_info.time.0.as_secs(),
+            player_info.time.1.as_secs(),
+            player_info.audio_format_rate.unwrap_or_default(),
+            player_info.audio_format_bit.unwrap_or_default(),
+            player_info.audio_format_channels.unwrap_or_default()
+        )
+        .as_str(),
+        Point::new(1, 60),
+        MonoTextStyle::new(&FONT_4X6, BinaryColor::On),
+    )
+    .draw(disp)
+    .expect("Failed to draw text");
+    disp.flush_region(1, 50, 100, 12, delay)
+        .expect("Failed to flush!");
 }

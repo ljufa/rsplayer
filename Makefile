@@ -15,11 +15,13 @@ build_librespot:
 	cross build --target $(TARGET) --release --no-default-features --features alsa-backend
 	cp -f target/$(TARGET)/$(OUT)/librespot ../dplayer/rpi_setup/.dplay/librespot
 	
-run_docker_ext:
+run_ext_build_server:
 	docker run --name dash-build --volume ${PWD}:/usr/src/app --detach --rm ljufa/linux-aarch64-gnu-rust:latest
 
-check_and_fix:
+check:
 	docker exec -it dash-build /bin/bash -c "RUSTFLAGS='-C linker=aarch64-linux-gnu-gcc' cargo check --target aarch64-unknown-linux-gnu"
+	
+fix:
 	docker exec -it dash-build /bin/bash -c "RUSTFLAGS='-C linker=aarch64-linux-gnu-gcc' cargo fix --target aarch64-unknown-linux-gnu --allow-dirty"
 
 clippy:

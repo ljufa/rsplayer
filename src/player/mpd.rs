@@ -2,10 +2,12 @@ use std::{borrow::BorrowMut, process::Child};
 use std::{borrow::Cow, time::Duration};
 
 use mpd::{Client, Query, Term};
+use num_traits::ToPrimitive;
 
+use crate::common::PlayerInfo;
 use crate::{common::PlayerState, player::Player};
 use crate::{
-    common::{CommandEvent, PlayerStatus, Result, DPLAY_CONFIG_DIR_PATH},
+    common::{CommandEvent, CurrentTrackInfo, Result, DPLAY_CONFIG_DIR_PATH},
     config::MpdSettings,
 };
 
@@ -81,6 +83,13 @@ impl Player for MpdPlayerApi {
         self.try_with_reconnect(CommandEvent::Stopped, |client| client.stop())
     }
 
+    fn shutdown(&mut self) {
+        info!("Shutting down MPD player!");
+        self.stop();
+        self.mpd_client.close();
+        self.mpd_server_process.kill();
+    }
+
     fn rewind(&mut self, seconds: i8) -> Result<CommandEvent> {
         let result = self.try_with_reconnect_result(|client| client.status());
         if let Ok(status) = result {
@@ -91,7 +100,7 @@ impl Player for MpdPlayerApi {
         Ok(CommandEvent::Playing)
     }
 
-    fn get_status(&mut self) -> Option<PlayerStatus> {
+    fn get_current_track_info(&mut self) -> Option<CurrentTrackInfo> {
         let result = self.try_with_reconnect_result(|client| client.currentsong());
         let song = result.unwrap_or_else(|_| return None);
         if song.is_none() {
@@ -99,15 +108,8 @@ impl Player for MpdPlayerApi {
             return None;
         }
         let song = song.unwrap();
-        // debug!("Song is {:?}", song);
-        let status = self.try_with_reconnect_result(|client| client.status());
-        // debug!("Mpd Status is {:?}", status);
-        if status.is_err() {
-            error!("Error while getting mpd status {:?}", status);
-            return None;
-        }
+        trace!("Song is {:?}", song);
 
-        let status = status.unwrap();
         let mut album: Option<String> = None;
         if song.tags.contains_key("Album") {
             album = Some(song.tags["Album"].clone());
@@ -124,32 +126,49 @@ impl Player for MpdPlayerApi {
         if song.tags.contains_key("Date") {
             date = Some(song.tags["Date"].clone());
         }
-        Some(PlayerStatus {
+        Some(CurrentTrackInfo {
             filename: Some(song.file),
             name: song.name,
             album,
             artist,
             genre,
             date,
-            audio_format_bit: status.audio.map(|f| f.bits),
-            audio_format_rate: status.audio.map(|f| f.rate),
-            audio_format_channels: status.audio.map(|f| f.chans as u32),
-            random: Some(status.random),
-            state: Some(convert_state(status.state)),
             title: song.title,
             uri: None,
-            time: None,
-            // time: status
-            // .time
-            // .map_or(None, |f| Some((f.0.to_string(), f.1.to_string()))),
         })
     }
 
-    fn shutdown(&mut self) {
-        info!("Shutting down MPD player!");
-        self.stop();
-        self.mpd_client.close();
-        self.mpd_server_process.kill();
+    fn get_player_info(&mut self) -> Option<PlayerInfo> {
+        let status = self.try_with_reconnect_result(|client| client.status());
+        trace!("Mpd Status is {:?}", status);
+        if let Ok(status) = status {
+            Some(PlayerInfo {
+                audio_format_bit: status.audio.map(|f| f.bits),
+                audio_format_rate: status.audio.map(|f| f.rate),
+                audio_format_channels: status.audio.map(|f| f.chans as u32),
+                random: Some(status.random),
+                state: Some(convert_state(status.state)),
+                time: status.time.map_or((Duration::ZERO, Duration::ZERO), |t| {
+                    (
+                        Duration::from_nanos(
+                            t.0.num_nanoseconds()
+                                .unwrap_or_default()
+                                .to_u64()
+                                .unwrap_or_default(),
+                        ),
+                        Duration::from_nanos(
+                            t.1.num_nanoseconds()
+                                .unwrap_or_default()
+                                .to_u64()
+                                .unwrap_or_default(),
+                        ),
+                    )
+                }),
+            })
+        } else {
+            error!("Error while getting mpd status {:?}", status);
+            return None;
+        }
     }
 }
 fn convert_state(mpd_state: mpd::status::State) -> PlayerState {

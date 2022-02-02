@@ -78,14 +78,17 @@ pub async fn start(
                 sleep(Duration::from_millis(100)).await;
                 continue;
             }
-            debug!("Received event {:?}", cmd_event);
+            trace!("Received event {:?}", cmd_event);
             let cmd_event = cmd_event.expect("Failed to receive command.");
             match cmd_event {
-                CommandEvent::PlayerStatusChanged(dsc) => {
+                CommandEvent::CurrentTrackInfoChanged(dsc) => {
                     notify_users(&users_notify, &dsc).await;
                 }
                 CommandEvent::StreamerStatusChanged(sstat) => {
                     notify_users(&users_notify, &sstat).await;
+                }
+                CommandEvent::PlayerInfoChanged(pinfo) => {
+                    notify_users(&users_notify, &pinfo).await;
                 }
                 _ => {}
             }

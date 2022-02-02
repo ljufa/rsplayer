@@ -4,7 +4,7 @@ use std::{
     process::Child,
 };
 
-use crate::common::{CommandEvent, PlayerStatus, Result, DPLAY_CONFIG_DIR_PATH};
+use crate::common::{CommandEvent, CurrentTrackInfo, PlayerInfo, Result, DPLAY_CONFIG_DIR_PATH};
 use crate::player::Player;
 use crate::{
     common::CommandEvent::{Paused, Playing, Stopped, SwitchedToNextTrack, SwitchedToPrevTrack},
@@ -119,11 +119,18 @@ impl Player for LogitechMediaServerApi {
         self.send_command("stop", Stopped)
     }
 
+    fn shutdown(&mut self) {
+        info!("Shutting down LMS player!");
+        self.stop();
+        self.client.shutdown(std::net::Shutdown::Both);
+        self.squeeze_player_process.kill();
+    }
+
     fn rewind(&mut self, _seconds: i8) -> Result<CommandEvent> {
         Ok(CommandEvent::SwitchedToPrevTrack)
     }
 
-    fn get_status(&mut self) -> Option<PlayerStatus> {
+    fn get_current_track_info(&mut self) -> Option<CurrentTrackInfo> {
         let artist = self
             .send_command_with_response("artist ?")
             .map_or(None, |r| if r.len() > 0 { Some(r) } else { None });
@@ -145,29 +152,20 @@ impl Player for LogitechMediaServerApi {
             }
         });
 
-        Some(PlayerStatus {
+        Some(CurrentTrackInfo {
             name: title.clone(),
-            audio_format_bit: None,
-            audio_format_rate: None,
-            audio_format_channels: None,
             album,
             artist,
             genre,
             date: None,
             filename: path,
-            random: None,
-            state: None,
             title: title.clone(),
             uri: None,
-            time: None,
         })
     }
 
-    fn shutdown(&mut self) {
-        info!("Shutting down LMS player!");
-        self.stop();
-        self.client.shutdown(std::net::Shutdown::Both);
-        self.squeeze_player_process.kill();
+    fn get_player_info(&mut self) -> Option<PlayerInfo> {
+        None
     }
 }
 
