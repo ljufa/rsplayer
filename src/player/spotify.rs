@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::{borrow::BorrowMut, process::Child};
 use std::{env, time::Duration};
 
-use crate::{common::PlayerState, config::SpotifySettings};
+use crate::config::SpotifySettings;
 use rspotify::blocking::client::Spotify;
 use rspotify::blocking::oauth2::{SpotifyClientCredentials, SpotifyOAuth};
 use rspotify::blocking::util::*;

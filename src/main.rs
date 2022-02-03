@@ -72,12 +72,6 @@ async fn main() {
 
     let config = Arc::new(Mutex::new(config));
     let (state_changes_sender, _) = broadcast::channel(20);
-    // poll player and dac and produce event if something has changed
-    StatusMonitor::start(
-        player_factory.clone(),
-        state_changes_sender.clone(),
-        audio_card.clone(),
-    );
 
     // start http server
     let http_handle = http_api::server_warp::start(
@@ -87,6 +81,12 @@ async fn main() {
     );
     monitor::oled::start(state_changes_sender.subscribe());
 
+    // poll player and dac and produce event if something has changed
+    StatusMonitor::start(
+        player_factory.clone(),
+        state_changes_sender.clone(),
+        audio_card.clone(),
+    );
     // start command handler thread
     control::command_handler::start(
         dac.clone(),

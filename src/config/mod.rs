@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use crate::common::{
-    AudioOut, FilterType, GainLevel, PlayerType, StreamerStatus, DPLAY_CONFIG_DIR_PATH,
-};
+use crate::common::{AudioOut, FilterType, PlayerType, StreamerStatus, DPLAY_CONFIG_DIR_PATH};
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
 
 const STREAMER_STATUS_KEY: &str = "streamer_status";
@@ -81,7 +79,7 @@ impl Default for Settings {
         Settings {
             spotify_settings: Some(SpotifySettings {
                 device_name: String::from("dplayer@rpi"),
-                auth_callback_url: String::from("http://dplayer.local:8000"),
+                auth_callback_url: String::from("http://dplayer.lan:8000"),
                 developer_client_id: String::default(),
                 developer_secret: String::default(),
                 username: String::default(),
@@ -218,7 +216,7 @@ impl Configuration {
         }
         ss.dac_status = ds;
         self.save_streamer_status(&mut ss);
-        debug!("New patched streamer status {:?}", ss);
+        trace!("New patched streamer status {:?}", ss);
         ss.clone()
     }
 }

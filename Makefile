@@ -16,10 +16,11 @@ build_librespot:
 	cp -f target/$(TARGET)/$(OUT)/librespot ../dplayer/rpi_setup/.dplay/librespot
 	
 run_ext_build_server:
-	docker run --name dash-build --volume ${PWD}:/usr/src/app --detach --rm ljufa/linux-aarch64-gnu-rust:latest
+	docker rm -f dash-build
+	docker run --user dlj --name dash-build --volume ${PWD}:/usr/src/app --detach --rm ljufa/linux-aarch64-gnu-rust:latest 
 
 check:
-	docker exec -it dash-build /bin/bash -c "RUSTFLAGS='-C linker=aarch64-linux-gnu-gcc' cargo check --target aarch64-unknown-linux-gnu"
+	docker exec -it dash-build /bin/bash -c "touch ./target/t && RUSTFLAGS='-C linker=aarch64-linux-gnu-gcc' cargo check --target aarch64-unknown-linux-gnu" 
 	
 fix:
 	docker exec -it dash-build /bin/bash -c "RUSTFLAGS='-C linker=aarch64-linux-gnu-gcc' cargo fix --target aarch64-unknown-linux-gnu --allow-dirty"

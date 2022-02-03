@@ -4,14 +4,14 @@ FROM rust:buster
 # Dockerfile for a build server for cross compiling the API Source code to Aarch64
 # to run on a Rasberry PI4
 
-RUN groupadd -r dlj && useradd -r -g dlj dlj
+RUN groupadd -r dlj && useradd -r -u 1000 -g dlj dlj
 
 # Update, Upgrade, Install the Aarch64 compilers. It is required to install pkg-config
 # along with the arm64 libssl-dev packages. This gives us cross compilation targets and the 
 # appropriate pkg-config to compile openssl-sys for rust
 RUN apt-get update && apt-get upgrade -qq &&\
     apt-get install -qq gcc-aarch64-linux-gnu pkg-config &&\
-    dpkg --add-architecture arm64 && apt-get update && apt-get install -qq libssl-dev:arm64
+    dpkg --add-architecture arm64 && apt-get update && apt-get install -qq libssl-dev:arm64 libasound-dev:arm64 libasound2-dev:arm64
 
 USER dlj
 # The root of the cargo project will be mounted here

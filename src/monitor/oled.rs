@@ -17,7 +17,7 @@ use linux_embedded_hal::{Delay, Pin};
 use tokio::sync::broadcast::Receiver;
 use unidecode::unidecode;
 
-use crate::common::{CommandEvent, CurrentTrackInfo, PlayerInfo, StreamerStatus};
+use crate::common::{CommandEvent, CurrentTrackInfo, PlayerInfo, PlayerState, StreamerStatus};
 
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
 use crate::monitor::myst7920::ST7920;
@@ -47,8 +47,8 @@ pub fn start(mut state_changes_receiver: Receiver<CommandEvent>) {
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 continue;
             }
-            let cmd_ev = cmd_ev.unwrap();
             trace!("Command event received: {:?}", cmd_ev);
+            let cmd_ev = cmd_ev.unwrap();
             match cmd_ev {
                 CommandEvent::CurrentTrackInfoChanged(stat) => {
                     draw_track_info(&mut disp, &mut delay, stat);
@@ -70,11 +70,11 @@ fn draw_streamer_info(
     delay: &mut dyn DelayUs<u32>,
     status: StreamerStatus,
 ) {
-    disp.clear_buffer_region(1, 1, 100, 12, delay);
+    disp.clear_buffer_region(1, 1, 120, 12, delay);
     //1. player name
     Text::new(
         format!(
-            "P:{:?} O:{:?} V:{:?}",
+            "P:{:?}|O:{:?}|V:{:?}",
             status.source_player, status.selected_audio_output, status.dac_status.volume
         )
         .as_str(),
@@ -83,7 +83,7 @@ fn draw_streamer_info(
     )
     .draw(disp)
     .expect("Failed to draw text");
-    disp.flush_region(1, 1, 100, 12, delay)
+    disp.flush_region(1, 1, 120, 12, delay)
         .expect("Failed to flush!");
 }
 
@@ -102,9 +102,9 @@ fn draw_track_info(
         } else {
             title = unidecode(name.as_str());
         }
-        let rows = title.len() / 20;
+        let rows = title.len() / 22;
         for i in 0..rows {
-            title.insert((i + 1) * 19, '\n');
+            title.insert((i + 1) * 21, '\n');
         }
     }
     trace!("Title length: {} / title: {}", title.len(), title);
@@ -126,16 +126,28 @@ fn draw_player_info(
     delay: &mut dyn DelayUs<u32>,
     player_info: PlayerInfo,
 ) {
-    disp.clear_buffer_region(1, 50, 100, 12, delay);
+    disp.clear_buffer_region(1, 50, 120, 12, delay);
     //1. player name
     Text::new(
         format!(
-            "T:{:?}/{:?}|F:{:?}|B:{:?}|C:{:?}",
+            "T:{:?}/{:?}|F:{:?}|B:{:?}|C:{:?}{}{}",
             player_info.time.0.as_secs(),
             player_info.time.1.as_secs(),
             player_info.audio_format_rate.unwrap_or_default(),
             player_info.audio_format_bit.unwrap_or_default(),
-            player_info.audio_format_channels.unwrap_or_default()
+            player_info.audio_format_channels.unwrap_or_default(),
+            player_info
+                .state
+                .map_or("".to_string(), |s| if s == PlayerState::PLAYING {
+                    "|>".to_string()
+                } else {
+                    "".to_string()
+                }),
+            player_info.random.map_or("".to_string(), |r| if r {
+                "|rnd".to_string()
+            } else {
+                "".to_string()
+            })
         )
         .as_str(),
         Point::new(1, 60),
@@ -143,6 +155,6 @@ fn draw_player_info(
     )
     .draw(disp)
     .expect("Failed to draw text");
-    disp.flush_region(1, 50, 100, 12, delay)
+    disp.flush_region(1, 50, 120, 12, delay)
         .expect("Failed to flush!");
 }

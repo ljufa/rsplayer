@@ -1,11 +1,11 @@
 use std::thread;
 use std::time::Duration;
 
-use crate::common::{CommandEvent, DacStatus, FilterType, GainLevel};
+use crate::common::{DacStatus, FilterType, GainLevel};
+use crate::config::DacSettings;
 use crate::mcu::gpio;
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_DAC_PDN_RST;
 use crate::mcu::i2c::I2CHelper;
-use crate::{common::CommandEvent::*, config::DacSettings};
 use mockall::automock;
 
 pub struct Dac {
