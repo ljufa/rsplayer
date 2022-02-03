@@ -19,17 +19,21 @@ run_ext_build_server:
 	docker rm -f dash-build
 	docker run --user dlj --name dash-build --volume ${PWD}:/usr/src/app --detach --rm ljufa/linux-aarch64-gnu-rust:latest 
 
-check:
-	docker exec -it dash-build /bin/bash -c "touch ./target/t && RUSTFLAGS='-C linker=aarch64-linux-gnu-gcc' cargo check --target aarch64-unknown-linux-gnu" 
-	
-fix:
-	docker exec -it dash-build /bin/bash -c "RUSTFLAGS='-C linker=aarch64-linux-gnu-gcc' cargo fix --target aarch64-unknown-linux-gnu --allow-dirty"
+chk:
+	docker exec -it dash-build /bin/bash -c "RUSTFLAGS='-C linker=aarch64-linux-gnu-gcc' cargo check --target $(TARGET)" 
+
+fix: run_ext_build_server chk
+	docker exec -it dash-build /bin/bash -c "RUSTFLAGS='-C linker=aarch64-linux-gnu-gcc' cargo fix --target $(TARGET) --allow-dirty"
 
 clippy:
 	cross clippy --target $(TARGET) --package dplay:0.1.0 --bin dplay
 
 test:
-	cross test --target $(TARGET) --package dplay:0.1.0 --bin dplay -- --nocapture
+	cross test --target $(TARGET) --package dplay:0.1.0 --bin dplay
+
+check:
+	cross check --target $(TARGET) --package dplay:0.1.0 --bin dplay
+
 
 release:
 	cargo fmt

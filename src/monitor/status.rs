@@ -45,21 +45,21 @@ impl StatusMonitor {
                         }
                         last_track_info = new_track_info;
                     }
-
-                    let new_player_info = player_factory
-                        .lock()
-                        .unwrap()
-                        .get_current_player()
-                        .get_player_info();
-                    if last_player_info != new_player_info {
-                        if let Some(new_p_info) = new_player_info.as_ref() {
-                            state_changes_tx
-                                .send(CommandEvent::PlayerInfoChanged(new_p_info.clone()))
-                                .expect("Sending command event failed");
-                        }
-                        last_player_info = new_player_info;
-                    }
                 }
+                let new_player_info = player_factory
+                    .lock()
+                    .unwrap()
+                    .get_current_player()
+                    .get_player_info();
+                if last_player_info != new_player_info {
+                    if let Some(new_p_info) = new_player_info.as_ref() {
+                        state_changes_tx
+                            .send(CommandEvent::PlayerInfoChanged(new_p_info.clone()))
+                            .expect("Sending command event failed");
+                    }
+                    last_player_info = new_player_info;
+                }
+
                 thread::sleep(Duration::from_millis(1000));
             }
         });
