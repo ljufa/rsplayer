@@ -46,5 +46,3 @@
     * if none of the players can't be created display error and fail command handling.
     * if next player is sucessfully created, execute play command on it.
 
-https://audio1.mixcloud.com/secure/dash_multi/,e/7/3/1/f2be-bc34-4654-9dd9-faba3b1f009c-64K,e/7/3/1/f2be-bc34-4654-9dd9-faba3b1f009c-192K,.m4a.urlset/fragment-29-f2-a1-x3.webm
-https://audio1.mixcloud.com/secure/dash_multi/,e/7/3/1/f2be-bc34-4654-9dd9-faba3b1f009c-64K,e/7/3/1/f2be-bc34-4654-9dd9-faba3b1f009c-192K,.m4a.urlset/fragment-38-f2-a1-x3.webm
