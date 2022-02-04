@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 #[double]
 use crate::audio_device::alsa::AudioCard;
-use crate::common::{CommandEvent, CurrentTrackInfo, PlayerInfo, PlayerType, Result};
+use crate::common::{CurrentTrackInfo, PlayerInfo, PlayerType, Result, StatusChangeEvent};
 use crate::config::Settings;
 use crate::player::lms::LogitechMediaServerApi;
 use crate::player::mpd::MpdPlayerApi;
@@ -15,15 +15,16 @@ pub(crate) mod mpd;
 pub(crate) mod spotify;
 
 pub trait Player {
-    fn play(&mut self) -> Result<CommandEvent>;
-    fn pause(&mut self) -> Result<CommandEvent>;
-    fn next_track(&mut self) -> Result<CommandEvent>;
-    fn prev_track(&mut self) -> Result<CommandEvent>;
-    fn stop(&mut self) -> Result<CommandEvent>;
+    fn play(&mut self) -> Result<StatusChangeEvent>;
+    fn pause(&mut self) -> Result<StatusChangeEvent>;
+    fn next_track(&mut self) -> Result<StatusChangeEvent>;
+    fn prev_track(&mut self) -> Result<StatusChangeEvent>;
+    fn stop(&mut self) -> Result<StatusChangeEvent>;
     fn shutdown(&mut self);
-    fn rewind(&mut self, seconds: i8) -> Result<CommandEvent>;
+    fn rewind(&mut self, seconds: i8) -> Result<StatusChangeEvent>;
     fn get_current_track_info(&mut self) -> Option<CurrentTrackInfo>;
     fn get_player_info(&mut self) -> Option<PlayerInfo>;
+    fn random_toggle(&mut self);
 }
 
 pub struct PlayerFactory {

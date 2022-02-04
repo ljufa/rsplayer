@@ -8,7 +8,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast::Sender;
 
-use crate::common::{AudioOut, Command, Command::*, CommandEvent, CommandEvent::*};
+use crate::common::{AudioOut, Command, Command::*, StatusChangeEvent, StatusChangeEvent::*};
 use crate::config::*;
 use crate::mcu::gpio;
 use crate::mcu::gpio::GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY;
@@ -19,7 +19,7 @@ pub fn start(
     audio_card: Arc<AudioCard>,
     config_store: Arc<Mutex<Configuration>>,
     input_commands_rx: Receiver<Command>,
-    state_changes_sender: Sender<CommandEvent>,
+    state_changes_sender: Sender<StatusChangeEvent>,
 ) {
     tokio::task::spawn(async move {
         //fixme : move to separate struct restore selected output
@@ -46,7 +46,7 @@ pub fn start(
                                 .unwrap()
                                 .patch_dac_status(Some(nv), None, None);
                         state_changes_sender
-                            .send(CommandEvent::StreamerStatusChanged(new_dac_status))
+                            .send(StatusChangeEvent::StreamerStatusChanged(new_dac_status))
                             .expect("Send event failed.");
                     }
                 }
@@ -58,7 +58,7 @@ pub fn start(
                                 .unwrap()
                                 .patch_dac_status(Some(nv), None, None);
                         state_changes_sender
-                            .send(CommandEvent::StreamerStatusChanged(new_dac_status))
+                            .send(StatusChangeEvent::StreamerStatusChanged(new_dac_status))
                             .expect("Send event failed.");
                     }
                 }
@@ -70,16 +70,22 @@ pub fn start(
                                 .unwrap()
                                 .patch_dac_status(Some(nv), None, None);
                         state_changes_sender
-                            .send(CommandEvent::StreamerStatusChanged(new_dac_status))
+                            .send(StatusChangeEvent::StreamerStatusChanged(new_dac_status))
                             .expect("Send event failed.");
                     }
                 }
                 Filter(ft) => {
                     if let Ok(nv) = dac.filter(ft) {
-                        config_store
-                            .lock()
-                            .unwrap()
-                            .patch_dac_status(None, Some(nv), None);
+                        let new_streamer_status =
+                            config_store
+                                .lock()
+                                .unwrap()
+                                .patch_dac_status(None, Some(nv), None);
+                        state_changes_sender
+                            .send(StatusChangeEvent::StreamerStatusChanged(
+                                new_streamer_status,
+                            ))
+                            .expect("Send event failed.");
                     }
                 }
                 Sound(nr) => {
@@ -144,7 +150,7 @@ pub fn start(
                         }
                         Err(_e) => {
                             state_changes_sender
-                                .send(CommandEvent::Error(String::from("Change failed!")))
+                                .send(StatusChangeEvent::Error(String::from("Change failed!")))
                                 .unwrap();
                         }
                     }
@@ -160,12 +166,12 @@ pub fn start(
                         Ok(npt) => {
                             let new_sstate = cfg.patch_streamer_status(Some(npt), None);
                             state_changes_sender
-                                .send(CommandEvent::StreamerStatusChanged(new_sstate))
+                                .send(StatusChangeEvent::StreamerStatusChanged(new_sstate))
                                 .unwrap();
                         }
                         Err(_e) => {
                             state_changes_sender
-                                .send(CommandEvent::Error(String::from("Change failed!")))
+                                .send(StatusChangeEvent::Error(String::from("Change failed!")))
                                 .unwrap();
                         }
                     }
@@ -192,6 +198,12 @@ pub fn start(
                         .spawn()
                         .expect("halt command failed");
                 }
+                RandomToggle => player_factory
+                    .lock()
+                    .unwrap()
+                    .get_current_player()
+                    .random_toggle(),
+                _ => {}
             }
         }
     });

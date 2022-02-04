@@ -1,5 +1,5 @@
 use crate::player::PlayerFactory;
-use crate::{audio_device::alsa::AudioCard, common::CommandEvent};
+use crate::{audio_device::alsa::AudioCard, common::StatusChangeEvent};
 use std::time::Duration;
 use std::{
     sync::{Arc, Mutex},
@@ -15,7 +15,7 @@ impl StatusMonitor {
 
     pub fn start(
         player_factory: Arc<Mutex<PlayerFactory>>,
-        state_changes_tx: Sender<CommandEvent>,
+        state_changes_tx: Sender<StatusChangeEvent>,
         audio_card: Arc<AudioCard>,
     ) {
         std::thread::spawn(move || {
@@ -38,7 +38,7 @@ impl StatusMonitor {
                     if last_track_info != new_track_info {
                         if let Some(new) = new_track_info.as_ref() {
                             state_changes_tx
-                                .send(CommandEvent::CurrentTrackInfoChanged(new.clone()))
+                                .send(StatusChangeEvent::CurrentTrackInfoChanged(new.clone()))
                                 .expect("Send command event failed.");
                         } else {
                             debug!("Current track info in None");
@@ -54,7 +54,7 @@ impl StatusMonitor {
                 if last_player_info != new_player_info {
                     if let Some(new_p_info) = new_player_info.as_ref() {
                         state_changes_tx
-                            .send(CommandEvent::PlayerInfoChanged(new_p_info.clone()))
+                            .send(StatusChangeEvent::PlayerInfoChanged(new_p_info.clone()))
                             .expect("Sending command event failed");
                     }
                     last_player_info = new_player_info;

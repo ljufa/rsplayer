@@ -13,7 +13,7 @@ mod mcu;
 mod monitor;
 mod player;
 
-use common::CommandEvent;
+use common::StatusChangeEvent;
 use mockall_double::double;
 use monitor::status::StatusMonitor;
 use std::{
@@ -101,7 +101,7 @@ async fn main() {
     input_commands_tx.send(Command::Play).expect("Error");
 
     state_changes_sender
-        .send(CommandEvent::StreamerStatusChanged(
+        .send(StatusChangeEvent::StreamerStatusChanged(
             config.lock().unwrap().get_streamer_status(),
         ))
         .expect("Event send failed");

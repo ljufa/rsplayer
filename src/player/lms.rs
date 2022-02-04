@@ -4,10 +4,14 @@ use std::{
     process::Child,
 };
 
-use crate::common::{CommandEvent, CurrentTrackInfo, PlayerInfo, Result, DPLAY_CONFIG_DIR_PATH};
+use crate::common::{
+    CurrentTrackInfo, PlayerInfo, Result, StatusChangeEvent, DPLAY_CONFIG_DIR_PATH,
+};
 use crate::player::Player;
 use crate::{
-    common::CommandEvent::{Paused, Playing, Stopped, SwitchedToNextTrack, SwitchedToPrevTrack},
+    common::StatusChangeEvent::{
+        Paused, Playing, Stopped, SwitchedToNextTrack, SwitchedToPrevTrack,
+    },
     config::LmsSettings,
 };
 
@@ -52,7 +56,11 @@ impl LogitechMediaServerApi {
         Ok(p)
     }
 
-    fn send_command(&mut self, command: &'static str, event: CommandEvent) -> Result<CommandEvent> {
+    fn send_command(
+        &mut self,
+        command: &'static str,
+        event: StatusChangeEvent,
+    ) -> Result<StatusChangeEvent> {
         self.send_command_with_response(command)?;
         Ok(event)
     }
@@ -101,21 +109,21 @@ impl LogitechMediaServerApi {
     }
 }
 impl Player for LogitechMediaServerApi {
-    fn play(&mut self) -> Result<CommandEvent> {
+    fn play(&mut self) -> Result<StatusChangeEvent> {
         self.send_command("play", Playing)
     }
 
-    fn pause(&mut self) -> Result<CommandEvent> {
+    fn pause(&mut self) -> Result<StatusChangeEvent> {
         self.send_command("pause", Paused)
     }
-    fn next_track(&mut self) -> Result<CommandEvent> {
+    fn next_track(&mut self) -> Result<StatusChangeEvent> {
         self.send_command("playlist index +1", SwitchedToNextTrack)
     }
-    fn prev_track(&mut self) -> Result<CommandEvent> {
+    fn prev_track(&mut self) -> Result<StatusChangeEvent> {
         self.send_command("playlist index -1", SwitchedToPrevTrack)
     }
 
-    fn stop(&mut self) -> Result<CommandEvent> {
+    fn stop(&mut self) -> Result<StatusChangeEvent> {
         self.send_command("stop", Stopped)
     }
 
@@ -126,8 +134,8 @@ impl Player for LogitechMediaServerApi {
         self.squeeze_player_process.kill();
     }
 
-    fn rewind(&mut self, _seconds: i8) -> Result<CommandEvent> {
-        Ok(CommandEvent::SwitchedToPrevTrack)
+    fn rewind(&mut self, _seconds: i8) -> Result<StatusChangeEvent> {
+        Ok(StatusChangeEvent::SwitchedToPrevTrack)
     }
 
     fn get_current_track_info(&mut self) -> Option<CurrentTrackInfo> {
@@ -167,6 +175,8 @@ impl Player for LogitechMediaServerApi {
     fn get_player_info(&mut self) -> Option<PlayerInfo> {
         None
     }
+
+    fn random_toggle(&mut self) {}
 }
 
 impl Drop for LogitechMediaServerApi {

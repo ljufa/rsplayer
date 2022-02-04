@@ -158,12 +158,13 @@ pub enum Command {
     SwitchToPlayer(PlayerType),
     PowerOff,
     ChangeAudioOutput,
+    RandomToggle,
     Rewind(i8),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, EnumProperty, Serialize, Deserialize)]
 #[strum(serialize_all = "title_case")]
-pub enum CommandEvent {
+pub enum StatusChangeEvent {
     Playing,
     Paused,
     Stopped,

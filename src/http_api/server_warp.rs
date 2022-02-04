@@ -24,7 +24,7 @@ use warp::{
 };
 
 use crate::{
-    common::{Command, CommandEvent, DPLAY_CONFIG_DIR_PATH},
+    common::{Command, StatusChangeEvent, DPLAY_CONFIG_DIR_PATH},
     config::Configuration,
 };
 
@@ -36,9 +36,24 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 /// - Key is their id
 /// - Value is a sender of `warp::ws::Message`
 type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
+type LastStatusMessages = Arc<RwLock<LastStatus>>;
 
+struct LastStatus {
+    current_track_info: Option<String>,
+    player_info: Option<String>,
+    streamer_status: Option<String>,
+}
+impl Default for LastStatus {
+    fn default() -> Self {
+        LastStatus {
+            current_track_info: None,
+            player_info: None,
+            streamer_status: None,
+        }
+    }
+}
 pub async fn start(
-    mut state_changes_receiver: Receiver<CommandEvent>,
+    mut state_changes_receiver: Receiver<StatusChangeEvent>,
     input_commands_tx: SyncSender<Command>,
     config: Arc<Mutex<Configuration>>,
 ) {
@@ -49,70 +64,101 @@ pub async fn start(
     let users_notify = users.clone();
     let users_f = warp::any().map(move || users.clone());
     let input_commands_tx = warp::any().map(move || input_commands_tx.clone());
-    // let last_state_change_message: LastStatusMessages = LastStatusMessages::default();
-    // let last_state_change_message_2 = last_state_change_message.clone();
-    // let last_state_change_message_f = warp::any().map(move || last_state_change_message.clone());
+    let last_state_change_message: LastStatusMessages = LastStatusMessages::default();
+    let last_state_change_message_2 = last_state_change_message.clone();
+    let last_state_change_message_f = warp::any().map(move || last_state_change_message.clone());
     let cors = warp::cors()
         .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
         .allow_any_origin();
 
-    let settings = warp::get()
+    let settings_rest_path = warp::get()
         .and(warp::path!("api" / "settings"))
         .map(move || warp::reply::json(&config.lock().expect("").get_settings()));
 
-    let player = warp::path!("api" / "player")
+    let player_ws_path = warp::path!("api" / "player")
         .and(warp::ws())
         .and(users_f)
         .and(input_commands_tx)
-        // .and(last_state_change_message_f)
-        .map(|ws: warp::ws::Ws, users, input_commands| {
-            // And then our closure will be called when it completes...
-            ws.on_upgrade(|websocket| user_connected(websocket, users, input_commands))
-        });
+        .and(last_state_change_message_f)
+        .map(
+            |ws: warp::ws::Ws, users, input_commands, last_state_change_message| {
+                // And then our closure will be called when it completes...
+                ws.on_upgrade(|websocket| {
+                    user_connected(websocket, users, input_commands, last_state_change_message)
+                })
+            },
+        );
     let ui_static_content = warp::get().and(warp::fs::dir(format!("{}ui", DPLAY_CONFIG_DIR_PATH)));
-    let routes = player.or(settings).or(ui_static_content).with(cors);
+    let routes = player_ws_path
+        .or(settings_rest_path)
+        .or(ui_static_content)
+        .with(cors);
     tokio::task::spawn(async move {
         loop {
-            let cmd_event = state_changes_receiver.try_recv();
-            if cmd_event.is_err() {
+            let state_change_event = state_changes_receiver.try_recv();
+            if state_change_event.is_err() {
                 sleep(Duration::from_millis(100)).await;
                 continue;
             }
-            trace!("Received event {:?}", cmd_event);
-            let cmd_event = cmd_event.expect("Failed to receive command.");
-            match cmd_event {
-                CommandEvent::CurrentTrackInfoChanged(dsc) => {
-                    notify_users(&users_notify, &dsc).await;
-                }
-                CommandEvent::StreamerStatusChanged(sstat) => {
-                    notify_users(&users_notify, &sstat).await;
-                }
-                CommandEvent::PlayerInfoChanged(pinfo) => {
-                    notify_users(&users_notify, &pinfo).await;
-                }
-                _ => {}
-            }
+            trace!("Received state changed event {:?}", state_change_event);
+            let state_change_event = state_change_event.expect("Failed to receive command.");
+            notify_users(
+                &users_notify,
+                state_change_event,
+                last_state_change_message_2.clone(),
+            )
+            .await;
         }
     });
     warp::serve(routes).run(([0, 0, 0, 0], 8000)).await
 }
 
-async fn notify_users<T>(users_to_notify: &Users, cmd_event_payload: &T)
-where
-    T: Serialize,
-{
-    for (&_uid, tx) in users_to_notify.read().await.iter() {
-        if let Err(_disconnected) = tx.send(Ok(Message::text(
-            serde_json::to_string(cmd_event_payload).unwrap(),
-        ))) {
-            // The tx is disconnected, our `user_disconnected` code
-            // should be happening in another task, nothing more to
-            // do here.
+async fn notify_users(
+    users_to_notify: &Users,
+    status_change_event: StatusChangeEvent,
+    last_state_change_message_2: LastStatusMessages,
+) {
+    let mut json_msg = String::default();
+    match status_change_event {
+        StatusChangeEvent::CurrentTrackInfoChanged(dsc) => {
+            json_msg = serde_json::to_string(&dsc).unwrap();
+            let last = last_state_change_message_2.try_write();
+            if last.is_ok() {
+                let mut ls = last.unwrap();
+                ls.current_track_info = Some(json_msg.clone());
+            }
+        }
+        StatusChangeEvent::StreamerStatusChanged(sstat) => {
+            json_msg = serde_json::to_string(&sstat).unwrap();
+            let last = last_state_change_message_2.try_write();
+            if last.is_ok() {
+                let mut ls = last.unwrap();
+                ls.streamer_status = Some(json_msg.clone());
+            }
+        }
+        StatusChangeEvent::PlayerInfoChanged(pinfo) => {
+            json_msg = serde_json::to_string(&pinfo).unwrap();
+            let last = last_state_change_message_2.try_write();
+            if last.is_ok() {
+                let mut ls = last.unwrap();
+                ls.player_info = Some(json_msg.clone());
+            }
+        }
+        _ => {}
+    }
+    if (!json_msg.is_empty()) {
+        for (&_uid, tx) in users_to_notify.read().await.iter() {
+            tx.send(Ok(Message::text(json_msg.clone()))).unwrap();
         }
     }
 }
 
-async fn user_connected(ws: WebSocket, users: Users, input_commands_tx: SyncSender<Command>) {
+async fn user_connected(
+    ws: WebSocket,
+    users: Users,
+    input_commands_tx: SyncSender<Command>,
+    last_state_message: LastStatusMessages,
+) {
     // Use a counter to assign a new unique ID for this user.
     let my_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
 
@@ -130,6 +176,28 @@ async fn user_connected(ws: WebSocket, users: Users, input_commands_tx: SyncSend
             debug!("websocket send error: {}", e);
         }
     }));
+
+    let last = last_state_message.try_read();
+    if let Ok(last) = last {
+        if last.current_track_info.is_some() {
+            tx.send(Ok(Message::text(
+                last.current_track_info.as_ref().unwrap().clone(),
+            )))
+            .unwrap();
+        }
+        if last.player_info.is_some() {
+            tx.send(Ok(Message::text(
+                last.player_info.as_ref().unwrap().clone(),
+            )))
+            .unwrap();
+        }
+        if last.streamer_status.is_some() {
+            tx.send(Ok(Message::text(
+                last.streamer_status.as_ref().unwrap().clone(),
+            )))
+            .unwrap();
+        }
+    }
     // Save the sender in our list of connected users.
     users.write().await.insert(my_id, tx);
 

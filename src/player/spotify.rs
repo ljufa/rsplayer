@@ -9,7 +9,9 @@ use rspotify::blocking::oauth2::{SpotifyClientCredentials, SpotifyOAuth};
 use rspotify::blocking::util::*;
 use rspotify::model::offset;
 
-use crate::common::{CommandEvent, CurrentTrackInfo, PlayerInfo, Result, DPLAY_CONFIG_DIR_PATH};
+use crate::common::{
+    CurrentTrackInfo, PlayerInfo, Result, StatusChangeEvent, DPLAY_CONFIG_DIR_PATH,
+};
 use crate::player::Player;
 use log::{info, trace};
 
@@ -37,9 +39,9 @@ impl SpotifyPlayerApi {
     }
     fn try_with_reconnect<F>(
         &mut self,
-        command_event: CommandEvent,
+        command_event: StatusChangeEvent,
         command: F,
-    ) -> Result<CommandEvent>
+    ) -> Result<StatusChangeEvent>
     where
         F: FnMut(&mut ClientDevice) -> core::result::Result<(), failure::Error>,
     {
@@ -82,7 +84,7 @@ impl Drop for SpotifyPlayerApi {
     }
 }
 impl Player for SpotifyPlayerApi {
-    fn play(&mut self) -> Result<CommandEvent> {
+    fn play(&mut self) -> Result<StatusChangeEvent> {
         self.try_with_reconnect_result(|sp| match sp.client.current_user_playing_track() {
             Ok(playing) => match playing {
                 Some(pl) => {
@@ -115,7 +117,7 @@ impl Player for SpotifyPlayerApi {
                             )?;
                         }
                     }
-                    Ok(CommandEvent::Playing)
+                    Ok(StatusChangeEvent::Playing)
                 }
                 None => {
                     let last_played = &sp.client.current_user_recently_played(1)?.items[0]
@@ -133,30 +135,30 @@ impl Player for SpotifyPlayerApi {
                         None,
                         None,
                     )?;
-                    Ok(CommandEvent::Playing)
+                    Ok(StatusChangeEvent::Playing)
                 }
             },
             Err(e) => Err(e),
         })
     }
 
-    fn pause(&mut self) -> Result<CommandEvent> {
-        self.try_with_reconnect(CommandEvent::Paused, |sp| {
+    fn pause(&mut self) -> Result<StatusChangeEvent> {
+        self.try_with_reconnect(StatusChangeEvent::Paused, |sp| {
             sp.client.pause_playback(sp.device_id.clone())
         })
     }
-    fn next_track(&mut self) -> Result<CommandEvent> {
-        self.try_with_reconnect(CommandEvent::Paused, |sp| {
+    fn next_track(&mut self) -> Result<StatusChangeEvent> {
+        self.try_with_reconnect(StatusChangeEvent::Paused, |sp| {
             sp.client.next_track(sp.device_id.clone())
         })
     }
-    fn prev_track(&mut self) -> Result<CommandEvent> {
-        self.try_with_reconnect(CommandEvent::Paused, |sp| {
+    fn prev_track(&mut self) -> Result<StatusChangeEvent> {
+        self.try_with_reconnect(StatusChangeEvent::Paused, |sp| {
             sp.client.previous_track(sp.device_id.clone())
         })
     }
-    fn stop(&mut self) -> Result<CommandEvent> {
-        self.try_with_reconnect(CommandEvent::Paused, |sp| {
+    fn stop(&mut self) -> Result<StatusChangeEvent> {
+        self.try_with_reconnect(StatusChangeEvent::Paused, |sp| {
             sp.client.pause_playback(sp.device_id.clone())
         })
     }
@@ -167,8 +169,8 @@ impl Player for SpotifyPlayerApi {
         self.librespot_process.kill();
     }
 
-    fn rewind(&mut self, _seconds: i8) -> Result<CommandEvent> {
-        Ok(CommandEvent::Playing)
+    fn rewind(&mut self, _seconds: i8) -> Result<StatusChangeEvent> {
+        Ok(StatusChangeEvent::Playing)
     }
 
     fn get_current_track_info(&mut self) -> Option<CurrentTrackInfo> {
@@ -203,6 +205,8 @@ impl Player for SpotifyPlayerApi {
     fn get_player_info(&mut self) -> Option<PlayerInfo> {
         None
     }
+
+    fn random_toggle(&mut self) {}
 }
 
 pub fn auth_manager(settings: &SpotifySettings) -> SpotifyOAuth {

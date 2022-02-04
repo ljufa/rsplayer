@@ -7,7 +7,7 @@ use num_traits::ToPrimitive;
 use crate::common::PlayerInfo;
 use crate::{common::PlayerState, player::Player};
 use crate::{
-    common::{CommandEvent, CurrentTrackInfo, Result, DPLAY_CONFIG_DIR_PATH},
+    common::{CurrentTrackInfo, Result, StatusChangeEvent, DPLAY_CONFIG_DIR_PATH},
     config::MpdSettings,
 };
 
@@ -29,9 +29,9 @@ impl MpdPlayerApi {
     }
     fn try_with_reconnect<F>(
         &mut self,
-        command_event: CommandEvent,
+        command_event: StatusChangeEvent,
         command: F,
-    ) -> Result<CommandEvent>
+    ) -> Result<StatusChangeEvent>
     where
         F: FnMut(&mut Client) -> core::result::Result<(), mpd::error::Error>,
     {
@@ -63,24 +63,28 @@ impl MpdPlayerApi {
 }
 
 impl Player for MpdPlayerApi {
-    fn play(&mut self) -> Result<CommandEvent> {
-        self.try_with_reconnect(CommandEvent::Playing, |client| client.play())
+    fn play(&mut self) -> Result<StatusChangeEvent> {
+        self.try_with_reconnect(StatusChangeEvent::Playing, |client| client.play())
     }
 
-    fn pause(&mut self) -> Result<CommandEvent> {
-        self.try_with_reconnect(CommandEvent::Paused, |client| client.pause(true))
+    fn pause(&mut self) -> Result<StatusChangeEvent> {
+        self.try_with_reconnect(StatusChangeEvent::Paused, |client| client.pause(true))
     }
 
-    fn next_track(&mut self) -> Result<CommandEvent> {
-        self.try_with_reconnect(CommandEvent::SwitchedToNextTrack, |client| client.next())
+    fn next_track(&mut self) -> Result<StatusChangeEvent> {
+        self.try_with_reconnect(StatusChangeEvent::SwitchedToNextTrack, |client| {
+            client.next()
+        })
     }
 
-    fn prev_track(&mut self) -> Result<CommandEvent> {
-        self.try_with_reconnect(CommandEvent::SwitchedToPrevTrack, |client| client.prev())
+    fn prev_track(&mut self) -> Result<StatusChangeEvent> {
+        self.try_with_reconnect(StatusChangeEvent::SwitchedToPrevTrack, |client| {
+            client.prev()
+        })
     }
 
-    fn stop(&mut self) -> Result<CommandEvent> {
-        self.try_with_reconnect(CommandEvent::Stopped, |client| client.stop())
+    fn stop(&mut self) -> Result<StatusChangeEvent> {
+        self.try_with_reconnect(StatusChangeEvent::Stopped, |client| client.stop())
     }
 
     fn shutdown(&mut self) {
@@ -90,14 +94,14 @@ impl Player for MpdPlayerApi {
         self.mpd_server_process.kill();
     }
 
-    fn rewind(&mut self, seconds: i8) -> Result<CommandEvent> {
+    fn rewind(&mut self, seconds: i8) -> Result<StatusChangeEvent> {
         let result = self.try_with_reconnect_result(|client| client.status());
         if let Ok(status) = result {
             //todo: implement protection against going of the range
             let position = status.elapsed.unwrap().num_seconds() + seconds as i64;
             self.mpd_client.rewind(position)?;
         }
-        Ok(CommandEvent::Playing)
+        Ok(StatusChangeEvent::Playing)
     }
 
     fn get_current_track_info(&mut self) -> Option<CurrentTrackInfo> {
@@ -168,6 +172,13 @@ impl Player for MpdPlayerApi {
         } else {
             error!("Error while getting mpd status {:?}", status);
             return None;
+        }
+    }
+
+    fn random_toggle(&mut self) {
+        let status = self.try_with_reconnect_result(|client| client.status());
+        if let Ok(status) = status {
+            self.mpd_client.random(!status.random);
         }
     }
 }

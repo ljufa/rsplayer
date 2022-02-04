@@ -17,12 +17,12 @@ use linux_embedded_hal::{Delay, Pin};
 use tokio::sync::broadcast::Receiver;
 use unidecode::unidecode;
 
-use crate::common::{CommandEvent, CurrentTrackInfo, PlayerInfo, PlayerState, StreamerStatus};
+use crate::common::{CurrentTrackInfo, PlayerInfo, PlayerState, StatusChangeEvent, StreamerStatus};
 
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
 use crate::monitor::myst7920::ST7920;
 
-pub fn start(mut state_changes_receiver: Receiver<CommandEvent>) {
+pub fn start(mut state_changes_receiver: Receiver<StatusChangeEvent>) {
     tokio::task::spawn(async move {
         let mut delay = Delay;
         let mut spi = Spidev::open("/dev/spidev0.0").expect("error initializing SPI");
@@ -50,13 +50,13 @@ pub fn start(mut state_changes_receiver: Receiver<CommandEvent>) {
             trace!("Command event received: {:?}", cmd_ev);
             let cmd_ev = cmd_ev.unwrap();
             match cmd_ev {
-                CommandEvent::CurrentTrackInfoChanged(stat) => {
+                StatusChangeEvent::CurrentTrackInfoChanged(stat) => {
                     draw_track_info(&mut disp, &mut delay, stat);
                 }
-                CommandEvent::StreamerStatusChanged(sstatus) => {
+                StatusChangeEvent::StreamerStatusChanged(sstatus) => {
                     draw_streamer_info(&mut disp, &mut delay, sstatus);
                 }
-                CommandEvent::PlayerInfoChanged(pinfo) => {
+                StatusChangeEvent::PlayerInfoChanged(pinfo) => {
                     draw_player_info(&mut disp, &mut delay, pinfo);
                 }
                 _ => {}
