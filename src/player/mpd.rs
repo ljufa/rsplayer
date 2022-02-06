@@ -21,8 +21,9 @@ unsafe impl Send for MpdPlayerApi {}
 
 impl MpdPlayerApi {
     pub fn new(mpd_settings: &MpdSettings) -> Result<MpdPlayerApi> {
+        let server_proc = start_mpd_server()?;
         Ok(MpdPlayerApi {
-            mpd_server_process: start_mpd_server()?,
+            mpd_server_process: server_proc,
             mpd_client: create_client(&mpd_settings)?,
             mpd_server_url: mpd_settings.get_server_url(),
         })
@@ -215,18 +216,22 @@ fn create_client(mpd_settings: &MpdSettings) -> Result<Client> {
     let mut connection = None;
     while tries < 5 {
         tries += 1;
-        info!("Trying to connect to MPD server. Attempt no: {}", tries);
+        info!(
+            "Trying to connect to MPD server {}. Attempt no: {}",
+            mpd_settings.get_server_url(),
+            tries,
+        );
         let conn = Client::connect(mpd_settings.get_server_url().as_str());
-        if let Ok(mut conn) = conn {
-            if conn.queue()?.is_empty() {
-                info!("Mpd playlist is empty, creating default one.");
-                conn.findadd(&Query::new().and(Term::Tag(Cow::from("date")), "2020"))?;
-                conn.random(true)?;
+        match conn {
+            Ok(mut conn) => {
+                info!("Mpd client created");
+                connection = Some(conn);
+                break;
             }
-            connection = Some(conn);
-            break;
-        } else {
-            std::thread::sleep(Duration::from_secs(1))
+            Err(e) => {
+                error!("Failed to connect to mpd server {}", e);
+                std::thread::sleep(Duration::from_secs(1))
+            }
         }
     }
     match connection {

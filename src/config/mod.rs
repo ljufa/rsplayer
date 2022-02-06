@@ -23,6 +23,7 @@ pub struct Settings {
 }
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SpotifySettings {
+    pub enabled: bool,
     pub device_name: String,
     pub developer_client_id: String,
     pub developer_secret: String,
@@ -78,6 +79,7 @@ impl Default for Settings {
         let default_alsa_pcm_device = "hw:1";
         Settings {
             spotify_settings: Some(SpotifySettings {
+                enabled: false,
                 device_name: String::from("dplayer@rpi"),
                 auth_callback_url: String::from("http://dplayer.lan:8000"),
                 developer_client_id: String::default(),

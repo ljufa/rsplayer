@@ -31,6 +31,9 @@ unsafe impl Send for SpotifyPlayerApi {}
 
 impl SpotifyPlayerApi {
     pub fn new(settings: &SpotifySettings) -> Result<SpotifyPlayerApi> {
+        if !settings.enabled {
+            return Err(failure::err_msg("Spotify integration is disabled."));
+        }
         Ok(SpotifyPlayerApi {
             librespot_process: start_librespot(settings)?,
             client_device: create_spotify_client(settings)?,
