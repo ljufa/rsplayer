@@ -21,6 +21,9 @@ unsafe impl Send for MpdPlayerApi {}
 
 impl MpdPlayerApi {
     pub fn new(mpd_settings: &MpdSettings) -> Result<MpdPlayerApi> {
+        if !mpd_settings.enabled {
+            return Err(failure::err_msg("MPD player integration is disabled."));
+        }
         let server_proc = start_mpd_server()?;
         Ok(MpdPlayerApi {
             mpd_server_process: server_proc,

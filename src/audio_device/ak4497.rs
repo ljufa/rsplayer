@@ -1,7 +1,7 @@
 use std::thread;
 use std::time::Duration;
 
-use crate::common::{DacStatus, FilterType, GainLevel};
+use crate::common::{DacStatus, FilterType, GainLevel, Result};
 use crate::config::DacSettings;
 use crate::mcu::gpio;
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_DAC_PDN_RST;
@@ -19,16 +19,16 @@ unsafe impl Sync for Dac {}
 
 #[automock]
 impl Dac {
-    pub fn new(dac_state: DacStatus, settings: &DacSettings) -> Self {
+    pub fn new(dac_state: DacStatus, settings: &DacSettings) -> Result<Self> {
         let dac = Self {
             i2c_helper: I2CHelper::new(settings.i2c_address),
             volume_step: settings.volume_step,
         };
-        dac.initialize(dac_state).expect("Can not initialize dac");
-        return dac;
+        dac.initialize(dac_state)?;
+        return Ok(dac);
     }
 
-    fn initialize(self: &Self, dac_state: DacStatus) -> Result<(), failure::Error> {
+    fn initialize(self: &Self, dac_state: DacStatus) -> Result<()> {
         // try talking to dac,
         match self.i2c_helper.read_register(0) {
             Ok(_) => {
@@ -69,7 +69,7 @@ impl Dac {
         Ok(())
     }
 
-    pub fn change_sound_setting(self: &Self, setting_no: u8) -> Result<u8, failure::Error> {
+    pub fn change_sound_setting(self: &Self, setting_no: u8) -> Result<u8> {
         match setting_no {
             1 => {
                 self.i2c_helper.change_bit(8, 1, false);
@@ -101,7 +101,7 @@ impl Dac {
         Ok(setting_no)
     }
 
-    fn get_reg_values(self: &Self) -> Result<Vec<String>, failure::Error> {
+    fn get_reg_values(self: &Self) -> Result<Vec<String>> {
         let mut result = Vec::new();
         for rg in 0..15 {
             let val = self.i2c_helper.read_register(rg)?;
@@ -110,13 +110,13 @@ impl Dac {
         Ok(result)
     }
 
-    pub fn set_vol(self: &Self, value: u8) -> Result<u8, failure::Error> {
+    pub fn set_vol(self: &Self, value: u8) -> Result<u8> {
         self.i2c_helper.write_register(3, value);
         self.i2c_helper.write_register(4, value);
         Ok(value)
     }
 
-    pub fn vol_down(self: &Self) -> Result<u8, failure::Error> {
+    pub fn vol_down(self: &Self) -> Result<u8> {
         let curr_val = self.i2c_helper.read_register(3)?;
         if let Some(new_val) = curr_val.checked_sub(self.volume_step) {
             self.set_vol(new_val)
@@ -125,7 +125,7 @@ impl Dac {
         }
     }
 
-    pub fn vol_up(self: &Self) -> Result<u8, failure::Error> {
+    pub fn vol_up(self: &Self) -> Result<u8> {
         let curr_val = self.i2c_helper.read_register(3)?;
         if let Some(new_val) = curr_val.checked_add(self.volume_step) {
             self.set_vol(new_val)
@@ -134,7 +134,7 @@ impl Dac {
         }
     }
 
-    pub fn filter(self: &Self, typ: FilterType) -> Result<FilterType, failure::Error> {
+    pub fn filter(self: &Self, typ: FilterType) -> Result<FilterType> {
         match typ {
             FilterType::SharpRollOff => {
                 self.i2c_helper.change_bit(5, 0, false);
@@ -165,12 +165,12 @@ impl Dac {
         Ok(typ)
     }
 
-    pub fn hi_load(self: &Self, flag: bool) -> Result<bool, failure::Error> {
+    pub fn hi_load(self: &Self, flag: bool) -> Result<bool> {
         self.i2c_helper.change_bit(8, 3, flag);
         Ok(flag)
     }
 
-    pub fn set_gain(self: &Self, level: GainLevel) -> Result<GainLevel, failure::Error> {
+    pub fn set_gain(self: &Self, level: GainLevel) -> Result<GainLevel> {
         match level {
             GainLevel::V25 => self.i2c_helper.write_register(7, 0b0000_0101),
             GainLevel::V28 => self.i2c_helper.write_register(7, 0b0000_0001),

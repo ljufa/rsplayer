@@ -38,9 +38,6 @@ pub fn start(tx: SyncSender<Command>, lirc_socket: ReadSocket) {
                 "00 KEY_PREVIOUSSONG" => {
                     tx.send(Command::Prev).expect("Error");
                 }
-                "00 KEY_MENU" => {
-                    tx.send(Command::TogglePlayer).expect("Error");
-                }
                 "00 KEY_EJECTCD" => {
                     tx.send(Command::ChangeAudioOutput).expect("Error");
                     std::thread::sleep(Duration::from_secs(1));

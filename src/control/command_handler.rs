@@ -1,6 +1,5 @@
-#[double]
 use crate::audio_device::ak4497::Dac;
-#[double]
+
 use crate::audio_device::alsa::AudioCard;
 use crate::player::PlayerFactory;
 use mockall_double::double;
@@ -134,27 +133,6 @@ pub fn start(
                         .rewind(sec);
                 }
                 // system commands
-                TogglePlayer => {
-                    let mut cfg = config_store.lock().unwrap();
-                    let cpt = cfg.get_streamer_status().source_player;
-                    match player_factory
-                        .lock()
-                        .unwrap()
-                        .toggle_player(audio_card.clone(), &cpt)
-                    {
-                        Ok(npt) => {
-                            let new_state = cfg.patch_streamer_status(Some(npt), None);
-                            state_changes_sender
-                                .send(StreamerStatusChanged(new_state))
-                                .unwrap();
-                        }
-                        Err(_e) => {
-                            state_changes_sender
-                                .send(StatusChangeEvent::Error(String::from("Change failed!")))
-                                .unwrap();
-                        }
-                    }
-                }
                 SwitchToPlayer(pt) => {
                     trace!("Switching to player {:?}", pt);
                     let mut cfg = config_store.lock().unwrap();

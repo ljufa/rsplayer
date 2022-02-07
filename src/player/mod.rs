@@ -2,7 +2,6 @@ use mockall_double::double;
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::sync::Arc;
 
-#[double]
 use crate::audio_device::alsa::AudioCard;
 use crate::common::{CurrentTrackInfo, PlayerInfo, PlayerType, Result, StatusChangeEvent};
 use crate::config::Settings;
@@ -33,28 +32,13 @@ pub struct PlayerFactory {
 }
 
 impl PlayerFactory {
-    pub fn new(current_player: &PlayerType, settings: Settings) -> Self {
-        let plr = PlayerFactory::create_this_or_first_available_player(&settings, current_player);
-        PlayerFactory {
-            player: plr.expect("No players available at this moment"),
+    pub fn new(current_player: &PlayerType, settings: Settings) -> Result<Self> {
+        Ok(PlayerFactory {
+            player: PlayerFactory::create_player(&settings, current_player)?,
             settings,
-        }
+        })
     }
 
-    pub fn toggle_player(
-        &mut self,
-        audio_card: Arc<AudioCard>,
-        current_player: &PlayerType,
-    ) -> Result<PlayerType> {
-        self.player.shutdown();
-        // time needed to release alsa device lock for next player
-        // todo: stop other players if lock can't be released. i.e. if play started externally.
-        audio_card.wait_unlock_audio_dev()?;
-        let cpt = PlayerFactory::next_player_type(current_player);
-        self.player = PlayerFactory::create_this_or_first_available_player(&self.settings, &cpt)?;
-        self.player.play()?;
-        Ok(cpt)
-    }
     pub fn get_current_player(&mut self) -> &mut Box<dyn Player + Send> {
         &mut self.player
     }
@@ -76,55 +60,11 @@ impl PlayerFactory {
         player_type: &PlayerType,
     ) -> Result<Box<dyn Player + Send>> {
         return match player_type {
-            PlayerType::SPF => {
-                if let Some(spot_set) = &settings.spotify_settings {
-                    Ok(Box::new(SpotifyPlayerApi::new(spot_set)?))
-                } else {
-                    Err(failure::err_msg("failed"))
-                }
-            }
-            PlayerType::MPD => {
-                if let Some(mpd_set) = &settings.mpd_settings {
-                    Ok(Box::new(MpdPlayerApi::new(mpd_set)?))
-                } else {
-                    Err(failure::err_msg("failed"))
-                }
-            }
-            PlayerType::LMS => {
-                if let Some(lms_set) = &settings.lms_settings {
-                    Ok(Box::new(LogitechMediaServerApi::new(lms_set)?))
-                } else {
-                    Err(failure::err_msg("failed"))
-                }
-            }
+            PlayerType::SPF => Ok(Box::new(SpotifyPlayerApi::new(&settings.spotify_settings)?)),
+            PlayerType::MPD => Ok(Box::new(MpdPlayerApi::new(&settings.mpd_settings)?)),
+            PlayerType::LMS => Ok(Box::new(LogitechMediaServerApi::new(
+                &settings.lms_settings,
+            )?)),
         };
-    }
-
-    fn next_player_type(start_from: &PlayerType) -> PlayerType {
-        let curr_id: u8 = ToPrimitive::to_u8(start_from).unwrap();
-        let next_player_try = FromPrimitive::from_u8(curr_id + 1);
-        let next_player;
-        if let Some(pl) = next_player_try {
-            next_player = pl;
-        } else {
-            next_player = FromPrimitive::from_u8(1u8).unwrap();
-        }
-        next_player
-    }
-
-    fn create_this_or_first_available_player(
-        settings: &Settings,
-        start_from: &PlayerType,
-    ) -> Result<Box<dyn Player + Send>> {
-        let mut tries = 0;
-        let mut cpt = start_from.clone();
-        let mut cpl = PlayerFactory::create_player(settings, &cpt);
-        while cpl.is_err() && tries < 3 {
-            trace!("Player {:?} creation failed: {:?}", &cpt, cpl.err());
-            cpt = PlayerFactory::next_player_type(&cpt);
-            cpl = PlayerFactory::create_player(settings, &cpt);
-            tries = tries + 1;
-        }
-        cpl
     }
 }

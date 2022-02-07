@@ -8,14 +8,10 @@ const SETTINGS_KEY: &str = "settings";
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Settings {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub spotify_settings: Option<SpotifySettings>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub lms_settings: Option<LmsSettings>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mpd_settings: Option<MpdSettings>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dac_settings: Option<DacSettings>,
+    pub spotify_settings: SpotifySettings,
+    pub lms_settings: LmsSettings,
+    pub mpd_settings: MpdSettings,
+    pub dac_settings: DacSettings,
     pub alsa_settings: AlsaSettings,
     pub available_alsa_pcm_devices: HashMap<String, String>,
     pub available_alsa_control_devices: HashMap<String, String>,
@@ -36,6 +32,7 @@ pub struct SpotifySettings {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LmsSettings {
+    pub enabled: bool,
     pub cli_port: u32,
     pub server_host: String,
     pub server_port: u32,
@@ -46,6 +43,7 @@ pub struct LmsSettings {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MpdSettings {
+    pub enabled: bool,
     pub server_host: String,
     pub server_port: u32,
 }
@@ -78,7 +76,7 @@ impl Default for Settings {
     fn default() -> Self {
         let default_alsa_pcm_device = "hw:1";
         Settings {
-            spotify_settings: Some(SpotifySettings {
+            spotify_settings: SpotifySettings {
                 enabled: false,
                 device_name: String::from("dplayer@rpi"),
                 auth_callback_url: String::from("http://dplayer.lan:8000"),
@@ -88,23 +86,25 @@ impl Default for Settings {
                 password: String::default(),
                 alsa_device_name: format!("plug{}", default_alsa_pcm_device),
                 bitrate: 320,
-            }),
-            lms_settings: Some(LmsSettings {
+            },
+            lms_settings: LmsSettings {
+                enabled: false,
                 server_host: String::from("localhost"),
                 cli_port: 9090,
                 server_port: 9000,
                 alsa_control_device_name: None,
                 alsa_pcm_device_name: String::from(default_alsa_pcm_device),
-            }),
-            dac_settings: Some(DacSettings {
+            },
+            dac_settings: DacSettings {
                 chip_id: String::from("AK4497"),
                 i2c_address: 0x13,
                 volume_step: 2,
-            }),
-            mpd_settings: Some(MpdSettings {
+            },
+            mpd_settings: MpdSettings {
+                enabled: false,
                 server_host: String::from("localhost"),
                 server_port: 6600,
-            }),
+            },
             alsa_settings: AlsaSettings {
                 device_name: String::from(default_alsa_pcm_device),
             },
@@ -169,8 +169,10 @@ impl Configuration {
     pub fn get_settings(&mut self) -> Settings {
         let mut result: Settings;
         if let Some(ds) = self.db.get(SETTINGS_KEY) {
+            debug!("Existing settings config found: {:?}", ds);
             result = ds;
         } else {
+            info!("Existing configuration not found. Using default.");
             let default = Settings::default();
             self.db
                 .set(SETTINGS_KEY, &default)

@@ -22,9 +22,8 @@ use std::{
 };
 use unix_socket::UnixStream;
 
-#[double]
 use crate::audio_device::ak4497::Dac;
-#[double]
+
 use crate::audio_device::alsa::AudioCard;
 use crate::common::Command;
 
@@ -43,35 +42,77 @@ async fn main() {
     let mut config = config::Configuration::new();
     let settings = config.get_settings();
 
-    let dac = Arc::new(Dac::new(
+    let dac = Dac::new(
         config.get_streamer_status().dac_status,
-        &settings
-            .dac_settings
-            .as_ref()
-            .expect("Dac Integration is not enabled"),
-    ));
+        &settings.dac_settings,
+    );
+    if let Err(dac_err) = dac {
+        error!("DAC initialization error: {}", dac_err);
+        std::process::exit(1);
+    } else {
+        info!("Dac is successfully initialized.");
+    }
+
+    let dac = Arc::new(dac.unwrap());
     let audio_card = Arc::new(AudioCard::new(settings.alsa_settings.device_name.clone()));
-    audio_card.wait_unlock_audio_dev();
+    let card_ok = audio_card.wait_unlock_audio_dev();
+    if let Err(err) = card_ok {
+        error!("Audio card error: {}", err);
+        std::process::exit(1);
+    } else {
+        info!("Audio card is succesfully initialized.");
+    }
 
     panic::set_hook(Box::new(|x| {
         error!("IGNORE PANIC: {}", x);
     }));
 
     let (input_commands_tx, input_commands_rx) = mpsc::sync_channel(1);
-    control::ir_lirc::start(
-        input_commands_tx.clone(),
-        Arc::new(Mutex::new(
-            UnixStream::connect("/var/run/lirc/lircd").unwrap(),
-        )),
-    );
-
-    let player_factory = Arc::new(Mutex::new(PlayerFactory::new(
-        &config.get_streamer_status().source_player,
-        settings.clone(),
-    )));
-
-    let config = Arc::new(Mutex::new(config));
     let (state_changes_sender, _) = broadcast::channel(20);
+    let current_player = &config.get_streamer_status().source_player;
+    let player_factory = PlayerFactory::new(current_player, settings.clone());
+    let config = Arc::new(Mutex::new(config));
+    if let Ok(player_factory) = player_factory {
+        control::ir_lirc::start(
+            input_commands_tx.clone(),
+            Arc::new(Mutex::new(
+                UnixStream::connect("/var/run/lirc/lircd").unwrap(),
+            )),
+        );
+        let player_factory = Arc::new(Mutex::new(player_factory));
+
+        monitor::oled::start(state_changes_sender.subscribe());
+
+        // poll player and dac and produce event if something has changed
+        StatusMonitor::start(
+            player_factory.clone(),
+            state_changes_sender.clone(),
+            audio_card.clone(),
+        );
+        // start command handler thread
+        control::command_handler::start(
+            dac.clone(),
+            player_factory.clone(),
+            audio_card.clone(),
+            config.clone(),
+            input_commands_rx,
+            state_changes_sender.clone(),
+        );
+
+        // send play command to start playing on last used player
+        input_commands_tx.send(Command::Play).expect("Error");
+
+        state_changes_sender
+            .send(StatusChangeEvent::StreamerStatusChanged(
+                config.lock().unwrap().get_streamer_status(),
+            ))
+            .expect("Event send failed");
+    } else if let Err(pf_err) = player_factory {
+        error!(
+            "Configured player {:?} can not be created. Please use settings page to enter correct configuration.\n Error: {:?}",
+            current_player, pf_err
+        );
+    }
 
     // start http server
     let http_handle = http_api::server_warp::start(
@@ -79,32 +120,5 @@ async fn main() {
         input_commands_tx.clone(),
         config.clone(),
     );
-    monitor::oled::start(state_changes_sender.subscribe());
-
-    // poll player and dac and produce event if something has changed
-    StatusMonitor::start(
-        player_factory.clone(),
-        state_changes_sender.clone(),
-        audio_card.clone(),
-    );
-    // start command handler thread
-    control::command_handler::start(
-        dac.clone(),
-        player_factory.clone(),
-        audio_card.clone(),
-        config.clone(),
-        input_commands_rx,
-        state_changes_sender.clone(),
-    );
-
-    // send play command to start playing on last used player
-    input_commands_tx.send(Command::Play).expect("Error");
-
-    state_changes_sender
-        .send(StatusChangeEvent::StreamerStatusChanged(
-            config.lock().unwrap().get_streamer_status(),
-        ))
-        .expect("Event send failed");
-
     http_handle.await;
 }

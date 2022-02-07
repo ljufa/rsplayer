@@ -25,6 +25,9 @@ pub struct LogitechMediaServerApi {
 unsafe impl Send for LogitechMediaServerApi {}
 impl LogitechMediaServerApi {
     pub fn new(settings: &LmsSettings) -> Result<LogitechMediaServerApi> {
+        if !settings.enabled {
+            return Err(failure::err_msg("LMS player integration is not enabled."));
+        }
         let mut p = LogitechMediaServerApi {
             squeeze_player_process: start_squeezelite(settings)?,
             client: TcpStream::connect(settings.get_cli_url())?,
