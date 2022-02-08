@@ -16,11 +16,11 @@ pub fn start(tx: SyncSender<Command>, lirc_socket: ReadSocket) {
             let mut bytes = [0; 60];
             lirc_socket.lock().unwrap().read(&mut bytes);
             let result = str::from_utf8(&bytes).unwrap();
-            let apple = result.find(REMOTE_MAKER);
-            if apple.is_none() || result.len() < 18 {
+            let remote_maker = result.find(REMOTE_MAKER);
+            if remote_maker.is_none() || result.len() < 18 {
                 continue;
             }
-            let end = apple.unwrap();
+            let end = remote_maker.unwrap();
             if end <= 18 {
                 continue;
             }

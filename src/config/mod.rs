@@ -13,9 +13,7 @@ pub struct Settings {
     pub mpd_settings: MpdSettings,
     pub dac_settings: DacSettings,
     pub alsa_settings: AlsaSettings,
-    pub available_alsa_pcm_devices: HashMap<String, String>,
-    pub available_alsa_control_devices: HashMap<String, String>,
-    pub available_dac_chips: HashMap<String, String>,
+    pub ir_control_settings: IRInputControlerSettings,
 }
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SpotifySettings {
@@ -50,13 +48,25 @@ pub struct MpdSettings {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AlsaSettings {
     pub device_name: String,
+    #[serde(skip_deserializing)]
+    pub available_alsa_pcm_devices: HashMap<String, String>,
+    #[serde(skip_deserializing)]
+    pub available_alsa_control_devices: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DacSettings {
+    pub enabled: bool,
     pub chip_id: String,
     pub i2c_address: u16,
     pub volume_step: u8,
+    #[serde(skip_deserializing)]
+    pub available_dac_chips: HashMap<String, String>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct IRInputControlerSettings {
+    pub enabled: bool,
+    pub input_socket_path: String,
 }
 
 impl LmsSettings {
@@ -96,21 +106,26 @@ impl Default for Settings {
                 alsa_pcm_device_name: String::from(default_alsa_pcm_device),
             },
             dac_settings: DacSettings {
+                enabled: true,
                 chip_id: String::from("AK4497"),
                 i2c_address: 0x13,
                 volume_step: 2,
+                available_dac_chips: HashMap::new(),
             },
             mpd_settings: MpdSettings {
-                enabled: false,
+                enabled: true,
                 server_host: String::from("localhost"),
-                server_port: 6600,
+                server_port: 6677,
             },
             alsa_settings: AlsaSettings {
                 device_name: String::from(default_alsa_pcm_device),
+                available_alsa_pcm_devices: HashMap::new(),
+                available_alsa_control_devices: HashMap::new(),
             },
-            available_alsa_pcm_devices: HashMap::new(),
-            available_alsa_control_devices: HashMap::new(),
-            available_dac_chips: HashMap::new(),
+            ir_control_settings: IRInputControlerSettings {
+                enabled: true,
+                input_socket_path: String::from("/var/run/lirc/lircd"),
+            },
         }
     }
 }
@@ -179,11 +194,14 @@ impl Configuration {
                 .expect("Could not store default settings");
             result = default;
         }
-        result.available_alsa_pcm_devices = crate::audio_device::alsa::get_all_cards();
+        result.alsa_settings.available_alsa_pcm_devices =
+            crate::audio_device::alsa::get_all_cards();
         result
+            .dac_settings
             .available_dac_chips
             .insert(String::from("AK4497"), String::from("AK4497"));
         result
+            .dac_settings
             .available_dac_chips
             .insert(String::from("AK4490"), String::from("AK4490"));
         result
