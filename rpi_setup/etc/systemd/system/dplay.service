@@ -7,6 +7,7 @@ After=network-online.target lircd.service logitechmediaserver.service syslog.ser
 [Service]
 LimitMEMLOCK=655360
 Environment=RUST_BACKTRACE=full
+Environment=RUST_LOG=dplay=debug,warp=debug
 ExecStart=/home/ubuntu/dplay
 WorkingDirectory=/home/ubuntu
 ExecStartPre=sleep 5

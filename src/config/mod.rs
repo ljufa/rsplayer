@@ -14,17 +14,23 @@ pub struct Settings {
     pub dac_settings: DacSettings,
     pub alsa_settings: AlsaSettings,
     pub ir_control_settings: IRInputControlerSettings,
+    pub oled_settings: OLEDSettings,
 }
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SpotifySettings {
     pub enabled: bool,
     pub device_name: String,
-    pub developer_client_id: String,
-    pub developer_secret: String,
-    pub auth_callback_url: String,
     pub username: String,
     pub password: String,
+    #[serde(skip_deserializing)]
+    pub developer_client_id: String,
+    #[serde(skip_deserializing)]
+    pub developer_secret: String,
+    #[serde(skip_deserializing)]
+    pub auth_callback_url: String,
+    #[serde(skip_deserializing)]
     pub alsa_device_name: String,
+    #[serde(skip_deserializing)]
     pub bitrate: u16,
 }
 
@@ -36,6 +42,7 @@ pub struct LmsSettings {
     pub server_port: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alsa_control_device_name: Option<String>,
+    #[serde(skip_deserializing)]
     pub alsa_pcm_device_name: String,
 }
 
@@ -67,6 +74,10 @@ pub struct DacSettings {
 pub struct IRInputControlerSettings {
     pub enabled: bool,
     pub input_socket_path: String,
+}
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct OLEDSettings {
+    pub enabled: bool,
 }
 
 impl LmsSettings {
@@ -126,6 +137,7 @@ impl Default for Settings {
                 enabled: true,
                 input_socket_path: String::from("/var/run/lirc/lircd"),
             },
+            oled_settings: OLEDSettings { enabled: false },
         }
     }
 }

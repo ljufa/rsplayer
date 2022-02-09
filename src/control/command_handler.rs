@@ -2,7 +2,7 @@ use crate::audio_device::ak4497::Dac;
 
 use crate::audio_device::alsa::AudioCard;
 use crate::player::PlayerFactory;
-use mockall_double::double;
+
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast::Sender;
@@ -185,4 +185,5 @@ pub fn start(
             }
         }
     });
+    info!("Command handler thread started.")
 }

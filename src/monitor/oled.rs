@@ -63,6 +63,7 @@ pub fn start(mut state_changes_receiver: Receiver<StatusChangeEvent>) {
             }
         }
     });
+    info!("OLED writer started.");
 }
 
 fn draw_streamer_info(

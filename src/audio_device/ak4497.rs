@@ -44,13 +44,12 @@ impl Dac {
                     .expect("Dac not available after restart");
             }
         }
-        info!("Dac registry before init");
+        trace!("Dac registry before init");
         self.get_reg_values()
             .expect("Can not read dac registry")
             .into_iter()
-            .for_each(|r| info!("{}", r));
+            .for_each(|r| trace!("{}", r));
 
-        //self.reset();
         self.i2c_helper.write_register(0, 0b1000_1111);
         self.i2c_helper.write_register(1, 0b1010_0010);
         self.set_vol(dac_state.volume).expect("error");
@@ -60,12 +59,11 @@ impl Dac {
         self.change_sound_setting(dac_state.sound_sett)
             .expect("error");
         //self.soft_mute(dac_state.muted);
-        info!("Dac registry After init");
+        trace!("Dac registry After init");
         self.get_reg_values()
             .expect("Can not read dac registry")
             .into_iter()
-            .for_each(|r| info!("{}", r));
-
+            .for_each(|r| trace!("{}", r));
         Ok(())
     }
 

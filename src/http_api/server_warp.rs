@@ -1,6 +1,10 @@
 use futures::FutureExt;
 use futures::StreamExt;
-use serde::Serialize;
+
+use crate::common::Command;
+use crate::common::StatusChangeEvent;
+use crate::common::DPLAY_CONFIG_DIR_PATH;
+use crate::config::Configuration;
 use std::{
     collections::HashMap,
     sync::{
@@ -23,11 +27,6 @@ use warp::{
     Filter,
 };
 
-use crate::{
-    common::{Command, StatusChangeEvent, DPLAY_CONFIG_DIR_PATH},
-    config::Configuration,
-};
-
 /// Our global unique user id counter.
 static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 
@@ -37,6 +36,7 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 /// - Value is a sender of `warp::ws::Message`
 type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
 type LastStatusMessages = Arc<RwLock<LastStatus>>;
+type Config = Arc<Mutex<Configuration>>;
 
 struct LastStatus {
     current_track_info: Option<String>,
@@ -55,7 +55,7 @@ impl Default for LastStatus {
 pub async fn start(
     mut state_changes_receiver: Receiver<StatusChangeEvent>,
     input_commands_tx: SyncSender<Command>,
-    config: Arc<Mutex<Configuration>>,
+    config: Config,
 ) {
     // Keep track of all connected users, key is usize, value
     // is a websocket sender.
@@ -71,9 +71,10 @@ pub async fn start(
         .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
         .allow_any_origin();
 
-    let settings_rest_path = warp::get()
+    let cc = config.clone();
+    let get_settings = warp::get()
         .and(warp::path!("api" / "settings"))
-        .map(move || warp::reply::json(&config.lock().expect("").get_settings()));
+        .map(move || warp::reply::json(&cc.lock().unwrap().get_settings()));
 
     let player_ws_path = warp::path!("api" / "player")
         .and(warp::ws())
@@ -90,7 +91,8 @@ pub async fn start(
         );
     let ui_static_content = warp::get().and(warp::fs::dir(format!("{}ui", DPLAY_CONFIG_DIR_PATH)));
     let routes = player_ws_path
-        .or(settings_rest_path)
+        .or(filters::settings_save(config.clone()))
+        .or(get_settings)
         .or(ui_static_content)
         .with(cors);
     tokio::task::spawn(async move {
@@ -110,7 +112,52 @@ pub async fn start(
             .await;
         }
     });
-    warp::serve(routes).run(([0, 0, 0, 0], 8000)).await
+    warp::serve(routes).run(([0, 0, 0, 0], 8000)).await;
+    info!("HTTP server started on port 8000");
+}
+mod filters {
+    use crate::config::Settings;
+    use warp::Filter;
+
+    use super::{handlers, Config};
+
+    pub fn settings_save(
+        config: Config,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        warp::post()
+            .and(warp::path!("api" / "settings"))
+            .and(json_body())
+            .and(with_config(config))
+            .and_then(handlers::save_settings)
+    }
+    fn with_config(
+        config: Config,
+    ) -> impl Filter<Extract = (Config,), Error = std::convert::Infallible> + Clone {
+        warp::any().map(move || config.clone())
+    }
+
+    fn json_body() -> impl Filter<Extract = (Settings,), Error = warp::Rejection> + Clone {
+        // When accepting a body, we want a JSON body
+        // (and to reject huge payloads)...
+        warp::body::json()
+    }
+}
+mod handlers {
+    use std::convert::Infallible;
+
+    use warp::hyper::StatusCode;
+
+    use crate::config::Settings;
+
+    use super::Config;
+    pub async fn save_settings(
+        settings: Settings,
+        config: Config,
+    ) -> Result<impl warp::Reply, Infallible> {
+        debug!("Settings to save {:?}", settings);
+        config.lock().unwrap().save_settings(&settings);
+        Ok(StatusCode::CREATED)
+    }
 }
 
 async fn notify_users(
@@ -146,7 +193,7 @@ async fn notify_users(
         }
         _ => {}
     }
-    if (!json_msg.is_empty()) {
+    if !json_msg.is_empty() {
         for (&_uid, tx) in users_to_notify.read().await.iter() {
             tx.send(Ok(Message::text(json_msg.clone()))).unwrap();
         }

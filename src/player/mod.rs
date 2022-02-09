@@ -1,5 +1,3 @@
-use mockall_double::double;
-use num_traits::{FromPrimitive, ToPrimitive};
 use std::sync::Arc;
 
 use crate::audio_device::alsa::AudioCard;

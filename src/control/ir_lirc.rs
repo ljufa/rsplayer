@@ -14,7 +14,11 @@ pub fn start(tx: SyncSender<Command>, lirc_socket: ReadSocket) {
     tokio::task::spawn(async move {
         loop {
             let mut bytes = [0; 60];
-            lirc_socket.lock().unwrap().read(&mut bytes);
+            lirc_socket
+                .lock()
+                .unwrap()
+                .read(&mut bytes)
+                .expect("Failed to read lirc socket.");
             let result = str::from_utf8(&bytes).unwrap();
             let remote_maker = result.find(REMOTE_MAKER);
             if remote_maker.is_none() || result.len() < 18 {
@@ -65,6 +69,7 @@ pub fn start(tx: SyncSender<Command>, lirc_socket: ReadSocket) {
             }
         }
     });
+    info!("IR command receiver started.");
 }
 
 #[cfg(test)]

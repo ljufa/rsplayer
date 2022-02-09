@@ -14,19 +14,7 @@ build_librespot:
 	cd librespot
 	cross build --target $(TARGET) --release --no-default-features --features alsa-backend
 	cp -f target/$(TARGET)/$(OUT)/librespot ../dplayer/rpi_setup/.dplay/librespot
-	
-run_ext_build_server:
-	docker rm -f dash-build
-	docker run --user dlj --name dash-build --volume ${PWD}:/usr/src/app --detach --rm ljufa/linux-aarch64-gnu-rust:latest 
 
-chk:
-	docker exec -it dash-build /bin/bash -c "RUSTFLAGS='-C linker=aarch64-linux-gnu-gcc' cargo check --target $(TARGET)" 
-
-fix: run_ext_build_server chk
-	docker exec -it dash-build /bin/bash -c "RUSTFLAGS='-C linker=aarch64-linux-gnu-gcc' cargo fix --target $(TARGET) --allow-dirty"
-
-clippy:
-	cross clippy --target $(TARGET) --package dplay:0.1.0 --bin dplay
 
 test:
 	cross test --target $(TARGET) --package dplay:0.1.0 --bin dplay
@@ -34,14 +22,9 @@ test:
 check:
 	cross check --target $(TARGET) --package dplay:0.1.0 --bin dplay
 
-
 release:
 	cargo fmt
 	cross build --target $(TARGET) --release
-
-debug:
-	cargo fmt
-	cross build --target $(TARGET)
 
 copytorpi: $(OUT)
 	rsync -avvP --rsync-path="sudo rsync" target/$(TARGET)/$(OUT)/$(RELEASE) ubuntu@$(RPI_HOST):/home/ubuntu
@@ -53,3 +36,9 @@ copy_config:
 clean:
 	cargo clean
 	
+build_local:
+	cargo build
+
+test:
+	cargo test
+

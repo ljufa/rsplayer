@@ -1,7 +1,7 @@
+use std::time::Duration;
 use std::{borrow::BorrowMut, process::Child};
-use std::{borrow::Cow, time::Duration};
 
-use mpd::{Client, Query, Term};
+use mpd::Client;
 use num_traits::ToPrimitive;
 
 use crate::common::PlayerInfo;
@@ -226,7 +226,7 @@ fn create_client(mpd_settings: &MpdSettings) -> Result<Client> {
         );
         let conn = Client::connect(mpd_settings.get_server_url().as_str());
         match conn {
-            Ok(mut conn) => {
+            Ok(conn) => {
                 info!("Mpd client created");
                 connection = Some(conn);
                 break;

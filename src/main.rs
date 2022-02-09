@@ -13,13 +13,8 @@ mod mcu;
 mod monitor;
 mod player;
 
-use common::StatusChangeEvent;
-use mockall_double::double;
 use monitor::status::StatusMonitor;
-use std::{
-    panic,
-    sync::{mpsc, Arc, Mutex},
-};
+use std::sync::{mpsc, Arc, Mutex};
 use unix_socket::UnixStream;
 
 use crate::audio_device::ak4497::Dac;
@@ -63,9 +58,9 @@ async fn main() {
         info!("Audio card is succesfully initialized.");
     }
 
-    panic::set_hook(Box::new(|x| {
-        error!("IGNORE PANIC: {}", x);
-    }));
+    // panic::set_hook(Box::new(|x| {
+    //     error!("IGNORE PANIC: {}", x);
+    // }));
 
     let (input_commands_tx, input_commands_rx) = mpsc::sync_channel(1);
     let (state_changes_sender, _) = broadcast::channel(20);
@@ -73,15 +68,20 @@ async fn main() {
     let player_factory = PlayerFactory::new(current_player, settings.clone());
     let config = Arc::new(Mutex::new(config));
     if let Ok(player_factory) = player_factory {
-        control::ir_lirc::start(
-            input_commands_tx.clone(),
-            Arc::new(Mutex::new(
-                UnixStream::connect("/var/run/lirc/lircd").unwrap(),
-            )),
-        );
-        let player_factory = Arc::new(Mutex::new(player_factory));
+        info!("Player succesfully created.");
+        if settings.ir_control_settings.enabled {
+            control::ir_lirc::start(
+                input_commands_tx.clone(),
+                Arc::new(Mutex::new(
+                    UnixStream::connect("/var/run/lirc/lircd").unwrap(),
+                )),
+            );
+        }
+        if settings.oled_settings.enabled {
+            monitor::oled::start(state_changes_sender.subscribe());
+        }
 
-        monitor::oled::start(state_changes_sender.subscribe());
+        let player_factory = Arc::new(Mutex::new(player_factory));
 
         // poll player and dac and produce event if something has changed
         StatusMonitor::start(
@@ -101,12 +101,6 @@ async fn main() {
 
         // send play command to start playing on last used player
         input_commands_tx.send(Command::Play).expect("Error");
-
-        state_changes_sender
-            .send(StatusChangeEvent::StreamerStatusChanged(
-                config.lock().unwrap().get_streamer_status(),
-            ))
-            .expect("Event send failed");
     } else if let Err(pf_err) = player_factory {
         error!(
             "Configured player {:?} can not be created. Please use settings page to enter correct configuration.\n Error: {:?}",
@@ -120,5 +114,6 @@ async fn main() {
         input_commands_tx.clone(),
         config.clone(),
     );
+    info!("DPlayer started.");
     http_handle.await;
 }

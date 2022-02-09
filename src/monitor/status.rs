@@ -63,5 +63,6 @@ impl StatusMonitor {
                 thread::sleep(Duration::from_millis(1000));
             }
         });
+        info!("Status monitor thread started.")
     }
 }
