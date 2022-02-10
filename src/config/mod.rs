@@ -40,9 +40,6 @@ pub struct LmsSettings {
     pub cli_port: u32,
     pub server_host: String,
     pub server_port: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub alsa_control_device_name: Option<String>,
-    #[serde(skip_deserializing)]
     pub alsa_pcm_device_name: String,
 }
 
@@ -81,9 +78,6 @@ pub struct OLEDSettings {
 }
 
 impl LmsSettings {
-    pub fn get_player_url(&self) -> String {
-        format!("\"{}:{}\"", self.server_host, self.server_port)
-    }
     pub fn get_cli_url(&self) -> String {
         format!("{}:{}", self.server_host, self.cli_port)
     }
@@ -113,7 +107,6 @@ impl Default for Settings {
                 server_host: String::from("localhost"),
                 cli_port: 9090,
                 server_port: 9000,
-                alsa_control_device_name: None,
                 alsa_pcm_device_name: String::from(default_alsa_pcm_device),
             },
             dac_settings: DacSettings {

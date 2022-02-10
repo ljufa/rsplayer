@@ -46,9 +46,10 @@ impl PlayerFactory {
         audio_card: Arc<AudioCard>,
         player_type: &PlayerType,
     ) -> Result<PlayerType> {
-        self.player.shutdown();
+        let _ = self.player.stop();
         audio_card.wait_unlock_audio_dev()?;
-        self.player = PlayerFactory::create_player(&self.settings, player_type)?;
+        let new_player = PlayerFactory::create_player(&self.settings, player_type)?;
+        self.player = new_player;
         self.player.play()?;
         Ok(player_type.clone())
     }

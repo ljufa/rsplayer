@@ -165,26 +165,23 @@ async fn notify_users(
     status_change_event: StatusChangeEvent,
     last_state_change_message_2: LastStatusMessages,
 ) {
-    let mut json_msg = String::default();
+    let json_msg = serde_json::to_string(&status_change_event).unwrap();
     match status_change_event {
-        StatusChangeEvent::CurrentTrackInfoChanged(dsc) => {
-            json_msg = serde_json::to_string(&dsc).unwrap();
+        StatusChangeEvent::CurrentTrackInfoChanged(_) => {
             let last = last_state_change_message_2.try_write();
             if last.is_ok() {
                 let mut ls = last.unwrap();
                 ls.current_track_info = Some(json_msg.clone());
             }
         }
-        StatusChangeEvent::StreamerStatusChanged(sstat) => {
-            json_msg = serde_json::to_string(&sstat).unwrap();
+        StatusChangeEvent::StreamerStatusChanged(_) => {
             let last = last_state_change_message_2.try_write();
             if last.is_ok() {
                 let mut ls = last.unwrap();
                 ls.streamer_status = Some(json_msg.clone());
             }
         }
-        StatusChangeEvent::PlayerInfoChanged(pinfo) => {
-            json_msg = serde_json::to_string(&pinfo).unwrap();
+        StatusChangeEvent::PlayerInfoChanged(_) => {
             let last = last_state_change_message_2.try_write();
             if last.is_ok() {
                 let mut ls = last.unwrap();
