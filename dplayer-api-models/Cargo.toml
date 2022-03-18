@@ -1,0 +1,17 @@
+[package]
+name = "api_models"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+serde = "^1.0"
+serde_derive = "^1.0"
+serde_json = "^1.0"
+validator = { version = "0.12", features = ["derive"] }
+regex = "1"
+lazy_static = "1"
+uuid = { version = "0.8.2", features = ["serde", "v4"] }
+strum = "0.23"
+strum_macros = "0.23"
+num-traits = { version = "0.2.12", default-features = false }
+num-derive = { version = "0.3.2", default-features = false }

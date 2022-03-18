@@ -5,7 +5,7 @@ authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-api_models = { path = "../dplayer-api-models" }
+api_models = { path = "dplayer-api-models" }
 
 #logging
 log = "0.4"
@@ -45,9 +45,5 @@ alsa = "0.4.3"
 url = "2.2.0"
 num-traits = { version = "0.2.12", default-features = false }
 num-derive = { version = "0.3.2", default-features = false }
-strum = "0.20"
-strum_macros = "0.20"
-mockall = "0.8.3"
-mockall_double = "0.2.0"
 pickledb = "0.4.1"
 log4rs = "1.0.0"

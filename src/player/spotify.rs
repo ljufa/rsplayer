@@ -11,13 +11,11 @@ use rspotify::model::offset;
 use api_models::player::*;
 use api_models::settings::*;
 
-use crate::common::{
-    Result, DPLAY_CONFIG_DIR_PATH,
-};
+use crate::common::Result;
+use crate::config::Configuration;
 use crate::player::Player;
 use log::{info, trace};
 
-const CACHE_FILE: &str = ".spotify_token_cache";
 
 struct ClientDevice {
     client: Spotify,
@@ -220,22 +218,11 @@ pub fn auth_manager(settings: &SpotifySettings) -> SpotifyOAuth {
         .client_id(settings.developer_client_id.as_str())
         .client_secret(settings.developer_secret.as_str())
         .redirect_uri(settings.auth_callback_url.as_str())
-        .cache_path(cache_path())
+        .cache_path(Configuration::spotify_cache_path())
         .scope("user-read-currently-playing playlist-modify-private user-read-recently-played user-modify-playback-state user-read-playback-state")
         .build()
 }
 
-fn cache_path() -> PathBuf {
-    let project_dir_path = env::current_dir().unwrap();
-    let mut cache_path = PathBuf::from(project_dir_path);
-    cache_path.push(DPLAY_CONFIG_DIR_PATH);
-    let cache_dir = cache_path.display().to_string();
-    cache_path.push(CACHE_FILE);
-    if !Path::new(cache_dir.as_str()).exists() {
-        fs::create_dir_all(cache_dir).unwrap();
-    }
-    cache_path
-}
 
 fn create_spotify_client(settings: &SpotifySettings) -> Result<ClientDevice> {
     let token_info = get_token(&mut auth_manager(settings));
@@ -279,7 +266,7 @@ fn create_spotify_client(settings: &SpotifySettings) -> Result<ClientDevice> {
 }
 fn start_librespot(settings: &SpotifySettings) -> Result<Child> {
     info!("Starting librespot process");
-    let child = std::process::Command::new(format!("{}librespot", DPLAY_CONFIG_DIR_PATH))
+    let child = std::process::Command::new(Configuration::get_librespot_path())
         .arg("--disable-audio-cache")
         .arg("--bitrate")
         .arg(settings.bitrate.to_string())

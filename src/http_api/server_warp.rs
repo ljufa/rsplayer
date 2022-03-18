@@ -4,7 +4,6 @@ use futures::StreamExt;
 use api_models::player::*;
 
 
-use crate::common::DPLAY_CONFIG_DIR_PATH;
 use crate::config::Configuration;
 use std::{
     collections::HashMap,
@@ -90,7 +89,7 @@ pub async fn start(
                 })
             },
         );
-    let ui_static_content = warp::get().and(warp::fs::dir(format!("{}ui", DPLAY_CONFIG_DIR_PATH)));
+    let ui_static_content = warp::get().and(warp::fs::dir(Configuration::get_static_dir_path()));
     let routes = player_ws_path
         .or(filters::settings_save(config.clone()))
         .or(get_settings)
@@ -149,8 +148,6 @@ mod handlers {
 
     use api_models::settings::Settings;
     use warp::hyper::StatusCode;
-
-    
 
     use super::Config;
     pub async fn save_settings(

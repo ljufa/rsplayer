@@ -1,12 +1,13 @@
 use std::time::Duration;
 use std::{borrow::BorrowMut, process::Child};
 
-use mpd::Client;
-use num_traits::ToPrimitive;
 use api_models::player::*;
 use api_models::settings::*;
+use mpd::Client;
+use num_traits::ToPrimitive;
 
-use crate::common::{ Result,  DPLAY_CONFIG_DIR_PATH};
+use crate::common::Result;
+use crate::config::Configuration;
 
 use super::Player;
 
@@ -203,7 +204,7 @@ fn start_mpd_server() -> Result<Child> {
     let child = std::process::Command::new("/usr/bin/mpd")
         .arg("--no-daemon")
         .arg("-v")
-        .arg(format!("{}mpd.conf", DPLAY_CONFIG_DIR_PATH))
+        .arg(Configuration::get_mpd_config_file_path())
         .spawn();
     match child {
         Ok(c) => Ok(c),

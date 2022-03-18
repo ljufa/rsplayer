@@ -1,11 +1,7 @@
-//#![feature(proc_macro_hygiene, decl_macro)]
-#[macro_use]
 extern crate serde_derive;
 #[macro_use]
-extern crate strum_macros;
-extern crate env_logger;
-#[macro_use]
 extern crate log;
+extern crate env_logger;
 
 mod audio_device;
 mod common;
@@ -57,10 +53,6 @@ async fn main() {
     } else {
         info!("Audio card is succesfully initialized.");
     }
-
-    // panic::set_hook(Box::new(|x| {
-    //     error!("IGNORE PANIC: {}", x);
-    // }));
 
     let (input_commands_tx, input_commands_rx) = mpsc::sync_channel(1);
     let (state_changes_sender, _) = broadcast::channel(20);

@@ -4,14 +4,12 @@ use alsa::card;
 use alsa::pcm::State;
 use failure::Error;
 
-
 const WAIT_TIME_MS: u64 = 10000;
 const DELAY_MS: u64 = 100;
 
 pub struct AudioCard {
     device_name: String,
 }
-
 
 impl AudioCard {
     pub fn new(device_name: String) -> Self {

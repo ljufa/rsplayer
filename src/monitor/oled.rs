@@ -19,7 +19,6 @@ use unidecode::unidecode;
 
 use api_models::player::*;
 
-
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
 use crate::monitor::myst7920::ST7920;
 

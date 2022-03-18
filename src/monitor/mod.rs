@@ -1,3 +1,3 @@
-pub mod myst7920;
-pub mod oled;
-pub mod status;
+pub(crate) mod myst7920;
+pub(crate) mod oled;
+pub(crate) mod status;

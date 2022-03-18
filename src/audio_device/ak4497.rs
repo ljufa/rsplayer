@@ -9,7 +9,6 @@ use crate::mcu::gpio;
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_DAC_PDN_RST;
 use crate::mcu::i2c::I2CHelper;
 
-
 pub struct Dac {
     i2c_helper: I2CHelper,
     volume_step: u8,
@@ -18,7 +17,6 @@ pub struct Dac {
 unsafe impl Send for Dac {}
 
 unsafe impl Sync for Dac {}
-
 
 impl Dac {
     pub fn new(dac_state: DacStatus, settings: &DacSettings) -> Result<Self> {

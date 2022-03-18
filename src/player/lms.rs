@@ -4,12 +4,12 @@ use std::{
     process::Child,
 };
 
-use crate::common::{
-     Result, DPLAY_CONFIG_DIR_PATH,
-};
+
+use crate::common::Result;
+use crate::config::Configuration;
 use crate::player::Player;
-use api_models::player::*;
 use api_models::player::StatusChangeEvent::*;
+use api_models::player::*;
 use api_models::settings::*;
 
 // https://github.com/elParaguayo/LMS-CLI-Documentation/blob/master/LMS-CLI.md
@@ -187,7 +187,7 @@ impl Drop for LogitechMediaServerApi {
 
 fn start_squeezelite(settings: &LmsSettings) -> Result<Child> {
     info!("Starting squeezelite player!");
-    let child = std::process::Command::new(format!("{}squeezelite", DPLAY_CONFIG_DIR_PATH))
+    let child = std::process::Command::new(Configuration::get_squeezelite_player_path())
         // todo: investigate why localhost:9000 is passed as two args localhost and 9000
         //.arg("-s")
         //.arg(settings.get_player_url())

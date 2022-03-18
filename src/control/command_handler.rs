@@ -8,10 +8,9 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast::Sender;
 
-use api_models::player::*;
-use api_models::player::StatusChangeEvent::*;
 use api_models::player::Command::*;
-
+use api_models::player::StatusChangeEvent::*;
+use api_models::player::*;
 
 use crate::mcu::gpio;
 use crate::mcu::gpio::GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY;
