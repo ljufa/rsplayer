@@ -3,13 +3,12 @@ use std::{borrow::BorrowMut, process::Child};
 
 use mpd::Client;
 use num_traits::ToPrimitive;
+use api_models::player::*;
+use api_models::settings::*;
 
-use crate::common::PlayerInfo;
-use crate::{common::PlayerState, player::Player};
-use crate::{
-    common::{CurrentTrackInfo, Result, StatusChangeEvent, DPLAY_CONFIG_DIR_PATH},
-    config::MpdSettings,
-};
+use crate::common::{ Result,  DPLAY_CONFIG_DIR_PATH};
+
+use super::Player;
 
 pub struct MpdPlayerApi {
     mpd_server_process: Child,

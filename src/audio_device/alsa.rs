@@ -12,7 +12,7 @@ pub struct AudioCard {
     device_name: String,
 }
 
-#[automock]
+
 impl AudioCard {
     pub fn new(device_name: String) -> Self {
         AudioCard { device_name }

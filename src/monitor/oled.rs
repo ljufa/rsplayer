@@ -17,7 +17,8 @@ use linux_embedded_hal::{Delay, Pin};
 use tokio::sync::broadcast::Receiver;
 use unidecode::unidecode;
 
-use crate::common::{CurrentTrackInfo, PlayerInfo, PlayerState, StatusChangeEvent, StreamerStatus};
+use api_models::player::*;
+use api_models::settings::*;
 
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
 use crate::monitor::myst7920::ST7920;

@@ -1,12 +1,14 @@
 use std::thread;
 use std::time::Duration;
 
-use crate::common::{DacStatus, FilterType, GainLevel, Result};
-use crate::config::DacSettings;
+use crate::common::Result;
+use api_models::player::*;
+use api_models::settings::*;
+
 use crate::mcu::gpio;
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_DAC_PDN_RST;
 use crate::mcu::i2c::I2CHelper;
-use mockall::automock;
+
 
 pub struct Dac {
     i2c_helper: I2CHelper,
@@ -17,7 +19,7 @@ unsafe impl Send for Dac {}
 
 unsafe impl Sync for Dac {}
 
-#[automock]
+
 impl Dac {
     pub fn new(dac_state: DacStatus, settings: &DacSettings) -> Result<Self> {
         let dac = Self {

@@ -1,8 +1,9 @@
 use futures::FutureExt;
 use futures::StreamExt;
 
-use crate::common::Command;
-use crate::common::StatusChangeEvent;
+use api_models::player::*;
+use api_models::settings::*;
+
 use crate::common::DPLAY_CONFIG_DIR_PATH;
 use crate::config::Configuration;
 use std::{
@@ -116,7 +117,7 @@ pub async fn start(
     info!("HTTP server started on port 8000");
 }
 mod filters {
-    use crate::config::Settings;
+    use api_models::settings::Settings;
     use warp::Filter;
 
     use super::{handlers, Config};
@@ -142,12 +143,14 @@ mod filters {
         warp::body::json()
     }
 }
+
 mod handlers {
     use std::convert::Infallible;
 
+    use api_models::settings::Settings;
     use warp::hyper::StatusCode;
 
-    use crate::config::Settings;
+    
 
     use super::Config;
     pub async fn save_settings(

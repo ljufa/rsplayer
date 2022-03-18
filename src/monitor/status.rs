@@ -1,10 +1,11 @@
 use crate::player::PlayerFactory;
-use crate::{audio_device::alsa::AudioCard, common::StatusChangeEvent};
+use crate::{audio_device::alsa::AudioCard};
 use std::time::Duration;
 use std::{
     sync::{Arc, Mutex},
     thread,
 };
+use api_models::player::StatusChangeEvent;
 use tokio::sync::broadcast::Sender;
 
 pub struct StatusMonitor {}

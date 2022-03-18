@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
 use crate::audio_device::alsa::AudioCard;
-use crate::common::{CurrentTrackInfo, PlayerInfo, PlayerType, Result, StatusChangeEvent};
-use crate::config::Settings;
+use crate::common::Result;
 use crate::player::lms::LogitechMediaServerApi;
 use crate::player::mpd::MpdPlayerApi;
 use crate::player::spotify::SpotifyPlayerApi;
+
+use api_models::player::*;
+use api_models::settings::*;
 
 pub(crate) mod lms;
 pub(crate) mod mpd;

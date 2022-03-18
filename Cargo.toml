@@ -1,10 +1,12 @@
 [package]
 name = "dplay"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
+api_models = { path = "../dplayer-api-models" }
+
 #logging
 log = "0.4"
 env_logger = "0.8.3"
@@ -21,7 +23,7 @@ st7920 = "0.2.2"
 unix_socket = "0.5.0"
 
 # spotify
-rspotify = { version = "0.10.0", features = ["blocking"]}
+rspotify = { version = "0.10.0", features = ["blocking"] }
 openssl = { version = "0.10", features = ["vendored"] }
 
 #warp
@@ -49,4 +51,3 @@ mockall = "0.8.3"
 mockall_double = "0.2.0"
 pickledb = "0.4.1"
 log4rs = "1.0.0"
-

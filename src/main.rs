@@ -3,6 +3,9 @@
 extern crate serde_derive;
 #[macro_use]
 extern crate strum_macros;
+extern crate env_logger;
+#[macro_use]
+extern crate log;
 
 mod audio_device;
 mod common;
@@ -13,6 +16,7 @@ mod mcu;
 mod monitor;
 mod player;
 
+use api_models::player::Command;
 use monitor::status::StatusMonitor;
 use std::sync::{mpsc, Arc, Mutex};
 use unix_socket::UnixStream;
@@ -20,12 +24,8 @@ use unix_socket::UnixStream;
 use crate::audio_device::ak4497::Dac;
 
 use crate::audio_device::alsa::AudioCard;
-use crate::common::Command;
 
 use crate::player::PlayerFactory;
-extern crate env_logger;
-#[macro_use]
-extern crate log;
 
 use tokio::sync::broadcast;
 

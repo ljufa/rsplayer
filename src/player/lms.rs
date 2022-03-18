@@ -5,15 +5,12 @@ use std::{
 };
 
 use crate::common::{
-    CurrentTrackInfo, PlayerInfo, Result, StatusChangeEvent, DPLAY_CONFIG_DIR_PATH,
+     Result, DPLAY_CONFIG_DIR_PATH,
 };
 use crate::player::Player;
-use crate::{
-    common::StatusChangeEvent::{
-        Paused, Playing, Stopped, SwitchedToNextTrack, SwitchedToPrevTrack,
-    },
-    config::LmsSettings,
-};
+use api_models::player::*;
+use api_models::player::StatusChangeEvent::*;
+use api_models::settings::*;
 
 // https://github.com/elParaguayo/LMS-CLI-Documentation/blob/master/LMS-CLI.md
 

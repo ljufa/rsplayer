@@ -3,7 +3,9 @@ use std::str;
 use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex};
 
-use crate::common::Command;
+use api_models::player::Command;
+
+
 use failure::_core::time::Duration;
 
 type ReadSocket = Arc<Mutex<dyn io::Read + Send>>;

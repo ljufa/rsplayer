@@ -3,14 +3,16 @@ use std::path::{Path, PathBuf};
 use std::{borrow::BorrowMut, process::Child};
 use std::{env, time::Duration};
 
-use crate::config::SpotifySettings;
 use rspotify::blocking::client::Spotify;
 use rspotify::blocking::oauth2::{SpotifyClientCredentials, SpotifyOAuth};
 use rspotify::blocking::util::*;
 use rspotify::model::offset;
 
+use api_models::player::*;
+use api_models::settings::*;
+
 use crate::common::{
-    CurrentTrackInfo, PlayerInfo, Result, StatusChangeEvent, DPLAY_CONFIG_DIR_PATH,
+    Result, DPLAY_CONFIG_DIR_PATH,
 };
 use crate::player::Player;
 use log::{info, trace};
