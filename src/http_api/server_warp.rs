@@ -2,7 +2,7 @@ use futures::FutureExt;
 use futures::StreamExt;
 
 use api_models::player::*;
-use api_models::settings::*;
+
 
 use crate::common::DPLAY_CONFIG_DIR_PATH;
 use crate::config::Configuration;

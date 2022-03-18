@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use alsa::card;
 use alsa::pcm::State;
 use failure::Error;
-use mockall::automock;
+
 
 const WAIT_TIME_MS: u64 = 10000;
 const DELAY_MS: u64 = 100;
