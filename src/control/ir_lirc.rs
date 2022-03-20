@@ -6,12 +6,13 @@ use std::sync::{Arc, Mutex};
 use api_models::player::Command;
 
 use failure::_core::time::Duration;
+use tokio::task::JoinHandle;
 
 type ReadSocket = Arc<Mutex<dyn io::Read + Send>>;
 
 const REMOTE_MAKER: &'static str = "dplayd";
 
-pub fn start(tx: SyncSender<Command>, lirc_socket: ReadSocket) {
+pub fn start(tx: SyncSender<Command>, lirc_socket: ReadSocket) -> JoinHandle<()> {
     tokio::task::spawn(async move {
         loop {
             let mut bytes = [0; 60];
@@ -69,6 +70,5 @@ pub fn start(tx: SyncSender<Command>, lirc_socket: ReadSocket) {
                 }
             }
         }
-    });
-    info!("IR command receiver started.");
+    })
 }

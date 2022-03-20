@@ -16,7 +16,6 @@ use crate::config::Configuration;
 use crate::player::Player;
 use log::{info, trace};
 
-
 struct ClientDevice {
     client: Spotify,
     device_id: Option<String>,
@@ -222,7 +221,6 @@ pub fn auth_manager(settings: &SpotifySettings) -> SpotifyOAuth {
         .scope("user-read-currently-playing playlist-modify-private user-read-recently-played user-modify-playback-state user-read-playback-state")
         .build()
 }
-
 
 fn create_spotify_client(settings: &SpotifySettings) -> Result<ClientDevice> {
     let token_info = get_token(&mut auth_manager(settings));

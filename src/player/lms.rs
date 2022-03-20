@@ -4,7 +4,6 @@ use std::{
     process::Child,
 };
 
-
 use crate::common::Result;
 use crate::config::Configuration;
 use crate::player::Player;

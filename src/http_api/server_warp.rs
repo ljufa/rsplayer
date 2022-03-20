@@ -1,8 +1,10 @@
+use futures::Future;
 use futures::FutureExt;
 use futures::StreamExt;
 
 use api_models::player::*;
-
+use tokio::task::JoinHandle;
+use warp::Server;
 
 use crate::config::Configuration;
 use std::{
@@ -52,11 +54,11 @@ impl Default for LastStatus {
         }
     }
 }
-pub async fn start(
+pub fn start(
     mut state_changes_receiver: Receiver<StatusChangeEvent>,
     input_commands_tx: SyncSender<Command>,
     config: Config,
-) {
+) -> (impl Future<Output = ()>, JoinHandle<()>) {
     // Keep track of all connected users, key is usize, value
     // is a websocket sender.
     let users = Users::default();
@@ -95,7 +97,7 @@ pub async fn start(
         .or(get_settings)
         .or(ui_static_content)
         .with(cors);
-    tokio::task::spawn(async move {
+    let ws_handle = tokio::task::spawn(async move {
         loop {
             let state_change_event = state_changes_receiver.try_recv();
             if state_change_event.is_err() {
@@ -112,8 +114,8 @@ pub async fn start(
             .await;
         }
     });
-    warp::serve(routes).run(([0, 0, 0, 0], 8000)).await;
-    info!("HTTP server started on port 8000");
+    let http_handle = warp::serve(routes).run(([0, 0, 0, 0], 8000));
+    (http_handle, ws_handle)
 }
 mod filters {
     use api_models::settings::Settings;

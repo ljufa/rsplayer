@@ -11,6 +11,7 @@ use tokio::sync::broadcast::Sender;
 use api_models::player::Command::*;
 use api_models::player::StatusChangeEvent::*;
 use api_models::player::*;
+use tokio::task::JoinHandle;
 
 use crate::mcu::gpio;
 use crate::mcu::gpio::GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY;
@@ -22,7 +23,7 @@ pub fn start(
     config_store: Arc<Mutex<Configuration>>,
     input_commands_rx: Receiver<Command>,
     state_changes_sender: Sender<StatusChangeEvent>,
-) {
+) -> JoinHandle<()> {
     tokio::task::spawn(async move {
         //fixme : move to separate struct restore selected output
         let out_sel_pin = gpio::get_output_pin_handle(GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY);
@@ -187,6 +188,5 @@ pub fn start(
                 _ => {}
             }
         }
-    });
-    info!("Command handler thread started.")
+    })
 }

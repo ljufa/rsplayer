@@ -1,4 +1,7 @@
-use std::{fs, path::{PathBuf, Path}, env};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 use api_models::settings::Settings;
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
@@ -56,7 +59,6 @@ impl Configuration {
         }
         cache_path
     }
-    
 
     pub fn get_streamer_status(&mut self) -> StreamerStatus {
         if let Some(ps) = self.db.get(STREAMER_STATUS_KEY) {

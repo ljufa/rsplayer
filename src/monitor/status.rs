@@ -7,6 +7,7 @@ use std::{
     thread,
 };
 use tokio::sync::broadcast::Sender;
+use tokio::task::JoinHandle;
 
 pub struct StatusMonitor {}
 impl StatusMonitor {
@@ -18,8 +19,8 @@ impl StatusMonitor {
         player_factory: Arc<Mutex<PlayerFactory>>,
         state_changes_tx: Sender<StatusChangeEvent>,
         audio_card: Arc<AudioCard>,
-    ) {
-        std::thread::spawn(move || {
+    ) -> JoinHandle<()> {
+        tokio::task::spawn(async move {
             let mut last_track_info = None;
             let mut last_player_info = None;
             thread::sleep(Duration::from_millis(1000));
@@ -39,8 +40,7 @@ impl StatusMonitor {
                     if last_track_info != new_track_info {
                         if let Some(new) = new_track_info.as_ref() {
                             state_changes_tx
-                                .send(StatusChangeEvent::CurrentTrackInfoChanged(new.clone()))
-                                .expect("Send command event failed.");
+                                .send(StatusChangeEvent::CurrentTrackInfoChanged(new.clone()));
                         } else {
                             debug!("Current track info in None");
                         }
@@ -55,15 +55,13 @@ impl StatusMonitor {
                 if last_player_info != new_player_info {
                     if let Some(new_p_info) = new_player_info.as_ref() {
                         state_changes_tx
-                            .send(StatusChangeEvent::PlayerInfoChanged(new_p_info.clone()))
-                            .expect("Sending command event failed");
+                            .send(StatusChangeEvent::PlayerInfoChanged(new_p_info.clone()));
                     }
                     last_player_info = new_player_info;
                 }
 
                 thread::sleep(Duration::from_millis(1000));
             }
-        });
-        info!("Status monitor thread started.")
+        })
     }
 }

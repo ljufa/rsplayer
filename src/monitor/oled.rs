@@ -14,7 +14,7 @@ use linux_embedded_hal::sysfs_gpio::Direction;
 use linux_embedded_hal::Spidev;
 use linux_embedded_hal::{Delay, Pin};
 
-use tokio::sync::broadcast::Receiver;
+use tokio::{sync::broadcast::Receiver, task::JoinHandle};
 use unidecode::unidecode;
 
 use api_models::player::*;
@@ -22,7 +22,7 @@ use api_models::player::*;
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
 use crate::monitor::myst7920::ST7920;
 
-pub fn start(mut state_changes_receiver: Receiver<StatusChangeEvent>) {
+pub fn start(mut state_changes_receiver: Receiver<StatusChangeEvent>) -> JoinHandle<()> {
     tokio::task::spawn(async move {
         let mut delay = Delay;
         let mut spi = Spidev::open("/dev/spidev0.0").expect("error initializing SPI");
@@ -62,8 +62,7 @@ pub fn start(mut state_changes_receiver: Receiver<StatusChangeEvent>) {
                 _ => {}
             }
         }
-    });
-    info!("OLED writer started.");
+    })
 }
 
 fn draw_streamer_info(

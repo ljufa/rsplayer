@@ -7,12 +7,10 @@ use mpd::Client;
 use num_traits::ToPrimitive;
 
 use crate::common::Result;
-use crate::config::Configuration;
 
 use super::Player;
 
 pub struct MpdPlayerApi {
-    mpd_server_process: Child,
     mpd_client: Client,
     mpd_server_url: String,
 }
@@ -24,9 +22,7 @@ impl MpdPlayerApi {
         if !mpd_settings.enabled {
             return Err(failure::err_msg("MPD player integration is disabled."));
         }
-        let server_proc = start_mpd_server()?;
         Ok(MpdPlayerApi {
-            mpd_server_process: server_proc,
             mpd_client: create_client(&mpd_settings)?,
             mpd_server_url: mpd_settings.get_server_url(),
         })
@@ -95,7 +91,7 @@ impl Player for MpdPlayerApi {
         info!("Shutting down MPD player!");
         self.stop();
         self.mpd_client.close();
-        self.mpd_server_process.kill();
+        info!("MPD player shutdown finished!");
     }
 
     fn rewind(&mut self, seconds: i8) -> Result<StatusChangeEvent> {
@@ -196,22 +192,6 @@ fn convert_state(mpd_state: mpd::status::State) -> PlayerState {
 impl Drop for MpdPlayerApi {
     fn drop(&mut self) {
         self.shutdown()
-    }
-}
-
-fn start_mpd_server() -> Result<Child> {
-    info!("Starting mpd server process!");
-    let child = std::process::Command::new("/usr/bin/mpd")
-        .arg("--no-daemon")
-        .arg("-v")
-        .arg(Configuration::get_mpd_config_file_path())
-        .spawn();
-    match child {
-        Ok(c) => Ok(c),
-        Err(e) => Err(failure::format_err!(
-            "Can't start mpd process. Error: {}",
-            e
-        )),
     }
 }
 fn create_client(mpd_settings: &MpdSettings) -> Result<Client> {
