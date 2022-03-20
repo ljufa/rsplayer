@@ -17,7 +17,7 @@ use crate::mcu::gpio;
 use crate::mcu::gpio::GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY;
 
 pub fn start(
-    dac: Arc<Dac>,
+    #[cfg(target_arch="aarch64")] dac: Arc<Dac>,
     player_factory: Arc<Mutex<PlayerFactory>>,
     audio_card: Arc<AudioCard>,
     config_store: Arc<Mutex<Configuration>>,
@@ -42,6 +42,7 @@ pub fn start(
             match cmd {
                 // dac commands
                 SetVol(val) => {
+                    #[cfg(target_arch="aarch64")]
                     if let Ok(nv) = dac.set_vol(val) {
                         let new_dac_status =
                             config_store
@@ -54,6 +55,7 @@ pub fn start(
                     }
                 }
                 VolUp => {
+                    #[cfg(target_arch="aarch64")]
                     if let Ok(nv) = dac.vol_up() {
                         let new_dac_status =
                             config_store
@@ -66,6 +68,7 @@ pub fn start(
                     }
                 }
                 VolDown => {
+                    #[cfg(target_arch="aarch64")]
                     if let Ok(nv) = dac.vol_down() {
                         let new_dac_status =
                             config_store
@@ -78,6 +81,7 @@ pub fn start(
                     }
                 }
                 Filter(ft) => {
+                    #[cfg(target_arch="aarch64")]
                     if let Ok(nv) = dac.filter(ft) {
                         let new_streamer_status =
                             config_store
@@ -92,6 +96,7 @@ pub fn start(
                     }
                 }
                 Sound(nr) => {
+                    #[cfg(target_arch="aarch64")]
                     if let Ok(nv) = dac.change_sound_setting(nr) {
                         config_store
                             .lock()
@@ -100,12 +105,15 @@ pub fn start(
                     }
                 }
                 Gain(level) => {
+                    #[cfg(target_arch="aarch64")]
                     dac.set_gain(level);
                 }
                 Hload(flag) => {
+                    #[cfg(target_arch="aarch64")]
                     dac.hi_load(flag);
                 }
                 Dsd(flag) => {
+                    #[cfg(target_arch="aarch64")]
                     dac.dsd_pcm(flag);
                 }
                 // player commands

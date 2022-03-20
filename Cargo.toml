@@ -4,6 +4,14 @@ version = "0.2.0"
 authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
 edition = "2021"
 
+[features]
+backend_spotify = [ "rspotify", "openssl" ]
+backend_mpd = []
+backend_lms = []
+
+local_linux_no_hw = ["backend_mpd"]
+default = ["backend_mpd","backend_lms"]
+
 [dependencies]
 api_models = { path = "dplayer-api-models" }
 
@@ -22,9 +30,6 @@ st7920 = "0.2.2"
 # for lirc socket read
 unix_socket = "0.5.0"
 
-# spotify
-rspotify = { version = "0.10.0", features = ["blocking"] }
-openssl = { version = "0.10", features = ["vendored"] }
 
 #warp
 tokio = { version = "1.5.0", features = ["full"] }
@@ -47,3 +52,13 @@ num-traits = { version = "0.2.12", default-features = false }
 num-derive = { version = "0.3.2", default-features = false }
 pickledb = "0.4.1"
 log4rs = "1.0.0"
+
+[dependencies.rspotify]
+version = "0.10.0"
+features = ["blocking"]
+optional = true
+
+[dependencies.openssl]
+version = "0.10"
+features = ["vendored"]
+optional = true

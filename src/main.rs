@@ -33,21 +33,24 @@ use tokio::sync::broadcast;
 async fn main() {
     env_logger::init();
     info!("Starting Dplayer!");
-    
+
     let mut config = config::Configuration::new();
     let settings = config.get_settings();
-
+    
+    #[cfg(target_arch = "aarch64")]
     let dac = Dac::new(
         config.get_streamer_status().dac_status,
         &settings.dac_settings,
     );
+    #[cfg(target_arch = "aarch64")]
     if let Err(dac_err) = dac {
         error!("DAC initialization error: {}", dac_err);
         std::process::exit(1);
     } else {
         info!("Dac is successfully initialized.");
     }
-
+    
+    #[cfg(target_arch = "aarch64")]
     let dac = Arc::new(dac.unwrap());
     let audio_card = Arc::new(AudioCard::new(settings.alsa_settings.device_name.clone()));
 
@@ -60,6 +63,9 @@ async fn main() {
     let mut threads: Vec<JoinHandle<()>> = vec![];
     if let Ok(player_factory) = player_factory {
         info!("Player succesfully created.");
+        let player_factory = Arc::new(Mutex::new(player_factory));
+        
+        #[cfg(target_arch = "aarch64")]
         if settings.ir_control_settings.enabled {
             threads.push(control::ir_lirc::start(
                 input_commands_tx.clone(),
@@ -68,12 +74,11 @@ async fn main() {
                 )),
             ));
         }
+        #[cfg(target_arch = "aarch64")]
         if settings.oled_settings.enabled {
             threads.push(monitor::oled::start(state_changes_sender.subscribe()));
         }
-
-        let player_factory = Arc::new(Mutex::new(player_factory));
-
+    
         // poll player and dac and produce event if something has changed
         threads.push(StatusMonitor::start(
             player_factory.clone(),
@@ -82,6 +87,7 @@ async fn main() {
         ));
         // start command handler thread
         threads.push(control::command_handler::start(
+            #[cfg(target_arch="aarch64")]
             dac.clone(),
             player_factory.clone(),
             audio_card.clone(),
@@ -112,13 +118,10 @@ async fn main() {
 
     info!("DPlayer started.");
 
-    signal(SignalKind::terminate()).unwrap().await;
-    
-    
+    signal(SignalKind::terminate()).unwrap().recv().await;
+
     info!("Gracefull shutdown started");
-    
-    drop(player_factory);
-    drop(audio_card);
+
     for t in &threads {
         debug!("Aborting thread {:?}", t);
         t.abort();

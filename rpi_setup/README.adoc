@@ -34,7 +34,7 @@ sudo ln -s /media/samsung/MUSIC /home/music
 [source, bash]
 cd github
 git clone git@github.com:librespot-org/librespot.git && cd librespot
-cp ../ak4497-software/Cross.toml .
+cp ../dplauer/Cross.toml .
 cross build --target aarch64-unknown-linux-gnu --release --no-default-features --features alsa-backend
 
 OR
@@ -51,11 +51,15 @@ sudo systemctl start dplay.service
 [source]
 sudo apt install -y mpd
 # then remove service files to avoid automatic mpd start
-sudo systemctl disable mpd.service
-sudo systemctl disable mpd.socket
-sudo rm /usr/lib/systemd/system/mpd.service
-sudo rm /usr/lib/systemd/system/mpd.socket
+sudo rm /etc/systemd/user/sockets.target.wants/mpd.socket
+sudo rm /etc/systemd/system/sockets.target.wants/mpd.socket
 sudo systemctl daemon-reload
+
+# old way, disable mpd 
+// sudo systemctl disable mpd.service
+// sudo systemctl disable mpd.socket
+// sudo rm /usr/lib/systemd/system/mpd.service
+// sudo rm /usr/lib/systemd/system/mpd.socket
 
 
 === WIFI setup

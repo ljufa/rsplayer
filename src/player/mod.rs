@@ -4,6 +4,7 @@ use crate::audio_device::alsa::AudioCard;
 use crate::common::Result;
 use crate::player::lms::LogitechMediaServerApi;
 use crate::player::mpd::MpdPlayerApi;
+#[cfg(feature = "backend_spotify")]
 use crate::player::spotify::SpotifyPlayerApi;
 
 use api_models::player::*;
@@ -11,6 +12,7 @@ use api_models::settings::*;
 
 pub(crate) mod lms;
 pub(crate) mod mpd;
+#[cfg(feature = "backend_spotify")]
 pub(crate) mod spotify;
 
 pub trait Player {
@@ -61,11 +63,13 @@ impl PlayerFactory {
         player_type: &PlayerType,
     ) -> Result<Box<dyn Player + Send>> {
         return match player_type {
+            #[cfg(feature = "backend_spotify")]
             PlayerType::SPF => Ok(Box::new(SpotifyPlayerApi::new(&settings.spotify_settings)?)),
             PlayerType::MPD => Ok(Box::new(MpdPlayerApi::new(&settings.mpd_settings)?)),
             PlayerType::LMS => Ok(Box::new(LogitechMediaServerApi::new(
                 &settings.lms_settings,
             )?)),
+            _ => panic!("Unknown type"),
         };
     }
 }
