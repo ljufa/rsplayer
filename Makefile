@@ -24,7 +24,7 @@ check:
 
 release:
 	cargo fmt
-	cross build --target $(TARGET) --release
+	cross build --target $(TARGET) --release --features backend_mpd,backend_lms,hw_dac,hw_ir_control,hw_oled
 
 copytorpi: $(OUT)
 	rsync -avvP --rsync-path="sudo rsync" target/$(TARGET)/$(OUT)/$(RELEASE) ubuntu@$(RPI_HOST):/home/ubuntu

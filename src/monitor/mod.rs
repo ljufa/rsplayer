@@ -1,5 +1,5 @@
-#[cfg(target_arch = "aarch64")]
+#[cfg(feature = "hw_oled")]
 pub(crate) mod myst7920;
-#[cfg(target_arch = "aarch64")]
+#[cfg(feature = "hw_oled")]
 pub(crate) mod oled;
 pub(crate) mod status;

@@ -1,3 +1,3 @@
 pub(crate) mod command_handler;
-#[cfg(target_arch = "aarch64")]
+#[cfg(feature = "hw_ir_control")]
 pub(crate) mod ir_lirc;

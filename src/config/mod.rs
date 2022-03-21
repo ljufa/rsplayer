@@ -41,9 +41,6 @@ impl Configuration {
     pub fn get_squeezelite_player_path() -> String {
         format!("{}squeezelite", DPLAY_CONFIG_DIR_PATH)
     }
-    pub fn get_mpd_config_file_path() -> String {
-        format!("{}mpd.conf", DPLAY_CONFIG_DIR_PATH)
-    }
     pub fn get_librespot_path() -> String {
         format!("{}librespot", DPLAY_CONFIG_DIR_PATH)
     }

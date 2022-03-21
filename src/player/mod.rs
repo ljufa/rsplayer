@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use crate::audio_device::alsa::AudioCard;
 use crate::common::Result;
+#[cfg(feature = "backend_lms")]
 use crate::player::lms::LogitechMediaServerApi;
+#[cfg(feature = "backend_mpd")]
 use crate::player::mpd::MpdPlayerApi;
 #[cfg(feature = "backend_spotify")]
 use crate::player::spotify::SpotifyPlayerApi;
@@ -10,7 +12,9 @@ use crate::player::spotify::SpotifyPlayerApi;
 use api_models::player::*;
 use api_models::settings::*;
 
+#[cfg(feature = "backend_lms")]
 pub(crate) mod lms;
+#[cfg(feature = "backend_mpd")]
 pub(crate) mod mpd;
 #[cfg(feature = "backend_spotify")]
 pub(crate) mod spotify;
@@ -65,7 +69,9 @@ impl PlayerFactory {
         return match player_type {
             #[cfg(feature = "backend_spotify")]
             PlayerType::SPF => Ok(Box::new(SpotifyPlayerApi::new(&settings.spotify_settings)?)),
+            #[cfg(feature = "backend_mpd")]
             PlayerType::MPD => Ok(Box::new(MpdPlayerApi::new(&settings.mpd_settings)?)),
+            #[cfg(feature = "backend_lms")]
             PlayerType::LMS => Ok(Box::new(LogitechMediaServerApi::new(
                 &settings.lms_settings,
             )?)),

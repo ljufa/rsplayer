@@ -8,28 +8,27 @@ mod common;
 mod config;
 mod control;
 mod http_api;
-#[cfg(target_arch = "aarch64")]
 mod mcu;
 mod monitor;
 mod player;
 
-#[cfg(target_arch = "aarch64")]
-use crate::audio_device::ak4497::Dac;
 use crate::control::command_handler::handle;
 use api_models::player::Command;
+use cfg_if::cfg_if;
 
 use std::sync::{Arc, Mutex};
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::spawn;
 use tokio::task::JoinHandle;
-#[cfg(target_arch = "aarch64")]
-use unix_socket::UnixStream;
 
 use crate::audio_device::alsa::AudioCard;
 
 use crate::player::PlayerFactory;
 
 use tokio::sync::broadcast;
+
+#[cfg(feature = "hw_dac")]
+use crate::audio_device::ak4497::Dac;
 
 #[tokio::main]
 async fn main() {
@@ -39,22 +38,21 @@ async fn main() {
     let mut config = config::Configuration::new();
     let settings = config.get_settings();
 
-    #[cfg(target_arch = "aarch64")]
-    let dac = Dac::new(
-        config.get_streamer_status().dac_status,
-        &settings.dac_settings,
-    );
-    #[cfg(target_arch = "aarch64")]
-    if let Err(dac_err) = dac {
-        error!("DAC initialization error: {}", dac_err);
-        std::process::exit(1);
-    } else {
-        info!("Dac is successfully initialized.");
+    cfg_if! {
+            if #[cfg(feature = "hw_dac")] {
+                let dac = Dac::new(
+                config.get_streamer_status().dac_status,
+                &settings.dac_settings,
+            );
+            if let Err(dac_err) = dac {
+                error!("DAC initialization error: {}", dac_err);
+                std::process::exit(1);
+            } else {
+                info!("Dac is successfully initialized.");
+            }
+            let dac = Arc::new(dac.unwrap());
+        }
     }
-
-    #[cfg(target_arch = "aarch64")]
-    let dac = Arc::new(dac.unwrap());
-
     let audio_card = Arc::new(AudioCard::new(settings.alsa_settings.device_name.clone()));
 
     let (input_commands_tx, input_commands_rx) = tokio::sync::mpsc::channel(1);
@@ -68,14 +66,14 @@ async fn main() {
     if let Ok(player_factory) = player_factory {
         info!("Player succesfully created.");
 
-        #[cfg(target_arch = "aarch64")]
+        #[cfg(feature = "hw_ir_control")]
         if settings.ir_control_settings.enabled {
             threads.push(control::ir_lirc::start(
                 input_commands_tx.clone(),
                 state_changes_sender.subscribe(),
             ));
         }
-        #[cfg(target_arch = "aarch64")]
+        #[cfg(feature = "hw_oled")]
         if settings.oled_settings.enabled {
             threads.push(monitor::oled::start(state_changes_sender.subscribe()));
         }
@@ -91,7 +89,7 @@ async fn main() {
 
         // start command handler thread
         threads.push(spawn(handle(
-            #[cfg(target_arch = "aarch64")]
+            #[cfg(feature = "hw_dac")]
             dac.clone(),
             player_factory.clone(),
             audio_card.clone(),
@@ -116,9 +114,7 @@ async fn main() {
         input_commands_tx.clone(),
         config.clone(),
     );
-    tokio::task::spawn(http_handle);
-    info!("Http server started.");
-
+    threads.push(tokio::task::spawn(http_handle));
     threads.push(ws_handle);
 
     info!("DPlayer started.");

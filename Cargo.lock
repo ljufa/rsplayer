@@ -380,7 +380,8 @@ version = "0.2.0"
 dependencies = [
  "alsa",
  "api_models",
- "embedded-graphics 0.7.1",
+ "cfg-if 1.0.0",
+ "embedded-graphics",
  "embedded-hal",
  "env_logger 0.8.4",
  "failure",
@@ -399,11 +400,9 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "st7920",
  "tokio 1.16.1",
  "tokio-stream",
  "unidecode",
- "unix_socket",
  "url 2.2.2",
  "warp",
 ]
@@ -413,15 +412,6 @@ name = "either"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
-
-[[package]]
-name = "embedded-graphics"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40a69991ceb896bd4810a0cf2bcc46fc94b7860573c71f965d8e5b3d66942fed"
-dependencies = [
- "byteorder",
-]
 
 [[package]]
 name = "embedded-graphics"
@@ -2178,18 +2168,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "st7920"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f24b9901602368a17febca448a1a6fa5bcd277e8eb552c63ba5edd44bd224088"
-dependencies = [
- "embedded-graphics 0.6.2",
- "embedded-hal",
- "num-derive",
- "num-traits",
-]
-
-[[package]]
 name = "strsim"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2607,16 +2585,6 @@ name = "unidecode"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "402bb19d8e03f1d1a7450e2bd613980869438e0666331be3e073089124aa1adc"
-
-[[package]]
-name = "unix_socket"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6aa2700417c405c38f5e6902d699345241c28c0b7ade4abaad71e35a87eb1564"
-dependencies = [
- "cfg-if 0.1.10",
- "libc",
-]
 
 [[package]]
 name = "unsafe-any"
