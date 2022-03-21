@@ -8,20 +8,22 @@ mod common;
 mod config;
 mod control;
 mod http_api;
+#[cfg(target_arch = "aarch64")]
 mod mcu;
 mod monitor;
 mod player;
 
-use api_models::player::Command;
-use futures::FutureExt;
-use monitor::status::StatusMonitor;
-use std::sync::{mpsc, Arc, Mutex};
-use tokio::signal::unix::{signal, Signal, SignalKind};
-use tokio::task::JoinHandle;
-use unix_socket::UnixStream;
-use warp::ws;
-
+#[cfg(target_arch = "aarch64")]
 use crate::audio_device::ak4497::Dac;
+use crate::control::command_handler::handle;
+use api_models::player::Command;
+
+use std::sync::{Arc, Mutex};
+use tokio::signal::unix::{signal, SignalKind};
+use tokio::spawn;
+use tokio::task::JoinHandle;
+#[cfg(target_arch = "aarch64")]
+use unix_socket::UnixStream;
 
 use crate::audio_device::alsa::AudioCard;
 
@@ -36,7 +38,7 @@ async fn main() {
 
     let mut config = config::Configuration::new();
     let settings = config.get_settings();
-    
+
     #[cfg(target_arch = "aarch64")]
     let dac = Dac::new(
         config.get_streamer_status().dac_status,
@@ -49,55 +51,58 @@ async fn main() {
     } else {
         info!("Dac is successfully initialized.");
     }
-    
+
     #[cfg(target_arch = "aarch64")]
     let dac = Arc::new(dac.unwrap());
+
     let audio_card = Arc::new(AudioCard::new(settings.alsa_settings.device_name.clone()));
 
-    let (input_commands_tx, input_commands_rx) = mpsc::sync_channel(1);
+    let (input_commands_tx, input_commands_rx) = tokio::sync::mpsc::channel(1);
     let (state_changes_sender, _) = broadcast::channel(20);
     let current_player = &config.get_streamer_status().source_player;
     let player_factory = PlayerFactory::new(current_player, settings.clone());
     let config = Arc::new(Mutex::new(config));
 
     let mut threads: Vec<JoinHandle<()>> = vec![];
+
     if let Ok(player_factory) = player_factory {
         info!("Player succesfully created.");
-        let player_factory = Arc::new(Mutex::new(player_factory));
-        
+
         #[cfg(target_arch = "aarch64")]
         if settings.ir_control_settings.enabled {
             threads.push(control::ir_lirc::start(
                 input_commands_tx.clone(),
-                Arc::new(Mutex::new(
-                    UnixStream::connect("/var/run/lirc/lircd").unwrap(),
-                )),
+                state_changes_sender.subscribe(),
             ));
         }
         #[cfg(target_arch = "aarch64")]
         if settings.oled_settings.enabled {
             threads.push(monitor::oled::start(state_changes_sender.subscribe()));
         }
-    
-        // poll player and dac and produce event if something has changed
-        threads.push(StatusMonitor::start(
+
+        let player_factory = Arc::new(Mutex::new(player_factory));
+
+        threads.push(spawn(monitor::status::monitor(
             player_factory.clone(),
             state_changes_sender.clone(),
+            state_changes_sender.subscribe(),
             audio_card.clone(),
-        ));
+        )));
+
         // start command handler thread
-        threads.push(control::command_handler::start(
-            #[cfg(target_arch="aarch64")]
+        threads.push(spawn(handle(
+            #[cfg(target_arch = "aarch64")]
             dac.clone(),
             player_factory.clone(),
             audio_card.clone(),
             config.clone(),
             input_commands_rx,
             state_changes_sender.clone(),
-        ));
+            state_changes_sender.subscribe(),
+        )));
 
         // send play command to start playing on last used player
-        input_commands_tx.send(Command::Play).expect("Error");
+        _ = input_commands_tx.send(Command::Play).await;
     } else if let Err(pf_err) = player_factory {
         error!(
             "Configured player {:?} can not be created. Please use settings page to enter correct configuration.\n Error: {:?}",
@@ -119,12 +124,13 @@ async fn main() {
     info!("DPlayer started.");
 
     signal(SignalKind::terminate()).unwrap().recv().await;
-
     info!("Gracefull shutdown started");
+    _ = state_changes_sender
+        .clone()
+        .send(api_models::player::StatusChangeEvent::Shutdown);
 
-    for t in &threads {
-        debug!("Aborting thread {:?}", t);
-        t.abort();
+    for t in threads {
+        _ = t.await;
     }
 
     info!("Gracefull shuttdown completed.");

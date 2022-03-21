@@ -1,5 +1,5 @@
+use std::borrow::BorrowMut;
 use std::time::Duration;
-use std::{borrow::BorrowMut, process::Child};
 
 use api_models::player::*;
 use api_models::settings::*;

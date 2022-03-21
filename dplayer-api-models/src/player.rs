@@ -105,6 +105,7 @@ pub enum StatusChangeEvent {
     StreamerStatusChanged(StreamerStatus),
     PlayerInfoChanged(PlayerInfo),
     Error(String),
+    Shutdown
 }
 
 #[derive(

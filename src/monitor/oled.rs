@@ -43,20 +43,22 @@ pub fn start(mut state_changes_receiver: Receiver<StatusChangeEvent>) -> JoinHan
 
         loop {
             let cmd_ev = state_changes_receiver.try_recv();
-            if cmd_ev.is_err() {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                continue;
-            }
             trace!("Command event received: {:?}", cmd_ev);
-            let cmd_ev = cmd_ev.unwrap();
             match cmd_ev {
-                StatusChangeEvent::CurrentTrackInfoChanged(stat) => {
+                Ok(StatusChangeEvent::Shutdown) => {
+                    info!("Exit oled writer thread");
+                    break;
+                }
+                Err(e) => {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                Ok(StatusChangeEvent::CurrentTrackInfoChanged(stat)) => {
                     draw_track_info(&mut disp, &mut delay, stat);
                 }
-                StatusChangeEvent::StreamerStatusChanged(sstatus) => {
+                Ok(StatusChangeEvent::StreamerStatusChanged(sstatus)) => {
                     draw_streamer_info(&mut disp, &mut delay, sstatus);
                 }
-                StatusChangeEvent::PlayerInfoChanged(pinfo) => {
+                Ok(StatusChangeEvent::PlayerInfoChanged(pinfo)) => {
                     draw_player_info(&mut disp, &mut delay, pinfo);
                 }
                 _ => {}

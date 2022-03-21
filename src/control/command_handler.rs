@@ -1,48 +1,58 @@
+#[cfg(target_arch = "aarch64")]
 use crate::audio_device::ak4497::Dac;
 
 use crate::audio_device::alsa::AudioCard;
 use crate::config::Configuration;
 use crate::player::PlayerFactory;
 
-use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
-use tokio::sync::broadcast::Sender;
 
 use api_models::player::Command::*;
-use api_models::player::StatusChangeEvent::*;
-use api_models::player::*;
-use tokio::task::JoinHandle;
 
+use api_models::player::*;
+use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::Sender;
+
+#[cfg(target_arch = "aarch64")]
 use crate::mcu::gpio;
+#[cfg(target_arch = "aarch64")]
 use crate::mcu::gpio::GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY;
 
-pub fn start(
-    #[cfg(target_arch="aarch64")] dac: Arc<Dac>,
+pub async fn handle(
+    #[cfg(target_arch = "aarch64")] dac: Arc<Dac>,
     player_factory: Arc<Mutex<PlayerFactory>>,
     audio_card: Arc<AudioCard>,
     config_store: Arc<Mutex<Configuration>>,
-    input_commands_rx: Receiver<Command>,
+    mut input_commands_rx: tokio::sync::mpsc::Receiver<Command>,
     state_changes_sender: Sender<StatusChangeEvent>,
-) -> JoinHandle<()> {
-    tokio::task::spawn(async move {
-        //fixme : move to separate struct restore selected output
-        let out_sel_pin = gpio::get_output_pin_handle(GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY);
-        let _i = match config_store
-            .lock()
-            .unwrap()
-            .get_streamer_status()
-            .selected_audio_output
-        {
-            AudioOut::SPKR => out_sel_pin.set_value(0),
-            AudioOut::HEAD => out_sel_pin.set_value(1),
-        };
+    mut state_changes_receiver: Receiver<StatusChangeEvent>,
+) {
+    //fixme : move to separate struct restore selected output
+    #[cfg(target_arch = "aarch64")]
+    let out_sel_pin = gpio::get_output_pin_handle(GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY);
+    #[cfg(target_arch = "aarch64")]
+    let _i = match config_store
+        .lock()
+        .unwrap()
+        .get_streamer_status()
+        .selected_audio_output
+    {
+        AudioOut::SPKR => out_sel_pin.set_value(0),
+        AudioOut::HEAD => out_sel_pin.set_value(1),
+    };
 
-        for cmd in input_commands_rx {
+    loop {
+        if let Ok(StatusChangeEvent::Shutdown) = state_changes_receiver.try_recv() {
+            info!("Stop command handler.");
+            break;
+        }
+        if let Ok(cmd) = input_commands_rx.try_recv() {
             trace!("Received command {:?}", cmd);
             match cmd {
                 // dac commands
-                SetVol(val) => {
-                    #[cfg(target_arch="aarch64")]
+                SetVol(val) =>
+                {
+                    #[cfg(target_arch = "aarch64")]
                     if let Ok(nv) = dac.set_vol(val) {
                         let new_dac_status =
                             config_store
@@ -54,8 +64,9 @@ pub fn start(
                             .expect("Send event failed.");
                     }
                 }
-                VolUp => {
-                    #[cfg(target_arch="aarch64")]
+                VolUp =>
+                {
+                    #[cfg(target_arch = "aarch64")]
                     if let Ok(nv) = dac.vol_up() {
                         let new_dac_status =
                             config_store
@@ -67,8 +78,9 @@ pub fn start(
                             .expect("Send event failed.");
                     }
                 }
-                VolDown => {
-                    #[cfg(target_arch="aarch64")]
+                VolDown =>
+                {
+                    #[cfg(target_arch = "aarch64")]
                     if let Ok(nv) = dac.vol_down() {
                         let new_dac_status =
                             config_store
@@ -80,8 +92,9 @@ pub fn start(
                             .expect("Send event failed.");
                     }
                 }
-                Filter(ft) => {
-                    #[cfg(target_arch="aarch64")]
+                Filter(ft) =>
+                {
+                    #[cfg(target_arch = "aarch64")]
                     if let Ok(nv) = dac.filter(ft) {
                         let new_streamer_status =
                             config_store
@@ -95,8 +108,9 @@ pub fn start(
                             .expect("Send event failed.");
                     }
                 }
-                Sound(nr) => {
-                    #[cfg(target_arch="aarch64")]
+                Sound(nr) =>
+                {
+                    #[cfg(target_arch = "aarch64")]
                     if let Ok(nv) = dac.change_sound_setting(nr) {
                         config_store
                             .lock()
@@ -105,15 +119,15 @@ pub fn start(
                     }
                 }
                 Gain(level) => {
-                    #[cfg(target_arch="aarch64")]
+                    #[cfg(target_arch = "aarch64")]
                     dac.set_gain(level);
                 }
                 Hload(flag) => {
-                    #[cfg(target_arch="aarch64")]
+                    #[cfg(target_arch = "aarch64")]
                     dac.hi_load(flag);
                 }
                 Dsd(flag) => {
-                    #[cfg(target_arch="aarch64")]
+                    #[cfg(target_arch = "aarch64")]
                     dac.dsd_pcm(flag);
                 }
                 // player commands
@@ -166,6 +180,7 @@ pub fn start(
                         }
                     }
                 }
+                #[cfg(target_arch = "aarch64")]
                 ChangeAudioOutput => {
                     let nout;
                     if out_sel_pin.get_value().unwrap() == 0 {
@@ -180,7 +195,7 @@ pub fn start(
                         .unwrap()
                         .patch_streamer_status(None, Some(nout));
                     state_changes_sender
-                        .send(StreamerStatusChanged(new_sstate))
+                        .send(StatusChangeEvent::StreamerStatusChanged(new_sstate))
                         .unwrap();
                 }
                 PowerOff => {
@@ -196,5 +211,5 @@ pub fn start(
                 _ => {}
             }
         }
-    })
+    }
 }

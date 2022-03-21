@@ -4,15 +4,11 @@ use futures::StreamExt;
 
 use api_models::player::*;
 use tokio::task::JoinHandle;
-use warp::Server;
 
 use crate::config::Configuration;
 use std::{
     collections::HashMap,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        mpsc::SyncSender,
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };
 use std::{
     sync::{Arc, Mutex},
@@ -39,6 +35,7 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
 type LastStatusMessages = Arc<RwLock<LastStatus>>;
 type Config = Arc<Mutex<Configuration>>;
+type SyncSender = tokio::sync::mpsc::Sender<Command>;
 
 struct LastStatus {
     current_track_info: Option<String>,
@@ -56,7 +53,7 @@ impl Default for LastStatus {
 }
 pub fn start(
     mut state_changes_receiver: Receiver<StatusChangeEvent>,
-    input_commands_tx: SyncSender<Command>,
+    input_commands_tx: SyncSender,
     config: Config,
 ) -> (impl Future<Output = ()>, JoinHandle<()>) {
     // Keep track of all connected users, key is usize, value
@@ -99,19 +96,20 @@ pub fn start(
         .with(cors);
     let ws_handle = tokio::task::spawn(async move {
         loop {
-            let state_change_event = state_changes_receiver.try_recv();
-            if state_change_event.is_err() {
-                sleep(Duration::from_millis(100)).await;
-                continue;
+            match state_changes_receiver.try_recv() {
+                Ok(StatusChangeEvent::Shutdown) => {
+                    info!("Exit from ws thread.");
+                    break;
+                }
+                Err(_e) => {
+                    sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
+                Ok(ev) => {
+                    trace!("Received state changed event {:?}", ev);
+                    notify_users(&users_notify, ev, last_state_change_message_2.clone()).await;
+                }
             }
-            trace!("Received state changed event {:?}", state_change_event);
-            let state_change_event = state_change_event.expect("Failed to receive command.");
-            notify_users(
-                &users_notify,
-                state_change_event,
-                last_state_change_message_2.clone(),
-            )
-            .await;
         }
     });
     let http_handle = warp::serve(routes).run(([0, 0, 0, 0], 8000));
@@ -202,7 +200,7 @@ async fn notify_users(
 async fn user_connected(
     ws: WebSocket,
     users: Users,
-    input_commands_tx: SyncSender<Command>,
+    input_commands_tx: SyncSender,
     last_state_message: LastStatusMessages,
 ) {
     // Use a counter to assign a new unique ID for this user.
@@ -259,7 +257,7 @@ async fn user_connected(
         info!("Got command from user {:?}", msg);
         if let Ok(cmd) = msg.to_str() {
             let cmd: Command = serde_json::from_str(cmd).unwrap();
-            input_commands_tx.send(cmd).unwrap();
+            input_commands_tx.send(cmd).await;
         }
     }
 

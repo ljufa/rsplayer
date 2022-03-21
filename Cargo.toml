@@ -19,18 +19,6 @@ api_models = { path = "dplayer-api-models" }
 log = "0.4"
 env_logger = "0.8.3"
 
-#gpio, i2c
-gpio-cdev = "0.4"
-rpi_embedded = "0.1.0"
-embedded-graphics = { version = "0.7.1" }
-
-linux-embedded-hal = "0.3.0"
-embedded-hal = "0.2.4"
-st7920 = "0.2.2"
-# for lirc socket read
-unix_socket = "0.5.0"
-
-
 #warp
 tokio = { version = "1.5.0", features = ["full"] }
 warp = "0.3"
@@ -62,3 +50,16 @@ optional = true
 version = "0.10"
 features = ["vendored"]
 optional = true
+
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+#gpio, i2c
+gpio-cdev = "0.4"
+rpi_embedded = "0.1.0"
+embedded-graphics = { version = "0.7.1" }
+
+linux-embedded-hal = "0.3.0"
+embedded-hal = "0.2.4"
+st7920 = "0.2.2"
+# for lirc socket read
+unix_socket = "0.5.0"
+
