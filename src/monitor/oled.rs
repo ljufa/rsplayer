@@ -42,6 +42,7 @@ pub fn start(mut state_changes_receiver: Receiver<StatusChangeEvent>) -> JoinHan
         disp.clear(&mut delay).expect("could not clear display");
 
         loop {
+            tokio::time::sleep(Duration::from_millis(200)).await;
             let cmd_ev = state_changes_receiver.try_recv();
             trace!("Command event received: {:?}", cmd_ev);
             match cmd_ev {

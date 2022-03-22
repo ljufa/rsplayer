@@ -12,6 +12,7 @@ use crate::config::Configuration;
 use crate::player::PlayerFactory;
 
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use api_models::player::Command::*;
 
@@ -50,6 +51,7 @@ pub async fn handle(
             info!("Stop command handler.");
             break;
         }
+        tokio::time::sleep(Duration::from_millis(200)).await;
         if let Ok(cmd) = input_commands_rx.try_recv() {
             trace!("Received command {:?}", cmd);
             match cmd {

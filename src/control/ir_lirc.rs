@@ -25,6 +25,7 @@ pub fn start(
                 info!("Exit IR commands thread");
                 break;
             }
+            tokio::time::sleep(Duration::from_millis(200)).await;
             let mut bytes = [0; 60];
             match stream.try_read(&mut bytes) {
                 Ok(n) => {

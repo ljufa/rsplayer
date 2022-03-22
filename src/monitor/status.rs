@@ -2,7 +2,10 @@ use crate::audio_device::alsa::AudioCard;
 use crate::player::PlayerFactory;
 use api_models::player::StatusChangeEvent;
 
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use tokio::sync::broadcast::{Receiver, Sender};
 
 pub async fn monitor(
@@ -19,7 +22,7 @@ pub async fn monitor(
             info!("Program terminate, monitoring stopped.");
             break;
         }
-
+        tokio::time::sleep(Duration::from_millis(200)).await;
         if audio_card.is_device_in_use() {
             let new_track_info = player_factory
                 .lock()
