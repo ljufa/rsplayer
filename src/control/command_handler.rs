@@ -20,6 +20,45 @@ use cfg_if::cfg_if;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::broadcast::Sender;
 
+pub struct MessageBus {
+    pub state_changes_tx: Sender<StatusChangeEvent>,
+    pub state_changes_rx: Receiver<StatusChangeEvent>,
+}
+impl Clone for MessageBus {
+    fn clone(&self) -> Self {
+        Self {
+            state_changes_tx: self.state_changes_tx.clone(),
+            state_changes_rx: self.state_changes_tx.subscribe(),
+        }
+    }
+}
+
+pub struct DplayContext {
+    #[cfg(feature = "hw_dac")]
+    pub dac: Arc<Dac>,
+    pub player_factory: Arc<Mutex<PlayerFactory>>,
+    pub audio_card: Arc<AudioCard>,
+    pub config_store: Arc<Mutex<Configuration>>,
+}
+impl Clone for DplayContext {
+    fn clone(&self) -> Self {
+        Self {
+            #[cfg(feature = "hw_dac")]
+            dac: self.dac.clone(),
+            player_factory: self.player_factory.clone(),
+            audio_card: self.audio_card.clone(),
+            config_store: self.config_store.clone(),
+        }
+    }
+}
+
+pub struct CommandHandlerActor {
+    pub message_bus: MessageBus,
+    pub context: DplayContext,
+}
+impl CommandHandlerActor {
+    async fn start() {}
+}
 pub async fn handle(
     #[cfg(feature = "hw_dac")] dac: Arc<Dac>,
     player_factory: Arc<Mutex<PlayerFactory>>,
