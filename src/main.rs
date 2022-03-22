@@ -12,7 +12,7 @@ mod mcu;
 mod monitor;
 mod player;
 
-use crate::control::command_handler::handle;
+use crate::control::command_handler::{handle, self};
 use api_models::player::Command;
 use cfg_if::cfg_if;
 
@@ -65,6 +65,16 @@ async fn main() {
 
     if let Ok(player_factory) = player_factory {
         info!("Player succesfully created.");
+        let ctx = command_handler::DplayContext{
+            audio_card: audio_card,
+            config_store: config,
+            player_factory:  Arc::new(Mutex::new(player_factory))
+        };
+        let message_bus = command_handler::MessageBus{
+            state_changes_rx: state_changes_sender.subscribe(),
+            state_changes_tx: state_changes_sender.clone()
+        };
+
 
         #[cfg(feature = "hw_ir_control")]
         if settings.ir_control_settings.enabled {
@@ -78,7 +88,7 @@ async fn main() {
             threads.push(monitor::oled::start(state_changes_sender.subscribe()));
         }
 
-        let player_factory = Arc::new(Mutex::new(player_factory));
+      
 
         threads.push(spawn(monitor::status::monitor(
             player_factory.clone(),
@@ -88,16 +98,10 @@ async fn main() {
         )));
 
         // start command handler thread
-        threads.push(spawn(handle(
-            #[cfg(feature = "hw_dac")]
-            dac.clone(),
-            player_factory.clone(),
-            audio_card.clone(),
-            config.clone(),
-            input_commands_rx,
-            state_changes_sender.clone(),
-            state_changes_sender.subscribe(),
-        )));
+        command_handler::Comm
+
+
+
 
         // send play command to start playing on last used player
         _ = input_commands_tx.send(Command::Play).await;
