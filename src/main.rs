@@ -61,7 +61,6 @@ async fn main() {
     
     let player_factory = PlayerFactory::new(current_player, settings.clone());
     
-    
     let _threads: Vec<JoinHandle<()>> = vec![];
     
     if let Ok(player_factory) = player_factory {
@@ -90,11 +89,11 @@ async fn main() {
         _ = input_commands_tx.send(Command::Play).await;
 
         tokio::select! {
-            _ = #[cfg(feature="hw_ir_control")] control::ir_lirc::listen(input_commands_tx.clone()) => {
+            _ = control::ir_lirc::listen(input_commands_tx.clone()) => {
                 error!("Exit from IR Command thread."); 
             }
 
-            _ = #[cfg(feature="hw_oled")] monitor::oled::write(state_changes_tx.subscribe()) => {
+            _ = monitor::oled::write(state_changes_tx.subscribe()) => {
                 error!("Exit from OLED writer thread.");
             }
 
@@ -136,6 +135,7 @@ async fn main() {
             "Configured player {:?} can not be created. Please use settings page to enter correct configuration.\n Error: {:?}",
             current_player, pf_err
         );
+        // todo: run http server
     }
-    info!("Gracefull shuttdown completed.");
+    info!("DPlayer shutdown completed.");
 }
