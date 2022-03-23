@@ -12,7 +12,7 @@ mod mcu;
 mod monitor;
 mod player;
 
-use crate::control::command_handler::{handle, self};
+use crate::control::command_handler::{self, handle};
 use api_models::player::Command;
 use cfg_if::cfg_if;
 
@@ -65,73 +65,51 @@ async fn main() {
 
     if let Ok(player_factory) = player_factory {
         info!("Player succesfully created.");
-        let ctx = command_handler::DplayContext{
-            audio_card: audio_card,
-            config_store: config,
-            player_factory:  Arc::new(Mutex::new(player_factory))
-        };
-        let message_bus = command_handler::MessageBus{
-            state_changes_rx: state_changes_sender.subscribe(),
-            state_changes_tx: state_changes_sender.clone()
-        };
 
+        let player_factory = Arc::new(Mutex::new(player_factory));
 
-        #[cfg(feature = "hw_ir_control")]
-        if settings.ir_control_settings.enabled {
-            threads.push(control::ir_lirc::start(
-                input_commands_tx.clone(),
-                state_changes_sender.subscribe(),
-            ));
-        }
-        #[cfg(feature = "hw_oled")]
-        if settings.oled_settings.enabled {
-            threads.push(monitor::oled::start(state_changes_sender.subscribe()));
-        }
-
-      
-
-        threads.push(spawn(monitor::status::monitor(
-            player_factory.clone(),
-            state_changes_sender.clone(),
+        let (http_handle, ws_handle) = http_api::server_warp::start(
             state_changes_sender.subscribe(),
-            audio_card.clone(),
-        )));
+            input_commands_tx.clone(),
+            config.clone(),
+        );
+        let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate())
+            .expect("failed to create signal future");
 
-        // start command handler thread
-        command_handler::Comm
-
-
-
-
-        // send play command to start playing on last used player
         _ = input_commands_tx.send(Command::Play).await;
+
+        tokio::select! {
+            _ = #[cfg(feature="hw_ir_control")] control::ir_lirc::listen(input_commands_tx.clone()) => { error!("Exit from IR Command thread."); }
+            _ = #[cfg(feature="hw_oled")] monitor::oled::write(state_changes_sender.subscribe()) => {error!("Exit from OLED writer thread.");}
+            _ = monitor::status::monitor(
+                player_factory.clone(),
+                state_changes_sender.clone(),
+                audio_card.clone(),
+            ) => {error!("Exit from status monitor thread.");}
+            _ = command_handler::handle(
+                #[cfg(feature = "hw_dac")]
+                dac.clone(),
+                player_factory.clone(),
+                audio_card,
+                config.clone(),
+                input_commands_rx,
+                state_changes_sender.clone(),
+                state_changes_sender.subscribe(),
+            ) => {}
+            _ = http_handle => {}
+            _ = ws_handle => {}
+            _ = term_signal.recv() => {
+                info!("Terminate signal received.");
+            }
+            _ = tokio::signal::ctrl_c() => {
+                info!("CTRL-c signal received.");
+            }
+        };
     } else if let Err(pf_err) = player_factory {
         error!(
             "Configured player {:?} can not be created. Please use settings page to enter correct configuration.\n Error: {:?}",
             current_player, pf_err
         );
     }
-
-    // start http server
-    let (http_handle, ws_handle) = http_api::server_warp::start(
-        state_changes_sender.subscribe(),
-        input_commands_tx.clone(),
-        config.clone(),
-    );
-    threads.push(tokio::task::spawn(http_handle));
-    threads.push(ws_handle);
-
-    info!("DPlayer started.");
-
-    signal(SignalKind::terminate()).unwrap().recv().await;
-    info!("Gracefull shutdown started");
-    _ = state_changes_sender
-        .clone()
-        .send(api_models::player::StatusChangeEvent::Shutdown);
-
-    for t in threads {
-        _ = t.await;
-    }
-
     info!("Gracefull shuttdown completed.");
 }

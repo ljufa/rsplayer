@@ -22,50 +22,41 @@ use api_models::player::*;
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
 use crate::monitor::myst7920::ST7920;
 
-pub fn start(mut state_changes_receiver: Receiver<StatusChangeEvent>) -> JoinHandle<()> {
-    tokio::task::spawn(async move {
-        let mut delay = Delay;
-        let mut spi = Spidev::open("/dev/spidev0.0").expect("error initializing SPI");
-        let options = SpidevOptions::new()
-            .bits_per_word(8)
-            .max_speed_hz(800000)
-            .mode(SpiModeFlags::SPI_CS_HIGH)
-            .build();
-        spi.configure(&options).expect("error configuring SPI");
-        let rst_pin = Pin::new(GPIO_PIN_OUTPUT_LCD_RST);
-        rst_pin.export().unwrap();
-        rst_pin
-            .set_direction(Direction::Out)
-            .expect("LCD Reset pin problem");
-        let mut disp = ST7920::<Spidev, Pin, Pin>::new(spi, rst_pin, None, false);
-        disp.init(&mut delay).expect("could not init display");
-        disp.clear(&mut delay).expect("could not clear display");
+pub async fn write(mut state_changes_receiver: Receiver<StatusChangeEvent>) {
+    info!("Start OLED writer thread.");
+    let mut delay = Delay;
+    let mut spi = Spidev::open("/dev/spidev0.0").expect("error initializing SPI");
+    let options = SpidevOptions::new()
+        .bits_per_word(8)
+        .max_speed_hz(800000)
+        .mode(SpiModeFlags::SPI_CS_HIGH)
+        .build();
+    spi.configure(&options).expect("error configuring SPI");
+    let rst_pin = Pin::new(GPIO_PIN_OUTPUT_LCD_RST);
+    rst_pin.export().unwrap();
+    rst_pin
+        .set_direction(Direction::Out)
+        .expect("LCD Reset pin problem");
+    let mut disp = ST7920::<Spidev, Pin, Pin>::new(spi, rst_pin, None, false);
+    disp.init(&mut delay).expect("could not init display");
+    disp.clear(&mut delay).expect("could not clear display");
 
-        loop {
-            tokio::time::sleep(Duration::from_millis(200)).await;
-            let cmd_ev = state_changes_receiver.try_recv();
-            trace!("Command event received: {:?}", cmd_ev);
-            match cmd_ev {
-                Ok(StatusChangeEvent::Shutdown) => {
-                    info!("Exit oled writer thread");
-                    break;
-                }
-                Err(e) => {
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-                Ok(StatusChangeEvent::CurrentTrackInfoChanged(stat)) => {
-                    draw_track_info(&mut disp, &mut delay, stat);
-                }
-                Ok(StatusChangeEvent::StreamerStatusChanged(sstatus)) => {
-                    draw_streamer_info(&mut disp, &mut delay, sstatus);
-                }
-                Ok(StatusChangeEvent::PlayerInfoChanged(pinfo)) => {
-                    draw_player_info(&mut disp, &mut delay, pinfo);
-                }
-                _ => {}
+    loop {
+        let cmd_ev = state_changes_receiver.recv().await;
+        trace!("Command event received: {:?}", cmd_ev);
+        match cmd_ev {
+            Ok(StatusChangeEvent::CurrentTrackInfoChanged(stat)) => {
+                draw_track_info(&mut disp, &mut delay, stat);
             }
+            Ok(StatusChangeEvent::StreamerStatusChanged(sstatus)) => {
+                draw_streamer_info(&mut disp, &mut delay, sstatus);
+            }
+            Ok(StatusChangeEvent::PlayerInfoChanged(pinfo)) => {
+                draw_player_info(&mut disp, &mut delay, pinfo);
+            }
+            _ => {}
         }
-    })
+    }
 }
 
 fn draw_streamer_info(

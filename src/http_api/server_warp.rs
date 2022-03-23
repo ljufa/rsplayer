@@ -55,7 +55,7 @@ pub fn start(
     mut state_changes_receiver: Receiver<StatusChangeEvent>,
     input_commands_tx: SyncSender,
     config: Config,
-) -> (impl Future<Output = ()>, JoinHandle<()>) {
+) -> (impl Future<Output = ()>, impl Future<Output = ()>) {
     // Keep track of all connected users, key is usize, value
     // is a websocket sender.
     let users = Users::default();
@@ -94,7 +94,7 @@ pub fn start(
         .or(get_settings)
         .or(ui_static_content)
         .with(cors);
-    let ws_handle = tokio::task::spawn(async move {
+    let ws_handle = async move {
         loop {
             match state_changes_receiver.try_recv() {
                 Ok(StatusChangeEvent::Shutdown) => {
@@ -111,7 +111,7 @@ pub fn start(
                 }
             }
         }
-    });
+    };
     let http_handle = warp::serve(routes).run(([0, 0, 0, 0], 8000));
     (http_handle, ws_handle)
 }

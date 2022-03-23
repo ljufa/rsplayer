@@ -11,18 +11,13 @@ use tokio::sync::broadcast::{Receiver, Sender};
 pub async fn monitor(
     player_factory: Arc<Mutex<PlayerFactory>>,
     state_changes_tx: Sender<StatusChangeEvent>,
-    mut state_changes_rx: Receiver<StatusChangeEvent>,
     audio_card: Arc<AudioCard>,
 ) {
+    info!("Status monitor thread started.");
     let mut last_track_info = None;
     let mut last_player_info = None;
-    info!("Monitor thread started.");
     loop {
-        if let Ok(StatusChangeEvent::Shutdown) = state_changes_rx.try_recv() {
-            info!("Program terminate, monitoring stopped.");
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        tokio::time::sleep(Duration::from_millis(500)).await;
         if audio_card.is_device_in_use() {
             let new_track_info = player_factory
                 .lock()
