@@ -1,16 +1,16 @@
 use std::io;
 use std::str;
-use std::sync::{Arc, Mutex};
+
 
 use api_models::player::Command;
 
-use api_models::player::StatusChangeEvent;
+
 use failure::_core::time::Duration;
-use tokio::io::Interest;
+
 use tokio::net::UnixStream;
-use tokio::sync::broadcast::Receiver;
+
 use tokio::sync::mpsc::Sender;
-use tokio::task::JoinHandle;
+
 
 const REMOTE_MAKER: &'static str = "dplayd";
 

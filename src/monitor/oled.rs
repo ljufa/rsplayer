@@ -1,4 +1,4 @@
-use std::time::Duration;
+
 
 use embedded_graphics::{
     mono_font::{ascii::FONT_4X6, ascii::FONT_5X8, ascii::FONT_6X12, MonoTextStyle},
@@ -14,7 +14,7 @@ use linux_embedded_hal::sysfs_gpio::Direction;
 use linux_embedded_hal::Spidev;
 use linux_embedded_hal::{Delay, Pin};
 
-use tokio::{sync::broadcast::Receiver, task::JoinHandle};
+use tokio::{sync::broadcast::Receiver};
 use unidecode::unidecode;
 
 use api_models::player::*;
