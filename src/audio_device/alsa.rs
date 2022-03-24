@@ -40,7 +40,7 @@ impl AudioCard {
         ))
     }
     pub fn is_device_in_use(&self) -> bool {
-        alsa::PCM::new(self.device_name.as_str(), alsa::Direction::Playback, false).is_ok()
+        alsa::PCM::new(self.device_name.as_str(), alsa::Direction::Playback, false).is_err()
     }
 }
 pub fn get_all_cards() -> HashMap<String, String> {
