@@ -186,30 +186,6 @@ where
         Ok(())
     }
 
-    /// Modify the raw buffer. 1 byte (u8) = 8 pixels
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// let mut st7920 = st7920::ST7920(...);
-    /// // add crazy pattern
-    /// st7920.modify_buffer(|x, y, v| {
-    ///     if x % 2 == y % 2 {
-    ///         v | 0b10101010
-    ///     } else {
-    ///         v
-    ///     }
-    /// });
-    /// st7920.flush();
-    /// ```
-    pub fn modify_buffer(&mut self, f: fn(x: u8, y: u8, v: u8) -> u8) {
-        for i in 0..BUFFER_SIZE {
-            let row = i / ROW_SIZE;
-            let column = i - (row * ROW_SIZE);
-            self.buffer[i] = f(column as u8, row as u8, self.buffer[i]);
-        }
-    }
-
     /// clears the buffer but don't update the display
     pub fn clear_buffer(&mut self) {
         for i in 0..BUFFER_SIZE {
@@ -355,9 +331,7 @@ where
 }
 
 // #[cfg(feature = "graphics")]
-use embedded_graphics::{
-    self, draw_target::DrawTarget, geometry::Point, pixelcolor::BinaryColor, prelude::*,
-};
+use embedded_graphics::{self, draw_target::DrawTarget, pixelcolor::BinaryColor, prelude::*};
 
 // #[cfg(feature = "graphics")]
 impl<SPI, CS, RST, PinError, SPIError> OriginDimensions for ST7920<SPI, CS, RST>
@@ -400,27 +374,5 @@ where
         }
 
         Ok(())
-    }
-}
-
-// #[cfg(feature = "graphics")]
-impl<SPI, RST, CS, PinError, SPIError> ST7920<SPI, RST, CS>
-where
-    SPI: spi::Write<u8, Error = SPIError>,
-    RST: OutputPin<Error = PinError>,
-    CS: OutputPin<Error = PinError>,
-{
-    pub fn flush_region_graphics(
-        &mut self,
-        region: (Point, Size),
-        delay: &mut dyn DelayUs<u32>,
-    ) -> Result<(), Error<SPIError, PinError>> {
-        self.flush_region(
-            region.0.x as u8,
-            region.0.y as u8,
-            region.1.width as u8,
-            region.1.height as u8,
-            delay,
-        )
     }
 }

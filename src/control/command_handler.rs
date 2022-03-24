@@ -9,7 +9,7 @@ use crate::audio_device::ak4497::Dac;
 
 use crate::audio_device::alsa::AudioCard;
 use crate::config::Configuration;
-use crate::player::PlayerFactory;
+use crate::player::PlayerService;
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -23,7 +23,7 @@ use tokio::sync::broadcast::Sender;
 
 pub async fn handle(
     #[cfg(feature = "hw_dac")] dac: Arc<Dac>,
-    player_factory: Arc<Mutex<PlayerFactory>>,
+    player_factory: Arc<Mutex<PlayerService>>,
     audio_card: Arc<AudioCard>,
     config_store: Arc<Mutex<Configuration>>,
     mut input_commands_rx: tokio::sync::mpsc::Receiver<Command>,
@@ -34,7 +34,7 @@ pub async fn handle(
     cfg_if! {
     if #[cfg(feature = "hw_gpio")] {
         let out_sel_pin = gpio::get_output_pin_handle(GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY);
-        let _i = match config_store
+        let _ = match config_store
         .lock()
         .unwrap()
         .get_streamer_status()
@@ -121,43 +121,46 @@ pub async fn handle(
                 }
                 #[cfg(feature = "hw_dac")]
                 Gain(level) => {
-                    dac.set_gain(level);
+                    _ = dac.set_gain(level);
                 }
                 #[cfg(feature = "hw_dac")]
                 Hload(flag) => {
-                    dac.hi_load(flag);
+                    _ = dac.hi_load(flag);
                 }
                 #[cfg(feature = "hw_dac")]
                 Dsd(flag) => {
-                    dac.dsd_pcm(flag);
+                    _ = dac.dsd_pcm(flag);
                 }
                 // player commands
                 Play => {
-                    player_factory.lock().unwrap().get_current_player().play();
+                    _ = player_factory.lock().unwrap().get_current_player().play();
                 }
                 Pause => {
-                    player_factory.lock().unwrap().get_current_player().pause();
+                    _ = player_factory.lock().unwrap().get_current_player().pause();
                 }
                 Next => {
-                    player_factory
+                    _ = player_factory
                         .lock()
                         .unwrap()
                         .get_current_player()
                         .next_track();
                 }
                 Prev => {
-                    player_factory
+                    _ = player_factory
                         .lock()
                         .unwrap()
                         .get_current_player()
                         .prev_track();
                 }
                 Rewind(sec) => {
-                    player_factory
+                    _ = player_factory
                         .lock()
                         .unwrap()
                         .get_current_player()
                         .rewind(sec);
+                }
+                LoadPlaylist(pl_name) => {
+
                 }
                 // system commands
                 SwitchToPlayer(pt) => {
@@ -183,14 +186,13 @@ pub async fn handle(
                 }
                 #[cfg(feature = "hw_gpio")]
                 ChangeAudioOutput => {
-                    let nout;
-                    if out_sel_pin.get_value().unwrap() == 0 {
-                        out_sel_pin.set_value(1);
-                        nout = AudioOut::HEAD;
+                    let nout = if out_sel_pin.get_value().unwrap() == 0 {
+                        _ = out_sel_pin.set_value(1).is_ok();
+                        AudioOut::HEAD
                     } else {
-                        out_sel_pin.set_value(0);
-                        nout = AudioOut::SPKR;
-                    }
+                        _ = out_sel_pin.set_value(0);
+                        AudioOut::SPKR
+                    };
                     let new_sstate = config_store
                         .lock()
                         .unwrap()

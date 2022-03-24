@@ -1,15 +1,15 @@
 use crate::audio_device::alsa::AudioCard;
-use crate::player::PlayerFactory;
+use crate::player::PlayerService;
 use api_models::player::StatusChangeEvent;
 
 use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio::sync::broadcast::{Sender};
+use tokio::sync::broadcast::Sender;
 
 pub async fn monitor(
-    player_factory: Arc<Mutex<PlayerFactory>>,
+    player_factory: Arc<Mutex<PlayerService>>,
     state_changes_tx: Sender<StatusChangeEvent>,
     audio_card: Arc<AudioCard>,
 ) {
@@ -32,7 +32,8 @@ pub async fn monitor(
 
             if last_track_info != new_track_info {
                 if let Some(new) = new_track_info.as_ref() {
-                    state_changes_tx.send(StatusChangeEvent::CurrentTrackInfoChanged(new.clone()));
+                    _ = state_changes_tx
+                        .send(StatusChangeEvent::CurrentTrackInfoChanged(new.clone()));
                 } else {
                     debug!("Current track info in None");
                 }
@@ -46,7 +47,7 @@ pub async fn monitor(
             .get_player_info();
         if last_player_info != new_player_info {
             if let Some(new_p_info) = new_player_info.as_ref() {
-                state_changes_tx.send(StatusChangeEvent::PlayerInfoChanged(new_p_info.clone()));
+                _ = state_changes_tx.send(StatusChangeEvent::PlayerInfoChanged(new_p_info.clone()));
             }
             last_player_info = new_player_info;
         }

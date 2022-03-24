@@ -1,8 +1,7 @@
-
-
+use std::time::Duration;
 use std::{borrow::BorrowMut, process::Child};
-use std::{time::Duration};
 
+use api_models::playlist::Playlist;
 use rspotify::blocking::client::Spotify;
 use rspotify::blocking::oauth2::{SpotifyClientCredentials, SpotifyOAuth};
 use rspotify::blocking::util::*;
@@ -21,19 +20,19 @@ struct ClientDevice {
     device_id: Option<String>,
 }
 
-pub struct SpotifyPlayerApi {
+pub struct SpotifyPlayerClient {
     librespot_process: Child,
     client_device: ClientDevice,
     settings: SpotifySettings,
 }
-unsafe impl Send for SpotifyPlayerApi {}
+unsafe impl Send for SpotifyPlayerClient {}
 
-impl SpotifyPlayerApi {
-    pub fn new(settings: &SpotifySettings) -> Result<SpotifyPlayerApi> {
+impl SpotifyPlayerClient {
+    pub fn new(settings: &SpotifySettings) -> Result<SpotifyPlayerClient> {
         if !settings.enabled {
             return Err(failure::err_msg("Spotify integration is disabled."));
         }
-        Ok(SpotifyPlayerApi {
+        Ok(SpotifyPlayerClient {
             librespot_process: start_librespot(settings)?,
             client_device: create_spotify_client(settings)?,
             settings: settings.clone(),
@@ -80,12 +79,12 @@ impl SpotifyPlayerApi {
         }
     }
 }
-impl Drop for SpotifyPlayerApi {
+impl Drop for SpotifyPlayerClient {
     fn drop(&mut self) {
         self.shutdown()
     }
 }
-impl Player for SpotifyPlayerApi {
+impl Player for SpotifyPlayerClient {
     fn play(&mut self) -> Result<StatusChangeEvent> {
         self.try_with_reconnect_result(|sp| match sp.client.current_user_playing_track() {
             Ok(playing) => match playing {
@@ -96,9 +95,7 @@ impl Player for SpotifyPlayerApi {
                             .as_ref()
                             .map(|it| offset::for_uri(it.uri.clone()).unwrap());
 
-                        let track: Option<String> = pl.item.as_ref().map(|ft| {
-                            return ft.uri.clone();
-                        });
+                        let track: Option<String> = pl.item.as_ref().map(|ft| ft.uri.clone());
 
                         let ctx = pl.context.map(|ct| ct.uri);
                         if ctx.is_some() {
@@ -167,8 +164,8 @@ impl Player for SpotifyPlayerApi {
 
     fn shutdown(&mut self) {
         info!("Shutting down Spotify player!");
-        self.stop();
-        self.librespot_process.kill();
+        _ = self.stop();
+        _ = self.librespot_process.kill();
     }
 
     fn rewind(&mut self, _seconds: i8) -> Result<StatusChangeEvent> {
@@ -184,7 +181,7 @@ impl Player for SpotifyPlayerApi {
                 if !track.artists.is_empty() {
                     artist = track.artists.pop().unwrap().name;
                 }
-                let _durati = track.duration_ms.to_string().clone();
+                let _durati = track.duration_ms.to_string();
                 Ok(CurrentTrackInfo {
                     name: Some(format!("{} - {}", artist, track.name)),
                     album: Some(track.album.name),
@@ -209,6 +206,14 @@ impl Player for SpotifyPlayerApi {
     }
 
     fn random_toggle(&mut self) {}
+
+    fn get_playlists(&mut self) -> Vec<Playlist> {
+        todo!()
+    }
+
+    fn load_playlist(&mut self, pl_name: String) {
+        todo!()
+    }
 }
 
 pub fn auth_manager(settings: &SpotifySettings) -> SpotifyOAuth {

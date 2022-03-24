@@ -2,22 +2,23 @@ use api_models::player::StatusChangeEvent;
 use cfg_if::cfg_if;
 use tokio::sync::broadcast::Receiver;
 
-use crate::common;
-
-pub async fn write(mut state_changes_rx: Receiver<StatusChangeEvent>) {
+// todo implement settings.is_enabled check
+pub async fn write(state_changes_rx: Receiver<StatusChangeEvent>) {
     cfg_if! {
         if #[cfg(feature="hw_oled")] {
-            hw_oled::write(state_changes_rx)
+            hw_oled::write(state_changes_rx).await;
         } else{
-            common::logging_receiver_future(state_changes_rx).await;
+            crate::common::logging_receiver_future(state_changes_rx).await;
         }
     }
 }
 
 #[cfg(feature = "hw_oled")]
 mod hw_oled {
+    use super::*;
     use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
     use crate::monitor::myst7920::ST7920;
+    use api_models::player::{CurrentTrackInfo, PlayerInfo, PlayerState, StreamerStatus};
     use embedded_graphics::{
         mono_font::{ascii::FONT_4X6, ascii::FONT_5X8, ascii::FONT_6X12, MonoTextStyle},
         pixelcolor::BinaryColor,
@@ -75,7 +76,7 @@ mod hw_oled {
         delay: &mut dyn DelayUs<u32>,
         status: StreamerStatus,
     ) {
-        disp.clear_buffer_region(1, 1, 120, 12, delay);
+        _ = disp.clear_buffer_region(1, 1, 120, 12, delay);
         //1. player name
         Text::new(
             format!(
@@ -131,7 +132,7 @@ mod hw_oled {
         delay: &mut dyn DelayUs<u32>,
         player_info: PlayerInfo,
     ) {
-        disp.clear_buffer_region(1, 50, 120, 12, delay);
+        _ = disp.clear_buffer_region(1, 50, 120, 12, delay);
         //1. player name
         Text::new(
             format!(

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use num_derive::{FromPrimitive, ToPrimitive};
-use serde::Serialize;
+
 use strum_macros::{EnumIter, EnumProperty};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -46,7 +46,7 @@ pub struct StreamerStatus {
     pub dac_status: DacStatus,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DacStatus {
     pub volume: u8,
     pub filter: FilterType,
@@ -91,6 +91,7 @@ pub enum Command {
     ChangeAudioOutput,
     RandomToggle,
     Rewind(i8),
+    LoadPlaylist(String)
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, EnumProperty, Serialize, Deserialize)]
@@ -103,6 +104,7 @@ pub enum StatusChangeEvent {
     SwitchedToPrevTrack,
     CurrentTrackInfoChanged(CurrentTrackInfo),
     StreamerStatusChanged(StreamerStatus),
+    PlaylistLoaded(String),
     PlayerInfoChanged(PlayerInfo),
     Error(String),
     Shutdown
@@ -151,11 +153,11 @@ impl CurrentTrackInfo {
         let mut result = "".to_string();
         if let Some(artist) = self.artist.as_ref() {
             result.push_str(artist.as_str());
-            result.push_str("-");
+            result.push('-');
         }
         if let Some(album) = self.album.as_ref() {
             result.push_str(album.as_str());
-            result.push_str("-");
+            result.push('-');
         }
         if let Some(title) = self.title.as_ref() {
             result.push_str(title.as_str());
@@ -165,7 +167,7 @@ impl CurrentTrackInfo {
                 result.push_str(filename.as_str());
             }
         }
-        if result.len() > 0 {
+        if !result.is_empty() {
             Some(result)
         } else {
             None
@@ -201,9 +203,9 @@ fn dur_to_string(duration: Duration) -> String {
         let seconds = secs % 60;
         let minutes = (secs / 60) % 60;
         let hours = (secs / 60) / 60;
-        result = format!("{:0>2}:{:0>2}:{:0>2}", hours, minutes, seconds).to_string();
+        result = format!("{:0>2}:{:0>2}:{:0>2}", hours, minutes, seconds);
     }
-    return result;
+    result
 }
 
 impl Default for StreamerStatus {

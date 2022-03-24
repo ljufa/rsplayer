@@ -2,14 +2,13 @@ use api_models::player::Command;
 use cfg_if::cfg_if;
 use tokio::sync::mpsc::Sender;
 
-use crate::common;
-
+// todo implement settings.is_enabled check
 pub async fn listen(input_comands_tx: Sender<Command>) {
     cfg_if! {
         if #[cfg(feature="hw_ir_control")] {
-            hw_ir::listen(input_commands_tx)
-        } else{
-            common::no_op_future().await;
+            hw_ir::listen(input_comands_tx).await;
+        } else if #[cfg(not(feature="hw_ir_control"))] {
+            crate::common::no_op_future().await;
         }
     }
 }
@@ -25,15 +24,15 @@ mod hw_ir {
 
     use tokio::net::UnixStream;
     use tokio::sync::mpsc::Sender;
-    const REMOTE_MAKER: &'static str = "dplayd";
+    const REMOTE_MAKER: &str = "dplayd";
 
-    async fn listen(input_comands_tx: Sender<Command>) {
+    pub async fn listen(input_comands_tx: Sender<Command>) {
         info!("Start IR Control thread.");
         let stream = UnixStream::connect("/var/run/lirc/lircd").await.unwrap();
 
         loop {
             trace!("Loop cycle");
-            stream.readable().await;
+            _ = stream.readable().await;
             let mut bytes = [0; 60];
             match stream.try_read(&mut bytes) {
                 Ok(n) => {

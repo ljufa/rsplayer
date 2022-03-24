@@ -2,6 +2,7 @@ use std::borrow::BorrowMut;
 use std::time::Duration;
 
 use api_models::player::*;
+use api_models::playlist::Playlist;
 use api_models::settings::*;
 use mpd::Client;
 use num_traits::ToPrimitive;
@@ -10,20 +11,20 @@ use crate::common::Result;
 
 use super::Player;
 
-pub struct MpdPlayerApi {
+pub struct MpdPlayerClient {
     mpd_client: Client,
     mpd_server_url: String,
 }
 
-unsafe impl Send for MpdPlayerApi {}
+unsafe impl Send for MpdPlayerClient {}
 
-impl MpdPlayerApi {
-    pub fn new(mpd_settings: &MpdSettings) -> Result<MpdPlayerApi> {
+impl MpdPlayerClient {
+    pub fn new(mpd_settings: &MpdSettings) -> Result<MpdPlayerClient> {
         if !mpd_settings.enabled {
             return Err(failure::err_msg("MPD player integration is disabled."));
         }
-        Ok(MpdPlayerApi {
-            mpd_client: create_client(&mpd_settings)?,
+        Ok(MpdPlayerClient {
+            mpd_client: create_client(mpd_settings)?,
             mpd_server_url: mpd_settings.get_server_url(),
         })
     }
@@ -62,7 +63,7 @@ impl MpdPlayerApi {
     }
 }
 
-impl Player for MpdPlayerApi {
+impl Player for MpdPlayerClient {
     fn play(&mut self) -> Result<StatusChangeEvent> {
         self.try_with_reconnect(StatusChangeEvent::Playing, |client| client.play())
     }
@@ -89,8 +90,8 @@ impl Player for MpdPlayerApi {
 
     fn shutdown(&mut self) {
         info!("Shutting down MPD player!");
-        self.stop();
-        self.mpd_client.close();
+        _ = self.stop();
+        _ = self.mpd_client.close();
         info!("MPD player shutdown finished!");
     }
 
@@ -106,7 +107,7 @@ impl Player for MpdPlayerApi {
 
     fn get_current_track_info(&mut self) -> Option<CurrentTrackInfo> {
         let result = self.try_with_reconnect_result(|client| client.currentsong());
-        let song = result.unwrap_or_else(|_| return None);
+        let song = result.unwrap_or(None);
         if song.is_none() {
             warn!("Mpd Song is None");
             return None;
@@ -171,15 +172,29 @@ impl Player for MpdPlayerApi {
             })
         } else {
             error!("Error while getting mpd status {:?}", status);
-            return None;
+            None
         }
     }
 
     fn random_toggle(&mut self) {
         let status = self.try_with_reconnect_result(|client| client.status());
         if let Ok(status) = status {
-            self.mpd_client.random(!status.random);
+            _ = self.mpd_client.random(!status.random);
         }
+    }
+
+    fn get_playlists(&mut self) -> Vec<Playlist> {
+        let pls = self
+            .try_with_reconnect_result(|client| client.playlists())
+            .unwrap_or_default();
+        pls.into_iter().map(|p| Playlist { name: p.name }).collect()
+    }
+
+    fn load_playlist(&mut self, pl_name: String) {
+        _ = self.try_with_reconnect(
+            StatusChangeEvent::PlaylistLoaded(pl_name.clone()),
+            |client| client.load(pl_name.clone(), ..),
+        );
     }
 }
 fn convert_state(mpd_state: mpd::status::State) -> PlayerState {
@@ -189,7 +204,7 @@ fn convert_state(mpd_state: mpd::status::State) -> PlayerState {
         mpd::State::Pause => PlayerState::PAUSED,
     }
 }
-impl Drop for MpdPlayerApi {
+impl Drop for MpdPlayerClient {
     fn drop(&mut self) {
         self.shutdown()
     }

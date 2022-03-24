@@ -3,13 +3,14 @@ use std::sync::Arc;
 use crate::audio_device::alsa::AudioCard;
 use crate::common::Result;
 #[cfg(feature = "backend_lms")]
-use crate::player::lms::LogitechMediaServerApi;
+use crate::player::lms::LMSPlayerClient;
 #[cfg(feature = "backend_mpd")]
-use crate::player::mpd::MpdPlayerApi;
+use crate::player::mpd::MpdPlayerClient;
 #[cfg(feature = "backend_spotify")]
-use crate::player::spotify::SpotifyPlayerApi;
+use crate::player::spotify::SpotifyPlayerClient;
 
 use api_models::player::*;
+use api_models::playlist::Playlist;
 use api_models::settings::*;
 
 #[cfg(feature = "backend_lms")]
@@ -30,17 +31,19 @@ pub trait Player {
     fn get_current_track_info(&mut self) -> Option<CurrentTrackInfo>;
     fn get_player_info(&mut self) -> Option<PlayerInfo>;
     fn random_toggle(&mut self);
+    fn get_playlists(&mut self) -> Vec<Playlist>;
+    fn load_playlist(&mut self, pl_name: String);
 }
 
-pub struct PlayerFactory {
+pub struct PlayerService {
     player: Box<dyn Player + Send>,
     settings: Settings,
 }
 
-impl PlayerFactory {
+impl PlayerService {
     pub fn new(current_player: &PlayerType, settings: Settings) -> Result<Self> {
-        Ok(PlayerFactory {
-            player: PlayerFactory::create_player(&settings, current_player)?,
+        Ok(PlayerService {
+            player: PlayerService::create_player(&settings, current_player)?,
             settings,
         })
     }
@@ -56,25 +59,26 @@ impl PlayerFactory {
     ) -> Result<PlayerType> {
         let _ = self.player.stop();
         audio_card.wait_unlock_audio_dev()?;
-        let new_player = PlayerFactory::create_player(&self.settings, player_type)?;
+        let new_player = PlayerService::create_player(&self.settings, player_type)?;
         self.player = new_player;
         self.player.play()?;
-        Ok(player_type.clone())
+        Ok(*player_type)
     }
 
+    #[allow(unreachable_patterns)]
     fn create_player(
         settings: &Settings,
         player_type: &PlayerType,
     ) -> Result<Box<dyn Player + Send>> {
         return match player_type {
             #[cfg(feature = "backend_spotify")]
-            PlayerType::SPF => Ok(Box::new(SpotifyPlayerApi::new(&settings.spotify_settings)?)),
-            #[cfg(feature = "backend_mpd")]
-            PlayerType::MPD => Ok(Box::new(MpdPlayerApi::new(&settings.mpd_settings)?)),
-            #[cfg(feature = "backend_lms")]
-            PlayerType::LMS => Ok(Box::new(LogitechMediaServerApi::new(
-                &settings.lms_settings,
+            PlayerType::SPF => Ok(Box::new(SpotifyPlayerClient::new(
+                &settings.spotify_settings,
             )?)),
+            #[cfg(feature = "backend_mpd")]
+            PlayerType::MPD => Ok(Box::new(MpdPlayerClient::new(&settings.mpd_settings)?)),
+            #[cfg(feature = "backend_lms")]
+            PlayerType::LMS => Ok(Box::new(LMSPlayerClient::new(&settings.lms_settings)?)),
             _ => panic!("Unknown type"),
         };
     }

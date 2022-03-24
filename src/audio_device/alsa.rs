@@ -32,7 +32,7 @@ impl AudioCard {
                 }
             }
             std::thread::sleep(std::time::Duration::from_millis(DELAY_MS));
-            elapsed_time = elapsed_time + DELAY_MS;
+            elapsed_time += DELAY_MS;
         }
         Err(failure::format_err!(
             "Audio device remains locked after [{}]ms",
@@ -40,28 +40,7 @@ impl AudioCard {
         ))
     }
     pub fn is_device_in_use(&self) -> bool {
-        if let Ok(_) = alsa::PCM::new(self.device_name.as_str(), alsa::Direction::Playback, false) {
-            return false;
-        }
-        return true;
-    }
-
-    // fix: not able to get current params because device is locked. read from file directly?
-    pub fn get_hw_params(&self) -> Option<(u32, u32, String)> {
-        let mut result = None;
-        let dev = alsa::PCM::new(self.device_name.as_str(), alsa::Direction::Playback, true);
-        if let Ok(dev) = dev {
-            if let Ok(hwp) = dev.hw_params_current() {
-                result = Some((
-                    hwp.get_rate().map_or(0, |r| r),
-                    hwp.get_channels().map_or(0, |c| c),
-                    hwp.get_format()
-                        .map_or(String::new(), |f| format!("{:?}", f).to_string()),
-                ));
-                debug!("hw_params from alsa {:?}", result);
-            }
-        }
-        result
+        alsa::PCM::new(self.device_name.as_str(), alsa::Direction::Playback, false).is_ok()
     }
 }
 pub fn get_all_cards() -> HashMap<String, String> {

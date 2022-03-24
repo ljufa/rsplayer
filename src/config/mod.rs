@@ -1,3 +1,4 @@
+#[cfg(feature = "backend_spotify")]
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -11,6 +12,7 @@ use api_models::player::*;
 const SETTINGS_KEY: &str = "settings";
 const STREAMER_STATUS_KEY: &str = "streamer_status";
 const DPLAY_CONFIG_DIR_PATH: &str = ".dplay/";
+#[cfg(feature = "backend_spotify")]
 const CACHE_FILE: &str = ".spotify_token_cache";
 
 pub struct Configuration {
@@ -41,13 +43,14 @@ impl Configuration {
     pub fn get_squeezelite_player_path() -> String {
         format!("{}squeezelite", DPLAY_CONFIG_DIR_PATH)
     }
+    #[cfg(feature = "backend_spotify")]
     pub fn get_librespot_path() -> String {
         format!("{}librespot", DPLAY_CONFIG_DIR_PATH)
     }
 
+    #[cfg(feature = "backend_spotify")]
     pub fn spotify_cache_path() -> PathBuf {
-        let project_dir_path = env::current_dir().unwrap();
-        let mut cache_path = PathBuf::from(project_dir_path);
+        let mut cache_path = env::current_dir().unwrap();
         cache_path.push(DPLAY_CONFIG_DIR_PATH);
         let cache_dir = cache_path.display().to_string();
         cache_path.push(CACHE_FILE);
@@ -86,18 +89,17 @@ impl Configuration {
     }
 
     pub fn get_settings(&mut self) -> Settings {
-        let mut result: Settings;
-        if let Some(ds) = self.db.get(SETTINGS_KEY) {
+        let mut result = if let Some(ds) = self.db.get(SETTINGS_KEY) {
             debug!("Existing settings config found: {:?}", ds);
-            result = ds;
+            ds
         } else {
             info!("Existing configuration not found. Using default.");
             let default = Settings::default();
             self.db
                 .set(SETTINGS_KEY, &default)
                 .expect("Could not store default settings");
-            result = default;
-        }
+            default
+        };
         result.alsa_settings.available_alsa_pcm_devices =
             crate::audio_device::alsa::get_all_cards();
         result
@@ -141,7 +143,7 @@ impl Configuration {
             ds.sound_sett = ss;
         }
         ss.dac_status = ds;
-        self.save_streamer_status(&mut ss);
+        self.save_streamer_status(&ss);
         trace!("New patched streamer status {:?}", ss);
         ss.clone()
     }

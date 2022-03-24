@@ -17,10 +17,9 @@ pub fn set_output_pin_value(pin_no: u32, value: bool) {
 
 pub fn get_output_pin_handle(pin_no: u32) -> LineHandle {
     let mut chip = Chip::new("/dev/gpiochip0").expect("Gpio chip not present");
-    let handle = chip
-        .get_line(pin_no)
-        .expect(format!("Pin {} can not be opened", pin_no).as_str())
+
+    chip.get_line(pin_no)
+        .expect("Pin can not be opened")
         .request(LineRequestFlags::OUTPUT, 0, "dplay")
-        .expect("Request to pin failed");
-    handle
+        .expect("Request to pin failed")
 }

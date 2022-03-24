@@ -25,10 +25,10 @@ impl Dac {
             volume_step: settings.volume_step,
         };
         dac.initialize(dac_state)?;
-        return Ok(dac);
+        Ok(dac)
     }
 
-    fn initialize(self: &Self, dac_state: DacStatus) -> Result<()> {
+    fn initialize(&self, dac_state: DacStatus) -> Result<()> {
         // try talking to dac,
         match self.i2c_helper.read_register(0) {
             Ok(_) => {
@@ -67,7 +67,7 @@ impl Dac {
         Ok(())
     }
 
-    pub fn change_sound_setting(self: &Self, setting_no: u8) -> Result<u8> {
+    pub fn change_sound_setting(&self, setting_no: u8) -> Result<u8> {
         match setting_no {
             1 => {
                 self.i2c_helper.change_bit(8, 1, false);
@@ -99,7 +99,7 @@ impl Dac {
         Ok(setting_no)
     }
 
-    fn get_reg_values(self: &Self) -> Result<Vec<String>> {
+    fn get_reg_values(&self) -> Result<Vec<String>> {
         let mut result = Vec::new();
         for rg in 0..15 {
             let val = self.i2c_helper.read_register(rg)?;
@@ -108,13 +108,13 @@ impl Dac {
         Ok(result)
     }
 
-    pub fn set_vol(self: &Self, value: u8) -> Result<u8> {
+    pub fn set_vol(&self, value: u8) -> Result<u8> {
         self.i2c_helper.write_register(3, value);
         self.i2c_helper.write_register(4, value);
         Ok(value)
     }
 
-    pub fn vol_down(self: &Self) -> Result<u8> {
+    pub fn vol_down(&self) -> Result<u8> {
         let curr_val = self.i2c_helper.read_register(3)?;
         if let Some(new_val) = curr_val.checked_sub(self.volume_step) {
             self.set_vol(new_val)
@@ -123,7 +123,7 @@ impl Dac {
         }
     }
 
-    pub fn vol_up(self: &Self) -> Result<u8> {
+    pub fn vol_up(&self) -> Result<u8> {
         let curr_val = self.i2c_helper.read_register(3)?;
         if let Some(new_val) = curr_val.checked_add(self.volume_step) {
             self.set_vol(new_val)
@@ -132,7 +132,7 @@ impl Dac {
         }
     }
 
-    pub fn filter(self: &Self, typ: FilterType) -> Result<FilterType> {
+    pub fn filter(&self, typ: FilterType) -> Result<FilterType> {
         match typ {
             FilterType::SharpRollOff => {
                 self.i2c_helper.change_bit(5, 0, false);
@@ -163,12 +163,12 @@ impl Dac {
         Ok(typ)
     }
 
-    pub fn hi_load(self: &Self, flag: bool) -> Result<bool> {
+    pub fn hi_load(&self, flag: bool) -> Result<bool> {
         self.i2c_helper.change_bit(8, 3, flag);
         Ok(flag)
     }
 
-    pub fn set_gain(self: &Self, level: GainLevel) -> Result<GainLevel> {
+    pub fn set_gain(&self, level: GainLevel) -> Result<GainLevel> {
         match level {
             GainLevel::V25 => self.i2c_helper.write_register(7, 0b0000_0101),
             GainLevel::V28 => self.i2c_helper.write_register(7, 0b0000_0001),
@@ -177,13 +177,13 @@ impl Dac {
         Ok(level)
     }
 
-    fn reset(self: &Self) {
+    fn reset(&self) {
         self.i2c_helper.change_bit(0, 0, false);
         thread::sleep(Duration::from_millis(20));
         self.i2c_helper.change_bit(0, 0, true);
     }
 
-    pub fn dsd_pcm(self: &Self, dsd: bool) {
+    pub fn dsd_pcm(&self, dsd: bool) {
         // ChangeBit(ak4490, 0x01, 0, true);         // Enable soft mute
         // ChangeBit(ak4490, 0x02, 7, true);         // Set To DSD Mode
         // WriteRegister(ak4490,0x00,B00000000);     // Reset
@@ -211,7 +211,7 @@ impl Dac {
         self.reset();
     }
 
-    pub fn soft_mute(self: &Self, flag: bool) {
+    pub fn soft_mute(&self, flag: bool) {
         self.i2c_helper.change_bit(1, 0, flag);
     }
 }

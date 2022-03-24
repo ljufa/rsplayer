@@ -4,8 +4,8 @@ use futures::StreamExt;
 
 use api_models::player::*;
 
-
 use crate::config::Configuration;
+use crate::player::PlayerService;
 use std::{
     collections::HashMap,
     sync::atomic::{AtomicUsize, Ordering},
@@ -35,26 +35,20 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
 type LastStatusMessages = Arc<RwLock<LastStatus>>;
 type Config = Arc<Mutex<Configuration>>;
+type PlayerServiceArc = Arc<Mutex<PlayerService>>;
 type SyncSender = tokio::sync::mpsc::Sender<Command>;
 
+#[derive(Default)]
 struct LastStatus {
     current_track_info: Option<String>,
     player_info: Option<String>,
     streamer_status: Option<String>,
 }
-impl Default for LastStatus {
-    fn default() -> Self {
-        LastStatus {
-            current_track_info: None,
-            player_info: None,
-            streamer_status: None,
-        }
-    }
-}
 pub fn start(
     mut state_changes_receiver: Receiver<StatusChangeEvent>,
     input_commands_tx: SyncSender,
     config: Config,
+    player_service: PlayerServiceArc
 ) -> (impl Future<Output = ()>, impl Future<Output = ()>) {
     // Keep track of all connected users, key is usize, value
     // is a websocket sender.
@@ -69,11 +63,6 @@ pub fn start(
     let cors = warp::cors()
         .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
         .allow_any_origin();
-
-    let cc = config.clone();
-    let get_settings = warp::get()
-        .and(warp::path!("api" / "settings"))
-        .map(move || warp::reply::json(&cc.lock().unwrap().get_settings()));
 
     let player_ws_path = warp::path!("api" / "player")
         .and(warp::ws())
@@ -91,16 +80,13 @@ pub fn start(
     let ui_static_content = warp::get().and(warp::fs::dir(Configuration::get_static_dir_path()));
     let routes = player_ws_path
         .or(filters::settings_save(config.clone()))
-        .or(get_settings)
+        .or(filters::get_settings(config))
+        .or(filters::get_playlists(player_service))
         .or(ui_static_content)
         .with(cors);
     let ws_handle = async move {
         loop {
             match state_changes_receiver.try_recv() {
-                Ok(StatusChangeEvent::Shutdown) => {
-                    info!("Exit from ws thread.");
-                    break;
-                }
                 Err(_e) => {
                     sleep(Duration::from_millis(100)).await;
                     continue;
@@ -119,7 +105,7 @@ mod filters {
     use api_models::settings::Settings;
     use warp::Filter;
 
-    use super::{handlers, Config};
+    use super::{handlers, Config, PlayerServiceArc};
 
     pub fn settings_save(
         config: Config,
@@ -130,10 +116,33 @@ mod filters {
             .and(with_config(config))
             .and_then(handlers::save_settings)
     }
+    pub fn get_settings(
+        config: Config,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        warp::get()
+            .and(warp::path!("api" / "settings"))
+            .and(with_config(config))
+            .and_then(handlers::get_settings)
+    }
+
+    pub fn get_playlists(player_service: PlayerServiceArc) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        warp::get()
+            .and(warp::path!("api" / "playlists"))
+            .and(with_player_svc(player_service))
+            .and_then(handlers::get_playlists)
+    }
+
+
+
     fn with_config(
         config: Config,
     ) -> impl Filter<Extract = (Config,), Error = std::convert::Infallible> + Clone {
         warp::any().map(move || config.clone())
+    }
+    fn with_player_svc(
+        player_svc: PlayerServiceArc,
+    ) -> impl Filter<Extract = (PlayerServiceArc,), Error = std::convert::Infallible> + Clone {
+        warp::any().map(move || player_svc.clone())
     }
 
     fn json_body() -> impl Filter<Extract = (Settings,), Error = warp::Rejection> + Clone {
@@ -149,7 +158,7 @@ mod handlers {
     use api_models::settings::Settings;
     use warp::hyper::StatusCode;
 
-    use super::Config;
+    use super::{Config, PlayerServiceArc};
     pub async fn save_settings(
         settings: Settings,
         config: Config,
@@ -157,6 +166,13 @@ mod handlers {
         debug!("Settings to save {:?}", settings);
         config.lock().unwrap().save_settings(&settings);
         Ok(StatusCode::CREATED)
+    }
+
+    pub async fn get_settings(config: Config) -> Result<impl warp::Reply, Infallible> {
+        Ok(warp::reply::json(&config.lock().unwrap().get_settings()))
+    }
+    pub async fn get_playlists(player_service: PlayerServiceArc) -> Result<impl warp::Reply, Infallible> {
+        Ok(warp::reply::json(&player_service.lock().unwrap().get_current_player().get_playlists()))
     }
 }
 
@@ -257,7 +273,7 @@ async fn user_connected(
         info!("Got command from user {:?}", msg);
         if let Ok(cmd) = msg.to_str() {
             let cmd: Command = serde_json::from_str(cmd).unwrap();
-            input_commands_tx.send(cmd).await;
+            _ = input_commands_tx.send(cmd).await;
         }
     }
 
