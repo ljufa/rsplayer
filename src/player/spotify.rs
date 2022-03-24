@@ -211,7 +211,7 @@ impl Player for SpotifyPlayerClient {
         todo!()
     }
 
-    fn load_playlist(&mut self, pl_name: String) {
+    fn load_playlist(&mut self, _pl_name: String) {
         todo!()
     }
 }

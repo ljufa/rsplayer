@@ -56,8 +56,6 @@ async fn main() {
 
     let current_player = &config.get_streamer_status().source_player;
 
-    
-
     if let Ok(player_service) = PlayerService::new(current_player, settings.clone()) {
         info!("Player succesfully created.");
         let player_service = Arc::new(Mutex::new(player_service));
@@ -73,12 +71,11 @@ async fn main() {
 
         let audio_card = Arc::new(AudioCard::new(settings.alsa_settings.device_name.clone()));
 
-
         let (http_server_future, websocket_future) = http_api::server_warp::start(
             state_changes_tx.subscribe(),
             input_commands_tx.clone(),
             config.clone(),
-            player_service.clone()
+            player_service.clone(),
         );
 
         let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate())

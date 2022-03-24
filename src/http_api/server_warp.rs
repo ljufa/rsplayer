@@ -48,7 +48,7 @@ pub fn start(
     mut state_changes_receiver: Receiver<StatusChangeEvent>,
     input_commands_tx: SyncSender,
     config: Config,
-    player_service: PlayerServiceArc
+    player_service: PlayerServiceArc,
 ) -> (impl Future<Output = ()>, impl Future<Output = ()>) {
     // Keep track of all connected users, key is usize, value
     // is a websocket sender.
@@ -125,14 +125,14 @@ mod filters {
             .and_then(handlers::get_settings)
     }
 
-    pub fn get_playlists(player_service: PlayerServiceArc) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    pub fn get_playlists(
+        player_service: PlayerServiceArc,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "playlists"))
             .and(with_player_svc(player_service))
             .and_then(handlers::get_playlists)
     }
-
-
 
     fn with_config(
         config: Config,
@@ -171,8 +171,16 @@ mod handlers {
     pub async fn get_settings(config: Config) -> Result<impl warp::Reply, Infallible> {
         Ok(warp::reply::json(&config.lock().unwrap().get_settings()))
     }
-    pub async fn get_playlists(player_service: PlayerServiceArc) -> Result<impl warp::Reply, Infallible> {
-        Ok(warp::reply::json(&player_service.lock().unwrap().get_current_player().get_playlists()))
+    pub async fn get_playlists(
+        player_service: PlayerServiceArc,
+    ) -> Result<impl warp::Reply, Infallible> {
+        Ok(warp::reply::json(
+            &player_service
+                .lock()
+                .unwrap()
+                .get_current_player()
+                .get_playlists(),
+        ))
     }
 }
 
