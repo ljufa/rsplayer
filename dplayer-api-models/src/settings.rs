@@ -47,7 +47,6 @@ pub struct MpdSettings {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AlsaSettings {
     pub device_name: String,
-    #[serde(skip_deserializing)]
     pub available_alsa_pcm_devices: HashMap<String, String>,
     #[serde(skip_deserializing)]
     pub available_alsa_control_devices: HashMap<String, String>,

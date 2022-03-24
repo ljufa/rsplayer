@@ -23,7 +23,7 @@ use tokio::sync::broadcast::Sender;
 
 pub async fn handle(
     #[cfg(feature = "hw_dac")] dac: Arc<Dac>,
-    player_factory: Arc<Mutex<PlayerService>>,
+    player_service: Arc<Mutex<PlayerService>>,
     audio_card: Arc<AudioCard>,
     config_store: Arc<Mutex<Configuration>>,
     mut input_commands_rx: tokio::sync::mpsc::Receiver<Command>,
@@ -133,40 +133,44 @@ pub async fn handle(
                 }
                 // player commands
                 Play => {
-                    _ = player_factory.lock().unwrap().get_current_player().play();
+                    _ = player_service.lock().unwrap().get_current_player().play();
                 }
                 Pause => {
-                    _ = player_factory.lock().unwrap().get_current_player().pause();
+                    _ = player_service.lock().unwrap().get_current_player().pause();
                 }
                 Next => {
-                    _ = player_factory
+                    _ = player_service
                         .lock()
                         .unwrap()
                         .get_current_player()
                         .next_track();
                 }
                 Prev => {
-                    _ = player_factory
+                    _ = player_service
                         .lock()
                         .unwrap()
                         .get_current_player()
                         .prev_track();
                 }
                 Rewind(sec) => {
-                    _ = player_factory
+                    _ = player_service
                         .lock()
                         .unwrap()
                         .get_current_player()
                         .rewind(sec);
                 }
                 LoadPlaylist(pl_name) => {
-
+                    _ = player_service
+                        .lock()
+                        .unwrap()
+                        .get_current_player()
+                        .load_playlist(pl_name);
                 }
                 // system commands
                 SwitchToPlayer(pt) => {
                     trace!("Switching to player {:?}", pt);
                     let mut cfg = config_store.lock().unwrap();
-                    match player_factory
+                    match player_service
                         .lock()
                         .unwrap()
                         .switch_to_player(audio_card.clone(), &pt)
@@ -206,7 +210,7 @@ pub async fn handle(
                         .spawn()
                         .expect("halt command failed");
                 }
-                RandomToggle => player_factory
+                RandomToggle => player_service
                     .lock()
                     .unwrap()
                     .get_current_player()

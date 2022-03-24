@@ -191,10 +191,14 @@ impl Player for MpdPlayerClient {
     }
 
     fn load_playlist(&mut self, pl_name: String) {
-        _ = self.try_with_reconnect(
+        let r = self.try_with_reconnect(
             StatusChangeEvent::PlaylistLoaded(pl_name.clone()),
-            |client| client.load(pl_name.clone(), ..),
+            |client| {
+                _ = client.clear();
+                client.load(pl_name.clone(), ..)
+            },
         );
+        info!("Load pl result: {:?}", r);
     }
 }
 fn convert_state(mpd_state: mpd::status::State) -> PlayerState {
