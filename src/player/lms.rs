@@ -138,7 +138,7 @@ impl Player for LMSPlayerClient {
         Ok(StatusChangeEvent::SwitchedToPrevTrack)
     }
 
-    fn get_current_track_info(&mut self) -> Option<CurrentTrackInfo> {
+    fn get_current_track_info(&mut self) -> Option<Track> {
         let artist = self
             .send_command_with_response("artist ?")
             .map_or(None, |r| if !r.is_empty() { Some(r) } else { None });
@@ -160,7 +160,7 @@ impl Player for LMSPlayerClient {
             }
         });
 
-        Some(CurrentTrackInfo {
+        Some(Track {
             name: title.clone(),
             album,
             artist,
@@ -169,6 +169,7 @@ impl Player for LMSPlayerClient {
             filename: path,
             title,
             uri: None,
+            queue_position: 0,
         })
     }
 
@@ -183,6 +184,10 @@ impl Player for LMSPlayerClient {
     }
 
     fn load_playlist(&mut self, _pl_name: String) {
+        todo!()
+    }
+
+    fn get_queue_items(&mut self) -> Vec<api_models::playlist::QueueItem> {
         todo!()
     }
 }

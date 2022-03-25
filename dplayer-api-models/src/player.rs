@@ -4,22 +4,33 @@ use num_derive::{FromPrimitive, ToPrimitive};
 
 use strum_macros::{EnumIter, EnumProperty};
 
+
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct CurrentTrackInfo {
+pub struct Track {
+    pub queue_position: u32,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
     pub album: Option<String>,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
     pub artist: Option<String>,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
     pub genre: Option<String>,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date: Option<String>,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uri: Option<String>,
 }
@@ -28,14 +39,19 @@ pub struct CurrentTrackInfo {
 pub struct PlayerInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<PlayerState>,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
     pub random: Option<bool>,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_format_rate: Option<u32>,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_format_bit: Option<u8>,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_format_channels: Option<u32>,
+    
     pub time: (Duration, Duration),
 }
 
@@ -102,7 +118,7 @@ pub enum StatusChangeEvent {
     Stopped,
     SwitchedToNextTrack,
     SwitchedToPrevTrack,
-    CurrentTrackInfoChanged(CurrentTrackInfo),
+    CurrentTrackInfoChanged(Track),
     StreamerStatusChanged(StreamerStatus),
     PlaylistLoaded(String),
     PlayerInfoChanged(PlayerInfo),
@@ -148,7 +164,7 @@ pub enum PlayerType {
     LMS = 3,
 }
 
-impl CurrentTrackInfo {
+impl Track {
     pub fn info_string(&self) -> Option<String> {
         let mut result = "".to_string();
         if let Some(artist) = self.artist.as_ref() {

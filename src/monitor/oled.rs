@@ -18,7 +18,7 @@ mod hw_oled {
     use super::*;
     use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
     use crate::monitor::myst7920::ST7920;
-    use api_models::player::{CurrentTrackInfo, PlayerInfo, PlayerState, StreamerStatus};
+    use api_models::player::{PlayerInfo, PlayerState, StreamerStatus, Track};
     use embedded_graphics::{
         mono_font::{ascii::FONT_4X6, ascii::FONT_5X8, ascii::FONT_6X12, MonoTextStyle},
         pixelcolor::BinaryColor,
@@ -96,7 +96,7 @@ mod hw_oled {
     fn draw_track_info(
         disp: &mut ST7920<Spidev, Pin, Pin>,
         delay: &mut dyn DelayUs<u32>,
-        status: CurrentTrackInfo,
+        status: Track,
     ) {
         //4. song
         let name = status.info_string();

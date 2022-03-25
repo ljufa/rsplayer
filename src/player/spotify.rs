@@ -172,7 +172,7 @@ impl Player for SpotifyPlayerClient {
         Ok(StatusChangeEvent::Playing)
     }
 
-    fn get_current_track_info(&mut self) -> Option<CurrentTrackInfo> {
+    fn get_current_track_info(&mut self) -> Option<Track> {
         match self.try_with_reconnect_result(|sp| {
             let playing = sp.client.current_user_playing_track()?;
             if let Some(playing) = playing {
@@ -182,7 +182,7 @@ impl Player for SpotifyPlayerClient {
                     artist = track.artists.pop().unwrap().name;
                 }
                 let _durati = track.duration_ms.to_string();
-                Ok(CurrentTrackInfo {
+                Ok(Track {
                     name: Some(format!("{} - {}", artist, track.name)),
                     album: Some(track.album.name),
                     artist: Some(artist),
@@ -191,6 +191,7 @@ impl Player for SpotifyPlayerClient {
                     filename: None,
                     title: Some(track.name.clone()),
                     uri: track.album.images.into_iter().map(|f| f.url).next(),
+                    queue_position: 0,
                 })
             } else {
                 Err(failure::err_msg("Can't get spotify track info"))
@@ -212,6 +213,10 @@ impl Player for SpotifyPlayerClient {
     }
 
     fn load_playlist(&mut self, _pl_name: String) {
+        todo!()
+    }
+
+    fn get_queue_items(&mut self) -> Vec<api_models::playlist::QueueItem> {
         todo!()
     }
 }

@@ -81,7 +81,8 @@ pub fn start(
     let routes = player_ws_path
         .or(filters::settings_save(config.clone()))
         .or(filters::get_settings(config))
-        .or(filters::get_playlists(player_service))
+        .or(filters::get_playlists(player_service.clone()))
+        .or(filters::get_queue_items(player_service))
         .or(ui_static_content)
         .with(cors);
     let ws_handle = async move {
@@ -133,6 +134,14 @@ mod filters {
             .and(with_player_svc(player_service))
             .and_then(handlers::get_playlists)
     }
+    pub fn get_queue_items(
+        player_service: PlayerServiceArc,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        warp::get()
+            .and(warp::path!("api" / "queue"))
+            .and(with_player_svc(player_service))
+            .and_then(handlers::get_queue_items)
+    }
 
     fn with_config(
         config: Config,
@@ -180,6 +189,17 @@ mod handlers {
                 .unwrap()
                 .get_current_player()
                 .get_playlists(),
+        ))
+    }
+    pub async fn get_queue_items(
+        player_service: PlayerServiceArc,
+    ) -> Result<impl warp::Reply, Infallible> {
+        Ok(warp::reply::json(
+            &player_service
+                .lock()
+                .unwrap()
+                .get_current_player()
+                .get_queue_items(),
         ))
     }
 }

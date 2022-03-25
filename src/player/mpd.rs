@@ -2,9 +2,9 @@ use std::borrow::BorrowMut;
 use std::time::Duration;
 
 use api_models::player::*;
-use api_models::playlist::Playlist;
+use api_models::playlist::{Playlist, QueueItem};
 use api_models::settings::*;
-use mpd::Client;
+use mpd::{Client, Song};
 use num_traits::ToPrimitive;
 
 use crate::common::Result;
@@ -105,44 +105,15 @@ impl Player for MpdPlayerClient {
         Ok(StatusChangeEvent::Playing)
     }
 
-    fn get_current_track_info(&mut self) -> Option<CurrentTrackInfo> {
+    fn get_current_track_info(&mut self) -> Option<Track> {
         let result = self.try_with_reconnect_result(|client| client.currentsong());
         let song = result.unwrap_or(None);
         if song.is_none() {
             warn!("Mpd Song is None");
             return None;
         }
-        let song = song.unwrap();
-        trace!("Song is {:?}", song);
-
-        let mut album: Option<String> = None;
-        if song.tags.contains_key("Album") {
-            album = Some(song.tags["Album"].clone());
-        }
-        let mut artist: Option<String> = None;
-        if song.tags.contains_key("Artist") {
-            artist = Some(song.tags["Artist"].clone());
-        }
-        let mut genre: Option<String> = None;
-        if song.tags.contains_key("Genre") {
-            genre = Some(song.tags["Genre"].clone());
-        }
-        let mut date: Option<String> = None;
-        if song.tags.contains_key("Date") {
-            date = Some(song.tags["Date"].clone());
-        }
-        Some(CurrentTrackInfo {
-            filename: Some(song.file),
-            name: song.name,
-            album,
-            artist,
-            genre,
-            date,
-            title: song.title,
-            uri: None,
-        })
+        Some(song_to_track(&song.unwrap()))
     }
-
     fn get_player_info(&mut self) -> Option<PlayerInfo> {
         let status = self.try_with_reconnect_result(|client| client.status());
         trace!("Mpd Status is {:?}", status);
@@ -200,7 +171,52 @@ impl Player for MpdPlayerClient {
         );
         info!("Load pl result: {:?}", r);
     }
+
+    fn get_queue_items(&mut self) -> Vec<api_models::playlist::QueueItem> {
+        let r = self
+            .try_with_reconnect_result(|client| client.queue())
+            .unwrap_or_default();
+        r.iter()
+            .map(|s| QueueItem {
+                queue_position: s.place.map_or(0, |p| p.pos),
+                title: song_to_track(s).info_string().unwrap_or_default(),
+                is_current: false,
+            })
+            .collect()
+    }
 }
+
+fn song_to_track(song: &Song) -> Track {
+    trace!("Song is {:?}", song);
+    let mut album: Option<String> = None;
+    if song.tags.contains_key("Album") {
+        album = Some(song.tags["Album"].clone());
+    }
+    let mut artist: Option<String> = None;
+    if song.tags.contains_key("Artist") {
+        artist = Some(song.tags["Artist"].clone());
+    }
+    let mut genre: Option<String> = None;
+    if song.tags.contains_key("Genre") {
+        genre = Some(song.tags["Genre"].clone());
+    }
+    let mut date: Option<String> = None;
+    if song.tags.contains_key("Date") {
+        date = Some(song.tags["Date"].clone());
+    }
+    Track {
+        filename: Some(song.file.clone()),
+        name: song.name.clone(),
+        album,
+        artist,
+        genre,
+        date,
+        title: song.title.clone(),
+        uri: None,
+        queue_position: song.place.map_or(0, |p| p.id.0),
+    }
+}
+
 fn convert_state(mpd_state: mpd::status::State) -> PlayerState {
     match mpd_state {
         mpd::State::Stop => PlayerState::STOPPED,
