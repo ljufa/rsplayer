@@ -40,18 +40,15 @@ async fn main() {
 
     cfg_if! {
             if #[cfg(feature = "hw_dac")] {
-                let dac = Dac::new(
-                config.get_streamer_status().dac_status,
-                &settings.dac_settings,
-            );
-            if let Err(dac_err) = dac {
-                error!("DAC initialization error: {}", dac_err);
-                std::process::exit(1);
-            } else {
-                info!("Dac is successfully initialized.");
+                let dac = Dac::new(config.get_streamer_status().dac_status, &settings.dac_settings);
+                if let Err(dac_err) = dac {
+                    error!("DAC initialization error: {}", dac_err);
+                    std::process::exit(1);
+                } else {
+                    info!("Dac is successfully initialized.");
+                }
+                let dac = Arc::new(dac.unwrap());
             }
-            let dac = Arc::new(dac.unwrap());
-        }
     }
 
     let current_player = &config.get_streamer_status().source_player;
@@ -76,6 +73,8 @@ async fn main() {
             input_commands_tx.clone(),
             config.clone(),
             player_service.clone(),
+            #[cfg(feature = "hw_dac")]
+            dac.clone(),
         );
 
         let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate())

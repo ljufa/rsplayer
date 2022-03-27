@@ -1,57 +1,78 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use num_derive::{FromPrimitive, ToPrimitive};
 
-use strum_macros::{EnumIter, EnumProperty};
+use strum_macros::{EnumIter, EnumProperty, EnumString, IntoStaticStr};
 
-
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct Track {
-    pub queue_position: u32,
-    
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub filename: Option<String>,
-    
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub album: Option<String>,
-    
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub artist: Option<String>,
-    
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
+pub struct Song {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub album: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artist: Option<String>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub genre: Option<String>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date: Option<String>,
-    
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_modified: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub track: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disc: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub album_artist: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub position: Option<u32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub performer: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub composer: Option<String>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uri: Option<String>,
+
+    pub tags: HashMap<String, String>,
+
+    pub file: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayerInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<PlayerState>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub random: Option<bool>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_format_rate: Option<u32>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_format_bit: Option<u8>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_format_channels: Option<u32>,
-    
+
     pub time: (Duration, Duration),
 }
 
@@ -101,13 +122,14 @@ pub enum Command {
     Prev,
     Pause,
     Play,
+    PlayAt(u32),
     TogglePlayer,
     SwitchToPlayer(PlayerType),
     PowerOff,
     ChangeAudioOutput,
     RandomToggle,
     Rewind(i8),
-    LoadPlaylist(String)
+    LoadPlaylist(String),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, EnumProperty, Serialize, Deserialize)]
@@ -118,16 +140,28 @@ pub enum StatusChangeEvent {
     Stopped,
     SwitchedToNextTrack,
     SwitchedToPrevTrack,
-    CurrentTrackInfoChanged(Track),
+    CurrentTrackInfoChanged(Song),
     StreamerStatusChanged(StreamerStatus),
     PlaylistLoaded(String),
     PlayerInfoChanged(PlayerInfo),
     Error(String),
-    Shutdown
+    Shutdown,
 }
 
 #[derive(
-    Debug, Hash, Serialize, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive, Deserialize,
+    Debug,
+    Hash,
+    Serialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    FromPrimitive,
+    ToPrimitive,
+    Deserialize,
+    EnumString,
+    EnumIter,
+    IntoStaticStr,
 )]
 pub enum FilterType {
     SharpRollOff,
@@ -164,7 +198,7 @@ pub enum PlayerType {
     LMS = 3,
 }
 
-impl Track {
+impl Song {
     pub fn info_string(&self) -> Option<String> {
         let mut result = "".to_string();
         if let Some(artist) = self.artist.as_ref() {
@@ -179,15 +213,23 @@ impl Track {
             result.push_str(title.as_str());
         }
         if result.is_empty() {
-            if let Some(filename) = self.filename.as_ref() {
-                result.push_str(filename.as_str());
-            }
+            result.push_str(self.file.as_str());
         }
         if !result.is_empty() {
             Some(result)
         } else {
             None
         }
+    }
+    pub fn get_title(&self) -> String {
+        let mut result = "".to_string();
+        if let Some(title) = self.title.as_ref() {
+            result.push_str(title.as_str());
+        }
+        if result.is_empty() {
+            result.push_str(self.file.as_str());
+        }
+        return result;
     }
 }
 
@@ -245,4 +287,11 @@ impl Default for DacStatus {
             heavy_load: true,
         }
     }
+}
+
+#[derive(Default, Serialize, Deserialize, Debug)]
+pub struct LastStatus {
+    pub current_track_info: Option<Song>,
+    pub player_info: Option<PlayerInfo>,
+    pub streamer_status: Option<StreamerStatus>,
 }

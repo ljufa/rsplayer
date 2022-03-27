@@ -44,7 +44,7 @@ impl LMSPlayerClient {
                 if num_tracks.trim().is_empty() || num_tracks == "0" {
                     info!("LMS playlist is empty, creating random tracks list.");
                     p.send_command("randomplay tracks", Playing)?;
-                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    // std::thread::sleep(std::time::Duration::from_secs(1));
                 } else {
                     debug!(
                         "Number of tracks in playlist higher that zero : {}",
@@ -138,7 +138,7 @@ impl Player for LMSPlayerClient {
         Ok(StatusChangeEvent::SwitchedToPrevTrack)
     }
 
-    fn get_current_track_info(&mut self) -> Option<Track> {
+    fn get_current_song(&mut self) -> Option<Song> {
         let artist = self
             .send_command_with_response("artist ?")
             .map_or(None, |r| if !r.is_empty() { Some(r) } else { None });
@@ -160,16 +160,14 @@ impl Player for LMSPlayerClient {
             }
         });
 
-        Some(Track {
-            name: title.clone(),
+        Some(Song {
             album,
             artist,
             genre,
             date: None,
-            filename: path,
+            file: path.unwrap_or_default(),
             title,
-            uri: None,
-            queue_position: 0,
+            ..Default::default()
         })
     }
 
@@ -187,7 +185,15 @@ impl Player for LMSPlayerClient {
         todo!()
     }
 
-    fn get_queue_items(&mut self) -> Vec<api_models::playlist::QueueItem> {
+    fn get_queue_items(&mut self) -> Vec<Song> {
+        todo!()
+    }
+
+    fn get_playlist_items(&mut self, _playlist_name: String) -> Vec<Song> {
+        todo!()
+    }
+
+    fn play_at(&mut self, _position: u32) -> Result<StatusChangeEvent> {
         todo!()
     }
 }

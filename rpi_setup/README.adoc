@@ -50,30 +50,15 @@ sudo systemctl start dplay.service
 === Install mpd
 [source]
 sudo apt install -y mpd
-# then remove service files to avoid automatic mpd start
-sudo rm /etc/systemd/user/sockets.target.wants/mpd.socket
-sudo rm /etc/systemd/system/sockets.target.wants/mpd.socket
-sudo systemctl daemon-reload
-
-# old way, disable mpd 
-// sudo systemctl disable mpd.service
-// sudo systemctl disable mpd.socket
-// sudo rm /usr/lib/systemd/system/mpd.service
-// sudo rm /usr/lib/systemd/system/mpd.socket
-
-
-=== WIFI setup
-[source]
-sudo cp wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf
 
 === LIRC setup
-put 
+ 
+`/boot/config.txt`
 ```
 dtoverlay=gpio-ir,gpio_pin=27
 gpio=18,15,17=pu
 gpio=22,23,9=op,dh
 ``` 
-into `/boot/config.txt`
 
 [source]
 sudo apt-get install -y lirc

@@ -1,6 +1,3 @@
-use std::thread;
-use std::time::Duration;
-
 use crate::common::Result;
 use api_models::player::*;
 use api_models::settings::*;
@@ -28,7 +25,7 @@ impl Dac {
         Ok(dac)
     }
 
-    fn initialize(&self, dac_state: DacStatus) -> Result<()> {
+    pub fn initialize(&self, dac_state: DacStatus) -> Result<()> {
         // try talking to dac,
         match self.i2c_helper.read_register(0) {
             Ok(_) => {
@@ -58,7 +55,6 @@ impl Dac {
         self.hi_load(dac_state.heavy_load).expect("error");
         self.change_sound_setting(dac_state.sound_sett)
             .expect("error");
-        //self.soft_mute(dac_state.muted);
         trace!("Dac registry After init");
         self.get_reg_values()
             .expect("Can not read dac registry")
@@ -99,7 +95,7 @@ impl Dac {
         Ok(setting_no)
     }
 
-    fn get_reg_values(&self) -> Result<Vec<String>> {
+    pub fn get_reg_values(&self) -> Result<Vec<String>> {
         let mut result = Vec::new();
         for rg in 0..15 {
             let val = self.i2c_helper.read_register(rg)?;
@@ -179,7 +175,6 @@ impl Dac {
 
     fn reset(&self) {
         self.i2c_helper.change_bit(0, 0, false);
-        thread::sleep(Duration::from_millis(20));
         self.i2c_helper.change_bit(0, 0, true);
     }
 
@@ -218,7 +213,5 @@ impl Dac {
 
 fn press_pdn_button() {
     gpio::set_output_pin_value(GPIO_PIN_OUTPUT_DAC_PDN_RST, false);
-    thread::sleep(Duration::from_millis(50));
     gpio::set_output_pin_value(GPIO_PIN_OUTPUT_DAC_PDN_RST, true);
-    thread::sleep(Duration::from_millis(50));
 }

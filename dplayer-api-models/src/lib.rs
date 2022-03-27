@@ -4,6 +4,5 @@ extern crate serde;
 extern crate serde_json;
 
 pub mod player;
-pub mod settings;
 pub mod playlist;
-
+pub mod settings;

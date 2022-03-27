@@ -15,16 +15,13 @@ build_librespot:
 	cross build --target $(TARGET) --release --no-default-features --features alsa-backend
 	cp -f target/$(TARGET)/$(OUT)/librespot ../dplayer/rpi_setup/.dplay/librespot
 
-
-test:
-	cross test --target $(TARGET) --package dplay:0.1.0 --bin dplay
-
-check:
-	cross check --target $(TARGET) --package dplay:0.1.0 --bin dplay
-
 release:
 	cargo fmt
 	cross build --target $(TARGET) --release --features backend_mpd,backend_lms,hw_dac,hw_ir_control,hw_oled
+
+debug:
+	cargo fmt
+	cross build --target $(TARGET) --features backend_mpd,backend_lms,hw_dac,hw_ir_control,hw_oled
 
 copytorpi: $(OUT)
 	rsync -avvP --rsync-path="sudo rsync" target/$(TARGET)/$(OUT)/$(RELEASE) ubuntu@$(RPI_HOST):/home/ubuntu
@@ -33,12 +30,4 @@ copy_config:
 	rsync -avvP --rsync-path="sudo rsync" rpi_setup/etc/ ubuntu@$(RPI_HOST):/etc
 	rsync -avvP rpi_setup/.dplay/ ubuntu@$(RPI_HOST):~/.dplay/
 
-clean:
-	cargo clean
-	
-build_local:
-	cargo build
-
-test:
-	cargo test
 

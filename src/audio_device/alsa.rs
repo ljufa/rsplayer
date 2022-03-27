@@ -31,7 +31,7 @@ impl AudioCard {
                     return Ok(());
                 }
             }
-            std::thread::sleep(std::time::Duration::from_millis(DELAY_MS));
+            // tokio::time::sleep(std::time::Duration::from_millis(DELAY_MS));
             elapsed_time += DELAY_MS;
         }
         Err(failure::format_err!(

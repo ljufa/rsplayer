@@ -1,4 +1,3 @@
-use std::time::Duration;
 use std::{borrow::BorrowMut, process::Child};
 
 use api_models::playlist::Playlist;
@@ -172,7 +171,7 @@ impl Player for SpotifyPlayerClient {
         Ok(StatusChangeEvent::Playing)
     }
 
-    fn get_current_track_info(&mut self) -> Option<Track> {
+    fn get_current_song(&mut self) -> Option<Song> {
         match self.try_with_reconnect_result(|sp| {
             let playing = sp.client.current_user_playing_track()?;
             if let Some(playing) = playing {
@@ -182,16 +181,14 @@ impl Player for SpotifyPlayerClient {
                     artist = track.artists.pop().unwrap().name;
                 }
                 let _durati = track.duration_ms.to_string();
-                Ok(Track {
-                    name: Some(format!("{} - {}", artist, track.name)),
+                Ok(Song {
                     album: Some(track.album.name),
                     artist: Some(artist),
                     genre: None,
                     date: track.album.release_date,
-                    filename: None,
+                    file: "".to_string(),
                     title: Some(track.name.clone()),
-                    uri: track.album.images.into_iter().map(|f| f.url).next(),
-                    queue_position: 0,
+                    ..Default::default()
                 })
             } else {
                 Err(failure::err_msg("Can't get spotify track info"))
@@ -216,7 +213,15 @@ impl Player for SpotifyPlayerClient {
         todo!()
     }
 
-    fn get_queue_items(&mut self) -> Vec<api_models::playlist::QueueItem> {
+    fn get_queue_items(&mut self) -> Vec<Song> {
+        todo!()
+    }
+
+    fn get_playlist_items(&mut self, _playlist_name: String) -> Vec<Song> {
+        todo!()
+    }
+
+    fn play_at(&mut self, _position: u32) -> Result<StatusChangeEvent> {
         todo!()
     }
 }
@@ -256,7 +261,7 @@ fn create_spotify_client(settings: &SpotifySettings) -> Result<ClientDevice> {
             }
         }
         if dev.is_empty() {
-            std::thread::sleep(Duration::from_millis(2000));
+            // std::thread::sleep(Duration::from_millis(2000));
             tries += 1;
         } else {
             break;

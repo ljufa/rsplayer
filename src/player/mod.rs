@@ -10,7 +10,7 @@ use crate::player::mpd::MpdPlayerClient;
 use crate::player::spotify::SpotifyPlayerClient;
 
 use api_models::player::*;
-use api_models::playlist::{Playlist, QueueItem};
+use api_models::playlist::Playlist;
 use api_models::settings::*;
 
 #[cfg(feature = "backend_lms")]
@@ -28,13 +28,14 @@ pub trait Player {
     fn stop(&mut self) -> Result<StatusChangeEvent>;
     fn shutdown(&mut self);
     fn rewind(&mut self, seconds: i8) -> Result<StatusChangeEvent>;
-    fn get_current_track_info(&mut self) -> Option<Track>;
+    fn get_current_song(&mut self) -> Option<Song>;
     fn get_player_info(&mut self) -> Option<PlayerInfo>;
     fn random_toggle(&mut self);
     fn get_playlists(&mut self) -> Vec<Playlist>;
     fn load_playlist(&mut self, pl_name: String);
-
-    fn get_queue_items(&mut self) -> Vec<QueueItem>;
+    fn get_queue_items(&mut self) -> Vec<Song>;
+    fn get_playlist_items(&mut self, playlist_name: String) -> Vec<Song>;
+    fn play_at(&mut self, position: u32) -> Result<StatusChangeEvent>;
 }
 
 pub struct PlayerService {

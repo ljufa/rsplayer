@@ -20,8 +20,6 @@ mod hw_ir {
 
     use api_models::player::Command;
 
-    use failure::_core::time::Duration;
-
     use tokio::net::UnixStream;
     use tokio::sync::mpsc::Sender;
     const REMOTE_MAKER: &str = "dplayd";
@@ -65,14 +63,12 @@ mod hw_ir {
                                 .send(Command::ChangeAudioOutput)
                                 .await
                                 .expect("Error");
-                            std::thread::sleep(Duration::from_secs(1));
                         }
                         "05 KEY_POWER" => {
                             input_comands_tx
                                 .send(Command::PowerOff)
                                 .await
                                 .expect("Error");
-                            std::thread::sleep(Duration::from_secs(10));
                         }
                         _ => {
                             let key_str = String::from(key);

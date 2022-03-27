@@ -71,8 +71,6 @@ pub struct OLEDSettings {
     pub enabled: bool,
 }
 
-
-
 impl LmsSettings {
     pub fn get_cli_url(&self) -> String {
         format!("{}:{}", self.server_host, self.cli_port)

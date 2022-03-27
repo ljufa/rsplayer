@@ -135,6 +135,13 @@ pub async fn handle(
                 Play => {
                     _ = player_service.lock().unwrap().get_current_player().play();
                 }
+                PlayAt(position) => {
+                    _ = player_service
+                        .lock()
+                        .unwrap()
+                        .get_current_player()
+                        .play_at(position);
+                }
                 Pause => {
                     _ = player_service.lock().unwrap().get_current_player().pause();
                 }

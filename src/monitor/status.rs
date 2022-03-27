@@ -23,7 +23,7 @@ pub async fn monitor(
                 .lock()
                 .unwrap()
                 .get_current_player()
-                .get_current_track_info();
+                .get_current_song();
             trace!(
                 "new track info:\t{:?}\nlast track info:\t{:?}",
                 new_track_info,
