@@ -6,3 +6,4 @@
 rpi_setup/etc/fstab
 rpi_setup/.dplay/configurations.db
 .dplay
+.spotify_token_cache.json

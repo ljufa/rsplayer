@@ -109,22 +109,22 @@ impl LMSPlayerClient {
     }
 }
 impl Player for LMSPlayerClient {
-    fn play(&mut self) -> Result<StatusChangeEvent> {
-        self.send_command("play", Playing)
+    fn play(&mut self) {
+        self.send_command("play", Playing);
     }
 
-    fn pause(&mut self) -> Result<StatusChangeEvent> {
-        self.send_command("pause", Paused)
+    fn pause(&mut self) {
+        self.send_command("pause", Paused);
     }
-    fn next_track(&mut self) -> Result<StatusChangeEvent> {
-        self.send_command("playlist index +1", SwitchedToNextTrack)
+    fn next_track(&mut self) {
+        self.send_command("playlist index +1", SwitchedToNextTrack);
     }
-    fn prev_track(&mut self) -> Result<StatusChangeEvent> {
-        self.send_command("playlist index -1", SwitchedToPrevTrack)
+    fn prev_track(&mut self) {
+        self.send_command("playlist index -1", SwitchedToPrevTrack);
     }
 
-    fn stop(&mut self) -> Result<StatusChangeEvent> {
-        self.send_command("stop", Stopped)
+    fn stop(&mut self) {
+        self.send_command("stop", Stopped);
     }
 
     fn shutdown(&mut self) {
@@ -134,9 +134,7 @@ impl Player for LMSPlayerClient {
         _ = self.squeeze_player_process.kill();
     }
 
-    fn rewind(&mut self, _seconds: i8) -> Result<StatusChangeEvent> {
-        Ok(StatusChangeEvent::SwitchedToPrevTrack)
-    }
+    fn rewind(&mut self, _seconds: i8) {}
 
     fn get_current_song(&mut self) -> Option<Song> {
         let artist = self
@@ -193,7 +191,7 @@ impl Player for LMSPlayerClient {
         todo!()
     }
 
-    fn play_at(&mut self, _position: u32) -> Result<StatusChangeEvent> {
+    fn play_at(&mut self, _position: u32) {
         todo!()
     }
 }

@@ -186,16 +186,15 @@ pub enum GainLevel {
     Hash,
     Copy,
     EnumIter,
-    FromPrimitive,
-    ToPrimitive,
+    EnumString,
     Serialize,
     Deserialize,
 )]
-#[repr(u8)]
+
 pub enum PlayerType {
-    SPF = 1,
-    MPD = 2,
-    LMS = 3,
+    SPF,
+    MPD,
+    LMS,
 }
 
 impl Song {

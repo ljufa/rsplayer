@@ -1,6 +1,7 @@
 use crate::common::Result;
 use api_models::player::*;
 use api_models::settings::*;
+use std::time::Duration;
 
 use crate::mcu::gpio;
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_DAC_PDN_RST;
@@ -26,6 +27,8 @@ impl Dac {
     }
 
     pub fn initialize(&self, dac_state: DacStatus) -> Result<()> {
+        // reset dac
+        press_pdn_button();
         // try talking to dac,
         match self.i2c_helper.read_register(0) {
             Ok(_) => {
@@ -35,7 +38,6 @@ impl Dac {
                 error!("Dac not available on i2c bus, sending power down command.");
                 // if not available powerdown dac pin
                 press_pdn_button();
-
                 self.i2c_helper
                     .read_register(0)
                     .expect("Dac not available after restart");
@@ -213,5 +215,7 @@ impl Dac {
 
 fn press_pdn_button() {
     gpio::set_output_pin_value(GPIO_PIN_OUTPUT_DAC_PDN_RST, false);
+    std::thread::sleep(Duration::from_millis(30));
     gpio::set_output_pin_value(GPIO_PIN_OUTPUT_DAC_PDN_RST, true);
+    std::thread::sleep(Duration::from_millis(30));
 }

@@ -12,7 +12,6 @@
 * `hw_ir_control` - enable IR input based on LIRC
 
 #### Backend player integrations
-* `backend_spotify` - build with spotify integration support
 * `backend_mpd` - build with MPD - music player daemon integration  support
 * `backend_lms` - build with LMS - Logitech Media Server integration support
 

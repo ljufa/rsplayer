@@ -6,3 +6,4 @@ extern crate serde_json;
 pub mod player;
 pub mod playlist;
 pub mod settings;
+pub mod spotify;

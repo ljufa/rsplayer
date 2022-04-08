@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::player::PlayerType;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     pub spotify_settings: SpotifySettings,
@@ -9,6 +11,7 @@ pub struct Settings {
     pub alsa_settings: AlsaSettings,
     pub ir_control_settings: IRInputControlerSettings,
     pub oled_settings: OLEDSettings,
+    pub active_player: PlayerType
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,15 +20,10 @@ pub struct SpotifySettings {
     pub device_name: String,
     pub username: String,
     pub password: String,
-    #[serde(skip_deserializing)]
     pub developer_client_id: String,
-    #[serde(skip_deserializing)]
     pub developer_secret: String,
-    #[serde(skip_deserializing)]
     pub auth_callback_url: String,
-    #[serde(skip_deserializing)]
     pub alsa_device_name: String,
-    #[serde(skip_deserializing)]
     pub bitrate: u16,
 }
 
@@ -85,6 +83,7 @@ impl Default for Settings {
     fn default() -> Self {
         let default_alsa_pcm_device = "hw:1";
         Settings {
+            active_player: PlayerType::MPD,
             spotify_settings: SpotifySettings {
                 enabled: false,
                 device_name: String::from("dplayer@rpi"),

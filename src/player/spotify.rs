@@ -1,282 +1,177 @@
-use std::{borrow::BorrowMut, process::Child};
-
-use api_models::playlist::Playlist;
-use rspotify::blocking::client::Spotify;
-use rspotify::blocking::oauth2::{SpotifyClientCredentials, SpotifyOAuth};
-use rspotify::blocking::util::*;
-use rspotify::model::offset;
+use std::process::Child;
+use std::time::Duration;
 
 use api_models::player::*;
+use api_models::playlist::Playlist;
 use api_models::settings::*;
+use failure::err_msg;
+use rspotify::clients::OAuthClient;
 
 use crate::common::Result;
 use crate::config::Configuration;
 use crate::player::Player;
-use log::{info, trace};
+use log::info;
 
-struct ClientDevice {
-    client: Spotify,
+use super::spotify_oauth::SpotifyOauth;
+
+pub struct SpotifyPlayerClient {
+    librespot_process: Option<Child>,
+    client: SpotifyOauth,
     device_id: Option<String>,
 }
 
-pub struct SpotifyPlayerClient {
-    librespot_process: Child,
-    client_device: ClientDevice,
-    settings: SpotifySettings,
-}
 unsafe impl Send for SpotifyPlayerClient {}
 
 impl SpotifyPlayerClient {
-    pub fn new(settings: &SpotifySettings) -> Result<SpotifyPlayerClient> {
+    pub fn new(settings: SpotifySettings) -> Result<SpotifyPlayerClient> {
         if !settings.enabled {
-            return Err(failure::err_msg("Spotify integration is disabled."));
+            return Err(err_msg("Spotify integration is disabled."));
+        }
+        let mut client = SpotifyOauth::new(settings);
+        if !client.is_token_present()? {
+            return Err(err_msg(
+                "Spotify token not found, please complete configuration",
+            ));
         }
         Ok(SpotifyPlayerClient {
-            librespot_process: start_librespot(settings)?,
-            client_device: create_spotify_client(settings)?,
-            settings: settings.clone(),
+            client,
+            librespot_process: None,
+            device_id: None,
         })
     }
-    fn try_with_reconnect<F>(
-        &mut self,
-        command_event: StatusChangeEvent,
-        command: F,
-    ) -> Result<StatusChangeEvent>
-    where
-        F: FnMut(&mut ClientDevice) -> core::result::Result<(), failure::Error>,
-    {
-        match self.try_with_reconnect_result(command) {
-            Ok(_) => Ok(command_event),
-            Err(e) => Err(e),
-        }
+
+    pub fn start_device(&mut self) -> Result<()> {
+        self.librespot_process = Some(start_librespot(&self.client.settings)?);
+        Ok(())
     }
 
-    fn try_with_reconnect_result<F, R>(&mut self, mut command: F) -> Result<R>
-    where
-        F: FnMut(&mut ClientDevice) -> core::result::Result<R, failure::Error>,
-    {
-        let mut result = command(&mut self.client_device);
-        if let Err(er) = result {
-            trace!("First attempt failed with error: {}", er);
-            match create_spotify_client(&self.settings) {
-                Ok(spot) => {
-                    self.client_device = spot;
-                    result = command(self.client_device.borrow_mut());
-                }
-                Err(e) => {
-                    trace!("Second attempt failed with error: {}", e);
-                    result = Err(e);
+    pub fn transfer_playback_to_device(&mut self) -> Result<()> {
+        let mut dev = "".to_string();
+        let mut tries = 0;
+        while tries < 5 {
+            for d in self.client.client.device()? {
+                if d.name.contains(self.client.settings.device_name.as_str()) {
+                    let device_id = d.id.as_ref();
+                    if device_id.is_some() && !d.is_active {
+                        self.client
+                            .client
+                            .transfer_playback(device_id.unwrap().as_str(), Some(false))?;
+                    }
+                    dev = device_id.unwrap().clone();
                 }
             }
+            if dev.is_empty() {
+                tries += 1;
+            } else {
+                break;
+            }
         }
-        match result {
-            Ok(r) => Ok(r),
-            Err(e) => Err(failure::format_err!(
-                "Spotify command failed with error: {}",
-                e
-            )),
+        if dev.is_empty() {
+            return Err(err_msg("Device not found!"));
         }
+        info!("Spotify client created sucessfully!");
+        self.device_id = Some(dev);
+        Ok(())
     }
 }
+
 impl Drop for SpotifyPlayerClient {
     fn drop(&mut self) {
         self.shutdown()
     }
 }
+
 impl Player for SpotifyPlayerClient {
-    fn play(&mut self) -> Result<StatusChangeEvent> {
-        self.try_with_reconnect_result(|sp| match sp.client.current_user_playing_track() {
-            Ok(playing) => match playing {
-                Some(pl) => {
-                    if !pl.is_playing {
-                        let offset = pl
-                            .item
-                            .as_ref()
-                            .map(|it| offset::for_uri(it.uri.clone()).unwrap());
-
-                        let track: Option<String> = pl.item.as_ref().map(|ft| ft.uri.clone());
-
-                        let ctx = pl.context.map(|ct| ct.uri);
-                        if ctx.is_some() {
-                            sp.client.start_playback(
-                                sp.device_id.clone(),
-                                ctx,
-                                None,
-                                offset,
-                                pl.progress_ms,
-                            )?;
-                        } else if let Some(track) = track {
-                            sp.client.start_playback(
-                                sp.device_id.clone(),
-                                None,
-                                Some(vec![track]),
-                                offset,
-                                pl.progress_ms,
-                            )?;
-                        }
-                    }
-                    Ok(StatusChangeEvent::Playing)
-                }
-                None => {
-                    let last_played = &sp.client.current_user_recently_played(1)?.items[0]
-                        .track
-                        .uri;
-                    trace!(
-                        "Start playing last played song {:?} on dev {:?}",
-                        last_played,
-                        &sp.device_id
-                    );
-                    sp.client.start_playback(
-                        sp.device_id.clone(),
-                        Some(last_played.to_string()),
-                        None,
-                        None,
-                        None,
-                    )?;
-                    Ok(StatusChangeEvent::Playing)
-                }
-            },
-            Err(e) => Err(e),
-        })
+    fn play(&mut self) {
+        _ = self
+            .client
+            .client
+            .resume_playback(self.device_id.as_deref(), None);
     }
 
-    fn pause(&mut self) -> Result<StatusChangeEvent> {
-        self.try_with_reconnect(StatusChangeEvent::Paused, |sp| {
-            sp.client.pause_playback(sp.device_id.clone())
-        })
+    fn pause(&mut self) {
+        _ = self.client.client.pause_playback(self.device_id.as_deref());
     }
-    fn next_track(&mut self) -> Result<StatusChangeEvent> {
-        self.try_with_reconnect(StatusChangeEvent::Paused, |sp| {
-            sp.client.next_track(sp.device_id.clone())
-        })
+    fn next_track(&mut self) {
+        _ = self.client.client.next_track(self.device_id.as_deref());
     }
-    fn prev_track(&mut self) -> Result<StatusChangeEvent> {
-        self.try_with_reconnect(StatusChangeEvent::Paused, |sp| {
-            sp.client.previous_track(sp.device_id.clone())
-        })
+    fn prev_track(&mut self) {
+        _ = self.client.client.previous_track(self.device_id.as_deref());
     }
-    fn stop(&mut self) -> Result<StatusChangeEvent> {
-        self.try_with_reconnect(StatusChangeEvent::Paused, |sp| {
-            sp.client.pause_playback(sp.device_id.clone())
-        })
+    fn stop(&mut self) {
+        _ = self.client.client.pause_playback(self.device_id.as_deref());
     }
 
     fn shutdown(&mut self) {
         info!("Shutting down Spotify player!");
-        _ = self.stop();
-        _ = self.librespot_process.kill();
+        if self.device_id.is_some() {
+            _ = self.stop();
+        }
+        _ = self.librespot_process.as_mut().unwrap().kill();
     }
 
-    fn rewind(&mut self, _seconds: i8) -> Result<StatusChangeEvent> {
-        Ok(StatusChangeEvent::Playing)
-    }
+    fn rewind(&mut self, _seconds: i8) {}
 
     fn get_current_song(&mut self) -> Option<Song> {
-        match self.try_with_reconnect_result(|sp| {
-            let playing = sp.client.current_user_playing_track()?;
-            if let Some(playing) = playing {
-                let mut track = playing.item.unwrap();
-                let mut artist = String::new();
-                if !track.artists.is_empty() {
-                    artist = track.artists.pop().unwrap().name;
-                }
-                let _durati = track.duration_ms.to_string();
-                Ok(Song {
-                    album: Some(track.album.name),
-                    artist: Some(artist),
+        if let Some(playing_item) = self.client.client.current_user_playing_item().unwrap() {
+            let mut track = playing_item.item.unwrap();
+            match &mut track {
+                rspotify::model::PlayableItem::Track(track) => Some(Song {
+                    album: Some(track.album.name.clone()),
+                    artist: track.artists.first().map(|a| a.name.clone()),
                     genre: None,
-                    date: track.album.release_date,
-                    file: "".to_string(),
+                    date: track.album.release_date.clone(),
+                    file: track.href.as_ref().map_or("".to_string(), |u| u.clone()),
                     title: Some(track.name.clone()),
+                    time: Some(track.duration.as_secs().to_string()),
+                    uri: track.album.images.first().map(|i| i.url.clone()),
                     ..Default::default()
-                })
-            } else {
-                Err(failure::err_msg("Can't get spotify track info"))
+                }),
+                rspotify::model::PlayableItem::Episode(_) => None,
             }
-        }) {
-            Ok(ps) => Some(ps),
-            Err(_) => None,
+        } else {
+            None
         }
     }
 
     fn get_player_info(&mut self) -> Option<PlayerInfo> {
-        None
+        if let Ok(Some(c)) = self.client.client.current_playback(None, None::<&[_]>) {
+            Some(PlayerInfo {
+                time: c
+                    .progress
+                    .map_or((Duration::ZERO, Duration::ZERO), |f| (Duration::ZERO, f)),
+                random: Some(c.shuffle_state),
+                state: if c.is_playing {
+                    Some(PlayerState::PLAYING)
+                } else {
+                    Some(PlayerState::PAUSED)
+                },
+                ..Default::default()
+            })
+        } else {
+            None
+        }
     }
 
     fn random_toggle(&mut self) {}
 
     fn get_playlists(&mut self) -> Vec<Playlist> {
-        todo!()
+        vec![]
     }
 
-    fn load_playlist(&mut self, _pl_name: String) {
-        todo!()
-    }
+    fn load_playlist(&mut self, _pl_name: String) {}
 
     fn get_queue_items(&mut self) -> Vec<Song> {
-        todo!()
+        vec![]
     }
 
     fn get_playlist_items(&mut self, _playlist_name: String) -> Vec<Song> {
-        todo!()
+        vec![]
     }
 
-    fn play_at(&mut self, _position: u32) -> Result<StatusChangeEvent> {
-        todo!()
-    }
+    fn play_at(&mut self, _position: u32) {}
 }
 
-pub fn auth_manager(settings: &SpotifySettings) -> SpotifyOAuth {
-    // Please notice that protocol of redirect_uri, make sure it's http(or https). It will fail if you mix them up.
-    SpotifyOAuth::default()
-        .client_id(settings.developer_client_id.as_str())
-        .client_secret(settings.developer_secret.as_str())
-        .redirect_uri(settings.auth_callback_url.as_str())
-        .cache_path(Configuration::spotify_cache_path())
-        .scope("user-read-currently-playing playlist-modify-private user-read-recently-played user-modify-playback-state user-read-playback-state")
-        .build()
-}
-
-fn create_spotify_client(settings: &SpotifySettings) -> Result<ClientDevice> {
-    let token_info = get_token(&mut auth_manager(settings));
-    if token_info.is_none() {
-        return Err(failure::format_err!("Can't get token info!"));
-    }
-    let client_credential = SpotifyClientCredentials::default()
-        .token_info(token_info.unwrap())
-        .build();
-    let spot = Spotify::default()
-        .client_credentials_manager(client_credential)
-        .build();
-    let mut dev = "".to_string();
-    let mut tries = 0;
-    while tries < 5 {
-        for d in spot.device()?.devices {
-            if d.name.contains(settings.device_name.as_str()) {
-                let device_id = &d.id;
-                if !d.is_active {
-                    spot.transfer_playback(device_id.as_str(), false)?;
-                }
-                dev = device_id.clone();
-            }
-        }
-        if dev.is_empty() {
-            // std::thread::sleep(Duration::from_millis(2000));
-            tries += 1;
-        } else {
-            break;
-        }
-    }
-    if dev.is_empty() {
-        return Err(failure::err_msg("Device not found!"));
-    }
-    info!("Spotify client created sucessfully!");
-
-    Ok(ClientDevice {
-        client: spot,
-        device_id: Some(dev),
-    })
-}
 fn start_librespot(settings: &SpotifySettings) -> Result<Child> {
     info!("Starting librespot process");
     let child = std::process::Command::new(Configuration::get_librespot_path())
@@ -293,9 +188,11 @@ fn start_librespot(settings: &SpotifySettings) -> Result<Child> {
         .arg(settings.password.clone())
         .arg("--device")
         .arg(settings.alsa_device_name.clone())
-        .arg("--verbose")
+        .arg("--format")
+        .arg("F32")
         .arg("--initial-volume")
         .arg("100")
+        .arg("--verbose")
         .spawn();
     match child {
         Ok(c) => Ok(c),

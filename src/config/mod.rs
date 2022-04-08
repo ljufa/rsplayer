@@ -1,19 +1,10 @@
-#[cfg(feature = "backend_spotify")]
-use std::{
-    env, fs,
-    path::{Path, PathBuf},
-};
-
+use api_models::player::*;
 use api_models::settings::Settings;
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
-
-use api_models::player::*;
 
 const SETTINGS_KEY: &str = "settings";
 const STREAMER_STATUS_KEY: &str = "streamer_status";
 const DPLAY_CONFIG_DIR_PATH: &str = ".dplay/";
-#[cfg(feature = "backend_spotify")]
-const CACHE_FILE: &str = ".spotify_token_cache";
 
 pub struct Configuration {
     db: PickleDb,
@@ -43,21 +34,9 @@ impl Configuration {
     pub fn get_squeezelite_player_path() -> String {
         format!("{}squeezelite", DPLAY_CONFIG_DIR_PATH)
     }
-    #[cfg(feature = "backend_spotify")]
+
     pub fn get_librespot_path() -> String {
         format!("{}librespot", DPLAY_CONFIG_DIR_PATH)
-    }
-
-    #[cfg(feature = "backend_spotify")]
-    pub fn spotify_cache_path() -> PathBuf {
-        let mut cache_path = env::current_dir().unwrap();
-        cache_path.push(DPLAY_CONFIG_DIR_PATH);
-        let cache_dir = cache_path.display().to_string();
-        cache_path.push(CACHE_FILE);
-        if !Path::new(cache_dir.as_str()).exists() {
-            fs::create_dir_all(cache_dir).unwrap();
-        }
-        cache_path
     }
 
     pub fn get_streamer_status(&mut self) -> StreamerStatus {

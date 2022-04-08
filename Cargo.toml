@@ -11,7 +11,7 @@ hw_oled = ["hw_gpio", "embedded-graphics"]
 hw_dac = ["hw_gpio"]
 hw_ir_control = []
 
-backend_spotify = [ "rspotify", "openssl" ]
+
 backend_mpd = ["mpd"]
 backend_lms = []
 
@@ -62,16 +62,9 @@ embedded-graphics = {optional=true, version = "0.7.1" }
 
 
 [dependencies.rspotify]
-version = "0.10.0"
-features = ["blocking"]
-optional = true
-
-[dependencies.openssl]
-version = "0.10"
-features = ["vendored"]
-optional = true
-
-
+version = "0.11.5"
+features = ["client-ureq", "ureq-rustls-tls"]
+default-features = false
 
 [profile.release]
 opt-level = 3

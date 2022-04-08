@@ -28,6 +28,6 @@ disable_overscan=1
 # on the IO board (assuming your CM4 is plugged into such a board)
 #dtoverlay=dwc2,dr_mode=host
 
-dtoverlay=gpio-ir,gpio_pin=27
-gpio=18,15,17=pu
+dtoverlay=gpio-ir,gpio_pin=17
+gpio=18,15,19=pu
 gpio=22,23=op,dh

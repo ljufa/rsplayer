@@ -13,9 +13,11 @@ mod monitor;
 mod player;
 
 use crate::control::command_handler;
+
 use api_models::player::Command;
 use cfg_if::cfg_if;
 
+use std::panic;
 use std::sync::{Arc, Mutex};
 use tokio::signal::unix::SignalKind;
 
@@ -51,80 +53,96 @@ async fn main() {
             }
     }
 
-    let current_player = &config.get_streamer_status().source_player;
+    let current_player = &config.get_settings().active_player;
 
-    if let Ok(player_service) = PlayerService::new(current_player, settings.clone()) {
-        info!("Player succesfully created.");
-        let player_service = Arc::new(Mutex::new(player_service));
+    let config = Arc::new(Mutex::new(config));
 
-        let (input_commands_tx, input_commands_rx) = tokio::sync::mpsc::channel(1);
+    let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate())
+        .expect("failed to create signal future");
 
-        // start playing after start
-        _ = input_commands_tx.send(Command::Play).await;
+    match PlayerService::new(current_player, settings.clone()) {
+        Ok(player_service) => {
+            info!("Player successfully created.");
+            let player_service = Arc::new(Mutex::new(player_service));
 
-        let (state_changes_tx, _) = broadcast::channel(20);
+            let (input_commands_tx, input_commands_rx) = tokio::sync::mpsc::channel(1);
 
-        let config = Arc::new(Mutex::new(config));
+            // start playing after start
+            _ = input_commands_tx.send(Command::Play).await;
 
-        let audio_card = Arc::new(AudioCard::new(settings.alsa_settings.device_name.clone()));
+            let (state_changes_tx, _) = broadcast::channel(20);
 
-        let (http_server_future, websocket_future) = http_api::server_warp::start(
-            state_changes_tx.subscribe(),
-            input_commands_tx.clone(),
-            config.clone(),
-            player_service.clone(),
-            #[cfg(feature = "hw_dac")]
-            dac.clone(),
-        );
+            let audio_card = Arc::new(AudioCard::new(settings.alsa_settings.device_name.clone()));
 
-        let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate())
-            .expect("failed to create signal future");
-
-        tokio::select! {
-            _ = control::ir_lirc::listen(input_commands_tx.clone()) => {
-                error!("Exit from IR Command thread.");
-            }
-
-            _ = monitor::oled::write(state_changes_tx.subscribe()) => {
-                error!("Exit from OLED writer thread.");
-            }
-
-            _ = monitor::status::monitor(
+            let (http_server_future, websocket_future) = http_api::server_warp::start(
+                state_changes_tx.subscribe(),
+                input_commands_tx.clone(),
+                config.clone(),
                 player_service.clone(),
-                state_changes_tx.clone(),
-                audio_card.clone(),
-            ) => {
-                error!("Exit from status monitor thread.");
-            }
-
-            _ = command_handler::handle(
                 #[cfg(feature = "hw_dac")]
                 dac.clone(),
-                player_service.clone(),
-                audio_card,
-                config.clone(),
-                input_commands_rx,
-                state_changes_tx.clone(),
-                state_changes_tx.subscribe(),
-            ) => {
-                error!("Exit from command handler thread.");
+            );
+
+            tokio::select! {
+                _ = control::ir_lirc::listen(input_commands_tx.clone()) => {
+                    error!("Exit from IR Command thread.");
+                }
+
+                _ = monitor::oled::write(state_changes_tx.subscribe()) => {
+                    error!("Exit from OLED writer thread.");
+                }
+
+                _ = monitor::status::monitor(
+                    player_service.clone(),
+                    state_changes_tx.clone(),
+                    audio_card.clone(),
+                ) => {
+                    error!("Exit from status monitor thread.");
+                }
+
+                _
+                 = command_handler::handle(
+                    #[cfg(feature = "hw_dac")]
+                    dac.clone(),
+                    player_service.clone(),
+                    audio_card,
+                    config.clone(),
+                    input_commands_rx,
+                    state_changes_tx.clone(),
+                    state_changes_tx.subscribe(),
+                ) => {
+                    error!("Exit from command handler thread.");
+                }
+
+                _ = http_server_future => {}
+
+                _ = websocket_future => {}
+
+                _ = term_signal.recv() => {
+                    info!("Terminate signal received.");
+                }
+
+                _ = tokio::signal::ctrl_c() => {
+                    info!("CTRL-c signal received.");
+                }
+            };
+        }
+        Err(err) => {
+            error!("Configured player {:?} can not be created. Please use settings page to enter correct configuration. Error: {}", current_player, err);
+            let http_server_future = http_api::server_warp::start_degraded(config);
+            tokio::select! {
+                _ = http_server_future => {}
+
+                _ = term_signal.recv() => {
+                    info!("Terminate signal received.");
+                }
+
+                _ = tokio::signal::ctrl_c() => {
+                    info!("CTRL-c signal received.");
+                }
+
             }
-
-            _ = http_server_future => {}
-
-            _ = websocket_future => {}
-
-            _ = term_signal.recv() => {
-                info!("Terminate signal received.");
-            }
-
-            _ = tokio::signal::ctrl_c() => {
-                info!("CTRL-c signal received.");
-            }
-        };
-    } else {
-        error!("Configured player {:?} can not be created. Please use settings page to enter correct configuration.", current_player);
-        // todo: run http server
+        }
     }
     info!("DPlayer shutdown completed.");
 }

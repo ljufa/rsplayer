@@ -3,10 +3,10 @@ use cfg_if::cfg_if;
 use tokio::sync::mpsc::Sender;
 
 // todo implement settings.is_enabled check
-pub async fn listen(input_comands_tx: Sender<Command>) {
+pub async fn listen(input_commands_tx: Sender<Command>) {
     cfg_if! {
         if #[cfg(feature="hw_ir_control")] {
-            hw_ir::listen(input_comands_tx).await;
+            hw_ir::listen(input_commands_tx).await;
         } else if #[cfg(not(feature="hw_ir_control"))] {
             crate::common::no_op_future().await;
         }
@@ -24,7 +24,7 @@ mod hw_ir {
     use tokio::sync::mpsc::Sender;
     const REMOTE_MAKER: &str = "dplayd";
 
-    pub async fn listen(input_comands_tx: Sender<Command>) {
+    pub async fn listen(input_commands_tx: Sender<Command>) {
         info!("Start IR Control thread.");
         let stream = UnixStream::connect("/var/run/lirc/lircd").await.unwrap();
 
@@ -47,25 +47,25 @@ mod hw_ir {
                     let key = &result[17..end - 1];
                     match key {
                         "00 KEY_PLAY" => {
-                            input_comands_tx.send(Command::Play).await.expect("Error");
+                            input_commands_tx.send(Command::Play).await.expect("Error");
                         }
                         "00 KEY_STOP" => {
-                            input_comands_tx.send(Command::Pause).await.expect("Error");
+                            input_commands_tx.send(Command::Pause).await.expect("Error");
                         }
                         "00 KEY_NEXTSONG" => {
-                            input_comands_tx.send(Command::Next).await.expect("Error");
+                            input_commands_tx.send(Command::Next).await.expect("Error");
                         }
                         "00 KEY_PREVIOUSSONG" => {
-                            input_comands_tx.send(Command::Prev).await.expect("Error");
+                            input_commands_tx.send(Command::Prev).await.expect("Error");
                         }
                         "00 KEY_EJECTCD" => {
-                            input_comands_tx
+                            input_commands_tx
                                 .send(Command::ChangeAudioOutput)
                                 .await
                                 .expect("Error");
                         }
                         "05 KEY_POWER" => {
-                            input_comands_tx
+                            input_commands_tx
                                 .send(Command::PowerOff)
                                 .await
                                 .expect("Error");
@@ -73,22 +73,22 @@ mod hw_ir {
                         _ => {
                             let key_str = String::from(key);
                             if key_str.ends_with("KEY_DOWN") {
-                                input_comands_tx
+                                input_commands_tx
                                     .send(Command::VolDown)
                                     .await
                                     .expect("Error");
                             }
                             if key_str.ends_with("KEY_UP") {
-                                input_comands_tx.send(Command::VolUp).await.expect("Error");
+                                input_commands_tx.send(Command::VolUp).await.expect("Error");
                             }
                             if key_str.ends_with("KEY_NEXT") {
-                                input_comands_tx
+                                input_commands_tx
                                     .send(Command::Rewind(5))
                                     .await
                                     .expect("Error");
                             }
                             if key_str.ends_with("KEY_PREVIOUS") {
-                                input_comands_tx
+                                input_commands_tx
                                     .send(Command::Rewind(-5))
                                     .await
                                     .expect("Error");

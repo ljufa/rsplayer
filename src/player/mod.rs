@@ -6,7 +6,7 @@ use crate::common::Result;
 use crate::player::lms::LMSPlayerClient;
 #[cfg(feature = "backend_mpd")]
 use crate::player::mpd::MpdPlayerClient;
-#[cfg(feature = "backend_spotify")]
+
 use crate::player::spotify::SpotifyPlayerClient;
 
 use api_models::player::*;
@@ -17,17 +17,18 @@ use api_models::settings::*;
 pub(crate) mod lms;
 #[cfg(feature = "backend_mpd")]
 pub(crate) mod mpd;
-#[cfg(feature = "backend_spotify")]
+
 pub(crate) mod spotify;
+pub(crate) mod spotify_oauth;
 
 pub trait Player {
-    fn play(&mut self) -> Result<StatusChangeEvent>;
-    fn pause(&mut self) -> Result<StatusChangeEvent>;
-    fn next_track(&mut self) -> Result<StatusChangeEvent>;
-    fn prev_track(&mut self) -> Result<StatusChangeEvent>;
-    fn stop(&mut self) -> Result<StatusChangeEvent>;
+    fn play(&mut self);
+    fn pause(&mut self);
+    fn next_track(&mut self);
+    fn prev_track(&mut self);
+    fn stop(&mut self);
     fn shutdown(&mut self);
-    fn rewind(&mut self, seconds: i8) -> Result<StatusChangeEvent>;
+    fn rewind(&mut self, seconds: i8);
     fn get_current_song(&mut self) -> Option<Song>;
     fn get_player_info(&mut self) -> Option<PlayerInfo>;
     fn random_toggle(&mut self);
@@ -35,7 +36,7 @@ pub trait Player {
     fn load_playlist(&mut self, pl_name: String);
     fn get_queue_items(&mut self) -> Vec<Song>;
     fn get_playlist_items(&mut self, playlist_name: String) -> Vec<Song>;
-    fn play_at(&mut self, position: u32) -> Result<StatusChangeEvent>;
+    fn play_at(&mut self, position: u32);
 }
 
 pub struct PlayerService {
@@ -46,7 +47,7 @@ pub struct PlayerService {
 impl PlayerService {
     pub fn new(current_player: &PlayerType, settings: Settings) -> Result<Self> {
         Ok(PlayerService {
-            player: PlayerService::create_player(&settings, current_player)?,
+            player: Self::create_player(&settings, current_player)?,
             settings,
         })
     }
@@ -62,9 +63,9 @@ impl PlayerService {
     ) -> Result<PlayerType> {
         let _ = self.player.stop();
         audio_card.wait_unlock_audio_dev()?;
-        let new_player = PlayerService::create_player(&self.settings, player_type)?;
+        let new_player = Self::create_player(&self.settings, player_type)?;
         self.player = new_player;
-        self.player.play()?;
+        self.player.play();
         Ok(*player_type)
     }
 
@@ -74,10 +75,12 @@ impl PlayerService {
         player_type: &PlayerType,
     ) -> Result<Box<dyn Player + Send>> {
         return match player_type {
-            #[cfg(feature = "backend_spotify")]
-            PlayerType::SPF => Ok(Box::new(SpotifyPlayerClient::new(
-                &settings.spotify_settings,
-            )?)),
+            PlayerType::SPF => {
+                let mut sp = SpotifyPlayerClient::new(settings.spotify_settings.clone())?;
+                sp.start_device()?;
+                sp.transfer_playback_to_device()?;
+                Ok(Box::new(sp))
+            }
             #[cfg(feature = "backend_mpd")]
             PlayerType::MPD => Ok(Box::new(MpdPlayerClient::new(&settings.mpd_settings)?)),
             #[cfg(feature = "backend_lms")]
