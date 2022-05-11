@@ -1,36 +1,38 @@
 == Raspbery PI 4 with Ubuntu Server arm64 installation
 
-=== Setup os (optional)
-* update and change user pass
+=== Setup OS 
+* update and change user pass (optional)
 [source, bash]
 sudo apt update
 sudo apt upgrade
 passwd
 sudo reboot
 
-* install micro
+* install micro (optional)
 [source]
 curl https://getmic.ro | bash
 sudo mv micro /usr/bin
 
-* install zsh  https://github.com/ohmyzsh/ohmyzsh
+* install zsh (optional)  https://github.com/ohmyzsh/ohmyzsh
 [source]
 sudo apt install -y zsh git fzf
 sh -c "$(wget https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh -O -)"
 git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
 
 
+=== Copy configuration
+[source]
+make copy_config
+
 === Mount network share
 [source]
 sudo apt install -y cifs-utils
-sudo cp fstab /etc/fstab
 sudo mkdir /media/samsung
 sudo mount /media/samsung
-sudo mkdir /home/music
-sudo ln -s /media/samsung/MUSIC /home/music
+mkdir /home/pi/music
+ln -s /media/samsung/MUSIC /home/pi/remote
 
-
-=== Build librespot
+=== Build librespot (optional)
 [source, bash]
 cd github
 git clone git@github.com:librespot-org/librespot.git && cd librespot
@@ -41,28 +43,27 @@ OR
 [source, bash]
 make build_librespot
 
-=== Create dplay as service
-[source]
-sudo cp dplay.service /etc/systemd/system/
-sudo systemctl enable dplay.service
-sudo systemctl start dplay.service
-
 === Install mpd
 [source]
 sudo apt install -y mpd
+sudo systemctl enable mpd
 
 === LIRC setup
- 
-`/boot/config.txt`
+[source]
+sudo apt-get install -y lirc
+  
+`/boot/config.txt (optional already provided in copy_config)`
 ```
 dtoverlay=gpio-ir,gpio_pin=27
 gpio=18,15,17=pu
 gpio=22,23,9=op,dh
 ``` 
 
+
+=== Enable and start dplay service
 [source]
-sudo apt-get install -y lirc
-sudo cp lirc_options.conf /etc/lirc/lirc_options.conf
+sudo systemctl enable dplay.service
+sudo systemctl start dplay.service
 
 ==== setup new remote
 [source]
@@ -72,7 +73,7 @@ irrecord -d /dev/lirc0 dplayd.lircd.conf
 sudo cp dplayd.lircd.conf /etc/lirc/lircd.conf.d
 
 
-=== Install LMS
+=== Install LMS 
 [source, bash]
 wget http://downloads.slimdevices.com/nightly/8.2/lms/6e12028145512cef7d240c5d24c3b17e89ed8a6d/logitechmediaserver_8.2.0\~1609139175_arm.deb
 sudo dpkg -i logitechmediaserver_8.2.0\~1609139175_arm.deb

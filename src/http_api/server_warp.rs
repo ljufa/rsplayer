@@ -2,15 +2,12 @@ use futures::Future;
 use futures::FutureExt;
 use futures::StreamExt;
 
-use api_models::player::*;
-
-#[cfg(feature = "hw_dac")]
-use crate::audio_device::ak4497::Dac;
 use crate::config::Configuration;
+use crate::player::player_service::PlayerService;
 use crate::player::spotify_oauth::SpotifyOauth;
-use crate::player::PlayerService;
-use std::ops::Deref;
 
+use api_models::common::Command;
+use api_models::state::{LastState, StateChangeEvent};
 use std::{
     collections::HashMap,
     sync::atomic::{AtomicUsize, Ordering},
@@ -38,12 +35,10 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 /// - Key is their id
 /// - Value is a sender of `warp::ws::Message`
 type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
-type LastStatusMessages = Arc<RwLock<LastStatus>>;
+type LastStatusMessages = Arc<RwLock<LastState>>;
 type Config = Arc<Mutex<Configuration>>;
 type PlayerServiceArc = Arc<Mutex<PlayerService>>;
 type SpotifyOauthArc = Arc<Mutex<SpotifyOauth>>;
-#[cfg(feature = "hw_dac")]
-type DacArc = Arc<Dac>;
 type SyncSender = tokio::sync::mpsc::Sender<Command>;
 
 pub fn start_degraded(config: Config) -> impl Future<Output = ()> {
@@ -57,7 +52,7 @@ pub fn start_degraded(config: Config) -> impl Future<Output = ()> {
 
     let ui_static_content = warp::get().and(warp::fs::dir(Configuration::get_static_dir_path()));
 
-    let r = ui_static_content
+    let routes = filters::settings_save(config.clone())
         .or(filters::settings_save(config.clone()))
         .or(filters::get_settings(config))
         .or(filters::get_spotify_authorization_url(
@@ -70,16 +65,16 @@ pub fn start_degraded(config: Config) -> impl Future<Output = ()> {
             spotify_oauth.clone(),
         ))
         .or(filters::get_spotify_account_info(spotify_oauth))
+        .or(ui_static_content)
         .with(cors);
-    warp::serve(r).run(([0, 0, 0, 0], 8000))
+    warp::serve(routes).run(([0, 0, 0, 0], 8000))
 }
 
 pub fn start(
-    mut state_changes_rx: Receiver<StatusChangeEvent>,
+    mut state_changes_rx: Receiver<StateChangeEvent>,
     input_commands_tx: SyncSender,
     config: Config,
     player_service: PlayerServiceArc,
-    #[cfg(feature = "hw_dac")] dac: DacArc,
 ) -> (impl Future<Output = ()>, impl Future<Output = ()>) {
     let spotify_oauth = Arc::new(Mutex::new(SpotifyOauth::new(
         config.lock().unwrap().get_settings().spotify_settings,
@@ -115,30 +110,7 @@ pub fn start(
         );
     let ui_static_content = warp::get().and(warp::fs::dir(Configuration::get_static_dir_path()));
 
-    #[cfg(feature = "hw_dac")]
-    let r = player_ws_path
-        .or(filters::settings_save(config.clone()))
-        .or(filters::get_settings(config.clone()))
-        .or(filters::get_playlists(player_service.clone()))
-        .or(filters::get_queue_items(player_service.clone()))
-        .or(filters::get_playlist_items(player_service))
-        .or(filters::get_spotify_authorization_url(
-            spotify_oauth.clone(),
-        ))
-        .or(filters::is_spotify_authorization_completed(
-            spotify_oauth.clone(),
-        ))
-        .or(filters::spotify_authorization_callback(
-            spotify_oauth.clone(),
-        ))
-        .or(filters::get_spotify_account_info(spotify_oauth))
-        .or(filters::get_last_status(last_state_change_message_3))
-        .or(filters::get_dac_reg_value(dac.clone()))
-        .or(filters::init_dac(dac, config))
-        .or(ui_static_content)
-        .with(cors);
-    #[cfg(not(feature = "hw_dac"))]
-    let r = player_ws_path
+    let routes = player_ws_path
         .or(filters::settings_save(config.clone()))
         .or(filters::get_settings(config))
         .or(filters::get_playlists(player_service.clone()))
@@ -154,6 +126,16 @@ pub fn start(
         ))
         .or(filters::get_spotify_account_info(spotify_oauth))
         .or(filters::get_playlist_items(player_service))
+        .or(filters::get_spotify_authorization_url(
+            spotify_oauth.clone(),
+        ))
+        .or(filters::is_spotify_authorization_completed(
+            spotify_oauth.clone(),
+        ))
+        .or(filters::spotify_authorization_callback(
+            spotify_oauth.clone(),
+        ))
+        .or(filters::get_spotify_account_info(spotify_oauth))
         .or(filters::get_last_status(last_state_change_message_3))
         .or(ui_static_content)
         .with(cors);
@@ -172,7 +154,7 @@ pub fn start(
             }
         }
     };
-    let http_handle = warp::serve(r).run(([0, 0, 0, 0], 8000));
+    let http_handle = warp::serve(routes).run(([0, 0, 0, 0], 8000));
     (http_handle, ws_handle)
 }
 mod filters {
@@ -181,8 +163,6 @@ mod filters {
     use api_models::settings::Settings;
     use warp::Filter;
 
-    #[cfg(feature = "hw_dac")]
-    use super::DacArc;
     use super::{handlers, Config, LastStatusMessages, PlayerServiceArc, SpotifyOauthArc};
 
     pub fn settings_save(
@@ -209,26 +189,6 @@ mod filters {
             .and(warp::path!("api" / "playlist"))
             .and(with_player_svc(player_service))
             .and_then(handlers::get_playlists)
-    }
-    #[cfg(feature = "hw_dac")]
-    pub fn get_dac_reg_value(
-        dac: DacArc,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::get()
-            .and(warp::path!("api" / "dac"))
-            .and(with_dac(dac))
-            .and_then(handlers::get_dac_reg_values)
-    }
-    #[cfg(feature = "hw_dac")]
-    pub fn init_dac(
-        dac: DacArc,
-        config: Config,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::get()
-            .and(warp::path!("api" / "dac" / "init"))
-            .and(with_dac(dac))
-            .and(with_config(config))
-            .and_then(handlers::init_dac)
     }
 
     pub fn get_queue_items(
@@ -307,13 +267,6 @@ mod filters {
         warp::any().map(move || spotify_oauth.clone())
     }
 
-    #[cfg(feature = "hw_dac")]
-    fn with_dac(
-        dac: DacArc,
-    ) -> impl Filter<Extract = (DacArc,), Error = std::convert::Infallible> + Clone {
-        warp::any().map(move || dac.clone())
-    }
-
     fn with_status_messages(
         last_state_message: LastStatusMessages,
     ) -> impl Filter<Extract = (LastStatusMessages,), Error = std::convert::Infallible> + Clone
@@ -331,19 +284,35 @@ mod filters {
 mod handlers {
     use std::{collections::HashMap, convert::Infallible, ops::Deref};
 
-    #[cfg(feature = "hw_dac")]
-    use super::DacArc;
-    use super::{Config, LastStatus, LastStatusMessages, PlayerServiceArc, SpotifyOauthArc};
+    use super::{Config, LastStatusMessages, PlayerServiceArc, SpotifyOauthArc};
     use api_models::settings::Settings;
+
+    use api_models::state::LastState;
     use warp::hyper::StatusCode;
+
     pub async fn save_settings(
         settings: Settings,
         config: Config,
     ) -> Result<impl warp::Reply, Infallible> {
         debug!("Settings to save {:?}", settings);
         config.lock().unwrap().save_settings(&settings);
-        std::process::exit(0);
-        Ok(StatusCode::CREATED)
+        // todo: find better way to trigger service restart by systemd
+        match std::process::Command::new("sudo")
+            .arg("systemctl")
+            .arg("restart")
+            .arg("dplay")
+            .spawn()
+        {
+            Ok(child) => {
+                debug!("Restart command invoked.");
+                child.wait_with_output().expect("Error");
+                Ok(StatusCode::CREATED)
+            }
+            Err(e) => {
+                error!("Restart command failed with error:{e}");
+                Ok(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
     }
 
     pub async fn get_settings(config: Config) -> Result<impl warp::Reply, Infallible> {
@@ -392,12 +361,20 @@ mod handlers {
             .unwrap()
             .authorize_callback(url.get("code").unwrap())
         {
-            //todo: redirect to homepage
-            Ok(_) => Ok(warp::reply::with_status(String::from(""), StatusCode::OK)),
-            Err(e) => Ok(warp::reply::with_status(
-                e.to_string(),
-                StatusCode::INTERNAL_SERVER_ERROR,
+            Ok(_) => Ok(warp::reply::html(
+                r#"<html>
+                            <body>
+                            <div>
+                                <p>Success!</p>
+                                <button onclick='self.close()'>Close</button>
+                            </div>
+                            </body>
+                        </html>"#,
             )),
+            Err(e) => {
+                error!("Authorization callback error:{}", e);
+                Ok(warp::reply::html(r#"<p>Error</p>"#))
+            }
         }
     }
 
@@ -407,16 +384,6 @@ mod handlers {
         Ok(warp::reply::json(
             &spotify_oauth.lock().unwrap().get_account_info(),
         ))
-    }
-
-    #[cfg(feature = "hw_dac")]
-    pub async fn get_dac_reg_values(dac: DacArc) -> Result<impl warp::Reply, Infallible> {
-        Ok(warp::reply::json(&dac.get_reg_values().unwrap()))
-    }
-    #[cfg(feature = "hw_dac")]
-    pub async fn init_dac(dac: DacArc, config: Config) -> Result<impl warp::Reply, Infallible> {
-        _ = dac.initialize(config.lock().unwrap().get_streamer_status().dac_status);
-        Ok(warp::reply::json(&dac.get_reg_values().unwrap()))
     }
 
     pub async fn get_queue_items(
@@ -448,32 +415,32 @@ mod handlers {
         if let Ok(m) = last_state_message.try_read() {
             return Ok(warp::reply::json(&m.deref()));
         }
-        Ok(warp::reply::json(&LastStatus::default()))
+        Ok(warp::reply::json(&LastState::default()))
     }
 }
 
 async fn notify_users(
     users_to_notify: &Users,
-    status_change_event: StatusChangeEvent,
+    status_change_event: StateChangeEvent,
     last_state_change_message_2: LastStatusMessages,
 ) {
     let json_msg = serde_json::to_string(&status_change_event).unwrap();
     match status_change_event {
-        StatusChangeEvent::CurrentTrackInfoChanged(t) => {
+        StateChangeEvent::CurrentTrackInfoChanged(t) => {
             let last = last_state_change_message_2.try_write();
             if last.is_ok() {
                 let mut ls = last.unwrap();
                 ls.current_track_info = Some(t);
             }
         }
-        StatusChangeEvent::StreamerStatusChanged(s) => {
+        StateChangeEvent::StreamerStateChanged(s) => {
             let last = last_state_change_message_2.try_write();
             if last.is_ok() {
                 let mut ls = last.unwrap();
-                ls.streamer_status = Some(s);
+                ls.streamer_state = Some(s);
             }
         }
-        StatusChangeEvent::PlayerInfoChanged(p) => {
+        StateChangeEvent::PlayerInfoChanged(p) => {
             let last = last_state_change_message_2.try_write();
             if last.is_ok() {
                 let mut ls = last.unwrap();
@@ -516,19 +483,19 @@ async fn user_connected(
     if let Ok(last) = last_state_message.try_read() {
         if let Some(csi) = &last.current_track_info {
             let json =
-                serde_json::to_string(&StatusChangeEvent::CurrentTrackInfoChanged(csi.clone()))
+                serde_json::to_string(&StateChangeEvent::CurrentTrackInfoChanged(csi.clone()))
                     .unwrap_or_default();
             tx.send(Ok(Message::text(json)))
                 .expect("Send message failed");
         }
         if let Some(pi) = &last.player_info {
-            let json = serde_json::to_string(&StatusChangeEvent::PlayerInfoChanged(pi.clone()))
+            let json = serde_json::to_string(&StateChangeEvent::PlayerInfoChanged(pi.clone()))
                 .unwrap_or_default();
             tx.send(Ok(Message::text(json)))
                 .expect("Send message failed");
         }
-        if let Some(ss) = &last.streamer_status {
-            let json = serde_json::to_string(&StatusChangeEvent::StreamerStatusChanged(ss.clone()))
+        if let Some(ss) = &last.streamer_state {
+            let json = serde_json::to_string(&StateChangeEvent::StreamerStateChanged(ss.clone()))
                 .unwrap_or_default();
             tx.send(Ok(Message::text(json)))
                 .expect("Send message failed");

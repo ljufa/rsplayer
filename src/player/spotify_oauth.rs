@@ -90,6 +90,7 @@ pub fn create_oauth(settings: &SpotifySettings) -> AuthCodeSpotify {
         scopes: scopes!(
             "user-read-currently-playing",
             "playlist-modify-private",
+            "playlist-read-private",
             "user-read-recently-played",
             "user-modify-playback-state",
             "user-read-playback-state"
@@ -114,21 +115,26 @@ pub fn create_oauth(settings: &SpotifySettings) -> AuthCodeSpotify {
 // Follow
 // user-follow-modify
 // user-follow-read
+
 // Listening History
 // user-read-recently-played
 // user-read-playback-position
 // user-top-read
+
 // Playlists
 // playlist-read-collaborative
 // playlist-modify-public
 // playlist-read-private
 // playlist-modify-private
+
 // Playback
 // app-remote-control
 // streaming
+
 // Users
 // user-read-email
 // user-read-private
+
 // Library
 // user-library-modify
 // user-library-read

@@ -20,23 +20,21 @@
 
 #### Improvements
 * replace warp with axum or actix
-* reimplement spotify support including configuration
 * better control over alsa device lock
 * control over samba mount points
 * make unit tests
-* get rid of static openssl (maybe to replace with rustls)
 * detect dsd signal from waveio(when they implement it diyaudio.com)
 
 #### Features
 * implement own player based on Symphonia
 * own media management with advanced search
-* use more information about song based on last.fm response. maybe update id tags on local files.
-* lirycs
+* use more information about song based on last.fm response, update id tags on local files?
+* lyrics
 * analyze audio files for song matching and similarity
 * streaming to local device (i.e. phone) for i.e. preview 
 * queue/playlist management: play next, remove, add ...
 * support more dac chips
-* support mode oled models
+* support more oled models
 * try different audio backends: pipewire, oss, jack ...
 * convert PCM to DSD on the fly
 * integrate more online streaming services

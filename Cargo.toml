@@ -60,7 +60,7 @@ embedded-hal = {optional = true, version="0.2.4"}
 embedded-graphics = {optional=true, version = "0.7.1" }
 # st7920 = { optional = true, version = "0.2.2" }
 
-
+# spotify
 [dependencies.rspotify]
 version = "0.11.5"
 features = ["client-ureq", "ureq-rustls-tls"]

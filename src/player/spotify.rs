@@ -1,15 +1,18 @@
 use std::process::Child;
+
 use std::time::Duration;
 
 use api_models::player::*;
 use api_models::playlist::Playlist;
 use api_models::settings::*;
 use failure::err_msg;
-use rspotify::clients::OAuthClient;
+use rspotify::clients::{BaseClient, OAuthClient};
+use rspotify::model::{Id, PlayableItem, PlaylistId, Type};
 
 use crate::common::Result;
 use crate::config::Configuration;
 use crate::player::Player;
+use api_models::state::{PlayerInfo, PlayerState, PlayingContext, PlayingContextType};
 use log::info;
 
 use super::spotify_oauth::SpotifyOauth;
@@ -18,6 +21,7 @@ pub struct SpotifyPlayerClient {
     librespot_process: Option<Child>,
     client: SpotifyOauth,
     device_id: Option<String>,
+    playing_item: Option<PlayableItem>,
 }
 
 unsafe impl Send for SpotifyPlayerClient {}
@@ -37,6 +41,7 @@ impl SpotifyPlayerClient {
             client,
             librespot_process: None,
             device_id: None,
+            playing_item: None,
         })
     }
 
@@ -113,33 +118,24 @@ impl Player for SpotifyPlayerClient {
     fn rewind(&mut self, _seconds: i8) {}
 
     fn get_current_song(&mut self) -> Option<Song> {
-        if let Some(playing_item) = self.client.client.current_user_playing_item().unwrap() {
-            let mut track = playing_item.item.unwrap();
-            match &mut track {
-                rspotify::model::PlayableItem::Track(track) => Some(Song {
-                    album: Some(track.album.name.clone()),
-                    artist: track.artists.first().map(|a| a.name.clone()),
-                    genre: None,
-                    date: track.album.release_date.clone(),
-                    file: track.href.as_ref().map_or("".to_string(), |u| u.clone()),
-                    title: Some(track.name.clone()),
-                    time: Some(track.duration.as_secs().to_string()),
-                    uri: track.album.images.first().map(|i| i.url.clone()),
-                    ..Default::default()
-                }),
-                rspotify::model::PlayableItem::Episode(_) => None,
-            }
-        } else {
-            None
+        if let Some(pi) = &self.playing_item {
+            return playable_item_to_song(pi);
         }
+        None
     }
 
     fn get_player_info(&mut self) -> Option<PlayerInfo> {
         if let Ok(Some(c)) = self.client.client.current_playback(None, None::<&[_]>) {
+            let dur = if let Some(PlayableItem::Track(t)) = &c.item {
+                t.duration
+            } else {
+                Duration::ZERO
+            };
+            self.playing_item = c.item;
             Some(PlayerInfo {
                 time: c
                     .progress
-                    .map_or((Duration::ZERO, Duration::ZERO), |f| (Duration::ZERO, f)),
+                    .map_or((Duration::ZERO, Duration::ZERO), |prog| (prog, dur)),
                 random: Some(c.shuffle_state),
                 state: if c.is_playing {
                     Some(PlayerState::PLAYING)
@@ -156,20 +152,82 @@ impl Player for SpotifyPlayerClient {
     fn random_toggle(&mut self) {}
 
     fn get_playlists(&mut self) -> Vec<Playlist> {
-        vec![]
+        if let Ok(f) = self
+            .client
+            .client
+            .current_user_playlists_manual(Some(20), Some(0))
+        {
+            f.items
+                .iter()
+                .map(|pl| Playlist {
+                    name: pl.name.clone(),
+                    id: pl.id.to_string(),
+                })
+                .collect()
+        } else {
+            vec![]
+        }
     }
 
-    fn load_playlist(&mut self, _pl_name: String) {}
+    fn load_playlist(&mut self, pl_id: String) {
+        _ = self.client.client.start_context_playback(
+            &PlaylistId::from_id_or_uri(pl_id.as_str()).unwrap(),
+            self.device_id.as_deref(),
+            None,
+            None,
+        );
+    }
 
     fn get_queue_items(&mut self) -> Vec<Song> {
+        if let Ok(Some(cp)) = self.client.client.current_playback(None, None::<&[_]>) {
+            if cp.is_playing {
+                if let Some(ctx) = cp.context {
+                    if ctx._type == Type::Playlist {
+                        return self.get_playlist_items(ctx.uri);
+                    }
+                }
+            }
+        }
         vec![]
     }
 
-    fn get_playlist_items(&mut self, _playlist_name: String) -> Vec<Song> {
-        vec![]
+    fn get_playlist_items(&mut self, playlist_id: String) -> Vec<Song> {
+        let items = self.client.client.playlist_items_manual(
+            &PlaylistId::from_id_or_uri(&playlist_id).unwrap(),
+            None,
+            None,
+            Some(100),
+            Some(0),
+        );
+        if let Ok(pg) = items {
+            return pg
+                .items
+                .iter()
+                .map(|i| playable_item_to_song(i.track.as_ref().unwrap()).unwrap())
+                .collect();
+        } else {
+            vec![]
+        }
     }
 
     fn play_at(&mut self, _position: u32) {}
+}
+
+fn playable_item_to_song(track: &PlayableItem) -> Option<Song> {
+    match track {
+        rspotify::model::PlayableItem::Track(track) => Some(Song {
+            album: Some(track.album.name.clone()),
+            artist: track.artists.first().map(|a| a.name.clone()),
+            genre: None,
+            date: track.album.release_date.clone(),
+            file: track.href.as_ref().map_or("".to_string(), |u| u.clone()),
+            title: Some(track.name.clone()),
+            time: Some(track.duration.as_secs().to_string()),
+            uri: track.album.images.first().map(|i| i.url.clone()),
+            ..Default::default()
+        }),
+        rspotify::model::PlayableItem::Episode(_) => None,
+    }
 }
 
 fn start_librespot(settings: &SpotifySettings) -> Result<Child> {
@@ -188,8 +246,6 @@ fn start_librespot(settings: &SpotifySettings) -> Result<Child> {
         .arg(settings.password.clone())
         .arg("--device")
         .arg(settings.alsa_device_name.clone())
-        .arg("--format")
-        .arg("F32")
         .arg("--initial-volume")
         .arg("100")
         .arg("--verbose")

@@ -9,6 +9,7 @@ use std::time::Duration;
 use api_models::player::*;
 use api_models::playlist::Playlist;
 use api_models::settings::*;
+use api_models::state::{PlayerInfo, PlayerState};
 use mpd::{Client, Song as MpdSong};
 use num_traits::ToPrimitive;
 
@@ -97,7 +98,7 @@ impl Player for MpdPlayerClient {
     fn get_current_song(&mut self) -> Option<Song> {
         let result = self.try_with_reconnect_result(|client| client.currentsong());
         let song = result.unwrap_or(None);
-        Some(mpd_song_to_song(&song.unwrap()))
+        Some(map_song(&song.unwrap()))
     }
     fn get_player_info(&mut self) -> Option<PlayerInfo> {
         let status = self.try_with_reconnect_result(|client| client.status());
@@ -108,7 +109,7 @@ impl Player for MpdPlayerClient {
                 audio_format_rate: status.audio.map(|f| f.rate),
                 audio_format_channels: status.audio.map(|f| f.chans as u32),
                 random: Some(status.random),
-                state: Some(convert_state(status.state)),
+                state: Some(map_state(status.state)),
                 time: status.time.map_or((Duration::ZERO, Duration::ZERO), |t| {
                     (
                         Duration::from_nanos(
@@ -143,30 +144,35 @@ impl Player for MpdPlayerClient {
         let pls = self
             .try_with_reconnect_result(|client| client.playlists())
             .unwrap_or_default();
-        pls.into_iter().map(|p| Playlist { name: p.name }).collect()
+        pls.into_iter()
+            .map(|p| Playlist {
+                name: p.name.clone(),
+                id: p.name,
+            })
+            .collect()
     }
 
-    fn load_playlist(&mut self, pl_name: String) {
+    fn load_playlist(&mut self, pl_id: String) {
         let r = self.try_with_reconnect_result(|client| {
             _ = client.clear();
-            client.load(pl_name.clone(), ..)
+            client.load(pl_id.clone(), ..)
         });
         info!("Load pl result: {:?}", r);
     }
 
     fn get_queue_items(&mut self) -> Vec<Song> {
         let r = send_command("playlistinfo").unwrap_or_default();
-        r.into_iter().take(50).collect()
+        r.into_iter().take(150).collect()
     }
 
     fn get_playlist_items(&mut self, playlist_name: String) -> Vec<Song> {
         let r = send_command(format!("listplaylistinfo {}", playlist_name).as_str())
             .unwrap_or_default();
-        r.into_iter().take(100).collect()
+        r.into_iter().take(150).collect()
     }
 }
 
-fn mpd_song_to_song(song: &MpdSong) -> Song {
+fn map_song(song: &MpdSong) -> Song {
     trace!("Song is {:?}", song);
 
     Song {
@@ -193,7 +199,7 @@ fn tag_to_value(song: &MpdSong, key: &str) -> Option<String> {
     song.tags.iter().find(|t| t.0 == key).map(|kv| kv.1.clone())
 }
 
-fn convert_state(mpd_state: mpd::status::State) -> PlayerState {
+fn map_state(mpd_state: mpd::status::State) -> PlayerState {
     match mpd_state {
         mpd::State::Stop => PlayerState::STOPPED,
         mpd::State::Play => PlayerState::PLAYING,
@@ -240,8 +246,9 @@ fn send_command(command: &str) -> std::io::Result<Vec<Song>> {
     full_cmd.push_str(command);
     full_cmd.push('\n');
 
+    // todo: read from configuration
     let mut client = TcpStream::connect_timeout(
-        &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 5, 59)), 6677),
+        &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 6600),
         Duration::from_secs(2),
     )
     .unwrap();

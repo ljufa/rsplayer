@@ -1,6 +1,8 @@
-use api_models::player::*;
 use api_models::settings::Settings;
+use api_models::state::{AudioOut, StreamerState};
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
+
+use crate::audio_device::alsa::AlsaPcmCard;
 
 const SETTINGS_KEY: &str = "settings";
 const STREAMER_STATUS_KEY: &str = "streamer_status";
@@ -39,32 +41,16 @@ impl Configuration {
         format!("{}librespot", DPLAY_CONFIG_DIR_PATH)
     }
 
-    pub fn get_streamer_status(&mut self) -> StreamerStatus {
+    pub fn get_streamer_status(&mut self) -> StreamerState {
         if let Some(ps) = self.db.get(STREAMER_STATUS_KEY) {
             ps
         } else {
-            let default = StreamerStatus::default();
+            let default = StreamerState::default();
             self.db
                 .set(STREAMER_STATUS_KEY, &default)
                 .expect("Could not store default player state");
             default
         }
-    }
-
-    pub fn patch_streamer_status(
-        &mut self,
-        current_player: Option<PlayerType>,
-        selected_output: Option<AudioOut>,
-    ) -> StreamerStatus {
-        let mut sstate = self.get_streamer_status();
-        if let Some(c) = current_player {
-            sstate.source_player = c;
-        }
-        if let Some(o) = selected_output {
-            sstate.selected_audio_output = o;
-        }
-        self.save_streamer_status(&sstate);
-        sstate.clone()
     }
 
     pub fn get_settings(&mut self) -> Settings {
@@ -79,8 +65,7 @@ impl Configuration {
                 .expect("Could not store default settings");
             default
         };
-        result.alsa_settings.available_alsa_pcm_devices =
-            crate::audio_device::alsa::get_all_cards();
+        result.alsa_settings.available_alsa_pcm_devices = AlsaPcmCard::get_all_cards();
         result
             .dac_settings
             .available_dac_chips
@@ -89,6 +74,7 @@ impl Configuration {
             .dac_settings
             .available_dac_chips
             .insert(String::from("AK4490"), String::from("AK4490"));
+
         result
     }
 
@@ -98,32 +84,25 @@ impl Configuration {
             .expect("Failed to store settings");
     }
 
-    fn save_streamer_status(&mut self, streamer_status: &StreamerStatus) {
+    pub fn save_audio_output(&mut self, selected_output: AudioOut) -> StreamerState {
+        let mut sstate = self.get_streamer_status();
+        sstate.selected_audio_output = selected_output;
+        self.save_streamer_state(&sstate);
+        sstate.clone()
+    }
+
+    pub fn save_volume_state(&mut self, volume: i64) -> StreamerState {
+        let mut ss = self.get_streamer_status();
+        let mut ds = ss.volume_state.clone();
+        ds.volume = volume;
+        ss.volume_state = ds;
+        self.save_streamer_state(&ss);
+        ss.clone()
+    }
+
+    fn save_streamer_state(&mut self, streamer_status: &StreamerState) {
         self.db
             .set(STREAMER_STATUS_KEY, streamer_status)
             .expect("Can't store new player state");
-    }
-
-    pub fn patch_dac_status(
-        &mut self,
-        volume: Option<u8>,
-        filter: Option<FilterType>,
-        sound_sett: Option<u8>,
-    ) -> StreamerStatus {
-        let mut ss = self.get_streamer_status();
-        let mut ds = ss.dac_status.clone();
-        if let Some(v) = volume {
-            ds.volume = v;
-        }
-        if let Some(f) = filter {
-            ds.filter = f;
-        }
-        if let Some(ss) = sound_sett {
-            ds.sound_sett = ss;
-        }
-        ss.dac_status = ds;
-        self.save_streamer_status(&ss);
-        trace!("New patched streamer status {:?}", ss);
-        ss.clone()
     }
 }

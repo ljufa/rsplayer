@@ -1,12 +1,14 @@
-use api_models::player::StatusChangeEvent;
+use api_models::state::StateChangeEvent;
 use cfg_if::cfg_if;
 use tokio::sync::broadcast::Receiver;
 
+use crate::common::MutArcConfiguration;
+
 // todo implement settings.is_enabled check
-pub async fn write(state_changes_rx: Receiver<StatusChangeEvent>) {
+pub async fn write(state_changes_rx: Receiver<StateChangeEvent>, config: MutArcConfiguration) {
     cfg_if! {
         if #[cfg(feature="hw_oled")] {
-            hw_oled::write(state_changes_rx).await;
+            hw_oled::write(state_changes_rx, config).await;
         } else{
             crate::common::logging_receiver_future(state_changes_rx).await;
         }
@@ -18,7 +20,7 @@ mod hw_oled {
     use super::*;
     use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
     use crate::monitor::myst7920::ST7920;
-    use api_models::player::{PlayerInfo, PlayerState, Song, StreamerStatus};
+    use api_models::{common::PlayerType, player::Song, state::PlayerInfo};
     use embedded_graphics::{
         mono_font::{ascii::FONT_4X6, ascii::FONT_5X8, ascii::FONT_6X12, MonoTextStyle},
         pixelcolor::BinaryColor,
@@ -28,13 +30,17 @@ mod hw_oled {
     use embedded_hal::blocking::delay::DelayUs;
     use unidecode::unidecode;
 
+    use api_models::state::{PlayerState, StreamerState};
     use linux_embedded_hal::spidev::SpiModeFlags;
     use linux_embedded_hal::spidev::SpidevOptions;
     use linux_embedded_hal::sysfs_gpio::Direction;
     use linux_embedded_hal::Spidev;
     use linux_embedded_hal::{Delay, Pin};
 
-    pub async fn write(mut state_changes_rx: Receiver<StatusChangeEvent>) {
+    pub async fn write(
+        mut state_changes_rx: Receiver<StateChangeEvent>,
+        config: MutArcConfiguration,
+    ) {
         info!("Start OLED writer thread.");
         let mut delay = Delay;
         let mut spi = Spidev::open("/dev/spidev0.0").expect("error initializing SPI");
@@ -52,18 +58,19 @@ mod hw_oled {
         let mut disp = ST7920::<Spidev, Pin, Pin>::new(spi, rst_pin, None, false);
         disp.init(&mut delay).expect("could not init display");
         disp.clear(&mut delay).expect("could not clear display");
-
+        let settings = config.lock().unwrap().get_settings();
+        let active_player = settings.active_player;
         loop {
             let cmd_ev = state_changes_rx.recv().await;
             trace!("Command event received: {:?}", cmd_ev);
             match cmd_ev {
-                Ok(StatusChangeEvent::CurrentTrackInfoChanged(stat)) => {
+                Ok(StateChangeEvent::CurrentTrackInfoChanged(stat)) => {
                     draw_track_info(&mut disp, &mut delay, stat);
                 }
-                Ok(StatusChangeEvent::StreamerStatusChanged(sstatus)) => {
-                    draw_streamer_info(&mut disp, &mut delay, sstatus);
+                Ok(StateChangeEvent::StreamerStateChanged(sstatus)) => {
+                    draw_streamer_info(&mut disp, &mut delay, sstatus, active_player);
                 }
-                Ok(StatusChangeEvent::PlayerInfoChanged(pinfo)) => {
+                Ok(StateChangeEvent::PlayerInfoChanged(pinfo)) => {
                     draw_player_info(&mut disp, &mut delay, pinfo);
                 }
                 _ => {}
@@ -74,14 +81,15 @@ mod hw_oled {
     fn draw_streamer_info(
         disp: &mut ST7920<Spidev, Pin, Pin>,
         delay: &mut dyn DelayUs<u32>,
-        status: StreamerStatus,
+        status: StreamerState,
+        active_player: PlayerType,
     ) {
         _ = disp.clear_buffer_region(1, 1, 120, 12, delay);
         //1. player name
         Text::new(
             format!(
                 "P:{:?}|O:{:?}|V:{:?}",
-                status.source_player, status.selected_audio_output, status.dac_status.volume
+                active_player, status.selected_audio_output, status.volume_state.volume
             )
             .as_str(),
             Point::new(1, 10),

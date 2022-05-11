@@ -1,7 +1,7 @@
 RELEASE=dplay
 TARGET=aarch64-unknown-linux-gnu
 IMAGE=ljufa/rpi4-build-ak44:aarch64_2
-RPI_HOST=192.168.5.59
+RPI_HOST=192.168.5.60
 RUST_BACKTRACE=full
 OUT=release
 
@@ -24,10 +24,11 @@ debug:
 	cross build --target $(TARGET) --features backend_mpd,backend_lms,hw_dac,hw_ir_control,hw_oled
 
 copytorpi: $(OUT)
-	rsync -avvP --rsync-path="sudo rsync" target/$(TARGET)/$(OUT)/$(RELEASE) ubuntu@$(RPI_HOST):/home/ubuntu
+	rsync -avvP --rsync-path="sudo rsync" target/$(TARGET)/$(OUT)/$(RELEASE) pi@$(RPI_HOST):~
 
 copy_config:
-	rsync -avvP --rsync-path="sudo rsync" rpi_setup/etc/ ubuntu@$(RPI_HOST):/etc
-	rsync -avvP rpi_setup/.dplay/ ubuntu@$(RPI_HOST):~/.dplay/
+	rsync -avvP --rsync-path="sudo rsync" rpi_setup/etc/ pi@$(RPI_HOST):/etc
+	rsync -avvP --rsync-path="sudo rsync" rpi_setup/config.txt pi@$(RPI_HOST):/boot/config.txt
+	rsync -avvP rpi_setup/.dplay/ pi@$(RPI_HOST):~/.dplay/
 
 

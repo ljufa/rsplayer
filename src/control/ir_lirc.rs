@@ -1,4 +1,4 @@
-use api_models::player::Command;
+use api_models::common::Command;
 use cfg_if::cfg_if;
 use tokio::sync::mpsc::Sender;
 
@@ -18,7 +18,7 @@ mod hw_ir {
     use std::io;
     use std::str;
 
-    use api_models::player::Command;
+    use api_models::common::Command;
 
     use tokio::net::UnixStream;
     use tokio::sync::mpsc::Sender;

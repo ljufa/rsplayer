@@ -1,32 +1,83 @@
 use crate::common::Result;
-use api_models::player::*;
+use api_models::common::GainLevel;
+
+use api_models::common::{FilterType, Volume};
 use api_models::settings::*;
+use api_models::state::VolumeState;
 use std::time::Duration;
 
 use crate::mcu::gpio;
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_DAC_PDN_RST;
 use crate::mcu::i2c::I2CHelper;
 
-pub struct Dac {
+use super::VolumeControlDevice;
+
+pub struct DacAk4497 {
     i2c_helper: I2CHelper,
     volume_step: u8,
 }
 
-unsafe impl Send for Dac {}
+impl VolumeControlDevice for DacAk4497 {
+    fn set_vol(&self, value: i64) -> Volume {
+        self.i2c_helper.write_register(3, value as u8);
+        self.i2c_helper.write_register(4, value as u8);
+        Volume {
+            current: value,
+            max: 255,
+            min: 0,
+            step: self.volume_step as i64,
+        }
+    }
 
-unsafe impl Sync for Dac {}
+    fn vol_down(&self) -> Volume {
+        let curr_val = self
+            .i2c_helper
+            .read_register(3)
+            .expect("Register read failed");
+        if let Some(new_val) = curr_val.checked_sub(self.volume_step) {
+            self.set_vol(new_val as i64)
+        } else {
+            self.set_vol(0)
+        }
+    }
 
-impl Dac {
-    pub fn new(dac_state: DacStatus, settings: &DacSettings) -> Result<Self> {
+    fn vol_up(&self) -> Volume {
+        let curr_val = self
+            .i2c_helper
+            .read_register(3)
+            .expect("Register read failed");
+        if let Some(new_val) = curr_val.checked_add(self.volume_step) {
+            self.set_vol(new_val as i64)
+        } else {
+            self.set_vol(255)
+        }
+    }
+
+    fn get_vol(&self) -> Volume {
+        let curr_val = self
+            .i2c_helper
+            .read_register(3)
+            .expect("Register read failed");
+        Volume {
+            step: self.volume_step as i64,
+            min: 0,
+            max: 255,
+            current: curr_val as i64,
+        }
+    }
+}
+
+impl DacAk4497 {
+    pub fn new(dac_state: VolumeState, settings: &DacSettings) -> Result<Box<Self>> {
         let dac = Self {
             i2c_helper: I2CHelper::new(settings.i2c_address),
             volume_step: settings.volume_step,
         };
-        dac.initialize(dac_state)?;
-        Ok(dac)
+        dac.initialize(dac_state, settings)?;
+        Ok(Box::new(dac))
     }
 
-    pub fn initialize(&self, dac_state: DacStatus) -> Result<()> {
+    fn initialize(&self, dac_state: VolumeState, dac_settings: &DacSettings) -> Result<()> {
         // reset dac
         press_pdn_button();
         // try talking to dac,
@@ -51,12 +102,11 @@ impl Dac {
 
         self.i2c_helper.write_register(0, 0b1000_1111);
         self.i2c_helper.write_register(1, 0b1010_0010);
-        self.set_vol(dac_state.volume).expect("error");
-        self.filter(dac_state.filter).expect("error");
-        self.set_gain(dac_state.gain).expect("error");
-        self.hi_load(dac_state.heavy_load).expect("error");
-        self.change_sound_setting(dac_state.sound_sett)
-            .expect("error");
+        self.set_vol(dac_state.volume);
+        self.filter(dac_settings.filter)?;
+        self.set_gain(dac_settings.gain)?;
+        self.hi_load(dac_settings.heavy_load)?;
+        self.change_sound_setting(dac_settings.sound_sett)?;
         trace!("Dac registry After init");
         self.get_reg_values()
             .expect("Can not read dac registry")
@@ -92,7 +142,7 @@ impl Dac {
                 self.i2c_helper.change_bit(8, 0, false);
                 self.i2c_helper.change_bit(8, 1, false);
             }
-            _ => return Err(failure::format_err!("Unknown setting no")),
+            _ => return Err(failure::format_err!("Unknown setting no {}", setting_no)),
         }
         Ok(setting_no)
     }
@@ -104,30 +154,6 @@ impl Dac {
             result.push(format!("Register {} has value {:#010b} ({})", rg, val, val));
         }
         Ok(result)
-    }
-
-    pub fn set_vol(&self, value: u8) -> Result<u8> {
-        self.i2c_helper.write_register(3, value);
-        self.i2c_helper.write_register(4, value);
-        Ok(value)
-    }
-
-    pub fn vol_down(&self) -> Result<u8> {
-        let curr_val = self.i2c_helper.read_register(3)?;
-        if let Some(new_val) = curr_val.checked_sub(self.volume_step) {
-            self.set_vol(new_val)
-        } else {
-            self.set_vol(0)
-        }
-    }
-
-    pub fn vol_up(&self) -> Result<u8> {
-        let curr_val = self.i2c_helper.read_register(3)?;
-        if let Some(new_val) = curr_val.checked_add(self.volume_step) {
-            self.set_vol(new_val)
-        } else {
-            self.set_vol(255)
-        }
     }
 
     pub fn filter(&self, typ: FilterType) -> Result<FilterType> {

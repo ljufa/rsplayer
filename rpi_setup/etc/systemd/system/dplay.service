@@ -1,15 +1,15 @@
 [Unit]
 Description=dac dplay daemon
 Documentation=https://github.com/ljufa/dplayer
-Wants=network-online.target lircd.service logitechmediaserver.service syslog.service
-After=network-online.target lircd.service logitechmediaserver.service syslog.service
+Wants=network-online.target lircd.service syslog.service
+After=network-online.target lircd.service syslog.service
 
 [Service]
 LimitMEMLOCK=655360
 Environment=RUST_BACKTRACE=full
 Environment=RUST_LOG=dplay=debug,warp=debug
-ExecStart=/home/ubuntu/dplay
-WorkingDirectory=/home/ubuntu
+ExecStart=/home/pi/dplay
+WorkingDirectory=/home/pi
 ExecStartPre=sleep 5
 Restart=always
 RestartSec=3

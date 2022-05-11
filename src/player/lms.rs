@@ -7,10 +7,11 @@ use std::{
 use crate::common::Result;
 use crate::config::Configuration;
 use crate::player::Player;
-use api_models::player::StatusChangeEvent::*;
 use api_models::player::*;
 use api_models::playlist::Playlist;
 use api_models::settings::*;
+use api_models::state::StateChangeEvent;
+use api_models::state::{PlayerInfo, StateChangeEvent::*};
 
 // https://github.com/elParaguayo/LMS-CLI-Documentation/blob/master/LMS-CLI.md
 
@@ -59,8 +60,8 @@ impl LMSPlayerClient {
     fn send_command(
         &mut self,
         command: &'static str,
-        event: StatusChangeEvent,
-    ) -> Result<StatusChangeEvent> {
+        event: StateChangeEvent,
+    ) -> Result<StateChangeEvent> {
         self.send_command_with_response(command)?;
         Ok(event)
     }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::player::PlayerType;
+use crate::common::{PlayerType, FilterType, GainLevel};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -42,6 +42,8 @@ pub struct MpdSettings {
     pub server_host: String,
     pub server_port: u32,
 }
+
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AlsaSettings {
     pub device_name: String,
@@ -56,6 +58,11 @@ pub struct DacSettings {
     pub chip_id: String,
     pub i2c_address: u16,
     pub volume_step: u8,
+    pub filter: FilterType,
+    pub sound_sett: u8,
+    pub gain: GainLevel,
+    pub heavy_load: bool,
+
     #[serde(skip_deserializing)]
     pub available_dac_chips: HashMap<String, String>,
 }
@@ -87,7 +94,7 @@ impl Default for Settings {
             spotify_settings: SpotifySettings {
                 enabled: false,
                 device_name: String::from("dplayer@rpi"),
-                auth_callback_url: String::from("http://dplayer.lan:8000"),
+                auth_callback_url: String::from("http://dplayer.lan:8000/api/spotify/callback"),
                 developer_client_id: String::default(),
                 developer_secret: String::default(),
                 username: String::default(),
@@ -107,12 +114,16 @@ impl Default for Settings {
                 chip_id: String::from("AK4497"),
                 i2c_address: 0x13,
                 volume_step: 2,
+                filter: FilterType::SharpRollOff,
+                gain: GainLevel::V375,
+                heavy_load: false,
+                sound_sett: 4,
                 available_dac_chips: HashMap::new(),
             },
             mpd_settings: MpdSettings {
                 enabled: true,
                 server_host: String::from("localhost"),
-                server_port: 6677,
+                server_port: 6600,
             },
             alsa_settings: AlsaSettings {
                 device_name: String::from(default_alsa_pcm_device),

@@ -1,11 +1,22 @@
 use core::result;
-use std::time::Duration;
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
-use api_models::player::StatusChangeEvent;
+use api_models::state::StateChangeEvent;
 use failure::Error;
 use tokio::sync::broadcast::Receiver;
 
+use crate::{
+    audio_device::audio_service::AudioInterfaceService, config::Configuration,
+    player::player_service::PlayerService,
+};
+
 pub type Result<T> = result::Result<T, Error>;
+pub type MutArcConfiguration = Arc<Mutex<Configuration>>;
+pub type MutArcPlayerService = Arc<Mutex<PlayerService>>;
+pub type ArcAudioInterfaceSvc = Arc<AudioInterfaceService>;
 
 #[allow(dead_code)]
 pub async fn no_op_future() {
@@ -15,7 +26,7 @@ pub async fn no_op_future() {
 }
 
 #[allow(dead_code)]
-pub async fn logging_receiver_future(mut rx: Receiver<StatusChangeEvent>) {
+pub async fn logging_receiver_future(mut rx: Receiver<StateChangeEvent>) {
     loop {
         let r = rx.recv().await;
         info!("Event received: {:?}", r);
