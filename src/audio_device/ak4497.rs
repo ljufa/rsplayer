@@ -16,6 +16,7 @@ pub struct DacAk4497 {
     i2c_helper: I2CHelper,
     volume_step: u8,
 }
+unsafe impl Sync for DacAk4497 {}
 
 impl VolumeControlDevice for DacAk4497 {
     fn vol_up(&self) -> Volume {

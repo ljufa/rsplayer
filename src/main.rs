@@ -1,7 +1,20 @@
-extern crate serde_derive;
+extern crate env_logger;
 #[macro_use]
 extern crate log;
-extern crate env_logger;
+extern crate serde_derive;
+
+use std::panic;
+use std::sync::{Arc, Mutex};
+
+use api_models::common::Command;
+use tokio::signal::unix::{Signal, SignalKind};
+use tokio::sync::broadcast;
+
+use config::Configuration;
+
+use crate::audio_device::audio_service::AudioInterfaceService;
+use crate::control::command_handler;
+use crate::player::player_service::PlayerService;
 
 mod audio_device;
 mod common;
@@ -12,26 +25,13 @@ mod mcu;
 mod monitor;
 mod player;
 
-use crate::audio_device::audio_service::AudioInterfaceService;
-use crate::control::command_handler;
-use crate::player::player_service::PlayerService;
-
-use api_models::common::Command;
-use config::Configuration;
-
-use std::panic;
-use std::sync::{Arc, Mutex};
-use tokio::signal::unix::{Signal, SignalKind};
-
-use tokio::sync::broadcast;
-
 #[tokio::main]
 async fn main() {
     env_logger::init();
 
     info!("Starting Dplayer!");
 
-    let config = Arc::new(Mutex::new(config::Configuration::new()));
+    let config = Arc::new(Mutex::new(Configuration::new()));
 
     let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate())
         .expect("failed to create signal future");
@@ -57,7 +57,7 @@ async fn main() {
     let (input_commands_tx, input_commands_rx) = tokio::sync::mpsc::channel(2);
 
     // start playing after start
-    _ = input_commands_tx.send(Command::Play).await;
+    let _ = input_commands_tx.send(Command::Play).await;
 
     let (state_changes_tx, _) = broadcast::channel(20);
 
@@ -69,34 +69,29 @@ async fn main() {
     );
 
     tokio::select! {
-        _ = control::ir_lirc::listen(input_commands_tx.clone()) => {
+        _ = tokio::spawn(control::ir_lirc::listen(input_commands_tx.clone())) => {
             error!("Exit from IR Command thread.");
         }
 
-        _ = control::volume_rotary::listen(input_commands_tx.clone()) =>{
+        _ = tokio::spawn(control::volume_rotary::listen(input_commands_tx.clone())) =>{
             error!("Exit from Volume control thread.");
         }
 
-        _ = monitor::oled::write(state_changes_tx.subscribe(), config.clone()) => {
+        _ = tokio::spawn(monitor::oled::write(state_changes_tx.subscribe(), config.clone())) => {
             error!("Exit from OLED writer thread.");
         }
 
-        _ = monitor::status::monitor(
-            player_service.clone(),
-            state_changes_tx.clone(),
-            ai_service.clone(),
-        ) => {
+        _ = tokio::spawn(monitor::status::monitor(player_service.clone(),state_changes_tx.clone())) => {
             error!("Exit from status monitor thread.");
         }
 
-        _
-         = command_handler::handle(
+        _ = tokio::spawn(command_handler::handle(
             player_service.clone(),
             ai_service,
             config.clone(),
             input_commands_rx,
             state_changes_tx.clone(),
-        ) => {
+        )) => {
             error!("Exit from command handler thread.");
         }
 

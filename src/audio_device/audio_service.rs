@@ -7,12 +7,11 @@ use crate::common::{MutArcConfiguration, Result};
 use super::ak4497::DacAk4497;
 #[cfg(not(feature = "hw_dac"))]
 use super::alsa::AlsaMixer;
-
 use super::{alsa::AlsaPcmCard, VolumeControlDevice};
 
 pub struct AudioInterfaceService {
     alsa_card: AlsaPcmCard,
-    volume_ctrl_device: Box<dyn VolumeControlDevice>,
+    volume_ctrl_device: Box<dyn VolumeControlDevice + Sync + Send>,
 }
 
 impl AudioInterfaceService {

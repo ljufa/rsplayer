@@ -7,11 +7,7 @@ use api_models::state::StateChangeEvent;
 use std::time::Duration;
 use tokio::sync::broadcast::Sender;
 
-pub async fn monitor(
-    player_svc: MutArcPlayerService,
-    state_changes_tx: Sender<StateChangeEvent>,
-    ai_svc: ArcAudioInterfaceSvc,
-) {
+pub async fn monitor(player_svc: MutArcPlayerService, state_changes_tx: Sender<StateChangeEvent>) {
     info!("Status monitor thread started.");
     let mut last_track_info = None;
     let mut last_player_info = None;
@@ -30,7 +26,7 @@ pub async fn monitor(
             .get_current_song();
         if last_track_info != new_track_info {
             if let Some(new) = new_track_info.as_ref() {
-                _ = state_changes_tx.send(StateChangeEvent::CurrentSongEvent(new.clone()));
+                let _ = state_changes_tx.send(StateChangeEvent::CurrentSongEvent(new.clone()));
             }
             last_track_info = new_track_info;
         }
@@ -42,7 +38,8 @@ pub async fn monitor(
             .get_player_info();
         if last_player_info != new_player_info {
             if let Some(new_p_info) = new_player_info.as_ref() {
-                _ = state_changes_tx.send(StateChangeEvent::PlayerInfoEvent(new_p_info.clone()));
+                let _ =
+                    state_changes_tx.send(StateChangeEvent::PlayerInfoEvent(new_p_info.clone()));
             }
             last_player_info = new_player_info;
         }
@@ -53,7 +50,7 @@ pub async fn monitor(
             .get_current_player()
             .get_song_progress();
         if last_progress != new_progress {
-            _ = state_changes_tx.send(StateChangeEvent::SongTimeEvent(new_progress.clone()));
+            let _ = state_changes_tx.send(StateChangeEvent::SongTimeEvent(new_progress.clone()));
             last_progress = new_progress;
         }
 
@@ -65,7 +62,7 @@ pub async fn monitor(
             .get_playing_context(false);
         if last_playing_context != new_playing_context {
             if let Some(new_pc) = new_playing_context.as_ref() {
-                _ = state_changes_tx
+                let _ = state_changes_tx
                     .send(StateChangeEvent::CurrentPlayingContextEvent(new_pc.clone()));
             }
             last_playing_context = new_playing_context;
