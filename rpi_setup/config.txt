@@ -29,5 +29,6 @@ disable_overscan=1
 #dtoverlay=dwc2,dr_mode=host
 
 dtoverlay=gpio-ir,gpio_pin=17
+dtoverlay=rotary-encoder,pin_a=15,pin_b=18,relative_axis=1,steps-per-period=1
 gpio=18,15,19=pu
 gpio=22,23=op,dh

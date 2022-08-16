@@ -19,7 +19,7 @@ impl AudioInterfaceService {
     pub fn new(config: MutArcConfiguration) -> Result<Self> {
         let settings = config.lock().unwrap().get_settings();
         let ac = AlsaPcmCard::new(settings.alsa_settings.device_name.clone());
-        ac.wait_unlock_audio_dev()?;
+        // ac.wait_unlock_audio_dev()?;
 
         cfg_if! {
             if #[cfg(feature="hw_dac")] {
@@ -47,8 +47,8 @@ impl AudioInterfaceService {
         self.alsa_card.wait_unlock_audio_dev()
     }
 
-    pub fn set_volume(&self, _value: u8) -> Result<Volume> {
-        Ok(self.volume_ctrl_device.vol_up())
+    pub fn set_volume(&self, value: i64) -> Result<Volume> {
+        Ok(self.volume_ctrl_device.set_vol(value))
     }
     pub fn volume_up(&self) -> Result<Volume> {
         Ok(self.volume_ctrl_device.vol_up())

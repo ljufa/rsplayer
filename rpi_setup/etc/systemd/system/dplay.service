@@ -1,8 +1,8 @@
 [Unit]
 Description=dac dplay daemon
 Documentation=https://github.com/ljufa/dplayer
-Wants=network-online.target lircd.service syslog.service
-After=network-online.target lircd.service syslog.service
+Wants=network-online.target mpd.service lircd.service syslog.service
+After=network-online.target mpd.service lircd.service syslog.service
 
 [Service]
 LimitMEMLOCK=655360

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{time::Duration, fmt::Display};
 
 use num_derive::{FromPrimitive, ToPrimitive};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
@@ -20,14 +20,21 @@ pub enum Command {
     Prev,
     Pause,
     Play,
-    PlayAt(u32),
-    TogglePlayer,
+    PlayItem(String),
+    RemovePlaylistItem(String),
     SwitchToPlayer(PlayerType),
     PowerOff,
     ChangeAudioOutput,
     RandomToggle,
     Rewind(i8),
     LoadPlaylist(String),
+    LoadAlbum(String),
+    QueryCurrentSong,
+    QueryCurrentPlayerInfo,
+    QueryCurrentStreamerState,
+    QueryCurrentPlayingContext{include_songs: bool},
+    QueryDynamicPlaylists(Vec<String>, u32, u32),
+    QueryPlaylistItems(String),
 }
 
 #[derive(
@@ -61,14 +68,22 @@ pub enum GainLevel {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash, Copy, EnumIter, EnumString, Serialize, Deserialize)]
-
 pub enum PlayerType {
     SPF,
     MPD,
     LMS,
 }
+impl Display for PlayerType{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self{
+            PlayerType::SPF => f.write_str("Spotify"),
+            PlayerType::MPD => f.write_str("Music Player Deamon"),
+            PlayerType::LMS => f.write_str("Logitech Media Server"),
+        }
+    }
+}
 
-pub fn dur_to_string(duration: Duration) -> String {
+pub fn dur_to_string(duration: &Duration) -> String {
     let mut result = "00:00:00".to_string();
     let secs = duration.as_secs();
     if secs > 0 {

@@ -25,7 +25,7 @@ impl PlayerService {
     pub fn new(config: MutArcConfiguration) -> Result<Self> {
         let settings = config.lock().unwrap().get_settings();
         Ok(PlayerService {
-            player: Self::create_player(&settings, &settings.active_player)?,
+            player: Self::create_player(&settings)?,
             settings,
         })
     }
@@ -34,29 +34,14 @@ impl PlayerService {
         &mut self.player
     }
 
-    pub fn switch_to_player(
-        &mut self,
-        audio_card: Arc<AudioInterfaceService>,
-        player_type: &PlayerType,
-    ) -> Result<PlayerType> {
-        let _ = self.player.stop();
-        audio_card.wait_unlock_audio_dev()?;
-        let new_player = Self::create_player(&self.settings, player_type)?;
-        self.player = new_player;
-        self.player.play();
-        Ok(*player_type)
-    }
-
     #[allow(unreachable_patterns)]
-    fn create_player(
-        settings: &Settings,
-        player_type: &PlayerType,
-    ) -> Result<Box<dyn Player + Send>> {
-        return match player_type {
+    fn create_player(settings: &Settings) -> Result<Box<dyn Player + Send>> {
+        return match &settings.active_player {
             PlayerType::SPF => {
                 let mut sp = SpotifyPlayerClient::new(settings.spotify_settings.clone())?;
                 sp.start_device()?;
                 sp.transfer_playback_to_device()?;
+                sp.play();
                 Ok(Box::new(sp))
             }
             #[cfg(feature = "backend_mpd")]

@@ -18,14 +18,15 @@ pub struct DacAk4497 {
 }
 
 impl VolumeControlDevice for DacAk4497 {
-    fn set_vol(&self, value: i64) -> Volume {
-        self.i2c_helper.write_register(3, value as u8);
-        self.i2c_helper.write_register(4, value as u8);
-        Volume {
-            current: value,
-            max: 255,
-            min: 0,
-            step: self.volume_step as i64,
+    fn vol_up(&self) -> Volume {
+        let curr_val = self
+            .i2c_helper
+            .read_register(3)
+            .expect("Register read failed");
+        if let Some(new_val) = curr_val.checked_add(self.volume_step) {
+            self.set_vol(new_val as i64)
+        } else {
+            self.set_vol(255)
         }
     }
 
@@ -41,18 +42,6 @@ impl VolumeControlDevice for DacAk4497 {
         }
     }
 
-    fn vol_up(&self) -> Volume {
-        let curr_val = self
-            .i2c_helper
-            .read_register(3)
-            .expect("Register read failed");
-        if let Some(new_val) = curr_val.checked_add(self.volume_step) {
-            self.set_vol(new_val as i64)
-        } else {
-            self.set_vol(255)
-        }
-    }
-
     fn get_vol(&self) -> Volume {
         let curr_val = self
             .i2c_helper
@@ -63,6 +52,17 @@ impl VolumeControlDevice for DacAk4497 {
             min: 0,
             max: 255,
             current: curr_val as i64,
+        }
+    }
+
+    fn set_vol(&self, value: i64) -> Volume {
+        self.i2c_helper.write_register(3, value as u8);
+        self.i2c_helper.write_register(4, value as u8);
+        Volume {
+            current: value,
+            max: 255,
+            min: 0,
+            step: self.volume_step as i64,
         }
     }
 }

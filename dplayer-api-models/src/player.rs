@@ -1,8 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub struct Song {
+
+    pub id: String,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
 
@@ -31,10 +34,7 @@ pub struct Song {
     pub album_artist: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub time: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub position: Option<u32>,
+    pub time: Option<Duration>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub performer: Option<String>,
@@ -86,4 +86,45 @@ impl Song {
         }
         return result;
     }
+
+    pub fn all_text(&self) -> String {
+        let mut result = String::new();
+        if let Some(t) = self.title.as_ref() {
+            result.push(' ');
+            result.push_str(t.as_str());
+        }
+        if let Some(t) = self.artist.as_ref() {
+            result.push(' ');
+            result.push_str(t.as_str());
+        }
+        if let Some(t) = self.album.as_ref() {
+            result.push(' ');
+            result.push_str(t.as_str());
+        }
+        if let Some(t) = self.album_artist.as_ref() {
+            result.push(' ');
+            result.push_str(t.as_str());
+        }
+        if let Some(t) = self.genre.as_ref() {
+            result.push(' ');
+            result.push_str(t.as_str());
+        }
+        if let Some(t) = self.composer.as_ref() {
+            result.push(' ');
+            result.push_str(t.as_str());
+        }
+        if let Some(t) = self.performer.as_ref() {
+            result.push(' ');
+            result.push_str(t.as_str());
+        }
+        if let Some(t) = self.date.as_ref() {
+            result.push(' ');
+            result.push_str(t.as_str());
+        }
+
+        return result;
+        
+        
+    }
+
 }

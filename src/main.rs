@@ -54,7 +54,7 @@ async fn main() {
     let player_service = Arc::new(Mutex::new(player_service.unwrap()));
     info!("Player service successfully created.");
 
-    let (input_commands_tx, input_commands_rx) = tokio::sync::mpsc::channel(1);
+    let (input_commands_tx, input_commands_rx) = tokio::sync::mpsc::channel(2);
 
     // start playing after start
     _ = input_commands_tx.send(Command::Play).await;
@@ -71,6 +71,10 @@ async fn main() {
     tokio::select! {
         _ = control::ir_lirc::listen(input_commands_tx.clone()) => {
             error!("Exit from IR Command thread.");
+        }
+
+        _ = control::volume_rotary::listen(input_commands_tx.clone()) =>{
+            error!("Exit from Volume control thread.");
         }
 
         _ = monitor::oled::write(state_changes_tx.subscribe(), config.clone()) => {
@@ -92,7 +96,6 @@ async fn main() {
             config.clone(),
             input_commands_rx,
             state_changes_tx.clone(),
-            state_changes_tx.subscribe(),
         ) => {
             error!("Exit from command handler thread.");
         }
@@ -112,6 +115,7 @@ async fn main() {
 
     info!("DPlayer shutdown completed.");
 }
+
 async fn start_degraded(term_signal: &mut Signal, config: Arc<Mutex<Configuration>>) {
     warn!("Starting server in degraded mode.");
     let http_server_future = http_api::server_warp::start_degraded(config);
@@ -125,6 +129,5 @@ async fn start_degraded(term_signal: &mut Signal, config: Arc<Mutex<Configuratio
         _ = tokio::signal::ctrl_c() => {
             info!("CTRL-c signal received.");
         }
-
     }
 }

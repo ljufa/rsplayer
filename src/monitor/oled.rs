@@ -64,13 +64,13 @@ mod hw_oled {
             let cmd_ev = state_changes_rx.recv().await;
             trace!("Command event received: {:?}", cmd_ev);
             match cmd_ev {
-                Ok(StateChangeEvent::CurrentTrackInfoChanged(stat)) => {
+                Ok(StateChangeEvent::CurrentSongEvent(stat)) => {
                     draw_track_info(&mut disp, &mut delay, stat);
                 }
-                Ok(StateChangeEvent::StreamerStateChanged(sstatus)) => {
+                Ok(StateChangeEvent::StreamerStateEvent(sstatus)) => {
                     draw_streamer_info(&mut disp, &mut delay, sstatus, active_player);
                 }
-                Ok(StateChangeEvent::PlayerInfoChanged(pinfo)) => {
+                Ok(StateChangeEvent::PlayerInfoEvent(pinfo)) => {
                     draw_player_info(&mut disp, &mut delay, pinfo);
                 }
                 _ => {}
@@ -144,9 +144,9 @@ mod hw_oled {
         //1. player name
         Text::new(
             format!(
-                "T:{:?}/{:?}|F:{:?}|B:{:?}|C:{:?}{}{}",
-                player_info.time.0.as_secs(),
-                player_info.time.1.as_secs(),
+                "F:{:?}|B:{:?}|C:{:?}{}{}",
+                // player_info.time.0.as_secs(),
+                // player_info.time.1.as_secs(),
                 player_info.audio_format_rate.unwrap_or_default(),
                 player_info.audio_format_bit.unwrap_or_default(),
                 player_info.audio_format_channels.unwrap_or_default(),

@@ -20,7 +20,7 @@ pub struct LMSPlayerClient {
     client: TcpStream,
     cli_server_url: String,
 }
-unsafe impl Send for LMSPlayerClient {}
+
 impl LMSPlayerClient {
     pub fn new(settings: &LmsSettings) -> Result<LMSPlayerClient> {
         if !settings.enabled {
@@ -176,7 +176,7 @@ impl Player for LMSPlayerClient {
 
     fn random_toggle(&mut self) {}
 
-    fn get_playlists(&mut self) -> Vec<Playlist> {
+    fn get_static_playlists(&mut self) -> Vec<Playlist> {
         todo!()
     }
 
@@ -184,15 +184,22 @@ impl Player for LMSPlayerClient {
         todo!()
     }
 
-    fn get_queue_items(&mut self) -> Vec<Song> {
-        todo!()
-    }
-
     fn get_playlist_items(&mut self, _playlist_name: String) -> Vec<Song> {
         todo!()
     }
 
-    fn play_at(&mut self, _position: u32) {
+    fn remove_playlist_item(&mut self, id: String) {
+        todo!()
+    }
+
+    fn get_playing_context(
+        &mut self,
+        include_songs: bool,
+    ) -> Option<api_models::state::PlayingContext> {
+        todo!()
+    }
+
+    fn play_item(&mut self, id: String) {
         todo!()
     }
 }

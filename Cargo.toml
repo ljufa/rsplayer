@@ -10,7 +10,7 @@ hw_gpio =  ["gpio-cdev","rpi_embedded","linux-embedded-hal", "embedded-hal"]
 hw_oled = ["hw_gpio", "embedded-graphics"]
 hw_dac = ["hw_gpio"]
 hw_ir_control = []
-
+hw_volume_control = ["evdev/tokio"]
 
 backend_mpd = ["mpd"]
 backend_lms = []
@@ -51,10 +51,12 @@ pickledb = "0.4.1"
 log4rs = "1.0.0"
 
 #gpio, i2c
-gpio-cdev = {optional = true, version="0.4"}
+gpio-cdev = {optional = true, version="0.5.1"}
 rpi_embedded = {optional = true, version="0.1.0"}
 linux-embedded-hal = {optional = true, version="0.3.0"}
 embedded-hal = {optional = true, version="0.2.4"}
+evdev = {optional=true, version = "0.11.4"}
+
 
 #oled
 embedded-graphics = {optional=true, version = "0.7.1" }

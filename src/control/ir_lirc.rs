@@ -22,7 +22,7 @@ mod hw_ir {
 
     use tokio::net::UnixStream;
     use tokio::sync::mpsc::Sender;
-    const REMOTE_MAKER: &str = "dplayd";
+    const REMOTE_MAKER: &str = "dplay2";
 
     pub async fn listen(input_commands_tx: Sender<Command>) {
         info!("Start IR Control thread.");
@@ -36,6 +36,7 @@ mod hw_ir {
                 Ok(n) => {
                     debug!("Read {} bytes from socket", n);
                     let result = str::from_utf8(&bytes).unwrap();
+                    debug!("Remote maker is {:?}", result);
                     let remote_maker = result.find(REMOTE_MAKER);
                     if remote_maker.is_none() || result.len() < 18 {
                         continue;
@@ -45,20 +46,51 @@ mod hw_ir {
                         continue;
                     }
                     let key = &result[17..end - 1];
+                    debug!("Key is {}", key);
                     match key {
-                        "00 KEY_PLAY" => {
+                        "00 KEY_UP" => {
                             input_commands_tx.send(Command::Play).await.expect("Error");
                         }
-                        "00 KEY_STOP" => {
+                        "00 KEY_DOWN" => {
                             input_commands_tx.send(Command::Pause).await.expect("Error");
                         }
-                        "00 KEY_NEXTSONG" => {
+                        "00 KEY_NEXT" => {
                             input_commands_tx.send(Command::Next).await.expect("Error");
                         }
-                        "00 KEY_PREVIOUSSONG" => {
+                        "00 KEY_PREVIOUS" => {
                             input_commands_tx.send(Command::Prev).await.expect("Error");
                         }
-                        "00 KEY_EJECTCD" => {
+                        "00 BTN_MOUSE" => {
+                            input_commands_tx
+                                .send(Command::RandomToggle)
+                                .await
+                                .expect("Error");
+                        }
+                        "00 KEY_MEDIA" => {
+                            input_commands_tx
+                                .send(Command::LoadPlaylist(
+                                    "mpd_playlist_saved_remote".to_string(),
+                                ))
+                                .await
+                                .expect("Error");
+                        }
+                        "00 KEY_RADIO" => {
+                            input_commands_tx
+                                .send(Command::LoadPlaylist(
+                                    "mpd_playlist_saved_radio".to_string(),
+                                ))
+                                .await
+                                .expect("Error");
+                        }
+                        "00 KEY_WWW" => {
+                            input_commands_tx
+                                .send(Command::LoadPlaylist(
+                                    "mpd_playlist_saved_local".to_string(),
+                                ))
+                                .await
+                                .expect("Error");
+                        }
+                        "00 KEY_MENU" => {
                             input_commands_tx
                                 .send(Command::ChangeAudioOutput)
                                 .await
@@ -72,22 +104,22 @@ mod hw_ir {
                         }
                         _ => {
                             let key_str = String::from(key);
-                            if key_str.ends_with("KEY_DOWN") {
+                            if key_str.ends_with("KEY_VOLUMEDOWN") {
                                 input_commands_tx
                                     .send(Command::VolDown)
                                     .await
                                     .expect("Error");
                             }
-                            if key_str.ends_with("KEY_UP") {
+                            if key_str.ends_with("KEY_VOLUMEUP") {
                                 input_commands_tx.send(Command::VolUp).await.expect("Error");
                             }
-                            if key_str.ends_with("KEY_NEXT") {
+                            if key_str.ends_with("KEY_RIGHT") {
                                 input_commands_tx
                                     .send(Command::Rewind(5))
                                     .await
                                     .expect("Error");
                             }
-                            if key_str.ends_with("KEY_PREVIOUS") {
+                            if key_str.ends_with("KEY_LEFT") {
                                 input_commands_tx
                                     .send(Command::Rewind(-5))
                                     .await

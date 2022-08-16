@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use alsa::device_name::HintIter;
 use alsa::mixer::{SelemChannelId, SelemId};
 use alsa::pcm::State;
-use alsa::{card, Direction, Mixer};
+use alsa::{Direction, Mixer};
 use api_models::common::Volume;
 
 use crate::common::Result;
@@ -156,9 +156,8 @@ impl VolumeControlDevice for AlsaMixer {
 #[cfg(test)]
 mod test {
     use alsa::{
-        device_name::HintIter,
         mixer::{Selem, SelemChannelId, SelemId},
-        Direction, Mixer,
+        Mixer,
     };
 
     use super::AlsaPcmCard;

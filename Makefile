@@ -17,7 +17,7 @@ build_librespot:
 
 release:
 	cargo fmt
-	cross build --target $(TARGET) --release --features backend_mpd,backend_lms,hw_dac,hw_ir_control,hw_oled
+	cross build --target $(TARGET) --release --features backend_mpd,hw_dac,hw_ir_control,hw_oled,hw_volume_control
 
 debug:
 	cargo fmt
@@ -32,3 +32,8 @@ copy_config:
 	rsync -avvP rpi_setup/.dplay/ pi@$(RPI_HOST):~/.dplay/
 
 
+run_local:
+	cargo clippy
+	pkill librespot || true
+	pkill dplay || true
+	RUST_BACKTRACE=full RUST_LOG=info,dplay=debug,rspotify=info cargo run

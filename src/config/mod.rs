@@ -33,6 +33,7 @@ impl Configuration {
     pub fn get_static_dir_path() -> String {
         format!("{}ui", DPLAY_CONFIG_DIR_PATH)
     }
+
     pub fn get_squeezelite_player_path() -> String {
         format!("{}squeezelite", DPLAY_CONFIG_DIR_PATH)
     }
@@ -55,7 +56,7 @@ impl Configuration {
 
     pub fn get_settings(&mut self) -> Settings {
         let mut result = if let Some(ds) = self.db.get(SETTINGS_KEY) {
-            debug!("Existing settings config found: {:?}", ds);
+            trace!("Existing settings config found: {:?}", ds);
             ds
         } else {
             info!("Existing configuration not found. Using default.");

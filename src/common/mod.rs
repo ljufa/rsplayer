@@ -29,6 +29,6 @@ pub async fn no_op_future() {
 pub async fn logging_receiver_future(mut rx: Receiver<StateChangeEvent>) {
     loop {
         let r = rx.recv().await;
-        info!("Event received: {:?}", r);
+        trace!("Event received: {:?}", r);
     }
 }

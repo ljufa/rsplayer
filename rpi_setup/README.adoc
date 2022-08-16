@@ -26,11 +26,11 @@ make copy_config
 
 === Mount network share
 [source]
-sudo apt install -y cifs-utils
-sudo mkdir /media/samsung
-sudo mount /media/samsung
+sudo apt install -y nfs-common
+sudo mkdir /media/nfs
+sudo mount /media/nfs
 mkdir /home/pi/music
-ln -s /media/samsung/MUSIC /home/pi/remote
+ln -s /media/nfs/MUSIC /home/pi/remote
 
 === Build librespot (optional)
 [source, bash]

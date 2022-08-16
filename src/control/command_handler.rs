@@ -1,3 +1,14 @@
+use std::time::Duration;
+
+use api_models::common::Command;
+use api_models::common::Command::*;
+use api_models::state::StateChangeEvent;
+use cfg_if::cfg_if;
+
+use tokio::sync::broadcast::Sender;
+
+use crate::common::{ArcAudioInterfaceSvc, MutArcConfiguration, MutArcPlayerService};
+
 cfg_if! {
 if #[cfg(feature = "hw_gpio")] {
     use crate::mcu::gpio;
@@ -5,25 +16,12 @@ if #[cfg(feature = "hw_gpio")] {
     use api_models::state::AudioOut;
 }}
 
-use crate::common::{ArcAudioInterfaceSvc, MutArcConfiguration, MutArcPlayerService};
-
-use std::time::Duration;
-
-use api_models::common::Command::*;
-
-use api_models::common::Command;
-use api_models::state::StateChangeEvent;
-use cfg_if::cfg_if;
-use tokio::sync::broadcast::Receiver;
-use tokio::sync::broadcast::Sender;
-
 pub async fn handle(
     player_service: MutArcPlayerService,
     ai_service: ArcAudioInterfaceSvc,
     config_store: MutArcConfiguration,
     mut input_commands_rx: tokio::sync::mpsc::Receiver<Command>,
     state_changes_sender: Sender<StateChangeEvent>,
-    mut state_changes_receiver: Receiver<StateChangeEvent>,
 ) {
     //fixme : move to separate struct restore selected output
     cfg_if! {
@@ -42,20 +40,16 @@ pub async fn handle(
     }}
 
     loop {
-        if let Ok(StateChangeEvent::Shutdown) = state_changes_receiver.try_recv() {
-            info!("Stop command handler.");
-            break;
-        }
         tokio::time::sleep(Duration::from_millis(200)).await;
         if let Ok(cmd) = input_commands_rx.try_recv() {
             trace!("Received command {:?}", cmd);
             match cmd {
                 SetVol(val) => {
-                    if let Ok(nv) = ai_service.set_volume(val) {
+                    if let Ok(nv) = ai_service.set_volume(val as i64) {
                         let new_dac_status =
                             config_store.lock().unwrap().save_volume_state(nv.current);
                         state_changes_sender
-                            .send(StateChangeEvent::StreamerStateChanged(new_dac_status))
+                            .send(StateChangeEvent::StreamerStateEvent(new_dac_status))
                             .expect("Send event failed.");
                     }
                 }
@@ -64,7 +58,7 @@ pub async fn handle(
                         let new_dac_status =
                             config_store.lock().unwrap().save_volume_state(nv.current);
                         state_changes_sender
-                            .send(StateChangeEvent::StreamerStateChanged(new_dac_status))
+                            .send(StateChangeEvent::StreamerStateEvent(new_dac_status))
                             .expect("Send event failed.");
                     }
                 }
@@ -73,7 +67,7 @@ pub async fn handle(
                         let new_dac_status =
                             config_store.lock().unwrap().save_volume_state(nv.current);
                         state_changes_sender
-                            .send(StateChangeEvent::StreamerStateChanged(new_dac_status))
+                            .send(StateChangeEvent::StreamerStateEvent(new_dac_status))
                             .expect("Send event failed.");
                     }
                 }
@@ -81,12 +75,19 @@ pub async fn handle(
                 Play => {
                     _ = player_service.lock().unwrap().get_current_player().play();
                 }
-                PlayAt(position) => {
+                PlayItem(id) => {
                     _ = player_service
                         .lock()
                         .unwrap()
                         .get_current_player()
-                        .play_at(position);
+                        .play_item(id);
+                }
+                RemovePlaylistItem(id) => {
+                    _ = player_service
+                        .lock()
+                        .unwrap()
+                        .get_current_player()
+                        .remove_playlist_item(id);
                 }
                 Pause => {
                     _ = player_service.lock().unwrap().get_current_player().pause();
@@ -119,6 +120,14 @@ pub async fn handle(
                         .get_current_player()
                         .load_playlist(pl_id);
                 }
+                LoadAlbum(album_id) => {
+                    _ = player_service
+                        .lock()
+                        .unwrap()
+                        .get_current_player()
+                        .load_album(album_id);
+                }
+
                 // system commands
                 #[cfg(feature = "hw_gpio")]
                 ChangeAudioOutput => {
@@ -131,7 +140,7 @@ pub async fn handle(
                     };
                     let new_sstate = config_store.lock().unwrap().save_audio_output(nout);
                     state_changes_sender
-                        .send(StateChangeEvent::StreamerStateChanged(new_sstate))
+                        .send(StateChangeEvent::StreamerStateEvent(new_sstate))
                         .unwrap();
                 }
                 PowerOff => {
@@ -144,6 +153,72 @@ pub async fn handle(
                     .unwrap()
                     .get_current_player()
                     .random_toggle(),
+                /*
+                 * Query commands
+                 */
+                QueryCurrentSong => {
+                    if let Some(song) = player_service
+                        .lock()
+                        .unwrap()
+                        .get_current_player()
+                        .get_current_song()
+                    {
+                        state_changes_sender
+                            .send(StateChangeEvent::CurrentSongEvent(song))
+                            .unwrap();
+                    }
+                }
+                QueryCurrentPlayingContext { include_songs } => {
+                    if let Some(pc) = player_service
+                        .lock()
+                        .unwrap()
+                        .get_current_player()
+                        .get_playing_context(include_songs)
+                    {
+                        state_changes_sender
+                            .send(StateChangeEvent::CurrentPlayingContextEvent(pc))
+                            .unwrap();
+                    }
+                }
+                QueryCurrentPlayerInfo => {
+                    if let Some(pi) = player_service
+                        .lock()
+                        .unwrap()
+                        .get_current_player()
+                        .get_player_info()
+                    {
+                        state_changes_sender
+                            .send(StateChangeEvent::PlayerInfoEvent(pi))
+                            .unwrap();
+                    }
+                }
+                QueryCurrentStreamerState => {
+                    let ss = config_store.lock().unwrap().get_streamer_status();
+                    state_changes_sender
+                        .send(StateChangeEvent::StreamerStateEvent(ss))
+                        .unwrap();
+                }
+                QueryDynamicPlaylists(category_ids, offset, limit) => {
+                    let dynamic_pls = player_service
+                        .lock()
+                        .unwrap()
+                        .get_current_player()
+                        .get_dynamic_playlists(category_ids, offset, limit);
+                    state_changes_sender
+                        .send(StateChangeEvent::DynamicPlaylistsPageEvent(dynamic_pls))
+                        .unwrap();
+                }
+                QueryPlaylistItems(playlist_id) => {
+                    let pl_items = player_service
+                        .lock()
+                        .unwrap()
+                        .get_current_player()
+                        .get_playlist_items(playlist_id);
+                    state_changes_sender
+                        .send(StateChangeEvent::PlaylistItemsEvent(pl_items))
+                        .unwrap();
+                }
+
                 _ => {}
             }
         }
