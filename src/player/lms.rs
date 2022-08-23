@@ -8,9 +8,9 @@ use crate::common::Result;
 use crate::config::Configuration;
 use crate::player::Player;
 use api_models::player::*;
-use api_models::playlist::Playlist;
+use api_models::playlist::{Category, DynamicPlaylistsPage, Playlist};
 use api_models::settings::*;
-use api_models::state::StateChangeEvent;
+use api_models::state::{SongProgress, StateChangeEvent};
 use api_models::state::{PlayerInfo, StateChangeEvent::*};
 
 // https://github.com/elParaguayo/LMS-CLI-Documentation/blob/master/LMS-CLI.md
@@ -137,6 +137,28 @@ impl Player for LMSPlayerClient {
 
     fn rewind(&mut self, _seconds: i8) {}
 
+    fn random_toggle(&mut self) {}
+
+    fn load_playlist(&mut self, _pl_name: String) {
+        todo!()
+    }
+
+    fn load_album(&mut self, album_id: String) {
+        todo!()
+    }
+
+    fn play_item(&mut self, id: String) {
+        todo!()
+    }
+
+    fn remove_playlist_item(&mut self, id: String) {
+        todo!()
+    }
+
+    fn get_song_progress(&mut self) -> SongProgress {
+        todo!()
+    }
+
     fn get_current_song(&mut self) -> Option<Song> {
         let artist = self
             .send_command_with_response("artist ?")
@@ -174,24 +196,6 @@ impl Player for LMSPlayerClient {
         None
     }
 
-    fn random_toggle(&mut self) {}
-
-    fn get_static_playlists(&mut self) -> Vec<Playlist> {
-        todo!()
-    }
-
-    fn load_playlist(&mut self, _pl_name: String) {
-        todo!()
-    }
-
-    fn get_playlist_items(&mut self, _playlist_name: String) -> Vec<Song> {
-        todo!()
-    }
-
-    fn remove_playlist_item(&mut self, id: String) {
-        todo!()
-    }
-
     fn get_playing_context(
         &mut self,
         include_songs: bool,
@@ -199,7 +203,19 @@ impl Player for LMSPlayerClient {
         todo!()
     }
 
-    fn play_item(&mut self, id: String) {
+    fn get_playlist_categories(&mut self) -> Vec<Category> {
+        todo!()
+    }
+
+    fn get_static_playlists(&mut self) -> Vec<Playlist> {
+        todo!()
+    }
+
+    fn get_dynamic_playlists(&mut self, category_ids: Vec<String>, offset: u32, limit: u32) -> Vec<DynamicPlaylistsPage> {
+        todo!()
+    }
+
+    fn get_playlist_items(&mut self, _playlist_name: String) -> Vec<Song> {
         todo!()
     }
 }

@@ -73,55 +73,55 @@ pub async fn handle(
                 }
                 // player commands
                 Play => {
-                    _ = player_service.lock().unwrap().get_current_player().play();
+                    player_service.lock().unwrap().get_current_player().play();
                 }
                 PlayItem(id) => {
-                    _ = player_service
+                    player_service
                         .lock()
                         .unwrap()
                         .get_current_player()
                         .play_item(id);
                 }
                 RemovePlaylistItem(id) => {
-                    _ = player_service
+                    player_service
                         .lock()
                         .unwrap()
                         .get_current_player()
                         .remove_playlist_item(id);
                 }
                 Pause => {
-                    _ = player_service.lock().unwrap().get_current_player().pause();
+                    player_service.lock().unwrap().get_current_player().pause();
                 }
                 Next => {
-                    _ = player_service
+                    player_service
                         .lock()
                         .unwrap()
                         .get_current_player()
                         .next_track();
                 }
                 Prev => {
-                    _ = player_service
+                    player_service
                         .lock()
                         .unwrap()
                         .get_current_player()
                         .prev_track();
                 }
                 Rewind(sec) => {
-                    _ = player_service
+                    player_service
                         .lock()
                         .unwrap()
                         .get_current_player()
                         .rewind(sec);
                 }
                 LoadPlaylist(pl_id) => {
-                    _ = player_service
+                    player_service
                         .lock()
                         .unwrap()
                         .get_current_player()
                         .load_playlist(pl_id);
                 }
                 LoadAlbum(album_id) => {
-                    _ = player_service
+                    player_service
                         .lock()
                         .unwrap()
                         .get_current_player()
@@ -131,16 +131,16 @@ pub async fn handle(
                 // system commands
                 #[cfg(feature = "hw_gpio")]
                 ChangeAudioOutput => {
-                    let nout = if out_sel_pin.get_value().unwrap() == 0 {
-                        _ = out_sel_pin.set_value(1).is_ok();
+                    let out = if out_sel_pin.get_value().unwrap() == 0 {
+                        let _ = out_sel_pin.set_value(1).is_ok();
                         AudioOut::HEAD
                     } else {
-                        _ = out_sel_pin.set_value(0);
+                        let _ = out_sel_pin.set_value(0);
                         AudioOut::SPKR
                     };
-                    let new_sstate = config_store.lock().unwrap().save_audio_output(nout);
+                    let new_state = config_store.lock().unwrap().save_audio_output(out);
                     state_changes_sender
-                        .send(StateChangeEvent::StreamerStateEvent(new_sstate))
+                        .send(StateChangeEvent::StreamerStateEvent(new_state))
                         .unwrap();
                 }
                 PowerOff => {

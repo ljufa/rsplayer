@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use api_models::common::Command;
 use tokio::signal::unix::{Signal, SignalKind};
+use tokio::spawn;
 use tokio::sync::broadcast;
 
 use config::Configuration;
@@ -69,35 +70,33 @@ async fn main() {
     );
 
     tokio::select! {
-        _ = tokio::spawn(control::ir_lirc::listen(input_commands_tx.clone())) => {
+        _ = spawn(control::ir_lirc::listen(input_commands_tx.clone())) => {
             error!("Exit from IR Command thread.");
         }
 
-        _ = tokio::spawn(control::volume_rotary::listen(input_commands_tx.clone())) =>{
+        _ = spawn(control::volume_rotary::listen(input_commands_tx.clone())) =>{
             error!("Exit from Volume control thread.");
         }
 
-        _ = tokio::spawn(monitor::oled::write(state_changes_tx.subscribe(), config.clone())) => {
+        _ = spawn(monitor::oled::write(state_changes_tx.subscribe(), config.clone())) => {
             error!("Exit from OLED writer thread.");
         }
 
-        _ = tokio::spawn(monitor::status::monitor(player_service.clone(),state_changes_tx.clone())) => {
+        _ = spawn(monitor::status::monitor(player_service.clone(),state_changes_tx.clone())) => {
             error!("Exit from status monitor thread.");
         }
 
-        _ = tokio::spawn(command_handler::handle(
-            player_service.clone(),
-            ai_service,
-            config.clone(),
-            input_commands_rx,
-            state_changes_tx.clone(),
-        )) => {
+        _ = spawn(command_handler::handle(
+                player_service.clone(),
+                ai_service,config.clone(),
+                input_commands_rx,
+                state_changes_tx.clone())) => {
             error!("Exit from command handler thread.");
         }
 
-        _ = http_server_future => {}
+        _ = spawn(http_server_future) => {}
 
-        _ = websocket_future => {}
+        _ = spawn(websocket_future) => {}
 
         _ = term_signal.recv() => {
             info!("Terminate signal received.");
@@ -106,7 +105,8 @@ async fn main() {
         _ = tokio::signal::ctrl_c() => {
             info!("CTRL-c signal received.");
         }
-    };
+    }
+    ;
 
     info!("DPlayer shutdown completed.");
 }

@@ -140,7 +140,7 @@ mod hw_oled {
         delay: &mut dyn DelayUs<u32>,
         player_info: PlayerInfo,
     ) {
-        _ = disp.clear_buffer_region(1, 50, 120, 12, delay);
+        let _ = disp.clear_buffer_region(1, 50, 120, 12, delay);
         //1. player name
         Text::new(
             format!(

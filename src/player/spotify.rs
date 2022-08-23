@@ -237,43 +237,6 @@ impl Player for SpotifyPlayerClient {
 
     fn rewind(&mut self, _seconds: i8) {}
 
-    fn get_current_song(&mut self) -> Option<Song> {
-        self.playing_item.clone()
-    }
-
-    fn get_player_info(&mut self) -> Option<PlayerInfo> {
-        if let Ok(Some(playback_ctx)) = self.oauth.client.current_playback(None, None::<&[_]>) {
-            self.update_playing_item(playback_ctx.item);
-            self.update_playing_context(playback_ctx.context);
-            self.progress = playback_ctx.progress;
-            Some(PlayerInfo {
-                random: Some(playback_ctx.shuffle_state),
-                state: if playback_ctx.is_playing {
-                    Some(PlayerState::PLAYING)
-                } else {
-                    Some(PlayerState::PAUSED)
-                },
-                audio_format_rate: Default::default(),
-                audio_format_bit: Default::default(),
-                audio_format_channels: Default::default(),
-            })
-        } else {
-            None
-        }
-    }
-    fn get_song_progress(&mut self) -> SongProgress {
-        let total_time = self
-            .playing_item
-            .as_ref()
-            .map(|p| p.time.unwrap_or_default())
-            .unwrap_or_default();
-        let prog = self.progress.unwrap_or_default();
-        SongProgress {
-            total_time,
-            current_time: prog,
-        }
-    }
-
     fn random_toggle(&mut self) {
         // self.oauth.client.shuffle(state, device_id)
     }
@@ -286,7 +249,6 @@ impl Player for SpotifyPlayerClient {
             None,
         );
     }
-
     fn load_album(&mut self, album_id: String) {
         _ = self.oauth.client.start_context_playback(
             &AlbumId::from_id_or_uri(album_id.as_str()).unwrap(), //todo remove unwrap
@@ -294,40 +256,6 @@ impl Player for SpotifyPlayerClient {
             None,
             None,
         );
-    }
-
-    fn get_playing_context(&mut self, include_songs: bool) -> Option<PlayingContext> {
-        if !include_songs {
-            self.playing_context.as_ref().map(|p| PlayingContext {
-                context_type: p.context_type.clone(),
-                id: p.id.clone(),
-                image_url: p.image_url.clone(),
-                name: p.name.clone(),
-                player_type: p.player_type,
-                playlist_page: None,
-            })
-        } else {
-            self.playing_context.clone()
-        }
-    }
-
-    fn get_playlist_items(&mut self, playlist_id: String) -> Vec<Song> {
-        let items = self.oauth.client.playlist_items_manual(
-            &PlaylistId::from_id_or_uri(&playlist_id).unwrap(),
-            None,
-            None,
-            Some(100),
-            Some(0),
-        );
-        if let Ok(pg) = items {
-            return pg
-                .items
-                .iter()
-                .map(|i| playable_item_to_song(i.track.as_ref()).unwrap())
-                .collect();
-        } else {
-            vec![]
-        }
     }
 
     fn play_item(&mut self, id: String) {
@@ -386,6 +314,86 @@ impl Player for SpotifyPlayerClient {
                 }
                 _ => {}
             });
+    }
+
+    fn get_song_progress(&mut self) -> SongProgress {
+        let total_time = self
+            .playing_item
+            .as_ref()
+            .map(|p| p.time.unwrap_or_default())
+            .unwrap_or_default();
+        let prog = self.progress.unwrap_or_default();
+        SongProgress {
+            total_time,
+            current_time: prog,
+        }
+    }
+
+    fn get_current_song(&mut self) -> Option<Song> {
+        self.playing_item.clone()
+    }
+
+    fn get_player_info(&mut self) -> Option<PlayerInfo> {
+        if let Ok(Some(playback_ctx)) = self.oauth.client.current_playback(None, None::<&[_]>) {
+            self.update_playing_item(playback_ctx.item);
+            self.update_playing_context(playback_ctx.context);
+            self.progress = playback_ctx.progress;
+            Some(PlayerInfo {
+                random: Some(playback_ctx.shuffle_state),
+                state: if playback_ctx.is_playing {
+                    Some(PlayerState::PLAYING)
+                } else {
+                    Some(PlayerState::PAUSED)
+                },
+                audio_format_rate: Default::default(),
+                audio_format_bit: Default::default(),
+                audio_format_channels: Default::default(),
+            })
+        } else {
+            None
+        }
+    }
+
+    fn get_playing_context(&mut self, include_songs: bool) -> Option<PlayingContext> {
+        if !include_songs {
+            self.playing_context.as_ref().map(|p| PlayingContext {
+                context_type: p.context_type.clone(),
+                id: p.id.clone(),
+                image_url: p.image_url.clone(),
+                name: p.name.clone(),
+                player_type: p.player_type,
+                playlist_page: None,
+            })
+        } else {
+            self.playing_context.clone()
+        }
+    }
+
+    fn get_playlist_categories(&mut self) -> Vec<Category> {
+        let categories = self.oauth.client.categories_manual(
+            Some("en_DE"),
+            Some(&Market::FromToken),
+            Some(50),
+            Some(0),
+        );
+
+        if let Ok(categories) = categories {
+            let mut result: Vec<Category> = categories
+                .items
+                .iter()
+                .map(|c| Category {
+                    id: c.id.clone(),
+                    name: c.name.clone(),
+                    icon: c.icons.first().map_or("".to_string(), |i| i.url.clone()),
+                })
+                .collect();
+            result.dedup();
+            result.sort();
+            result
+        } else {
+            error!("Failed to get categories:{}", categories.unwrap_err());
+            vec![]
+        }
     }
 
     fn get_static_playlists(&mut self) -> Playlists {
@@ -473,29 +481,21 @@ impl Player for SpotifyPlayerClient {
         result
     }
 
-    fn get_playlist_categories(&mut self) -> Vec<Category> {
-        let categories = self.oauth.client.categories_manual(
-            Some("en_DE"),
-            Some(&Market::FromToken),
-            Some(50),
+    fn get_playlist_items(&mut self, playlist_id: String) -> Vec<Song> {
+        let items = self.oauth.client.playlist_items_manual(
+            &PlaylistId::from_id_or_uri(&playlist_id).unwrap(),
+            None,
+            None,
+            Some(100),
             Some(0),
         );
-
-        if let Ok(categories) = categories {
-            let mut result: Vec<Category> = categories
+        if let Ok(pg) = items {
+            return pg
                 .items
                 .iter()
-                .map(|c| Category {
-                    id: c.id.clone(),
-                    name: c.name.clone(),
-                    icon: c.icons.first().map_or("".to_string(), |i| i.url.clone()),
-                })
+                .map(|i| playable_item_to_song(i.track.as_ref()).unwrap())
                 .collect();
-            result.dedup();
-            result.sort();
-            result
         } else {
-            error!("Failed to get categories:{}", categories.unwrap_err());
             vec![]
         }
     }

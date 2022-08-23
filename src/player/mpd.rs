@@ -248,6 +248,31 @@ impl Player for MpdPlayerClient {
         Some(pc)
     }
 
+    fn get_playlist_categories(&mut self) -> Vec<Category> {
+        vec![
+            Category {
+                id: CATEGORY_ID_BY_ARTIST.to_string(),
+                name: "By Artist".to_string(),
+                icon: "".to_string(),
+            },
+            Category {
+                id: CATEGORY_ID_BY_DATE.to_string(),
+                name: "By Date".to_string(),
+                icon: "".to_string(),
+            },
+            Category {
+                id: CATEGORY_ID_BY_GENRE.to_string(),
+                name: "By Genre".to_string(),
+                icon: "".to_string(),
+            },
+            Category {
+                id: CATEGORY_ID_BY_FOLDER.to_string(),
+                name: "By Directory".to_string(),
+                icon: "".to_string(),
+            },
+        ]
+    }
+
     fn get_static_playlists(&mut self) -> Playlists {
         // saved pls
         let pls = self
@@ -266,6 +291,50 @@ impl Player for MpdPlayerClient {
             })
             .collect();
         Playlists { items }
+    }
+
+    fn get_dynamic_playlists(
+        &mut self,
+        category_ids: Vec<String>,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<DynamicPlaylistsPage> {
+        if self.all_songs.is_empty() {
+            self.all_songs = get_songs_from_command("listallinfo", self.mpd_server_url.clone());
+        };
+        let mut result = vec![];
+        for category_id in category_ids {
+            result.push(match category_id.as_str() {
+                CATEGORY_ID_BY_ARTIST => DynamicPlaylistsPage {
+                    category_id: CATEGORY_ID_BY_ARTIST.to_string(),
+                    playlists: get_playlists_by_artist(&self.all_songs, offset, limit),
+                    offset,
+                    limit,
+                },
+                CATEGORY_ID_BY_DATE => DynamicPlaylistsPage {
+                    category_id: CATEGORY_ID_BY_DATE.to_string(),
+                    playlists: get_playlists_by_date(&self.all_songs, offset, limit),
+                    offset,
+                    limit,
+                },
+                CATEGORY_ID_BY_GENRE => DynamicPlaylistsPage {
+                    category_id: CATEGORY_ID_BY_GENRE.to_string(),
+                    playlists: get_playlists_by_genre(&self.all_songs, offset, limit),
+                    offset,
+                    limit,
+                },
+                CATEGORY_ID_BY_FOLDER => DynamicPlaylistsPage {
+                    category_id: CATEGORY_ID_BY_FOLDER.to_string(),
+                    playlists: get_playlists_by_folder(&self.all_songs, offset, limit),
+                    offset,
+                    limit,
+                },
+                &_ => {
+                    todo!()
+                }
+            });
+        }
+        result
     }
 
     fn get_playlist_items(&mut self, playlist_id: String) -> Vec<Song> {
@@ -313,75 +382,6 @@ impl Player for MpdPlayerClient {
         } else {
             vec![]
         }
-    }
-
-    fn get_dynamic_playlists(
-        &mut self,
-        category_ids: Vec<String>,
-        offset: u32,
-        limit: u32,
-    ) -> Vec<DynamicPlaylistsPage> {
-        if self.all_songs.is_empty() {
-            self.all_songs = get_songs_from_command("listallinfo", self.mpd_server_url.clone());
-        };
-        let mut result = vec![];
-        for category_id in category_ids {
-            result.push(match category_id.as_str() {
-                CATEGORY_ID_BY_ARTIST => DynamicPlaylistsPage {
-                    category_id: CATEGORY_ID_BY_ARTIST.to_string(),
-                    playlists: get_playlists_by_artist(&self.all_songs, offset, limit),
-                    offset,
-                    limit,
-                },
-                CATEGORY_ID_BY_DATE => DynamicPlaylistsPage {
-                    category_id: CATEGORY_ID_BY_DATE.to_string(),
-                    playlists: get_playlists_by_date(&self.all_songs, offset, limit),
-                    offset,
-                    limit,
-                },
-                CATEGORY_ID_BY_GENRE => DynamicPlaylistsPage {
-                    category_id: CATEGORY_ID_BY_GENRE.to_string(),
-                    playlists: get_playlists_by_genre(&self.all_songs, offset, limit),
-                    offset,
-                    limit,
-                },
-                CATEGORY_ID_BY_FOLDER => DynamicPlaylistsPage {
-                    category_id: CATEGORY_ID_BY_FOLDER.to_string(),
-                    playlists: get_playlists_by_folder(&self.all_songs, offset, limit),
-                    offset,
-                    limit,
-                },
-                &_ => {
-                    todo!()
-                }
-            });
-        }
-        result
-    }
-
-    fn get_playlist_categories(&mut self) -> Vec<Category> {
-        vec![
-            Category {
-                id: CATEGORY_ID_BY_ARTIST.to_string(),
-                name: "By Artist".to_string(),
-                icon: "".to_string(),
-            },
-            Category {
-                id: CATEGORY_ID_BY_DATE.to_string(),
-                name: "By Date".to_string(),
-                icon: "".to_string(),
-            },
-            Category {
-                id: CATEGORY_ID_BY_GENRE.to_string(),
-                name: "By Genre".to_string(),
-                icon: "".to_string(),
-            },
-            Category {
-                id: CATEGORY_ID_BY_FOLDER.to_string(),
-                name: "By Directory".to_string(),
-                icon: "".to_string(),
-            },
-        ]
     }
 }
 
