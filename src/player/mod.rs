@@ -22,6 +22,8 @@ pub trait Player {
     fn random_toggle(&mut self);
     fn load_playlist(&mut self, pl_id: String);
     fn load_album(&mut self, album_id: String);
+    fn load_song(&mut self, song_id: String);
+    fn add_song_to_queue(&mut self, song_id: String);
     fn play_item(&mut self, id: String);
     fn remove_playlist_item(&mut self, id: String);
     fn get_song_progress(&mut self) -> SongProgress;

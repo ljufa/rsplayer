@@ -127,6 +127,12 @@ pub async fn handle(
                         .get_current_player()
                         .load_album(album_id);
                 }
+                LoadSong(song_id) => {
+                    
+                }
+                AddSongToQueue(song_id) => {
+
+                }
 
                 // system commands
                 #[cfg(feature = "hw_gpio")]

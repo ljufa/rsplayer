@@ -83,6 +83,13 @@ impl Song {
         }
         return result;
     }
+    pub fn get_identifier(&self) -> String {
+        if !self.id.is_empty() {
+            self.id.clone()
+        } else {
+            self.file.clone()
+        }
+    }
 
     pub fn all_text(&self) -> String {
         let mut result = String::new();

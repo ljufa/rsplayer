@@ -495,6 +495,14 @@ impl Player for SpotifyPlayerClient {
             vec![]
         }
     }
+
+    fn load_song(&mut self, song_id: String) {
+        todo!()
+    }
+
+    fn add_song_to_queue(&mut self, song_id: String) {
+        todo!()
+    }
 }
 
 fn simplified_playlist_to_playlist_type(

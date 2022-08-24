@@ -30,6 +30,8 @@ pub enum Command {
     Rewind(i8),
     LoadPlaylist(String),
     LoadAlbum(String),
+    LoadSong(String),
+    AddSongToQueue(String),
     QueryCurrentSong,
     QueryCurrentPlayerInfo,
     QueryCurrentStreamerState,

@@ -410,6 +410,15 @@ impl Player for MpdPlayerClient {
             vec![]
         }
     }
+
+    fn load_song(&mut self, song_id: String) {
+        self.mpd_client.clear();
+    }
+
+    fn add_song_to_queue(&mut self, song_id: String) {
+        todo!()
+
+    }
 }
 
 fn get_playlists_by_genre(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Vec<Playlist> {
@@ -585,10 +594,7 @@ fn create_client(mpd_settings: &MpdSettings) -> Result<Client> {
     }
 }
 
-fn get_songs_from_command(command: &str, mpd_server_url: String) -> Vec<Song> {
-    let mut full_cmd = String::new();
-    full_cmd.push_str(command);
-    full_cmd.push('\n');
+fn create_socket_client(mpd_server_url: String) -> TcpStream {
     let mut client = TcpStream::connect_timeout(
         &SocketAddr::from_str(mpd_server_url.as_str()).unwrap(),
         Duration::from_secs(2),
@@ -602,80 +608,86 @@ fn get_songs_from_command(command: &str, mpd_server_url: String) -> Vec<Song> {
     client
         .set_write_timeout(Some(Duration::from_secs(1)))
         .expect("Failed to set write timeout");
-
+    client
+}
+fn get_songs_from_command(command: &str, mpd_server_url: String) -> Vec<Song> {
+    let mut full_cmd = String::new();
+    full_cmd.push_str(command);
+    full_cmd.push('\n');
+    let mut client = create_socket_client(mpd_server_url);
     client
         .write_all(full_cmd.as_bytes())
         .expect("Can't write to socket");
 
-    let mut conn = BufReader::new(&mut client);
+    let mut reader = BufReader::new(&mut client);
 
-    let mut file_buffer = String::new();
+    let mut read_buffer = String::new();
     // skip header lines
-    conn.read_line(&mut file_buffer).unwrap_or_default();
+    reader.read_line(&mut read_buffer).unwrap_or_default();
     for _ in 1..15 {
-        file_buffer.clear();
-        conn.read_line(&mut file_buffer).unwrap_or_default();
-        if file_buffer.starts_with("file") {
+        read_buffer.clear();
+        reader.read_line(&mut read_buffer).unwrap_or_default();
+        if read_buffer.starts_with("file") {
             break;
         }
     }
     let mut result = Vec::<Song>::new();
     loop {
-        if file_buffer.starts_with("file:") {
-            let mut p = Song {
-                file: to_opt_string(file_buffer.split_once(':').unwrap_or_default().1)
+        if read_buffer.starts_with("file:") {
+            let mut song = Song {
+                file: to_opt_string(read_buffer.split_once(':').unwrap_or_default().1)
                     .unwrap_or_default(),
                 ..Default::default()
             };
             'song: loop {
-                let mut song_buf = String::new();
-                conn.read_line(&mut song_buf).unwrap_or_default();
+                let mut song_buffer = String::new();
+                reader.read_line(&mut song_buffer).unwrap_or_default();
 
                 // end of response
-                if song_buf == "OK\n" {
-                    file_buffer.clear();
+                if song_buffer == "OK\n" {
+                    read_buffer.clear();
                     break 'song;
                 }
-                if !song_buf.contains(':') {
+                if !song_buffer.contains(':') {
                     continue;
                 }
 
-                let pair = song_buf.split_once(':').unwrap_or_default();
+                let pair = song_buffer.split_once(':').unwrap_or_default();
                 let key = pair.0;
                 let value = pair.1;
                 match key {
-                    "Artist" => p.artist = to_opt_string(value),
-                    "Title" => p.title = to_opt_string(value),
-                    "Genre" => p.genre = to_opt_string(value),
-                    "Album" => p.album = to_opt_string(value),
-                    "Date" => p.date = to_opt_string(value),
-                    "Track" => p.track = to_opt_string(value),
+                    "Artist" => song.artist = to_opt_string(value),
+                    "Title" => song.title = to_opt_string(value),
+                    "Genre" => song.genre = to_opt_string(value),
+                    "Album" => song.album = to_opt_string(value),
+                    "Date" => song.date = to_opt_string(value),
+                    "Track" => song.track = to_opt_string(value),
                     "Time" => {
-                        p.time = to_opt_string(value)
+                        song.time = to_opt_string(value)
                             .map(|f| Duration::from_secs(f.parse::<u64>().unwrap()))
                     }
-                    "Id" => p.id = value.trim().to_string(),
-                    "Last-Modified" => p.last_modified = to_opt_string(value),
-                    "Performer" => p.performer = to_opt_string(value),
-                    "Composer" => p.composer = to_opt_string(value),
-                    "AlbumArtist" => p.album_artist = to_opt_string(value),
-                    "Disc" => p.disc = to_opt_string(value),
-                    "Label" => p.label = to_opt_string(value),
+                    "Id" => song.id = value.trim().to_string(),
+                    "Last-Modified" => song.last_modified = to_opt_string(value),
+                    "Performer" => song.performer = to_opt_string(value),
+                    "Composer" => song.composer = to_opt_string(value),
+                    "AlbumArtist" => song.album_artist = to_opt_string(value),
+                    "Disc" => song.disc = to_opt_string(value),
+                    "Label" => song.label = to_opt_string(value),
                     "Range" | "Pos" | "duration" => {}
                     "file" => {
-                        file_buffer = song_buf;
+                        read_buffer = song_buffer;
                         break 'song;
                     }
                     &_ => {
-                        trace!("Unmatched:|{}|", song_buf);
-                        p.tags.insert(
+                        trace!("Unmatched:|{}|", song_buffer);
+                        song.tags.insert(
                             String::from_str(key).unwrap(),
                             to_opt_string(value).unwrap(),
                         );
                     }
                 }
             }
-            result.push(p);
+            result.push(song);
         } else {
             break;
         }
