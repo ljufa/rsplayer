@@ -48,9 +48,9 @@ pub struct Playlists {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct PlaylistPage {
-    pub total: u32,
-    pub offset: u32,
-    pub limit: u32,
+    pub total: usize,
+    pub offset: usize,
+    pub limit: usize,
     pub items: Vec<Song>,
 }
 

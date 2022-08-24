@@ -1,6 +1,6 @@
 use api_models::player::*;
 use api_models::playlist::{Category, DynamicPlaylistsPage, Playlists};
-use api_models::state::{PlayerInfo, PlayingContext, SongProgress};
+use api_models::state::{PlayerInfo, PlayingContext, PlayingContextQuery, SongProgress};
 
 #[cfg(feature = "backend_lms")]
 pub(crate) mod lms;
@@ -27,7 +27,7 @@ pub trait Player {
     fn get_song_progress(&mut self) -> SongProgress;
     fn get_current_song(&mut self) -> Option<Song>;
     fn get_player_info(&mut self) -> Option<PlayerInfo>;
-    fn get_playing_context(&mut self, include_songs: bool) -> Option<PlayingContext>;
+    fn get_playing_context(&mut self, query: PlayingContextQuery) -> Option<PlayingContext>;
     fn get_playlist_categories(&mut self) -> Vec<Category>;
     fn get_static_playlists(&mut self) -> Playlists;
     fn get_dynamic_playlists(

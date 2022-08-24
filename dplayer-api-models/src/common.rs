@@ -2,6 +2,7 @@ use std::{time::Duration, fmt::Display};
 
 use num_derive::{FromPrimitive, ToPrimitive};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
+use crate::state::PlayingContextQuery;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Volume {
@@ -32,9 +33,10 @@ pub enum Command {
     QueryCurrentSong,
     QueryCurrentPlayerInfo,
     QueryCurrentStreamerState,
-    QueryCurrentPlayingContext{include_songs: bool},
+    QueryCurrentPlayingContext(PlayingContextQuery),
     QueryDynamicPlaylists(Vec<String>, u32, u32),
     QueryPlaylistItems(String),
+    
 }
 
 #[derive(

@@ -1,8 +1,7 @@
 use std::borrow::BorrowMut;
-use std::collections::{hash_set, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -11,7 +10,9 @@ use api_models::playlist::{
     Category, DynamicPlaylistsPage, Playlist, PlaylistPage, PlaylistType, Playlists,
 };
 use api_models::settings::*;
-use api_models::state::{PlayerInfo, PlayerState, PlayingContext, SongProgress};
+use api_models::state::{
+    PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, SongProgress,
+};
 use mpd::{Client, Query, Song as MpdSong};
 use num_traits::ToPrimitive;
 
@@ -29,6 +30,7 @@ const CATEGORY_ID_BY_GENRE: &str = "mpd_category_by_genre";
 const CATEGORY_ID_BY_DATE: &str = "mpd_category_by_date";
 const CATEGORY_ID_BY_ARTIST: &str = "mpd_category_by_artist";
 const CATEGORY_ID_BY_FOLDER: &str = "mpd_category_by_folder";
+const PAGE_SIZE: usize = 80;
 
 pub struct MpdPlayerClient {
     mpd_client: Client,
@@ -145,7 +147,6 @@ impl Player for MpdPlayerClient {
             self.all_songs
                 .iter()
                 .filter(|s| s.file.starts_with(pl_id.as_str()))
-                .take(500)
                 .for_each(|s| {
                     let _ = self
                         .mpd_client
@@ -218,8 +219,8 @@ impl Player for MpdPlayerClient {
         }
     }
 
-    fn get_playing_context(&mut self, include_songs: bool) -> Option<PlayingContext> {
-        let pc = PlayingContext {
+    fn get_playing_context(&mut self, query: PlayingContextQuery) -> Option<PlayingContext> {
+        let mut pc = PlayingContext {
             id: "1".to_string(),
             name: "Queue".to_string(),
             player_type: api_models::common::PlayerType::MPD,
@@ -228,23 +229,49 @@ impl Player for MpdPlayerClient {
                 public: None,
                 snapshot_id: "1".to_string(),
             },
-            playlist_page: if include_songs {
-                let songs: Vec<Song> =
-                    get_songs_from_command("playlistinfo", self.mpd_server_url.clone())
-                        .into_iter()
-                        .take(150)
-                        .collect();
-                Some(PlaylistPage {
-                    total: songs.len().to_u32().unwrap_or_default(),
-                    offset: 0,
-                    limit: 150,
-                    items: songs,
-                })
-            } else {
-                None
-            },
+            playlist_page: None,
             image_url: None,
         };
+        match query {
+            PlayingContextQuery::WithSearchTerm(term, offset) => {
+                let mut songs = get_songs_from_command("playlistinfo", self.mpd_server_url.clone());
+                if term.len() > 3 {
+                    songs = songs
+                        .into_iter()
+                        .filter(|s| s.all_text().to_lowercase().contains(&term.to_lowercase()))
+                        .collect();
+                }
+                let page = PlaylistPage {
+                    total: songs.len(),
+                    offset,
+                    limit: PAGE_SIZE,
+                    items: songs
+                        .into_iter()
+                        .skip(offset.to_usize().unwrap_or_default())
+                        .take(PAGE_SIZE.to_usize().unwrap_or_default())
+                        .collect(),
+                };
+                pc.playlist_page = Some(page);
+            }
+            PlayingContextQuery::CurrentSongPage => {
+                let mut songs = get_songs_from_command("playlistinfo", self.mpd_server_url.clone());
+                if let Some(cs) = &self.get_current_song() {
+                    songs = songs
+                        .into_iter()
+                        .skip_while(|s| s.id != cs.id)
+                        .take(PAGE_SIZE)
+                        .collect();
+                }
+                let page = PlaylistPage {
+                    total: songs.len(),
+                    offset: 0,
+                    limit: PAGE_SIZE,
+                    items: songs,
+                };
+                pc.playlist_page = Some(page);
+            }
+            PlayingContextQuery::IgnoreSongs => {}
+        }
         Some(pc)
     }
 

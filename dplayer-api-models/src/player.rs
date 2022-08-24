@@ -1,9 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
-
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub struct Song {
-
     pub id: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -67,9 +65,8 @@ impl Song {
         if let Some(title) = self.title.as_ref() {
             result.push_str(title.as_str());
         }
-        if result.is_empty() {
-            result.push_str(self.file.as_str());
-        }
+        result.push_str(self.file.as_str());
+
         if !result.is_empty() {
             Some(result)
         } else {
@@ -123,8 +120,5 @@ impl Song {
         }
 
         return result;
-        
-        
     }
-
 }

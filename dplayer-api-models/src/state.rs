@@ -1,10 +1,12 @@
-use crate::{common::PlayerType, player::Song, playlist::{PlaylistPage, DynamicPlaylistsPage}};
 use core::default::Default;
 use core::option::Option;
 use core::option::Option::None;
 use core::time::Duration;
+
 use num_derive::{FromPrimitive, ToPrimitive};
 use strum_macros::EnumProperty;
+
+use crate::{common::PlayerType, player::Song, playlist::{DynamicPlaylistsPage, PlaylistPage}};
 
 // todo move somewhere else
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -19,16 +21,17 @@ pub enum PlayingContextType {
         artists: Vec<String>,
         release_date: String,
         label: Option<String>,
-        genres: Vec<String>
+        genres: Vec<String>,
     },
     Artist {
         genres: Vec<String>,
         popularity: u32,
         followers: u32,
-        description: Option<String>
+        description: Option<String>,
     },
     Unknown,
 }
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, Deserialize)]
 pub struct PlayingContext {
     pub id: String,
@@ -41,6 +44,12 @@ pub struct PlayingContext {
     pub image_url: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, Deserialize)]
+pub enum PlayingContextQuery {
+    WithSearchTerm(String, usize),
+    CurrentSongPage,
+    IgnoreSongs
+}
 // end todo
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -84,10 +93,11 @@ pub enum StateChangeEvent {
 pub struct VolumeState {
     pub volume: i64,
 }
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct SongProgress {
-    pub total_time: Duration, 
-    pub current_time: Duration
+    pub total_time: Duration,
+    pub current_time: Duration,
 }
 
 impl Default for VolumeState {
@@ -104,7 +114,7 @@ pub enum PlayerState {
 }
 
 #[derive(
-    Debug, Eq, PartialEq, Clone, Hash, Copy, FromPrimitive, ToPrimitive, Serialize, Deserialize,
+Debug, Eq, PartialEq, Clone, Hash, Copy, FromPrimitive, ToPrimitive, Serialize, Deserialize,
 )]
 pub enum AudioOut {
     SPKR,
@@ -122,6 +132,7 @@ impl Default for PlayerInfo {
         }
     }
 }
+
 impl SongProgress {
     pub fn format_time(&self) -> String {
         return format!(
@@ -130,7 +141,6 @@ impl SongProgress {
             crate::common::dur_to_string(&self.total_time)
         );
     }
-    
 }
 
 impl Default for StreamerState {

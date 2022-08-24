@@ -168,12 +168,12 @@ pub async fn handle(
                             .unwrap();
                     }
                 }
-                QueryCurrentPlayingContext { include_songs } => {
+                QueryCurrentPlayingContext(query) => {
                     if let Some(pc) = player_service
                         .lock()
                         .unwrap()
                         .get_current_player()
-                        .get_playing_context(include_songs)
+                        .get_playing_context(query)
                     {
                         state_changes_sender
                             .send(StateChangeEvent::CurrentPlayingContextEvent(pc))
@@ -218,6 +218,7 @@ pub async fn handle(
                         .send(StateChangeEvent::PlaylistItemsEvent(pl_items))
                         .unwrap();
                 }
+                
 
                 _ => {}
             }

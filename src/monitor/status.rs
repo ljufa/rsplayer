@@ -1,4 +1,3 @@
-use crate::common::ArcAudioInterfaceSvc;
 use crate::common::MutArcPlayerService;
 
 use api_models::state::SongProgress;
@@ -59,7 +58,7 @@ pub async fn monitor(player_svc: MutArcPlayerService, state_changes_tx: Sender<S
             .lock()
             .unwrap()
             .get_current_player()
-            .get_playing_context(false);
+            .get_playing_context(api_models::state::PlayingContextQuery::IgnoreSongs);
         if last_playing_context != new_playing_context {
             if let Some(new_pc) = new_playing_context.as_ref() {
                 let _ = state_changes_tx

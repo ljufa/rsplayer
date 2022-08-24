@@ -8,7 +8,7 @@ use api_models::playlist::{
 };
 use api_models::settings::*;
 use api_models::state::{
-    PlayerInfo, PlayerState, PlayingContext, PlayingContextType, SongProgress,
+    PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, PlayingContextType, SongProgress,
 };
 use failure::err_msg;
 use log::info;
@@ -354,19 +354,15 @@ impl Player for SpotifyPlayerClient {
         }
     }
 
-    fn get_playing_context(&mut self, include_songs: bool) -> Option<PlayingContext> {
-        if !include_songs {
-            self.playing_context.as_ref().map(|p| PlayingContext {
-                context_type: p.context_type.clone(),
-                id: p.id.clone(),
-                image_url: p.image_url.clone(),
-                name: p.name.clone(),
-                player_type: p.player_type,
-                playlist_page: None,
-            })
-        } else {
-            self.playing_context.clone()
-        }
+    fn get_playing_context(&mut self, query: PlayingContextQuery) -> Option<PlayingContext> {
+        self.playing_context.as_ref().map(|p| PlayingContext {
+            context_type: p.context_type.clone(),
+            id: p.id.clone(),
+            image_url: p.image_url.clone(),
+            name: p.name.clone(),
+            player_type: p.player_type,
+            playlist_page: None,
+        })
     }
 
     fn get_playlist_categories(&mut self) -> Vec<Category> {
@@ -545,9 +541,9 @@ fn playlist_tracks_to_tracks(
         .map_while(|tr| playable_item_to_song(tr.track.as_ref()))
         .collect();
     PlaylistPage {
-        total: tracks.total,
-        offset: tracks.offset,
-        limit: tracks.limit,
+        total: tracks.total.to_usize().unwrap_or_default(),
+        offset: tracks.offset.to_usize().unwrap_or_default(),
+        limit: tracks.limit.to_usize().unwrap_or_default(),
         items,
     }
 }
@@ -557,17 +553,17 @@ fn album_tracks_to_tracks(
 ) -> PlaylistPage {
     let items = tracks.items.iter().map(simple_track_to_song).collect();
     PlaylistPage {
-        total: tracks.total,
-        offset: tracks.offset,
-        limit: tracks.limit,
+        total: tracks.total.to_usize().unwrap_or_default(),
+        offset: tracks.offset.to_usize().unwrap_or_default(),
+        limit: tracks.limit.to_usize().unwrap_or_default(),
         items,
     }
 }
 fn author_tracks_to_tracks(tracks: &Vec<FullTrack>) -> PlaylistPage {
     let items = tracks.iter().map(full_track_to_song).collect();
     PlaylistPage {
-        total: tracks.len().to_u32().unwrap_or_default(),
-        offset: 0u32,
+        total: tracks.len(),
+        offset: 0,
         limit: 100,
         items,
     }
