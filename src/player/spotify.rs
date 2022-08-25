@@ -15,7 +15,7 @@ use log::info;
 use num_traits::ToPrimitive;
 use rspotify::clients::{BaseClient, OAuthClient};
 use rspotify::model::{
-    AlbumId, ArtistId, Country, FullTrack, Id, Market, Offset, PlayableId, PlayableItem,
+    AlbumId, ArtistId, FullTrack, Id, Market, Offset, PlayableId, PlayableItem,
     PlaylistId, SimplifiedAlbum, SimplifiedTrack, TrackId, Type,
 };
 
@@ -230,7 +230,7 @@ impl Player for SpotifyPlayerClient {
     fn shutdown(&mut self) {
         info!("Shutting down Spotify player!");
         if self.device_id.is_some() {
-            _ = self.stop();
+            self.stop();
         }
         _ = self.librespot_process.as_mut().unwrap().kill();
     }
@@ -354,7 +354,7 @@ impl Player for SpotifyPlayerClient {
         }
     }
 
-    fn get_playing_context(&mut self, query: PlayingContextQuery) -> Option<PlayingContext> {
+    fn get_playing_context(&mut self, _query: PlayingContextQuery) -> Option<PlayingContext> {
         self.playing_context.as_ref().map(|p| PlayingContext {
             context_type: p.context_type.clone(),
             id: p.id.clone(),
@@ -496,11 +496,11 @@ impl Player for SpotifyPlayerClient {
         }
     }
 
-    fn load_song(&mut self, song_id: String) {
+    fn load_song(&mut self, _song_id: String) {
         todo!()
     }
 
-    fn add_song_to_queue(&mut self, song_id: String) {
+    fn add_song_to_queue(&mut self, _song_id: String) {
         todo!()
     }
 }

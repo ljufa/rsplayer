@@ -32,7 +32,7 @@ impl PlayerService {
 
     #[allow(unreachable_patterns)]
     fn create_player(settings: &Settings) -> Result<Box<dyn Player + Send>> {
-        return match &settings.active_player {
+        match &settings.active_player {
             PlayerType::SPF => {
                 let mut sp = SpotifyPlayerClient::new(settings.spotify_settings.clone())?;
                 sp.start_device()?;
@@ -45,6 +45,6 @@ impl PlayerService {
             #[cfg(feature = "backend_lms")]
             PlayerType::LMS => Ok(Box::new(LMSPlayerClient::new(&settings.lms_settings)?)),
             _ => panic!("Unknown type"),
-        };
+        }
     }
 }

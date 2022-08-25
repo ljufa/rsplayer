@@ -96,7 +96,7 @@ impl Player for MpdPlayerClient {
 
     fn shutdown(&mut self) {
         info!("Shutting down MPD player!");
-        let _ = self.stop();
+        self.stop();
         let _ = self.mpd_client.close();
         info!("MPD player shutdown finished!");
     }
@@ -149,7 +149,7 @@ impl Player for MpdPlayerClient {
                 .iter()
                 .filter(|s| {
                     s.file
-                        .split("/")
+                        .split('/')
                         .nth(1)
                         .unwrap_or_default()
                         .starts_with(pl_id.as_str())
@@ -313,7 +313,7 @@ impl Player for MpdPlayerClient {
         let pls = self
             .try_with_reconnect_result(|client| client.playlists())
             .unwrap_or_default();
-        let mut items: Vec<PlaylistType> = pls
+        let items: Vec<PlaylistType> = pls
             .iter()
             .map(|p| {
                 PlaylistType::Saved(Playlist {
@@ -410,7 +410,7 @@ impl Player for MpdPlayerClient {
             let pl_name = playlist_id.replace(BY_FOLDER_PL_PREFIX, "");
             self.all_songs
                 .iter()
-                .filter(|s| s.file.split("/").nth(1).map_or(false, |d| *d == pl_name))
+                .filter(|s| s.file.split('/').nth(1).map_or(false, |d| *d == pl_name))
                 .take(100)
                 .cloned()
                 .collect()
@@ -419,11 +419,11 @@ impl Player for MpdPlayerClient {
         }
     }
 
-    fn load_song(&mut self, song_id: String) {
+    fn load_song(&mut self, _song_id: String) {
         self.mpd_client.clear();
     }
 
-    fn add_song_to_queue(&mut self, song_id: String) {
+    fn add_song_to_queue(&mut self, _song_id: String) {
         todo!()
     }
 }
@@ -432,8 +432,7 @@ fn get_playlists_by_genre(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Vec
     let mut items = vec![];
     let mut genres: Vec<String> = all_songs
         .iter()
-        .filter(|s| s.genre.is_some())
-        .map(|s| s.genre.clone().unwrap())
+        .filter_map(|s| s.genre.clone())
         .filter(|g| g.starts_with(char::is_alphabetic))
         .collect();
     genres.sort();
@@ -459,8 +458,7 @@ fn get_playlists_by_date(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Vec<
     let mut items = vec![];
     let mut dates: Vec<String> = all_songs
         .iter()
-        .filter(|s| s.date.is_some())
-        .map(|s| s.date.clone().unwrap())
+        .filter_map(|s| s.date.clone())
         .collect();
     dates.sort();
     dates.dedup();
@@ -485,8 +483,7 @@ fn get_playlists_by_artist(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Ve
     let mut items = vec![];
     let mut artists: Vec<String> = all_songs
         .iter()
-        .filter(|s| s.artist.is_some())
-        .map(|s| s.artist.clone().unwrap())
+        .filter_map(|s| s.artist.clone())
         .filter(|art| art.starts_with(char::is_alphabetic))
         .collect();
     artists.sort();
@@ -509,10 +506,10 @@ fn get_playlists_by_artist(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Ve
 
 fn get_playlists_by_folder(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Vec<Playlist> {
     let mut items = vec![];
-    let mut second_level_folders: HashSet<String> = all_songs
+    let second_level_folders: HashSet<String> = all_songs
         .iter()
         .map(|s| s.file.clone())
-        .map(|file| file.split("/").nth(1).unwrap_or_default().to_string())
+        .map(|file| file.split('/').nth(1).unwrap_or_default().to_string())
         .collect();
     second_level_folders
         .iter()
@@ -602,7 +599,7 @@ fn create_client(mpd_settings: &MpdSettings) -> Result<Client> {
 }
 
 fn create_socket_client(mpd_server_url: String) -> TcpStream {
-    let mut client = TcpStream::connect_timeout(
+    let client = TcpStream::connect_timeout(
         &SocketAddr::from_str(mpd_server_url.as_str()).unwrap(),
         Duration::from_secs(2),
     )

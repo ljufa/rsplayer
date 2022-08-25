@@ -1,4 +1,4 @@
-use std::time::Duration;
+
 
 use api_models::common::Command;
 use api_models::common::Command::*;
@@ -126,8 +126,8 @@ pub async fn handle(
                         .get_current_player()
                         .load_album(album_id);
                 }
-                LoadSong(song_id) => {}
-                AddSongToQueue(song_id) => {}
+                LoadSong(_song_id) => {}
+                AddSongToQueue(_song_id) => {}
 
                 // system commands
                 #[cfg(feature = "hw_gpio")]
