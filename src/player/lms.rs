@@ -10,8 +10,8 @@ use crate::player::Player;
 use api_models::player::*;
 use api_models::playlist::{Category, DynamicPlaylistsPage, Playlist};
 use api_models::settings::*;
-use api_models::state::{SongProgress, StateChangeEvent};
 use api_models::state::{PlayerInfo, StateChangeEvent::*};
+use api_models::state::{SongProgress, StateChangeEvent};
 
 // https://github.com/elParaguayo/LMS-CLI-Documentation/blob/master/LMS-CLI.md
 
@@ -211,7 +211,12 @@ impl Player for LMSPlayerClient {
         todo!()
     }
 
-    fn get_dynamic_playlists(&mut self, category_ids: Vec<String>, offset: u32, limit: u32) -> Vec<DynamicPlaylistsPage> {
+    fn get_dynamic_playlists(
+        &mut self,
+        category_ids: Vec<String>,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<DynamicPlaylistsPage> {
         todo!()
     }
 

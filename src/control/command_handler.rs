@@ -40,8 +40,7 @@ pub async fn handle(
     }}
 
     loop {
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        if let Ok(cmd) = input_commands_rx.try_recv() {
+        if let Some(cmd) = input_commands_rx.recv().await {
             trace!("Received command {:?}", cmd);
             match cmd {
                 SetVol(val) => {
@@ -127,12 +126,8 @@ pub async fn handle(
                         .get_current_player()
                         .load_album(album_id);
                 }
-                LoadSong(song_id) => {
-                    
-                }
-                AddSongToQueue(song_id) => {
-
-                }
+                LoadSong(song_id) => {}
+                AddSongToQueue(song_id) => {}
 
                 // system commands
                 #[cfg(feature = "hw_gpio")]
@@ -224,7 +219,6 @@ pub async fn handle(
                         .send(StateChangeEvent::PlaylistItemsEvent(pl_items))
                         .unwrap();
                 }
-                
 
                 _ => {}
             }

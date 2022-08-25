@@ -121,7 +121,7 @@ pub fn start(
 
     let ws_handle = async move {
         loop {
-            match state_changes_rx.try_recv() {
+            match state_changes_rx.recv().await {
                 Err(_e) => {
                     sleep(Duration::from_millis(100)).await;
                     continue;
@@ -377,10 +377,12 @@ mod handlers {
 }
 
 async fn notify_users(users_to_notify: &Users, status_change_event: StateChangeEvent) {
-    let json_msg = serde_json::to_string(&status_change_event).unwrap();
-    if !json_msg.is_empty() {
-        for (&_uid, tx) in users_to_notify.read().await.iter() {
-            _ = tx.send(Ok(Message::text(json_msg.clone())));
+    if !users_to_notify.read().await.is_empty() {
+        let json_msg = serde_json::to_string(&status_change_event).unwrap();
+        if !json_msg.is_empty() {
+            for (&_uid, tx) in users_to_notify.read().await.iter() {
+                _ = tx.send(Ok(Message::text(json_msg.clone())));
+            }
         }
     }
 }

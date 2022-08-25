@@ -1,12 +1,8 @@
-use std::sync::Arc;
 
 use api_models::common::PlayerType;
 use api_models::settings::Settings;
 
-use crate::{
-    audio_device::audio_service::AudioInterfaceService,
-    common::{MutArcConfiguration, Result},
-};
+use crate::common::{MutArcConfiguration, Result};
 
 #[cfg(feature = "backend_lms")]
 use super::lms::LMSPlayerClient;

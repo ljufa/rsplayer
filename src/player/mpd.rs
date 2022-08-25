@@ -32,6 +32,7 @@ const CATEGORY_ID_BY_ARTIST: &str = "mpd_category_by_artist";
 const CATEGORY_ID_BY_FOLDER: &str = "mpd_category_by_folder";
 const PAGE_SIZE: usize = 80;
 
+#[derive(Debug)]
 pub struct MpdPlayerClient {
     mpd_client: Client,
     mpd_server_url: String,
@@ -146,7 +147,13 @@ impl Player for MpdPlayerClient {
             let _ = self.mpd_client.clear();
             self.all_songs
                 .iter()
-                .filter(|s| s.file.starts_with(pl_id.as_str()))
+                .filter(|s| {
+                    s.file
+                        .split("/")
+                        .nth(1)
+                        .unwrap_or_default()
+                        .starts_with(pl_id.as_str())
+                })
                 .for_each(|s| {
                     let _ = self
                         .mpd_client
@@ -219,6 +226,7 @@ impl Player for MpdPlayerClient {
         }
     }
 
+    #[tracing::instrument]
     fn get_playing_context(&mut self, query: PlayingContextQuery) -> Option<PlayingContext> {
         let mut pc = PlayingContext {
             id: "1".to_string(),
@@ -402,7 +410,7 @@ impl Player for MpdPlayerClient {
             let pl_name = playlist_id.replace(BY_FOLDER_PL_PREFIX, "");
             self.all_songs
                 .iter()
-                .filter(|s| s.file.split("/").nth(0).map_or(false, |d| *d == pl_name))
+                .filter(|s| s.file.split("/").nth(1).map_or(false, |d| *d == pl_name))
                 .take(100)
                 .cloned()
                 .collect()
@@ -417,7 +425,6 @@ impl Player for MpdPlayerClient {
 
     fn add_song_to_queue(&mut self, song_id: String) {
         todo!()
-
     }
 }
 
@@ -505,7 +512,7 @@ fn get_playlists_by_folder(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Ve
     let mut second_level_folders: HashSet<String> = all_songs
         .iter()
         .map(|s| s.file.clone())
-        .map(|file| file.split("/").nth(0).unwrap_or_default().to_string())
+        .map(|file| file.split("/").nth(1).unwrap_or_default().to_string())
         .collect();
     second_level_folders
         .iter()
@@ -623,11 +630,10 @@ fn get_songs_from_command(command: &str, mpd_server_url: String) -> Vec<Song> {
 
     let mut read_buffer = String::new();
     // skip header lines
-    reader.read_line(&mut read_buffer).unwrap_or_default();
     for _ in 1..15 {
         read_buffer.clear();
-        reader.read_line(&mut read_buffer).unwrap_or_default();
-        if read_buffer.starts_with("file") {
+        let res = reader.read_line(&mut read_buffer).unwrap_or_default();
+        if res < 5 || read_buffer.starts_with("file") {
             break;
         }
     }

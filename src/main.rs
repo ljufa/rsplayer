@@ -5,6 +5,7 @@ extern crate serde_derive;
 
 use std::panic;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use api_models::common::Command;
 use tokio::signal::unix::{Signal, SignalKind};
@@ -29,6 +30,10 @@ mod player;
 #[tokio::main]
 async fn main() {
     env_logger::init();
+    console_subscriber::ConsoleLayer::builder()
+        .retention(Duration::from_secs(60))
+        .server_addr(([0, 0, 0, 0], 6669))
+        .init();
 
     info!("Starting Dplayer!");
 
@@ -96,7 +101,9 @@ async fn main() {
 
         _ = spawn(http_server_future) => {}
 
-        _ = spawn(websocket_future) => {}
+        _ = spawn(websocket_future) => {
+            error!("Exit from websocket thread.");
+        }
 
         _ = term_signal.recv() => {
             info!("Terminate signal received.");
@@ -105,8 +112,7 @@ async fn main() {
         _ = tokio::signal::ctrl_c() => {
             info!("CTRL-c signal received.");
         }
-    }
-    ;
+    };
 
     info!("DPlayer shutdown completed.");
 }

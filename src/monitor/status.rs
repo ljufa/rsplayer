@@ -18,11 +18,9 @@ pub async fn monitor(player_svc: MutArcPlayerService, state_changes_tx: Sender<S
     loop {
         tokio::time::sleep(Duration::from_millis(1000)).await;
         // check track info change
-        let new_track_info = player_svc
-            .lock()
-            .unwrap()
-            .get_current_player()
-            .get_current_song();
+        let mut player = player_svc.lock().unwrap();
+        let player = player.get_current_player();
+        let new_track_info = player.get_current_song();
         if last_track_info != new_track_info {
             if let Some(new) = new_track_info.as_ref() {
                 let _ = state_changes_tx.send(StateChangeEvent::CurrentSongEvent(new.clone()));
@@ -30,11 +28,7 @@ pub async fn monitor(player_svc: MutArcPlayerService, state_changes_tx: Sender<S
             last_track_info = new_track_info;
         }
         // check player info change
-        let new_player_info = player_svc
-            .lock()
-            .unwrap()
-            .get_current_player()
-            .get_player_info();
+        let new_player_info = player.get_player_info();
         if last_player_info != new_player_info {
             if let Some(new_p_info) = new_player_info.as_ref() {
                 let _ =
@@ -43,22 +37,15 @@ pub async fn monitor(player_svc: MutArcPlayerService, state_changes_tx: Sender<S
             last_player_info = new_player_info;
         }
         // check progres info change
-        let new_progress = player_svc
-            .lock()
-            .unwrap()
-            .get_current_player()
-            .get_song_progress();
+        let new_progress = player.get_song_progress();
         if last_progress != new_progress {
             let _ = state_changes_tx.send(StateChangeEvent::SongTimeEvent(new_progress.clone()));
             last_progress = new_progress;
         }
 
         // check playing context change
-        let new_playing_context = player_svc
-            .lock()
-            .unwrap()
-            .get_current_player()
-            .get_playing_context(api_models::state::PlayingContextQuery::IgnoreSongs);
+        let new_playing_context =
+            player.get_playing_context(api_models::state::PlayingContextQuery::IgnoreSongs);
         if last_playing_context != new_playing_context {
             if let Some(new_pc) = new_playing_context.as_ref() {
                 let _ = state_changes_tx
