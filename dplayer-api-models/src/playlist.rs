@@ -100,8 +100,8 @@ impl PlaylistType {
     }
 }
 impl Category {
-    pub fn sanitized_name(&self) -> String {
-        self.name.replace(
+    pub fn sanitized_id(&self) -> String {
+        self.id.replace(
             &['(', ' ', '/', ')', '+', '&', ',', '\"', '.', ';', ':', '\''][..],
             "",
         )

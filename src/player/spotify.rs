@@ -15,8 +15,8 @@ use log::info;
 use num_traits::ToPrimitive;
 use rspotify::clients::{BaseClient, OAuthClient};
 use rspotify::model::{
-    AlbumId, ArtistId, FullTrack, Id, Market, Offset, PlayableId, PlayableItem,
-    PlaylistId, SimplifiedAlbum, SimplifiedTrack, TrackId, Type,
+    AlbumId, ArtistId, FullTrack, Id, Market, Offset, PlayableId, PlayableItem, PlaylistId,
+    SimplifiedAlbum, SimplifiedTrack, TrackId, Type,
 };
 
 use crate::common::Result;
@@ -208,7 +208,7 @@ impl Player for SpotifyPlayerClient {
             .resume_playback(self.device_id.as_deref(), None);
         if play.is_err() {
             _ = self.transfer_playback_to_device();
-            self.oauth
+            _ = self.oauth
                 .client
                 .resume_playback(self.device_id.as_deref(), None);
         }
@@ -354,14 +354,30 @@ impl Player for SpotifyPlayerClient {
         }
     }
 
-    fn get_playing_context(&mut self, _query: PlayingContextQuery) -> Option<PlayingContext> {
-        self.playing_context.as_ref().map(|p| PlayingContext {
-            context_type: p.context_type.clone(),
-            id: p.id.clone(),
-            image_url: p.image_url.clone(),
-            name: p.name.clone(),
-            player_type: p.player_type,
-            playlist_page: None,
+    fn get_playing_context(&mut self, query: PlayingContextQuery) -> Option<PlayingContext> {
+        self.playing_context.as_ref().map(|context| PlayingContext {
+            context_type: context.context_type.clone(),
+            id: context.id.clone(),
+            image_url: context.image_url.clone(),
+            name: context.name.clone(),
+            player_type: context.player_type,
+            playlist_page: match query {
+                PlayingContextQuery::WithSearchTerm(term, offset) => {
+                    context.playlist_page.as_ref().map(|pp| PlaylistPage {
+                        total: 0,
+                        offset,
+                        limit: 0,
+                        items: pp
+                            .items
+                            .iter()
+                            .filter(|s| s.all_text().to_lowercase().contains(&term.to_lowercase()))
+                            .cloned()
+                            .collect(),
+                    })
+                }
+                PlayingContextQuery::CurrentSongPage => todo!(),
+                PlayingContextQuery::IgnoreSongs => None,
+            },
         })
     }
 

@@ -1,4 +1,3 @@
-
 use api_models::common::PlayerType;
 use api_models::settings::Settings;
 

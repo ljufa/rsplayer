@@ -1,5 +1,3 @@
-
-
 use api_models::common::Command;
 use api_models::common::Command::*;
 use api_models::state::StateChangeEvent;

@@ -420,7 +420,7 @@ impl Player for MpdPlayerClient {
     }
 
     fn load_song(&mut self, _song_id: String) {
-        self.mpd_client.clear();
+        _ = self.mpd_client.clear();
     }
 
     fn add_song_to_queue(&mut self, _song_id: String) {
@@ -456,10 +456,7 @@ fn get_playlists_by_genre(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Vec
 fn get_playlists_by_date(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Vec<Playlist> {
     // dynamic pls
     let mut items = vec![];
-    let mut dates: Vec<String> = all_songs
-        .iter()
-        .filter_map(|s| s.date.clone())
-        .collect();
+    let mut dates: Vec<String> = all_songs.iter().filter_map(|s| s.date.clone()).collect();
     dates.sort();
     dates.dedup();
     dates.reverse();
