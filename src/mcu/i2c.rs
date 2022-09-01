@@ -1,18 +1,19 @@
 use rpi_embedded::i2c::I2c;
 
+use crate::common::Result;
+
 pub struct I2CHelper {
     i2c: I2c,
 }
 
 impl I2CHelper {
-    pub fn new(address: u16) -> Self {
-        let mut i2c = I2c::new().expect("i2c failed in initialization");
-        i2c.set_slave_address(address)
-            .expect("slave address failed");
-        Self { i2c }
+    pub fn new(address: u16) -> Result<Self> {
+        let mut i2c = I2c::new()?;
+        i2c.set_slave_address(address)?;
+        Ok(Self { i2c })
     }
 
-    pub(crate) fn read_register(&self, reg_addr: u8) -> Result<u8, failure::Error> {
+    pub(crate) fn read_register(&self, reg_addr: u8) -> Result<u8> {
         let mut out = [0u8];
         match self.i2c.cmd_read(reg_addr, &mut out) {
             Ok(_) => Ok(out[0]),

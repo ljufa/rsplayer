@@ -2,9 +2,6 @@ use api_models::player::*;
 use api_models::playlist::{Category, DynamicPlaylistsPage, Playlists};
 use api_models::state::{PlayerInfo, PlayingContext, PlayingContextQuery, SongProgress};
 
-#[cfg(feature = "backend_lms")]
-pub(crate) mod lms;
-#[cfg(feature = "backend_mpd")]
 pub(crate) mod mpd;
 
 pub(crate) mod player_service;

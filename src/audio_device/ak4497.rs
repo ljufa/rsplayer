@@ -71,7 +71,7 @@ impl VolumeControlDevice for DacAk4497 {
 impl DacAk4497 {
     pub fn new(dac_state: VolumeState, settings: &DacSettings) -> Result<Box<Self>> {
         let dac = Self {
-            i2c_helper: I2CHelper::new(settings.i2c_address),
+            i2c_helper: I2CHelper::new(settings.i2c_address)?,
             volume_step: settings.volume_step,
         };
         dac.initialize(dac_state, settings)?;
@@ -119,29 +119,29 @@ impl DacAk4497 {
     pub fn change_sound_setting(&self, setting_no: u8) -> Result<u8> {
         match setting_no {
             1 => {
-                self.i2c_helper.change_bit(8, 1, false);
                 self.i2c_helper.change_bit(8, 0, false);
+                self.i2c_helper.change_bit(8, 1, false);
                 self.i2c_helper.change_bit(8, 2, false);
             }
             2 => {
-                self.i2c_helper.change_bit(8, 1, false);
                 self.i2c_helper.change_bit(8, 0, true);
+                self.i2c_helper.change_bit(8, 1, false);
                 self.i2c_helper.change_bit(8, 2, false);
             }
             3 => {
-                self.i2c_helper.change_bit(8, 1, true);
                 self.i2c_helper.change_bit(8, 0, false);
+                self.i2c_helper.change_bit(8, 1, true);
                 self.i2c_helper.change_bit(8, 2, false);
             }
             4 => {
-                self.i2c_helper.change_bit(8, 1, true);
                 self.i2c_helper.change_bit(8, 0, true);
+                self.i2c_helper.change_bit(8, 1, true);
                 self.i2c_helper.change_bit(8, 2, false);
             }
             5 => {
-                self.i2c_helper.change_bit(8, 2, true);
                 self.i2c_helper.change_bit(8, 0, false);
                 self.i2c_helper.change_bit(8, 1, false);
+                self.i2c_helper.change_bit(8, 2, true);
             }
             _ => return Err(failure::format_err!("Unknown setting no {}", setting_no)),
         }

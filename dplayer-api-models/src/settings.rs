@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
-use crate::common::{PlayerType, FilterType, GainLevel};
+use crate::common::{FilterType, GainLevel, PlayerType, VolumeCrtlType};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
+    pub volume_ctrl_settings: VolumeControlSettings,
+    pub output_selector_settings: OutputSelectorSettings,
     pub spotify_settings: SpotifySettings,
     pub lms_settings: LmsSettings,
     pub mpd_settings: MpdSettings,
@@ -11,7 +13,20 @@ pub struct Settings {
     pub alsa_settings: AlsaSettings,
     pub ir_control_settings: IRInputControlerSettings,
     pub oled_settings: OLEDSettings,
-    pub active_player: PlayerType
+    pub active_player: PlayerType,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OutputSelectorSettings {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VolumeControlSettings {
+    pub volume_step: u8,
+    pub ctrl_device: VolumeCrtlType,
+    pub rotary_enabled: bool,
+    pub rotary_event_device_path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,7 +58,6 @@ pub struct MpdSettings {
     pub server_port: u32,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AlsaSettings {
     pub device_name: String,
@@ -69,11 +83,14 @@ pub struct DacSettings {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IRInputControlerSettings {
     pub enabled: bool,
+    pub remote_maker: String,
     pub input_socket_path: String,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OLEDSettings {
     pub enabled: bool,
+    pub display_model: String,
+    pub spi_device_path: String,
 }
 
 impl LmsSettings {
@@ -91,6 +108,13 @@ impl Default for Settings {
         let default_alsa_pcm_device = "hw:1";
         Settings {
             active_player: PlayerType::MPD,
+            output_selector_settings: OutputSelectorSettings { enabled: true },
+            volume_ctrl_settings: VolumeControlSettings {
+                volume_step: 2,
+                ctrl_device: VolumeCrtlType::Dac,
+                rotary_enabled: true,
+                rotary_event_device_path: "/dev/input/by-path/platform-rotary@f-event".to_string(),
+            },
             spotify_settings: SpotifySettings {
                 enabled: false,
                 device_name: String::from("dplayer@rpi"),
@@ -117,7 +141,7 @@ impl Default for Settings {
                 filter: FilterType::SharpRollOff,
                 gain: GainLevel::V375,
                 heavy_load: false,
-                sound_sett: 4,
+                sound_sett: 5,
                 available_dac_chips: HashMap::new(),
             },
             mpd_settings: MpdSettings {
@@ -132,9 +156,14 @@ impl Default for Settings {
             },
             ir_control_settings: IRInputControlerSettings {
                 enabled: true,
+                remote_maker: "dplay2".to_string(),
                 input_socket_path: String::from("/var/run/lirc/lircd"),
             },
-            oled_settings: OLEDSettings { enabled: false },
+            oled_settings: OLEDSettings {
+                enabled: false,
+                display_model: "ST7920 - 128x64".to_string(),
+                spi_device_path: "/dev/spidev0.0".to_string(),
+            },
         }
     }
 }

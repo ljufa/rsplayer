@@ -4,6 +4,10 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 use crate::state::PlayingContextQuery;
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VolumeCrtlType {
+    Dac, Alsa
+}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Volume {
     pub step: i64,

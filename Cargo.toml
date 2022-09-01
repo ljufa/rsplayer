@@ -4,19 +4,6 @@ version = "0.2.0"
 authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
 edition = "2021"
 
-[features]
-hw_gpio =  ["gpio-cdev","rpi_embedded","linux-embedded-hal", "embedded-hal"]
-
-hw_oled = ["hw_gpio", "embedded-graphics"]
-hw_dac = ["hw_gpio"]
-hw_ir_control = []
-hw_volume_control = ["evdev/tokio"]
-
-backend_mpd = ["mpd"]
-backend_lms = []
-
-
-default = ["backend_mpd"]
 
 [dependencies]
 api_models = { path = "dplayer-api-models" }
@@ -27,7 +14,7 @@ env_logger = "0.9.0"
 cfg-if = "1.0.0"
 
 #warp
-tokio = { version = "1.17.0", features = ["full","tracing"] }
+tokio = { version = "1.17.0", features = ["full", "tracing"] }
 warp = "0.3.2"
 futures = { version = "0.3.21", default-features = false }
 tokio-stream = "0.1.8"
@@ -42,7 +29,7 @@ serde_json = "1.0"
 serde_derive = "1.0"
 
 #mpd
-mpd = { version = "0.0.12", optional = true }
+mpd = { version = "0.0.12" }
 
 #other
 failure = "0.1.7"
@@ -55,16 +42,16 @@ pickledb = "0.5.1"
 log4rs = "1.0.0"
 
 #gpio, i2c
-gpio-cdev = {optional = true, version="0.5.1"}
-rpi_embedded = {optional = true, version="0.1.0"}
-linux-embedded-hal = {optional = true, version="0.3.0"}
-embedded-hal = {optional = true, version="0.2.4"}
-evdev = {optional=true, version = "0.11.4"}
+gpio-cdev = { version = "0.5.1" }
+rpi_embedded = { version = "0.1.0" }
+linux-embedded-hal = { version = "0.3.0" }
+embedded-hal = { version = "0.2.4" }
+evdev = { version = "0.11.4", features = ["tokio"]}
 
 
 #oled
-embedded-graphics = {optional=true, version = "0.7.1" }
-# st7920 = { optional = true, version = "0.2.2" }
+embedded-graphics = { version = "0.7.1" }
+# st7920 = {  version = "0.2.2" }
 
 # spotify
 [dependencies.rspotify]

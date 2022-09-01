@@ -208,7 +208,8 @@ impl Player for SpotifyPlayerClient {
             .resume_playback(self.device_id.as_deref(), None);
         if play.is_err() {
             _ = self.transfer_playback_to_device();
-            _ = self.oauth
+            _ = self
+                .oauth
                 .client
                 .resume_playback(self.device_id.as_deref(), None);
         }

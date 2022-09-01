@@ -21,7 +21,7 @@ pub type ArcAudioInterfaceSvc = Arc<AudioInterfaceService>;
 #[allow(dead_code)]
 pub async fn no_op_future() {
     loop {
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_secs(50)).await;
     }
 }
 

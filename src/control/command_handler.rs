@@ -1,18 +1,10 @@
 use api_models::common::Command;
 use api_models::common::Command::*;
 use api_models::state::StateChangeEvent;
-use cfg_if::cfg_if;
 
 use tokio::sync::broadcast::Sender;
 
 use crate::common::{ArcAudioInterfaceSvc, MutArcConfiguration, MutArcPlayerService};
-
-cfg_if! {
-if #[cfg(feature = "hw_gpio")] {
-    use crate::mcu::gpio;
-    use crate::mcu::gpio::GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY;
-    use api_models::state::AudioOut;
-}}
 
 pub async fn handle(
     player_service: MutArcPlayerService,
@@ -21,22 +13,6 @@ pub async fn handle(
     mut input_commands_rx: tokio::sync::mpsc::Receiver<Command>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) {
-    //fixme : move to separate struct restore selected output
-    cfg_if! {
-    if #[cfg(feature = "hw_gpio")] {
-        let out_sel_pin = gpio::get_output_pin_handle(GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY);
-        let _ = match config_store
-        .lock()
-        .unwrap()
-        .get_streamer_status()
-        .selected_audio_output
-    {
-        AudioOut::SPKR => out_sel_pin.set_value(0),
-        AudioOut::HEAD => out_sel_pin.set_value(1),
-    };
-
-    }}
-
     loop {
         if let Some(cmd) = input_commands_rx.recv().await {
             trace!("Received command {:?}", cmd);
@@ -128,19 +104,13 @@ pub async fn handle(
                 AddSongToQueue(_song_id) => {}
 
                 // system commands
-                #[cfg(feature = "hw_gpio")]
                 ChangeAudioOutput => {
-                    let out = if out_sel_pin.get_value().unwrap() == 0 {
-                        let _ = out_sel_pin.set_value(1).is_ok();
-                        AudioOut::HEAD
-                    } else {
-                        let _ = out_sel_pin.set_value(0);
-                        AudioOut::SPKR
+                    if let Some(out) = ai_service.toggle_output() {
+                        let new_state = config_store.lock().unwrap().save_audio_output(out);
+                        state_changes_sender
+                            .send(StateChangeEvent::StreamerStateEvent(new_state))
+                            .unwrap();
                     };
-                    let new_state = config_store.lock().unwrap().save_audio_output(out);
-                    state_changes_sender
-                        .send(StateChangeEvent::StreamerStateEvent(new_state))
-                        .unwrap();
                 }
                 PowerOff => {
                     std::process::Command::new("/sbin/poweroff")

@@ -1,26 +1,27 @@
 use api_models::state::StateChangeEvent;
-use cfg_if::cfg_if;
 use tokio::sync::broadcast::Receiver;
 
 use crate::common::MutArcConfiguration;
 
-// todo implement settings.is_enabled check
 pub async fn write(state_changes_rx: Receiver<StateChangeEvent>, config: MutArcConfiguration) {
-    cfg_if! {
-        if #[cfg(feature="hw_oled")] {
-            hw_oled::write(state_changes_rx, config).await;
-        } else{
-            crate::common::logging_receiver_future(state_changes_rx).await;
-        }
+    let settings = config.lock().expect("Unable to lock config").get_settings();
+    if settings.oled_settings.enabled {
+        hw_oled::write(
+            state_changes_rx,
+            settings.oled_settings,
+            settings.active_player,
+        )
+        .await;
+    } else {
+        crate::common::logging_receiver_future(state_changes_rx).await;
     }
 }
 
-#[cfg(feature = "hw_oled")]
 mod hw_oled {
     use super::*;
-    use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
     use crate::monitor::myst7920::ST7920;
-    use api_models::{common::PlayerType, player::Song, state::PlayerInfo};
+    use crate::{common, mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST};
+    use api_models::{common::PlayerType, player::Song, settings::OLEDSettings, state::PlayerInfo};
     use embedded_graphics::{
         mono_font::{ascii::FONT_4X6, ascii::FONT_5X8, ascii::FONT_6X12, MonoTextStyle},
         pixelcolor::BinaryColor,
@@ -39,42 +40,45 @@ mod hw_oled {
 
     pub async fn write(
         mut state_changes_rx: Receiver<StateChangeEvent>,
-        config: MutArcConfiguration,
+        oled_settings: OLEDSettings,
+        active_player: PlayerType,
     ) {
-        info!("Start OLED writer thread.");
         let mut delay = Delay;
-        let mut spi = Spidev::open("/dev/spidev0.0").expect("error initializing SPI");
-        let options = SpidevOptions::new()
-            .bits_per_word(8)
-            .max_speed_hz(800000)
-            .mode(SpiModeFlags::SPI_CS_HIGH)
-            .build();
-        spi.configure(&options).expect("error configuring SPI");
-        let rst_pin = Pin::new(GPIO_PIN_OUTPUT_LCD_RST);
-        rst_pin.export().unwrap();
-        rst_pin
-            .set_direction(Direction::Out)
-            .expect("LCD Reset pin problem");
-        let mut disp = ST7920::<Spidev, Pin, Pin>::new(spi, rst_pin, None, false);
-        disp.init(&mut delay).expect("could not init display");
-        disp.clear(&mut delay).expect("could not clear display");
-        let settings = config.lock().unwrap().get_settings();
-        let active_player = settings.active_player;
-        loop {
-            let cmd_ev = state_changes_rx.recv().await;
-            trace!("Command event received: {:?}", cmd_ev);
-            match cmd_ev {
-                Ok(StateChangeEvent::CurrentSongEvent(stat)) => {
-                    draw_track_info(&mut disp, &mut delay, stat);
+        if let Ok(mut spi) = Spidev::open(oled_settings.spi_device_path) {
+            info!("Start OLED writer thread.");
+            let options = SpidevOptions::new()
+                .bits_per_word(8)
+                .max_speed_hz(800000)
+                .mode(SpiModeFlags::SPI_CS_HIGH)
+                .build();
+            spi.configure(&options).expect("error configuring SPI");
+            let rst_pin = Pin::new(GPIO_PIN_OUTPUT_LCD_RST);
+            rst_pin.export().unwrap();
+            rst_pin
+                .set_direction(Direction::Out)
+                .expect("LCD Reset pin problem");
+            let mut disp = ST7920::<Spidev, Pin, Pin>::new(spi, rst_pin, None, false);
+            disp.init(&mut delay).expect("could not init display");
+            disp.clear(&mut delay).expect("could not clear display");
+            loop {
+                let cmd_ev = state_changes_rx.recv().await;
+                trace!("Command event received: {:?}", cmd_ev);
+                match cmd_ev {
+                    Ok(StateChangeEvent::CurrentSongEvent(stat)) => {
+                        draw_track_info(&mut disp, &mut delay, stat);
+                    }
+                    Ok(StateChangeEvent::StreamerStateEvent(sstatus)) => {
+                        draw_streamer_info(&mut disp, &mut delay, sstatus, active_player);
+                    }
+                    Ok(StateChangeEvent::PlayerInfoEvent(pinfo)) => {
+                        draw_player_info(&mut disp, &mut delay, pinfo);
+                    }
+                    _ => {}
                 }
-                Ok(StateChangeEvent::StreamerStateEvent(sstatus)) => {
-                    draw_streamer_info(&mut disp, &mut delay, sstatus, active_player);
-                }
-                Ok(StateChangeEvent::PlayerInfoEvent(pinfo)) => {
-                    draw_player_info(&mut disp, &mut delay, pinfo);
-                }
-                _ => {}
             }
+        } else {
+            error!("Failed to configure OLED display");
+            common::no_op_future().await;
         }
     }
 

@@ -1,19 +1,12 @@
 use api_models::common::PlayerType;
 use api_models::settings::Settings;
 
-use crate::common::{MutArcConfiguration, Result};
-
-#[cfg(feature = "backend_lms")]
-use super::lms::LMSPlayerClient;
-
-#[cfg(feature = "backend_mpd")]
 use super::mpd::MpdPlayerClient;
-
 use super::{spotify::SpotifyPlayerClient, Player};
+use crate::common::{MutArcConfiguration, Result};
 
 pub struct PlayerService {
     player: Box<dyn Player + Send>,
-    settings: Settings,
 }
 
 impl PlayerService {
@@ -21,7 +14,6 @@ impl PlayerService {
         let settings = config.lock().unwrap().get_settings();
         Ok(PlayerService {
             player: Self::create_player(&settings)?,
-            settings,
         })
     }
 
@@ -39,10 +31,7 @@ impl PlayerService {
                 sp.play();
                 Ok(Box::new(sp))
             }
-            #[cfg(feature = "backend_mpd")]
             PlayerType::MPD => Ok(Box::new(MpdPlayerClient::new(&settings.mpd_settings)?)),
-            #[cfg(feature = "backend_lms")]
-            PlayerType::LMS => Ok(Box::new(LMSPlayerClient::new(&settings.lms_settings)?)),
             _ => panic!("Unknown type"),
         }
     }

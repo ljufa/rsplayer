@@ -1,33 +1,19 @@
+use std::io;
+use std::str;
+
 use api_models::common::Command;
-use cfg_if::cfg_if;
+
+use tokio::net::UnixStream;
 use tokio::sync::mpsc::Sender;
 
-// todo implement settings.is_enabled check
-pub async fn listen(input_commands_tx: Sender<Command>) {
-    cfg_if! {
-        if #[cfg(feature="hw_ir_control")] {
-            hw_ir::listen(input_commands_tx).await;
-        } else if #[cfg(not(feature="hw_ir_control"))] {
-            crate::common::no_op_future().await;
-        }
-    }
-}
+use crate::common::MutArcConfiguration;
 
-#[cfg(feature = "hw_ir_control")]
-mod hw_ir {
-    use std::io;
-    use std::str;
+pub async fn listen(input_commands_tx: Sender<Command>, config: MutArcConfiguration) {
+    let ir_settings = config.lock().unwrap().get_settings().ir_control_settings;
+    let maker = &ir_settings.remote_maker;
 
-    use api_models::common::Command;
-
-    use tokio::net::UnixStream;
-    use tokio::sync::mpsc::Sender;
-    const REMOTE_MAKER: &str = "dplay2";
-
-    pub async fn listen(input_commands_tx: Sender<Command>) {
+    if let Ok(stream) = UnixStream::connect(&ir_settings.input_socket_path).await {
         info!("Start IR Control thread.");
-        let stream = UnixStream::connect("/var/run/lirc/lircd").await.unwrap();
-
         loop {
             trace!("Loop cycle");
             _ = stream.readable().await;
@@ -37,7 +23,7 @@ mod hw_ir {
                     debug!("Read {} bytes from socket", n);
                     let result = str::from_utf8(&bytes).unwrap();
                     debug!("Remote maker is {:?}", result);
-                    let remote_maker = result.find(REMOTE_MAKER);
+                    let remote_maker = result.find(maker);
                     if remote_maker.is_none() || result.len() < 18 {
                         continue;
                     }
@@ -137,5 +123,8 @@ mod hw_ir {
                 }
             }
         }
+    } else {
+        error!("Failed to open provided lirc socket");
+        crate::common::no_op_future().await;
     }
 }

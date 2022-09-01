@@ -75,11 +75,11 @@ async fn main() {
     );
 
     tokio::select! {
-        _ = spawn(control::ir_lirc::listen(input_commands_tx.clone())) => {
+        _ = spawn(control::ir_lirc::listen(input_commands_tx.clone(), config.clone())) => {
             error!("Exit from IR Command thread.");
         }
 
-        _ = spawn(control::volume_rotary::listen(input_commands_tx.clone())) =>{
+        _ = spawn(control::volume_rotary::listen(input_commands_tx.clone(), config.clone())) => {
             error!("Exit from Volume control thread.");
         }
 
@@ -87,7 +87,7 @@ async fn main() {
             error!("Exit from OLED writer thread.");
         }
 
-        _ = spawn(monitor::status::monitor(player_service.clone(),state_changes_tx.clone())) => {
+        _ = spawn(monitor::status::monitor(player_service.clone(), state_changes_tx.clone())) => {
             error!("Exit from status monitor thread.");
         }
 
