@@ -17,11 +17,11 @@ build_librespot:
 
 release:
 	cargo fmt
-	cross build --target $(TARGET) --release --features backend_mpd,hw_dac,hw_ir_control,hw_oled,hw_volume_control
+	cross build --target $(TARGET) --release 
 
 debug:
 	cargo fmt
-	cross build --target $(TARGET) --features backend_mpd,backend_lms,hw_dac,hw_ir_control,hw_oled
+	cross build --target $(TARGET)
 
 copytorpi: $(OUT)
 	rsync -avvP --rsync-path="sudo rsync" target/$(TARGET)/$(OUT)/$(RELEASE) pi@$(RPI_HOST):~
