@@ -62,21 +62,19 @@ impl SpotifyOauth {
         Ok(())
     }
 
-    pub fn get_account_info(&mut self) -> SpotifyAccountInfo {
+    pub fn get_account_info(&mut self) -> Option<SpotifyAccountInfo> {
         if self.is_token_present().map_or(false, |r| r) {
             if let Ok(me) = self.client.me() {
-                return SpotifyAccountInfo {
+                return Some(SpotifyAccountInfo {
                     display_name: me.display_name,
                     email: me.email,
                     image_url: me
                         .images
                         .and_then(|imgs| imgs.first().map(|i| i.url.clone())),
-                };
-            } else {
-                return SpotifyAccountInfo::default();
+                });
             }
         }
-        SpotifyAccountInfo::default()
+        None
     }
 }
 

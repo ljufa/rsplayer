@@ -1,12 +1,12 @@
 [package]
-name = "dplay"
+name = "rsplayer"
 version = "0.2.0"
 authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
 edition = "2021"
 
 
 [dependencies]
-api_models = { path = "dplayer-api-models" }
+api_models = { path = "api-models" }
 
 #logging
 log = "0.4"

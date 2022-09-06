@@ -156,6 +156,7 @@ impl VolumeControlDevice for AlsaMixer {
 #[cfg(test)]
 mod test {
     use alsa::{
+        card,
         mixer::{Selem, SelemChannelId, SelemId},
         Mixer,
     };
@@ -164,8 +165,6 @@ mod test {
 
     #[test]
     fn print_mixer_of_cards() {
-        use super::card;
-
         for card in card::Iter::new().map(|c| c.unwrap()) {
             println!(
                 "Card #{}: {} ({})",

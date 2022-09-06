@@ -421,7 +421,7 @@ impl Player for SpotifyPlayerClient {
             );
             let mut items = featured
                 .map(|r| simplified_playlist_to_playlist_type(&r))
-                .unwrap();
+                .unwrap_or_default();
 
             // get new releases
             let new_releases =

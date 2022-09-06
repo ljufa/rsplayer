@@ -35,7 +35,7 @@ async fn main() {
         .server_addr(([0, 0, 0, 0], 6669))
         .init();
 
-    info!("Starting Dplayer!");
+    info!("Starting RSPlayer!");
 
     let config = Arc::new(Mutex::new(Configuration::new()));
 
@@ -114,7 +114,7 @@ async fn main() {
         }
     };
 
-    info!("DPlayer shutdown completed.");
+    info!("RSPlayer shutdown completed.");
 }
 
 async fn start_degraded(term_signal: &mut Signal, config: Arc<Mutex<Configuration>>) {

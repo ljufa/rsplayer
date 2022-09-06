@@ -4,7 +4,6 @@ use futures::StreamExt;
 
 use crate::config::Configuration;
 use crate::player::player_service::PlayerService;
-use crate::player::spotify_oauth::SpotifyOauth;
 
 use api_models::common::Command;
 use api_models::state::StateChangeEvent;
@@ -37,14 +36,9 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
 type Config = Arc<Mutex<Configuration>>;
 type PlayerServiceArc = Arc<Mutex<PlayerService>>;
-type SpotifyOauthArc = Arc<Mutex<SpotifyOauth>>;
 type SyncSender = tokio::sync::mpsc::Sender<Command>;
 
 pub fn start_degraded(config: Config) -> impl Future<Output = ()> {
-    let spotify_oauth = Arc::new(Mutex::new(SpotifyOauth::new(
-        config.lock().unwrap().get_settings().spotify_settings,
-    )));
-
     let cors = warp::cors()
         .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
         .allow_any_origin();
@@ -54,16 +48,10 @@ pub fn start_degraded(config: Config) -> impl Future<Output = ()> {
     let routes = filters::settings_save(config.clone())
         .or(filters::settings_save(config.clone()))
         .or(filters::get_settings(config))
-        .or(filters::get_spotify_authorization_url(
-            spotify_oauth.clone(),
-        ))
-        .or(filters::is_spotify_authorization_completed(
-            spotify_oauth.clone(),
-        ))
-        .or(filters::spotify_authorization_callback(
-            spotify_oauth.clone(),
-        ))
-        .or(filters::get_spotify_account_info(spotify_oauth))
+        .or(filters::get_spotify_authorization_url())
+        .or(filters::is_spotify_authorization_completed())
+        .or(filters::spotify_authorization_callback())
+        .or(filters::get_spotify_account_info())
         .or(ui_static_content)
         .with(cors);
     warp::serve(routes).run(([0, 0, 0, 0], 8000))
@@ -75,10 +63,6 @@ pub fn start(
     config: Config,
     player_service: PlayerServiceArc,
 ) -> (impl Future<Output = ()>, impl Future<Output = ()>) {
-    let spotify_oauth = Arc::new(Mutex::new(SpotifyOauth::new(
-        config.lock().unwrap().get_settings().spotify_settings,
-    )));
-
     // Keep track of all connected users, key is usize, value
     // is a websocket sender.
     let users = Users::default();
@@ -106,16 +90,10 @@ pub fn start(
         .or(filters::get_static_playlists(player_service.clone()))
         .or(filters::get_playlist_items(player_service.clone()))
         .or(filters::get_playlist_categories(player_service))
-        .or(filters::get_spotify_authorization_url(
-            spotify_oauth.clone(),
-        ))
-        .or(filters::is_spotify_authorization_completed(
-            spotify_oauth.clone(),
-        ))
-        .or(filters::spotify_authorization_callback(
-            spotify_oauth.clone(),
-        ))
-        .or(filters::get_spotify_account_info(spotify_oauth))
+        .or(filters::get_spotify_authorization_url())
+        .or(filters::is_spotify_authorization_completed())
+        .or(filters::spotify_authorization_callback())
+        .or(filters::get_spotify_account_info())
         .or(ui_static_content)
         .with(cors);
 
@@ -142,7 +120,7 @@ mod filters {
     use api_models::settings::Settings;
     use warp::Filter;
 
-    use super::{handlers, Config, PlayerServiceArc, SpotifyOauthArc};
+    use super::{handlers, Config, PlayerServiceArc};
 
     pub fn settings_save(
         config: Config,
@@ -151,6 +129,7 @@ mod filters {
             .and(warp::path!("api" / "settings"))
             .and(json_body())
             .and(with_config(config))
+            .and(warp::query())
             .and_then(handlers::save_settings)
     }
     pub fn get_settings(
@@ -188,36 +167,28 @@ mod filters {
             .and_then(handlers::get_playlist_items)
     }
     pub fn get_spotify_authorization_url(
-        spotify_oauth: SpotifyOauthArc,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "spotify" / "get-url"))
-            .and(with_spotify_oauth(spotify_oauth))
             .and_then(handlers::get_spotify_authorization_url)
     }
     pub fn is_spotify_authorization_completed(
-        spotify_oauth: SpotifyOauthArc,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "spotify" / "is-authorized"))
-            .and(with_spotify_oauth(spotify_oauth))
             .and_then(handlers::is_spotify_authorization_completed)
     }
     pub fn spotify_authorization_callback(
-        spotify_oauth: SpotifyOauthArc,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "spotify" / "callback"))
             .and(warp::query::<HashMap<String, String>>())
-            .and(with_spotify_oauth(spotify_oauth))
             .and_then(handlers::spotify_authorization_callback)
     }
     pub fn get_spotify_account_info(
-        spotify_oauth: SpotifyOauthArc,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "spotify" / "me"))
-            .and(with_spotify_oauth(spotify_oauth))
             .and_then(handlers::get_spotify_account_info)
     }
 
@@ -233,12 +204,6 @@ mod filters {
         warp::any().map(move || player_svc.clone())
     }
 
-    fn with_spotify_oauth(
-        spotify_oauth: SpotifyOauthArc,
-    ) -> impl Filter<Extract = (SpotifyOauthArc,), Error = std::convert::Infallible> + Clone {
-        warp::any().map(move || spotify_oauth.clone())
-    }
-
     fn json_body() -> impl Filter<Extract = (Settings,), Error = warp::Rejection> + Clone {
         // When accepting a body, we want a JSON body
         // (and to reject huge payloads)...
@@ -249,7 +214,9 @@ mod filters {
 mod handlers {
     use std::{collections::HashMap, convert::Infallible};
 
-    use super::{Config, PlayerServiceArc, SpotifyOauthArc};
+    use crate::{config, player::spotify_oauth::SpotifyOauth};
+
+    use super::{Config, PlayerServiceArc};
     use api_models::settings::Settings;
 
     use warp::hyper::StatusCode;
@@ -257,25 +224,31 @@ mod handlers {
     pub async fn save_settings(
         settings: Settings,
         config: Config,
+        query: HashMap<String, String>,
     ) -> Result<impl warp::Reply, Infallible> {
-        debug!("Settings to save {:?}", settings);
+        debug!("Settings to save {:?} and reload {:?}", settings, query);
         config.lock().unwrap().save_settings(&settings);
         // todo: find better way to trigger service restart by systemd
-        match std::process::Command::new("sudo")
-            .arg("systemctl")
-            .arg("restart")
-            .arg("dplay")
-            .spawn()
-        {
-            Ok(child) => {
-                debug!("Restart command invoked.");
-                child.wait_with_output().expect("Error");
-                Ok(StatusCode::CREATED)
+        let param = query.get("reload").unwrap();
+        if param == "true" {
+            match std::process::Command::new("sudo")
+                .arg("systemctl")
+                .arg("restart")
+                .arg("rsplayer")
+                .spawn()
+            {
+                Ok(child) => {
+                    debug!("Restart command invoked.");
+                    child.wait_with_output().expect("Error");
+                    Ok(StatusCode::CREATED)
+                }
+                Err(e) => {
+                    error!("Restart command failed with error:{e}");
+                    Ok(StatusCode::INTERNAL_SERVER_ERROR)
+                }
             }
-            Err(e) => {
-                error!("Restart command failed with error:{e}");
-                Ok(StatusCode::INTERNAL_SERVER_ERROR)
-            }
+        } else {
+            Ok(StatusCode::CREATED)
         }
     }
 
@@ -306,10 +279,10 @@ mod handlers {
         ))
     }
 
-    pub async fn get_spotify_authorization_url(
-        spotify_oauth: SpotifyOauthArc,
-    ) -> Result<impl warp::Reply, Infallible> {
-        match &spotify_oauth.lock().unwrap().get_authorization_url() {
+    pub async fn get_spotify_authorization_url() -> Result<impl warp::Reply, Infallible> {
+        let mut spotify_oauth =
+            SpotifyOauth::new(config::Configuration::new().get_settings().spotify_settings);
+        match &spotify_oauth.get_authorization_url() {
             Ok(url) => Ok(warp::reply::with_status(url.clone(), StatusCode::OK)),
             Err(e) => Ok(warp::reply::with_status(
                 e.to_string(),
@@ -317,10 +290,10 @@ mod handlers {
             )),
         }
     }
-    pub async fn is_spotify_authorization_completed(
-        spotify_oauth: SpotifyOauthArc,
-    ) -> Result<impl warp::Reply, Infallible> {
-        match &spotify_oauth.lock().unwrap().is_token_present() {
+    pub async fn is_spotify_authorization_completed() -> Result<impl warp::Reply, Infallible> {
+        let mut spotify_oauth =
+            SpotifyOauth::new(config::Configuration::new().get_settings().spotify_settings);
+        match &spotify_oauth.is_token_present() {
             Ok(auth) => Ok(warp::reply::with_status(auth.to_string(), StatusCode::OK)),
             Err(e) => Ok(warp::reply::with_status(
                 e.to_string(),
@@ -330,13 +303,10 @@ mod handlers {
     }
     pub async fn spotify_authorization_callback(
         url: HashMap<String, String>,
-        spotify_oauth: SpotifyOauthArc,
     ) -> Result<impl warp::Reply, Infallible> {
-        match &spotify_oauth
-            .lock()
-            .unwrap()
-            .authorize_callback(url.get("code").unwrap())
-        {
+        let mut spotify_oauth =
+            SpotifyOauth::new(config::Configuration::new().get_settings().spotify_settings);
+        match &spotify_oauth.authorize_callback(url.get("code").unwrap()) {
             Ok(_) => Ok(warp::reply::html(
                 r#"<html>
                             <body>
@@ -354,12 +324,10 @@ mod handlers {
         }
     }
 
-    pub async fn get_spotify_account_info(
-        spotify_oauth: SpotifyOauthArc,
-    ) -> Result<impl warp::Reply, Infallible> {
-        Ok(warp::reply::json(
-            &spotify_oauth.lock().unwrap().get_account_info(),
-        ))
+    pub async fn get_spotify_account_info() -> Result<impl warp::Reply, Infallible> {
+        let mut spotify_oauth =
+            SpotifyOauth::new(config::Configuration::new().get_settings().spotify_settings);
+        Ok(warp::reply::json(&spotify_oauth.get_account_info()))
     }
 
     pub async fn get_playlist_items(

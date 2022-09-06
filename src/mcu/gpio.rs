@@ -22,7 +22,7 @@ pub fn get_output_pin_handle(pin_no: u32) -> Result<LineHandle> {
     let mut chip = Chip::new("/dev/gpiochip0")?;
     Ok(chip
         .get_line(pin_no)?
-        .request(LineRequestFlags::OUTPUT, 0, "dplay")?)
+        .request(LineRequestFlags::OUTPUT, 0, "rsplayer")?)
 }
 
 pub fn get_lines(pin_no: &[u32]) -> gpio_cdev::Lines {

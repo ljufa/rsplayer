@@ -6,7 +6,18 @@ use crate::audio_device::alsa::AlsaPcmCard;
 
 const SETTINGS_KEY: &str = "settings";
 const STREAMER_STATUS_KEY: &str = "streamer_status";
-const DPLAY_CONFIG_DIR_PATH: &str = ".dplay/";
+
+#[cfg(debug_assertions)]
+const CONFIG_DIR_PATH: &str = ".run/";
+#[cfg(not(debug_assertions))]
+const CONFIG_DIR_PATH: &str = "./";
+
+#[cfg(debug_assertions)]
+const EXEC_DIR_PATH: &str = ".run/";
+#[cfg(not(debug_assertions))]
+const EXEC_DIR_PATH: &str = "/usr/local/bin/";
+
+
 
 pub struct Configuration {
     db: PickleDb,
@@ -15,7 +26,7 @@ pub struct Configuration {
 impl Configuration {
     pub fn new() -> Configuration {
         if let Ok(db) = PickleDb::load(
-            DPLAY_CONFIG_DIR_PATH.to_owned() + "/configuration.db",
+            CONFIG_DIR_PATH.to_owned() + "configuration.db",
             PickleDbDumpPolicy::AutoDump,
             SerializationMethod::Json,
         ) {
@@ -23,7 +34,7 @@ impl Configuration {
         } else {
             Configuration {
                 db: PickleDb::new(
-                    DPLAY_CONFIG_DIR_PATH.to_owned() + "/configuration.db",
+                    CONFIG_DIR_PATH.to_owned() + "configuration.db",
                     PickleDbDumpPolicy::AutoDump,
                     SerializationMethod::Json,
                 ),
@@ -31,15 +42,15 @@ impl Configuration {
         }
     }
     pub fn get_static_dir_path() -> String {
-        format!("{}ui", DPLAY_CONFIG_DIR_PATH)
+        format!("{}ui", CONFIG_DIR_PATH)
     }
 
     pub fn get_squeezelite_player_path() -> String {
-        format!("{}squeezelite", DPLAY_CONFIG_DIR_PATH)
+        format!("{}squeezelite", EXEC_DIR_PATH)
     }
 
     pub fn get_librespot_path() -> String {
-        format!("{}librespot", DPLAY_CONFIG_DIR_PATH)
+        format!("{}librespot", EXEC_DIR_PATH)
     }
 
     pub fn get_streamer_status(&mut self) -> StreamerState {

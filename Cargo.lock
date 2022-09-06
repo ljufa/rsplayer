@@ -457,42 +457,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dplay"
-version = "0.2.0"
-dependencies = [
- "alsa",
- "api_models",
- "cfg-if",
- "console-subscriber",
- "embedded-graphics",
- "embedded-hal",
- "env_logger",
- "evdev",
- "failure",
- "futures",
- "gpio-cdev",
- "linux-embedded-hal",
- "log",
- "log4rs",
- "mpd",
- "num-derive",
- "num-traits",
- "pickledb",
- "rpi_embedded",
- "rspotify",
- "serde",
- "serde_derive",
- "serde_json",
- "tokio",
- "tokio-stream",
- "tracing",
- "tracing-subscriber 0.2.25",
- "unidecode",
- "url",
- "warp",
-]
-
-[[package]]
 name = "either"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1600,6 +1564,42 @@ checksum = "f052bc47577b54d656c0adabd2e76591bc646ab01714e1abf429aeaed83f1222"
 dependencies = [
  "lazy_static",
  "libc",
+]
+
+[[package]]
+name = "rsplayer"
+version = "0.2.0"
+dependencies = [
+ "alsa",
+ "api_models",
+ "cfg-if",
+ "console-subscriber",
+ "embedded-graphics",
+ "embedded-hal",
+ "env_logger",
+ "evdev",
+ "failure",
+ "futures",
+ "gpio-cdev",
+ "linux-embedded-hal",
+ "log",
+ "log4rs",
+ "mpd",
+ "num-derive",
+ "num-traits",
+ "pickledb",
+ "rpi_embedded",
+ "rspotify",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "tracing-subscriber 0.2.25",
+ "unidecode",
+ "url",
+ "warp",
 ]
 
 [[package]]
