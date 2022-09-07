@@ -1,5 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub struct Song {
     pub id: String,
@@ -81,7 +83,7 @@ impl Song {
         if result.is_empty() {
             result.push_str(self.file.as_str());
         }
-        return result;
+        result
     }
     pub fn get_identifier(&self) -> String {
         if !self.id.is_empty() {
@@ -126,6 +128,6 @@ impl Song {
             result.push_str(t.as_str());
         }
 
-        return result;
+        result
     }
 }

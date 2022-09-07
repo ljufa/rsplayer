@@ -1,8 +1,9 @@
-use std::{time::Duration, fmt::Display};
+use std::{fmt::Display, time::Duration};
 
-use num_derive::{FromPrimitive, ToPrimitive};
-use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 use crate::state::PlayingContextQuery;
+use num_derive::{FromPrimitive, ToPrimitive};
+use serde::{Deserialize, Serialize};
+use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
 #[derive(
     Debug,
@@ -20,7 +21,8 @@ use crate::state::PlayingContextQuery;
     IntoStaticStr,
 )]
 pub enum VolumeCrtlType {
-    Dac, Alsa
+    Dac,
+    Alsa,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Volume {
@@ -56,7 +58,6 @@ pub enum Command {
     QueryCurrentPlayingContext(PlayingContextQuery),
     QueryDynamicPlaylists(Vec<String>, u32, u32),
     QueryPlaylistItems(String),
-    
 }
 
 #[derive(
@@ -82,7 +83,9 @@ pub enum FilterType {
     SuperSlow,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumString, EnumIter, IntoStaticStr)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumString, EnumIter, IntoStaticStr,
+)]
 pub enum GainLevel {
     V25,
     V28,
@@ -95,9 +98,9 @@ pub enum PlayerType {
     MPD,
     LMS,
 }
-impl Display for PlayerType{
+impl Display for PlayerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self{
+        match self {
             PlayerType::SPF => f.write_str("Spotify"),
             PlayerType::MPD => f.write_str("Music Player Deamon"),
             PlayerType::LMS => f.write_str("Logitech Media Server"),

@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::player::Song;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Default, PartialOrd, Ord)]

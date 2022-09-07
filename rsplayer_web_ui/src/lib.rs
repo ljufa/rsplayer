@@ -1,7 +1,8 @@
 use api_models::state::StateChangeEvent;
+
 use seed::{prelude::*, *};
 use strum_macros::IntoStaticStr;
-
+extern crate api_models;
 mod page;
 
 const SETTINGS: &str = "settings";

@@ -5,4 +5,5 @@
 .vscode
 .run
 .spotify_token_cache.json
-PKGS/rsplayer/opt/rsplayer/ui
+PKGS/**/opt/rsplayer/ui
+PKGS/**/usr/local/bin/rsplayer

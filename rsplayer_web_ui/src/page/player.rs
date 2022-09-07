@@ -1,6 +1,8 @@
 use api_models::common::*;
 use api_models::player::*;
+use api_models::serde::Deserialize;
 use api_models::state::*;
+
 use seed::{prelude::*, *};
 
 use std::str::FromStr;
@@ -26,15 +28,15 @@ pub enum Msg {
     SendCommand(Command),
     WebSocketOpen,
 }
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct AlbumInfo {
     pub album: Album,
 }
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Album {
     image: Vec<Image>,
 }
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Image {
     size: String,
     #[serde(rename = "#text")]

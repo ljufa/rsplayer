@@ -1,0 +1,95 @@
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+RPI_HOST = "192.168.5.60"
+TARGET = "aarch64-unknown-linux-gnu"
+
+[config]
+default_to_workspace = false
+
+# ---- BUILD UI----
+[tasks.ui_dev_build]
+env = { "CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS" = ["rsplayer_web_ui"] }
+run_task = {name = "_ui_dev_build", fork = true}
+
+[tasks.ui_release_build]
+env = { "CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS" = ["rsplayer_web_ui"] }
+run_task = {name = "_ui_release_build", fork = true}
+
+[tasks.ui_copyremote]
+env = { RPI_DIR = "/opt/rsplayer/ui" }
+dependencies = ["ui_release_build"]
+script = [
+    "rsync -av --rsync-path=\"sudo rsync\" --delete rsplayer_web_ui/public/ rsplayer_web_ui/pkg pi@${RPI_HOST}:${RPI_DIR}",
+]
+
+[tasks.ui_copylocal]
+dependencies = ["ui_dev_build"]
+script = [
+    "rsync -av --delete rsplayer_web_ui/pkg rsplayer_web_ui/public/ .run/ui",
+]
+
+[tasks._ui_dev_build]
+workspace = true
+description = "Build with wasm-pack"
+install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V" }
+command = "wasm-pack"
+args = ["build", "--target", "web", "--out-name", "package", "--dev", "--", "--no-default-features", "--features", "local"]
+
+[tasks._ui_release_build]
+workspace = true
+env = { "CARGO_MAKE_WORKSPACE_SKIP_MEMBERS" = ["rsplayer_api_models", "rsplayer_backend"] }
+description = "Build with wasm-pack in release mode"
+install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V" }
+command = "wasm-pack"
+args = ["build", "--target", "web", "--out-name", "package"]
+
+# ---- BUILD Backend----
+[tasks.backend_run_local]
+command = "cargo"
+args = ["run"]
+
+[tasks.backend_build_release]
+command = "cross"
+args =["build", "--target", "${TARGET}", "--release", "--workspace", "--exclude", "rsplayer_web_ui", "--package", "rsplayer", "--bin", "rsplayer"]
+
+[tasks.backend_copyremote]
+dependencies = ["backend_build_release"]
+script = [
+    "rsync -avvP --rsync-path=\"sudo rsync\" target/${TARGET}/release/rsplayer pi@${RPI_HOST}:/usr/local/bin",
+]
+
+[tasks.package_deb]
+dependencies = [
+    "ui_release_build", 
+    "backend_build_release"
+]
+script = [
+    "rsync -avvP target/${TARGET}/release/rsplayer PKGS/arm64/usr/local/bin",
+    "rsync -av --delete rsplayer_web_ui/pkg rsplayer_web_ui/public/ PKGS/arm64/opt/rsplayer/ui",
+    "dpkg-deb -b -Zxz --root-owner-group PKGS/arm64 rsplayer-0.2.0-arm64.deb"
+]
+
+[tasks.echo_vars]
+# workspace = true
+env = { "CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS" = ["rsplayer_backend"] }
+script = "echo ${CARGO_MAKE_GIT_BRANCH}"
+
+# ---- LINT ----
+[tasks.clippy]
+description = "Lint with Clippy"
+install_crate = { rustup_component_name = "clippy", binary = "cargo-clippy", test_arg = "--help" }
+command = "cargo"
+args = ["clippy", "--all-features", "--", "--deny", "warnings", "--deny", "clippy::pedantic", "--deny", "clippy::nursery"]
+
+[tasks.format]
+description = "Format with rustfmt"
+command = "cargo"
+args = ["fmt"]
+
+
+# ---- Local DEV ----
+
+
+
+
+

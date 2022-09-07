@@ -40,7 +40,7 @@ pub enum Msg {
     AddSongToQueue(String),
     PlaySongFromPlaylist(String),
     ShowCategoryPlaylists(String),
-    LoadMoreCategories
+    LoadMoreCategories,
 }
 
 pub(crate) fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
@@ -78,14 +78,19 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
                 attachCarousel("#featured-pl");
                 attachCarousel("#saved-pl");
                 attachCarousel("#newreleases-pl");
-                
             });
         }
         Msg::CategoriesFetched(Ok(categories)) => {
             model.playlist_categories = categories;
         }
         Msg::LoadMoreCategories => {
-            let cat_ids: Vec<String> = model.playlist_categories.iter().skip(model.category_offset).take(CATEGORY_PAGE_SIZE).map(|c| c.id.clone()).collect();
+            let cat_ids: Vec<String> = model
+                .playlist_categories
+                .iter()
+                .skip(model.category_offset)
+                .take(CATEGORY_PAGE_SIZE)
+                .map(|c| c.id.clone())
+                .collect();
             log!("Cat ids", cat_ids);
             model.category_offset += cat_ids.len();
             orders.send_msg(Msg::SendCommand(Command::QueryDynamicPlaylists(
@@ -95,7 +100,6 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
             )));
             model.dynamic_playlist_loading = true;
             orders.after_next_render(move |_| scrollToId("dynamic-playlists-section"));
-            
         }
         Msg::StatusChangeEventReceived(StateChangeEvent::DynamicPlaylistsPageEvent(
             dynamic_pls,
@@ -110,12 +114,13 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
                     .iter()
                     .find(|c| c.id == dpl.category_id)
                 {
-                if dpl.playlists.len() >= 10 {
-                    model.dynamic_playlists.insert(cat.clone(), dpl.clone());
-                    let cid = cat.sanitized_id();
-                    orders.after_next_render(move |_| {
-                        attachCarousel(&format!("#cat-{}", cid)); ()});
-                 }
+                    if dpl.playlists.len() >= 10 {
+                        model.dynamic_playlists.insert(cat.clone(), dpl.clone());
+                        let cid = cat.sanitized_id();
+                        orders.after_next_render(move |_| {
+                            attachCarousel(&format!("#cat-{}", cid));
+                        });
+                    }
                 }
             });
         }
@@ -223,10 +228,9 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
                                         C!["icon"], i![C!("material-icons"), "play_circle_filled"],
                                         ev(Ev::Click, move |_| Msg::PlaySongFromPlaylist(song_id2))
                                     ],
-                                    
                                 ]
                             ],
-                        ] 
+                        ]
                     })
                 ]
             ]
@@ -377,7 +381,9 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                     div![
                         C!["card-footer"],
                         a![
-                            ev(Ev::Click, |_| Msg::ShowPlaylistItemsClicked(false, id2, name)),
+                            ev(Ev::Click, |_| Msg::ShowPlaylistItemsClicked(
+                                false, id2, name
+                            )),
                             C!["card-footer-item"],
                             pl.name.clone(),
                             pl.owner_name

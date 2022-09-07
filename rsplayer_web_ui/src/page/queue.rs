@@ -126,7 +126,8 @@ pub fn view(model: &Model) -> Node<Msg> {
 
 fn view_context_info(
     context_type: &PlayingContextType,
-    playing_context: &PlayingContext,) -> Vec<Node<Msg>> {
+    playing_context: &PlayingContext,
+) -> Vec<Node<Msg>> {
     match context_type {
         PlayingContextType::Playlist {
             description,
@@ -226,7 +227,7 @@ fn view_context_info(
                 b!(followers)
             ],
         ],
-        _ => return nodes![],
+        _ => nodes![],
     }
 }
 
@@ -272,7 +273,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                                     At::Type => "text",
                                     At::Placeholder => "Find a song"
                                 },
-                                input_ev(Ev::Input, move |val| Msg::SearchInputChanged(val)),
+                                input_ev(Ev::Input, Msg::SearchInputChanged),
                                 ev(Ev::KeyDown, |keyboard_event| {
                                     if keyboard_event.value_of().to_string() == "[object KeyboardEvent]"{
                                         let kev: KeyboardEvent = keyboard_event.unchecked_into();
@@ -298,7 +299,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                                 attrs!(At::Title =>"Show queue starting from current song"),
                                 i![C!("material-icons is-large-icon"), "filter_center_focus"],
                                 ev(Ev::Click, move |_| Msg::ShowStartingFromCurrentSong)
-                            ], 
+                            ],
                             a![
                                 attrs!(At::Title =>"Locate current song"),
                                 i![C!("material-icons is-large-icon"), "adjust"],
@@ -356,14 +357,17 @@ fn view_queue_item(song: &Song, playing_context: &PlayingContext, model: &Model)
             C!["list-item-controls"],
             div![
                 C!["buttons"],
-                a![C!["is-hidden-mobile"],
+                a![
+                    C!["is-hidden-mobile"],
                     attrs!(At::Title =>"Play song"),
-                    C!["icon"], i![C!("material-icons"), "play_arrow"],
+                    C!["icon"],
+                    i![C!("material-icons"), "play_arrow"],
                     ev(Ev::Click, move |_| Msg::PlaylistItemSelected(id2))
                 ],
                 a![
                     attrs!(At::Title =>"Remove song from queue"),
-                    C!["icon"], i![C!("material-icons"), "delete"],
+                    C!["icon"],
+                    i![C!("material-icons"), "delete"],
                     ev(Ev::Click, move |_| Msg::PlaylistItemRemove(id1))
                 ],
             ]

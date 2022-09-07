@@ -54,10 +54,10 @@ pub enum Msg {
     InputRotaryEventDevicePathChanged(String),
     InputVolumeStepChanged(String),
     InputVolumeCtrlDeviceChanged(VolumeCrtlType),
-       
+
     ClickSpotifyAuthorizeButton,
     ClickSpotifyLogoutButton,
-    
+
     SpotifyAccountInfoFetched(Option<SpotifyAccountInfo>),
     SpotifyAuthorizationUrlFetched(String),
 
@@ -97,7 +97,8 @@ pub(crate) fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
                 .await
                 .expect("")
                 .json::<SpotifyAccountInfo>()
-                .await.ok()  
+                .await
+                .ok(),
         )
     });
     Model {
@@ -116,7 +117,9 @@ pub(crate) fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>)
         Msg::SaveSettings => {
             // todo: show modal wait window while server is restarting. use ws status.
             let settings = model.settings.clone();
-            orders.perform_cmd(async { Msg::SettingsSaved(save_settings(settings, "reload=true".to_string()).await) });
+            orders.perform_cmd(async {
+                Msg::SettingsSaved(save_settings(settings, "reload=true".to_string()).await)
+            });
             model.waiting_response = true;
         }
         Msg::SelectActivePlayer(value) => {
@@ -197,7 +200,8 @@ pub(crate) fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>)
             model.settings.volume_ctrl_settings.ctrl_device = device;
         }
         Msg::InputVolumeStepChanged(step) => {
-            model.settings.volume_ctrl_settings.volume_step = step.parse::<u8>().unwrap_or_default();
+            model.settings.volume_ctrl_settings.volume_step =
+                step.parse::<u8>().unwrap_or_default();
         }
         Msg::InputRotaryEventDevicePathChanged(path) => {
             model.settings.volume_ctrl_settings.rotary_event_device_path = path;
@@ -206,9 +210,13 @@ pub(crate) fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>)
             let settings = model.settings.clone();
             orders.perform_cmd(async move {
                 _ = save_settings(settings, "reload=false".to_string()).await;
-                let url = fetch(API_SPOTIFY_GET_AUTH_URL_PATH).await.expect("msg").text().await.expect("msg");
+                let url = fetch(API_SPOTIFY_GET_AUTH_URL_PATH)
+                    .await
+                    .expect("msg")
+                    .text()
+                    .await
+                    .expect("msg");
                 _ = seed::util::window().open_with_url(url.as_str());
-
             });
         }
         Msg::SpotifyAuthorizationUrlFetched(value) => {
@@ -230,7 +238,7 @@ pub(crate) fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>)
 }
 
 async fn save_settings(settings: Settings, query: String) -> fetch::Result<Settings> {
-    Request::new(format!("{}?{}",API_SETTINGS_PATH, query))
+    Request::new(format!("{}?{}", API_SETTINGS_PATH, query))
         .method(Method::Post)
         .json(&settings)?
         .fetch()
@@ -533,7 +541,7 @@ fn view_volume_control(volume_settings: &VolumeControlSettings) -> Node<Msg> {
                 input![
                     C!["input"],
                     attrs! {
-                        At::Value => volume_settings.volume_step 
+                        At::Value => volume_settings.volume_step
                         At::Type => "number"
                     },
                     input_ev(Ev::Input, move |value| {
@@ -584,7 +592,7 @@ fn view_volume_control(volume_settings: &VolumeControlSettings) -> Node<Msg> {
                 }
             ],
         ],
-        IF!(volume_settings.rotary_enabled =>         
+        IF!(volume_settings.rotary_enabled =>
             div![
                 div![
                     C!["field"],
@@ -606,7 +614,6 @@ fn view_volume_control(volume_settings: &VolumeControlSettings) -> Node<Msg> {
         )
 
     ]
-
 }
 fn view_oled_display(oled_settings: &OLEDSettings) -> Node<Msg> {
     div![
@@ -617,12 +624,7 @@ fn view_oled_display(oled_settings: &OLEDSettings) -> Node<Msg> {
                 C!["control"],
                 div![
                     C!["select"],
-                    select![
-                            option![
-                                attrs!( At::Value => "ST7920"),
-                                "ST7920 - 128x64"
-                            ],
-                    ],
+                    select![option![attrs!( At::Value => "ST7920"), "ST7920 - 128x64"],],
                 ],
             ],
         ],
@@ -631,7 +633,10 @@ fn view_oled_display(oled_settings: &OLEDSettings) -> Node<Msg> {
             label!["SPI Device path:", C!["label"]],
             div![
                 C!["control"],
-                input![C!["input"], attrs! {At::Value => oled_settings.spi_device_path},],
+                input![
+                    C!["input"],
+                    attrs! {At::Value => oled_settings.spi_device_path},
+                ],
             ],
         ],
     ]
@@ -648,12 +653,7 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
                 C!["control"],
                 div![
                     C!["select"],
-                    select![
-                            option![
-                                attrs!( At::Value => "AK4497"),
-                                "AK4497"
-                            ],
-                    ],
+                    select![option![attrs!( At::Value => "AK4497"), "AK4497"],],
                 ],
             ],
         ],
@@ -662,7 +662,10 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
             label!["DAC I2C address:", C!["label"]],
             div![
                 C!["control"],
-                input![C!["input"], attrs! {At::Value => dac_settings.i2c_address, At::Type => "number"},],
+                input![
+                    C!["input"],
+                    attrs! {At::Value => dac_settings.i2c_address, At::Type => "number"},
+                ],
             ],
         ],
         div![
@@ -744,7 +747,7 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
                             IF!(dac_settings.sound_sett == 5 => attrs!(At::Selected => "")),
                             "High Sound Quality Mode (Setting 5)"
                         ],
-                        input_ev(Ev::Change, move |v| Msg::InputDacSoundSettingsChanged(v)),
+                        input_ev(Ev::Change, Msg::InputDacSoundSettingsChanged),
                     ],
                 ],
             ],
@@ -845,7 +848,7 @@ fn view_spotify(model: &Model) -> Node<Msg> {
                     div![C!["control","has-icons-right"],
                     input![
                         C!["input"],
-                        attrs! {At::Value => spot_settings.developer_client_id}, 
+                        attrs! {At::Value => spot_settings.developer_client_id},
                     ],
                     input_ev(Ev::Input, move |value| {
                         Msg::InputSpotifyDeveloperClientId(value)
@@ -943,7 +946,7 @@ fn view_spotify(model: &Model) -> Node<Msg> {
                     ),
                     if let Some(me) = &model.spotify_account_info {
                         p![
-                            span![me.display_name.clone()], 
+                            span![me.display_name.clone()],
                             span![me.email.clone()],
                             button![C!["is-primary", "is-large"], ev(Ev::Click, move |_| Msg::ClickSpotifyLogoutButton), "Logout"]
                         ]
@@ -1019,14 +1022,14 @@ fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
                 C!["field-body"],
                 div![
                     C!["field"],
-                    div![C!["control","has-icons-right"],
-                    input![
-                        C!["input"],
-                        attrs! {At::Value => mpd_settings.server_host},
-                        input_ev(Ev::Input, move |value| { Msg::InputMpdHostChange(value) }),
+                    div![
+                        C!["control", "has-icons-right"],
+                        input![
+                            C!["input"],
+                            attrs! {At::Value => mpd_settings.server_host},
+                            input_ev(Ev::Input, move |value| { Msg::InputMpdHostChange(value) }),
                         ],
                         view_validation_icon(mpd_settings, "server_host")
-
                     ]
                 ]
             ],
@@ -1041,13 +1044,14 @@ fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
                 C!["field-body"],
                 div![
                     C!["field"],
-                    div![C!["control","has-icons-right"],
-                    input![
-                        C!["input"],
-                        attrs! {At::Value => mpd_settings.server_port, At::Type => "number"},
-                        input_ev(Ev::Input, move |v| {
-                            Msg::InputMpdPortChange(v.parse::<u32>().unwrap_or_default())
-                        }),
+                    div![
+                        C!["control", "has-icons-right"],
+                        input![
+                            C!["input"],
+                            attrs! {At::Value => mpd_settings.server_port, At::Type => "number"},
+                            input_ev(Ev::Input, move |v| {
+                                Msg::InputMpdPortChange(v.parse::<u32>().unwrap_or_default())
+                            }),
                         ],
                         view_validation_icon(mpd_settings, "server_port")
                     ]

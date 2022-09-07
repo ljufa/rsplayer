@@ -4,9 +4,14 @@ use core::option::Option::None;
 use core::time::Duration;
 
 use num_derive::{FromPrimitive, ToPrimitive};
+use serde::{Deserialize, Serialize};
 use strum_macros::EnumProperty;
 
-use crate::{common::PlayerType, player::Song, playlist::{DynamicPlaylistsPage, PlaylistPage}};
+use crate::{
+    common::PlayerType,
+    player::Song,
+    playlist::{DynamicPlaylistsPage, PlaylistPage},
+};
 
 // todo move somewhere else
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -48,7 +53,7 @@ pub struct PlayingContext {
 pub enum PlayingContextQuery {
     WithSearchTerm(String, usize),
     CurrentSongPage,
-    IgnoreSongs
+    IgnoreSongs,
 }
 // end todo
 
@@ -114,7 +119,7 @@ pub enum PlayerState {
 }
 
 #[derive(
-Debug, Eq, PartialEq, Clone, Hash, Copy, FromPrimitive, ToPrimitive, Serialize, Deserialize,
+    Debug, Eq, PartialEq, Clone, Hash, Copy, FromPrimitive, ToPrimitive, Serialize, Deserialize,
 )]
 pub enum AudioOut {
     SPKR,
@@ -135,11 +140,11 @@ impl Default for PlayerInfo {
 
 impl SongProgress {
     pub fn format_time(&self) -> String {
-        return format!(
+        format!(
             "{} / {}",
             crate::common::dur_to_string(&self.current_time),
             crate::common::dur_to_string(&self.total_time)
-        );
+        )
     }
 }
 

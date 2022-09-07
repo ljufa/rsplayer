@@ -17,8 +17,6 @@ const EXEC_DIR_PATH: &str = ".run/";
 #[cfg(not(debug_assertions))]
 const EXEC_DIR_PATH: &str = "/usr/local/bin/";
 
-
-
 pub struct Configuration {
     db: PickleDb,
 }

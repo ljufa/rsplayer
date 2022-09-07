@@ -23,11 +23,6 @@ console-subscriber = "0.1.7"
 tracing = "0.1"
 tracing-subscriber = "0.2.0"
 
-#json serde
-serde = "1.0"
-serde_json = "1.0"
-serde_derive = "1.0"
-
 #mpd
 mpd = { version = "0.0.12" }
 

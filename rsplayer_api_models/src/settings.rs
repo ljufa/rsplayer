@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
 use validator::{validate_ip_v4, Validate, ValidationError};
 
 use crate::common::{FilterType, GainLevel, PlayerType, VolumeCrtlType};

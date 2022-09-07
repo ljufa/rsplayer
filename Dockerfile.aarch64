@@ -1,5 +1,5 @@
 #Thanks to: https://capnfabs.net/posts/cross-compiling-rust-apps-linker-shenanigans-multistrap-chroot/
-FROM ghcr.io/cross-rs/aarch64-unknown-linux-gnu:latest
+FROM ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main
 RUN apt-get update
 RUN dpkg --add-architecture arm64
 RUN apt-get update

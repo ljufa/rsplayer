@@ -704,7 +704,6 @@ mod test {
     use std::{
         fs,
         io::{self, BufRead, Write},
-        os,
     };
 
     use super::get_songs_from_command;
@@ -730,12 +729,12 @@ mod test {
         for line in lines {
             let line = line.unwrap();
             //let line = line.trim();
-            if line.len() < 1 || line.starts_with("#") {
+            if line.is_empty() || line.starts_with('#') {
                 continue;
             } else {
                 let mut out_line = line.clone();
                 if line.contains("music_directory") {
-                   out_line = "music_directory\t\t\"/home/dragan/music\"".to_owned();
+                    out_line = "music_directory\t\t\"/home/dragan/music\"".to_owned();
                 }
                 out_buffer.write_fmt(format_args!("{}\n", out_line));
                 //println!("{}", line);

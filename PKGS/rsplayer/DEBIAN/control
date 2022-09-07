@@ -1,8 +1,0 @@
-Package: rsplayer
-Version: 0.1.0
-Section: multimedia
-Priority: optional
-Architecture: arm64
-Depends: mpd (>= 0.22), lirc (>= 0.10.1-6.3)
-Maintainer: dragan.ljubojevic@gmail.com
-Description: Proxy player and dac volume controler with web UI

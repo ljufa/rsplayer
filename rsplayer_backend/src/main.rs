@@ -1,7 +1,6 @@
 extern crate env_logger;
 #[macro_use]
 extern crate log;
-extern crate serde_derive;
 
 use std::panic;
 use std::sync::{Arc, Mutex};
@@ -63,7 +62,7 @@ async fn main() {
 
     let (input_commands_tx, input_commands_rx) = tokio::sync::mpsc::channel(2);
 
-    // start/resume playing after start 
+    // start/resume playing after start
     let _ = input_commands_tx.send(Command::Play).await;
 
     let (state_changes_tx, _) = broadcast::channel(20);
