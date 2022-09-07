@@ -30,6 +30,7 @@ mod player;
 #[tokio::main]
 async fn main() {
     env_logger::init();
+    #[cfg(not(debug_assertions))]
     console_subscriber::ConsoleLayer::builder()
         .retention(Duration::from_secs(60))
         .server_addr(([0, 0, 0, 0], 6669))
@@ -62,7 +63,7 @@ async fn main() {
 
     let (input_commands_tx, input_commands_rx) = tokio::sync::mpsc::channel(2);
 
-    // start playing after start
+    // start/resume playing after start 
     let _ = input_commands_tx.send(Command::Play).await;
 
     let (state_changes_tx, _) = broadcast::channel(20);

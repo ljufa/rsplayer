@@ -11,10 +11,10 @@ build_librespot:
 	cd ..
 	git clone git@github.com:librespot-org/librespot.git
 	git checkout master
-	cp rsplayer-backend/Cross.toml librespot/
+	cp rsplayer/Cross.toml librespot/
 	cd librespot
 	cross build --target $(TARGET) --release --no-default-features --features alsa-backend
-	cp -f target/$(TARGET)/$(OUT)/librespot ../rsplayer-backend/PKGS/rsplayer/urs/local/bin
+	cp -f target/$(TARGET)/$(OUT)/librespot ../rsplayer/PKGS/rsplayer/urs/local/bin
 
 release:
 	cargo fmt
@@ -26,12 +26,26 @@ debug:
 	cross build --target $(TARGET)
 
 copytorpi: $(OUT)
-	rsync -avvP --rsync-path="sudo rsync" target/$(TARGET)/$(OUT)/$(RELEASE) pi@$(RPI_HOST):~
+	rsync -avvP --rsync-path="sudo rsync" target/$(TARGET)/$(OUT)/$(RELEASE) pi@$(RPI_HOST):/usr/local/bin
 
-# copy_config:
-# 	rsync -avvP --rsync-path="sudo rsync" rpi_setup/etc/ pi@$(RPI_HOST):/etc
-# 	rsync -avvP --rsync-path="sudo rsync" rpi_setup/config.txt pi@$(RPI_HOST):/boot/config.txt
-# 	rsync -avvP rpi_setup/.dplay/librespot pi@$(RPI_HOST):~/.dplay/
+.ONESHELL:
+build_ui:
+	cd rsplayer_web_ui
+	cargo make build_release
+	rsync -av --delete ./pkg ./public/ ../PKGS/rsplayer/opt/rsplayer/ui
+	
+
+create_deb: release build_ui
+	dpkg-deb -b -Zxz --root-owner-group PKGS/rsplayer
+	# rsync -avvP PKGS/*.deb pi@$(RPI_HOST):~/
+
+
+### Local development @ linux x86_64
+.ONESHELL:
+build_ui_local:
+	cd rsplayer_web_ui
+	cargo make build_dev
+	rsync -av --delete ./pkg ./public/ ../.run/ui
 
 run_local:
 	cargo clippy
@@ -40,21 +54,15 @@ run_local:
 	RUST_BACKTRACE=full RUST_LOG=info,rsplayer=debug,rspotify=info,librespot=debug cargo run
 
 .ONESHELL:
-build_ui:
-	cd ../rsplayer-ui
-	cargo make build_release
+build_librespot_local:
+	cd ..
+	# git clone git@github.com:librespot-org/librespot.git
+	# git checkout master
+	cd librespot
+	cargo build --release --no-default-features --features alsa-backend
+	cp -f target/release/librespot ../rsplayer/.run/
+
 	
 
-.ONESHELL:
-build_ui_dev:
-	cd ../rsplayer-ui
-	cargo make build_dev
-	rsync -av --delete ./pkg ./public/ ../rsplayer-backend/.run/ui
-	
-
-create_deb: release build_ui
-	rsync -av --delete ../rsplayer-ui/pkg ../rsplayer-ui/public/ PKGS/rsplayer/opt/rsplayer/ui
-	dpkg-deb -b -Zxz --root-owner-group PKGS/rsplayer
-	rsync -avvP PKGS/*.deb pi@$(RPI_HOST):~/
 
 	

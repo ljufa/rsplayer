@@ -83,3 +83,22 @@ tar zxvf download
 sudo cp squeezelite /home/ubuntu
 squeezelite -V "Luckit Audio 2.0 Output" -o hw:CARD=L20,DEV=0 -C 1 -v -z
 
+
+
+### Install build tools
+`cargo install cross`
+
+### Build release
+
+`make release copytorpi`
+
+### Features
+#### Hardware integration
+* `hw_oled` - enable control of OLED module over gpio spi protocol
+* `hw_dac` - enable control of DAC chip, volume, filters, gain ...
+* `hw_ir_control` - enable IR input based on LIRC
+
+#### Backend player integrations
+* `backend_mpd` - build with MPD - music player daemon integration  support
+* `backend_lms` - build with LMS - Logitech Media Server integration support
+

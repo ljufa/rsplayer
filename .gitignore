@@ -3,7 +3,6 @@
 /target
 .history
 .vscode
-rpi_setup/etc/fstab
 .run
 .spotify_token_cache.json
 PKGS/rsplayer/opt/rsplayer/ui

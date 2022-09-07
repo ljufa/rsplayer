@@ -1,0 +1,72 @@
+name: Rust
+
+on:
+  push:
+    branches: [ master, rust ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build binary
+    runs-on: ubuntu-latest
+    steps:
+    - uses: kielabokkie/ssh-key-and-known-hosts-action@v1
+      with:
+        ssh-private-key: ${{ secrets.SSH_KEY_CHECKOUT }}
+        ssh-host: github.com
+    - uses: actions/checkout@v2
+    - uses: Swatinem/rust-cache@v1
+    - uses: davidB/rust-cargo-make@v1
+    - name: Build
+      run: cargo build --release
+    - name: Upload binary
+      uses: actions/upload-artifact@v2
+      with:
+        name: binary
+        path: target/release/mysepa-backend
+
+  push_docker_image:
+    name: Push Docker images to Docker Hub
+    runs-on: ubuntu-latest
+    needs: [ build ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Download binary
+        uses: actions/download-artifact@v2
+        with:
+          name: binary
+          path: target/release/mysepa-backend
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+        with:
+          driver: docker
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/mysepa-backend:latest,${{ secrets.DOCKER_USERNAME }}/mysepa-backend:${{ github.sha }}
+  
+  redeploy:
+    name: Trigger app redeploy
+    runs-on: ubuntu-latest
+    needs: [ push_docker_image ]
+    steps:
+    - name: Call endpoint
+      uses: wei/curl@master
+      with:
+        args: -v -u '${{secrets.DEPLOY_SERVER_AUTH}}' -H "Content-Type:application/json" -d '{\"container_name\":\"backend\"}' https://deploy-server.sepama.freemyip.com/deploy
