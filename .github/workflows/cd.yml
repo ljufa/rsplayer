@@ -1,0 +1,25 @@
+name: Release from tag
+on:
+  release:
+    types: [released]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build binary
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: Swatinem/rust-cache@v1
+    - uses: davidB/rust-cargo-make@v1
+    - name: Build
+      run: cargo make --env RELEASE_NAME=${GITHUB_REF_NAME} package_deb
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: |
+          rsplayer*.deb
+          

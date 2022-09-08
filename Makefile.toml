@@ -2,6 +2,7 @@
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 RPI_HOST = "192.168.5.60"
 TARGET = "aarch64-unknown-linux-gnu"
+RELEASE_VERSION = "0.2.2"
 
 [config]
 default_to_workspace = false
@@ -49,7 +50,7 @@ command = "cargo"
 args = ["run"]
 
 [tasks.backend_build_release]
-install_crate = { crate_name = "cross", binary = "cross", test_arg = "-V" }
+install_crate = { crate_name = "cross", binary = "cross", test_arg = "-V", force = false}
 command = "cross"
 args =["build", "--target", "${TARGET}", "--release", "--workspace", "--exclude", "rsplayer_web_ui", "--package", "rsplayer", "--bin", "rsplayer"]
 
@@ -60,20 +61,39 @@ script = [
 ]
 
 [tasks.package_deb]
-dependencies = [
-    "ui_release_build", 
-    "backend_build_release"
-]
+install_crate = { crate_name = "cargo-deb", binary = "deb", test_arg = "--version", force = false }
+# dependencies = [
+#     "ui_release_build", 
+#     "backend_build_release",
+#     "build_librespot_aarch64"
+# ]
+command = "cargo"
+args = ["deb", "--no-build", "-p", "rsplayer", "--deb-version", "${RELEASE_VERSION}"]
+
+[tasks.build_librespot_aarch64]
+cwd = "/tmp"
 script = [
-    "rsync -avvP target/${TARGET}/release/rsplayer PKGS/arm64/usr/local/bin",
-    "rsync -av --delete rsplayer_web_ui/pkg rsplayer_web_ui/public/ PKGS/arm64/opt/rsplayer/ui",
-    "dpkg-deb -b -Zxz --root-owner-group PKGS/arm64 rsplayer-0.2.0-arm64.deb"
+    "rm -rf librespot",
+	"git clone git@github.com:librespot-org/librespot.git",
+	"cd librespot",
+    "git checkout master",
+    "cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/Cross.toml .",
+	"cross build --target aarch64-unknown-linux-gnu --release --no-default-features --features alsa-backend",
+	"cp -f target/aarch64-unknown-linux-gnu/release/librespot ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/PKGS/debian-arm64/usr/local/bin"
 ]
 
-[tasks.echo_vars]
-# workspace = true
-env = { "CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS" = ["rsplayer_backend"] }
-script = "echo ${CARGO_MAKE_GIT_BRANCH}"
+[tasks.build_librespot_local]
+cwd = "/tmp"
+script = [
+    "rm -rf librespot",
+	"git clone git@github.com:librespot-org/librespot.git",
+	"cd librespot",
+    "git checkout master",
+	"cargo build --release --no-default-features --features alsa-backend",
+	"cp -f target/release/librespot ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/.run",
+    "rm -rf librespot",
+]
+
 
 # ---- LINT ----
 [tasks.clippy]

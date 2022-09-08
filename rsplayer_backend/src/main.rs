@@ -29,7 +29,7 @@ mod player;
 #[tokio::main]
 async fn main() {
     env_logger::init();
-    #[cfg(not(debug_assertions))]
+    #[cfg(debug_assertions)]
     console_subscriber::ConsoleLayer::builder()
         .retention(Duration::from_secs(60))
         .server_addr(([0, 0, 0, 0], 6669))
