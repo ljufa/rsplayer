@@ -8,9 +8,6 @@ RELEASE_VERSION = "0.2.2"
 default_to_workspace = false
 
 # ---- BUILD UI----
-[tasks.ui_dev_build]
-env = { "CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS" = ["rsplayer_web_ui"] }
-run_task = {name = "_ui_dev_build", fork = true}
 
 [tasks.ui_release_build]
 env = { "CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS" = ["rsplayer_web_ui"] }
@@ -22,19 +19,6 @@ dependencies = ["ui_release_build"]
 script = [
     "rsync -av --rsync-path=\"sudo rsync\" --delete rsplayer_web_ui/public/ rsplayer_web_ui/pkg pi@${RPI_HOST}:${RPI_DIR}",
 ]
-
-[tasks.ui_copylocal]
-dependencies = ["ui_dev_build"]
-script = [
-    "rsync -av --delete rsplayer_web_ui/pkg rsplayer_web_ui/public/ .run/ui",
-]
-
-[tasks._ui_dev_build]
-workspace = true
-description = "Build with wasm-pack"
-install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V" }
-command = "wasm-pack"
-args = ["build", "--target", "web", "--out-name", "package", "--dev", "--", "--no-default-features", "--features", "local"]
 
 [tasks._ui_release_build]
 workspace = true
@@ -54,19 +38,14 @@ install_crate = { crate_name = "cross", binary = "cross", test_arg = "-V", force
 command = "cross"
 args =["build", "--target", "${TARGET}", "--release", "--workspace", "--exclude", "rsplayer_web_ui", "--package", "rsplayer", "--bin", "rsplayer"]
 
-[tasks.backend_copyremote]
-dependencies = ["backend_build_release"]
-script = [
-    "rsync -avvP --rsync-path=\"sudo rsync\" target/${TARGET}/release/rsplayer pi@${RPI_HOST}:/usr/local/bin",
-]
 
 [tasks.package_deb]
 install_crate = { crate_name = "cargo-deb", binary = "deb", test_arg = "--version", force = false }
-# dependencies = [
-#     "ui_release_build", 
-#     "backend_build_release",
-#     "build_librespot_aarch64"
-# ]
+dependencies = [
+    "ui_release_build", 
+    "backend_build_release",
+    "build_librespot_aarch64"
+]
 command = "cargo"
 args = ["deb", "--no-build", "-p", "rsplayer", "--deb-version", "${RELEASE_VERSION}"]
 
@@ -111,6 +90,28 @@ args = ["fmt"]
 # ---- Local DEV ----
 
 
+[tasks.backend_copyremote]
+dependencies = ["backend_build_release"]
+script = [
+    "rsync -avvP --rsync-path=\"sudo rsync\" target/${TARGET}/release/rsplayer pi@${RPI_HOST}:/usr/local/bin",
+]
+
+[tasks.ui_copylocal]
+dependencies = ["ui_dev_build"]
+script = [
+    "rsync -av --delete rsplayer_web_ui/pkg rsplayer_web_ui/public/ .run/ui",
+]
+
+[tasks.ui_dev_build]
+env = { "CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS" = ["rsplayer_web_ui"] }
+run_task = {name = "_ui_dev_build", fork = true}
+
+[tasks._ui_dev_build]
+workspace = true
+description = "Build with wasm-pack"
+install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V" }
+command = "wasm-pack"
+args = ["build", "--target", "web", "--out-name", "package", "--dev", "--", "--no-default-features", "--features", "local"]
 
 
 
