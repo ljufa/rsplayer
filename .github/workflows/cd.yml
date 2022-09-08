@@ -1,8 +1,8 @@
 name: Release from tag
 on:
-  release:
-    types: [prereleased]
-
+  push:
+    tags:
+      - "v*.*.*"
 env:
   CARGO_TERM_COLOR: always
 
