@@ -11,7 +11,7 @@ default_to_workspace = false
 
 [tasks.ui_release_build]
 env = { "CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS" = ["rsplayer_web_ui"] }
-run_task = {name = "_ui_release_build", fork = true}
+run_task = { name = "_ui_release_build", fork = true }
 
 [tasks.ui_copyremote]
 env = { RPI_DIR = "/opt/rsplayer/ui" }
@@ -22,7 +22,10 @@ script = [
 
 [tasks._ui_release_build]
 workspace = true
-env = { "CARGO_MAKE_WORKSPACE_SKIP_MEMBERS" = ["rsplayer_api_models", "rsplayer_backend"] }
+env = { "CARGO_MAKE_WORKSPACE_SKIP_MEMBERS" = [
+    "rsplayer_api_models",
+    "rsplayer_backend",
+] }
 description = "Build with wasm-pack in release mode"
 install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V" }
 command = "wasm-pack"
@@ -34,37 +37,57 @@ command = "cargo"
 args = ["run"]
 
 [tasks.backend_build_release]
-install_crate = { crate_name = "cross", binary = "cross", test_arg = "-V", force = false}
+install_crate = { crate_name = "cross", binary = "cross", test_arg = "-V", force = false }
 command = "cross"
-args =["build", "--target", "${TARGET}", "--release", "--workspace", "--exclude", "rsplayer_web_ui", "--package", "rsplayer", "--bin", "rsplayer"]
+args = [
+    "build",
+    "--target",
+    "${TARGET}",
+    "--release",
+    "--workspace",
+    "--exclude",
+    "rsplayer_web_ui",
+    "--package",
+    "rsplayer",
+    "--bin",
+    "rsplayer",
+]
 
 
 [tasks.package_deb]
 install_crate = { crate_name = "cargo-deb", binary = "deb", test_arg = "--version", force = false }
 command = "cargo"
-args = ["deb", "--no-build", "-p", "rsplayer", "--deb-version", "${RELEASE_VERSION}"]
+args = [
+    "deb",
+    "--no-build",
+    "-p",
+    "rsplayer",
+    "--target=${TARGET}",
+    "--deb-version",
+    "${RELEASE_VERSION}",
+]
 
 [tasks.build_librespot_aarch64]
 cwd = "/tmp"
 script = [
     "rm -rf librespot",
-	"git clone https://github.com/librespot-org/librespot.git",
-	"cd librespot",
+    "git clone https://github.com/librespot-org/librespot.git",
+    "cd librespot",
     "git checkout master",
     "cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/Cross.toml .",
-	"cross build --target aarch64-unknown-linux-gnu --release --no-default-features --features alsa-backend",
-	"cp -f target/aarch64-unknown-linux-gnu/release/librespot ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/PKGS/debian-arm64/usr/local/bin"
+    "cross build --target aarch64-unknown-linux-gnu --release --no-default-features --features alsa-backend",
+    "cp -f target/aarch64-unknown-linux-gnu/release/librespot ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/PKGS/debian-arm64/usr/local/bin",
 ]
 
 [tasks.build_librespot_local]
 cwd = "/tmp"
 script = [
     "rm -rf librespot",
-	"git clone https://github.com/librespot-org/librespot.git",
-	"cd librespot",
+    "git clone https://github.com/librespot-org/librespot.git",
+    "cd librespot",
     "git checkout master",
-	"cargo build --release --no-default-features --features alsa-backend",
-	"cp -f target/release/librespot ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/.run",
+    "cargo build --release --no-default-features --features alsa-backend",
+    "cp -f target/release/librespot ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/.run",
     "rm -rf librespot",
 ]
 
@@ -74,7 +97,17 @@ script = [
 description = "Lint with Clippy"
 install_crate = { rustup_component_name = "clippy", binary = "cargo-clippy", test_arg = "--help" }
 command = "cargo"
-args = ["clippy", "--all-features", "--", "--deny", "warnings", "--deny", "clippy::pedantic", "--deny", "clippy::nursery"]
+args = [
+    "clippy",
+    "--all-features",
+    "--",
+    "--deny",
+    "warnings",
+    "--deny",
+    "clippy::pedantic",
+    "--deny",
+    "clippy::nursery",
+]
 
 [tasks.format]
 description = "Format with rustfmt"
@@ -99,14 +132,22 @@ script = [
 
 [tasks.ui_dev_build]
 env = { "CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS" = ["rsplayer_web_ui"] }
-run_task = {name = "_ui_dev_build", fork = true}
+run_task = { name = "_ui_dev_build", fork = true }
 
 [tasks._ui_dev_build]
 workspace = true
 description = "Build with wasm-pack"
 install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V" }
 command = "wasm-pack"
-args = ["build", "--target", "web", "--out-name", "package", "--dev", "--", "--no-default-features", "--features", "local"]
-
-
-
+args = [
+    "build",
+    "--target",
+    "web",
+    "--out-name",
+    "package",
+    "--dev",
+    "--",
+    "--no-default-features",
+    "--features",
+    "local",
+]
