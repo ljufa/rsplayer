@@ -27,33 +27,33 @@ Optional:
 
 ## Installation - ssh access to rpi is required
 - ### Raspberry PI configuration
-Tested on RPI4 with Raspberry Pi OS Lite (64-bit)
-Make sure you have following entries in `/boot/config.txt`:
-```
-dtparam=i2c_arm=on
-dtparam=spi=on
-dtoverlay=gpio-ir,gpio_pin=17
-dtoverlay=rotary-encoder,pin_a=15,pin_b=18,relative_axis=1,steps-per-period=1
-gpio=18,15,19=pu
-gpio=22,23=op,dh
-```
+    Tested on RPI4 with Raspberry Pi OS Lite (64-bit)
+    Make sure you have following entries in `/boot/config.txt`:
+    ```
+    dtparam=i2c_arm=on
+    dtparam=spi=on
+    dtoverlay=gpio-ir,gpio_pin=17
+    dtoverlay=rotary-encoder,pin_a=15,pin_b=18,relative_axis=1,steps-per-period=1
+    gpio=18,15,19=pu
+    gpio=22,23=op,dh
+    ```
 
 - ### Dependencies
-Install MPD and LIRC:
-```
-sudo apt install -y mpd lirc
-sudo systemctl enable mpd
-sudo systemctl enable lircd
-```
-[Librespot](librespot)
+    - Install MPD and LIRC:
+        ```
+        sudo apt install -y mpd lirc
+        sudo systemctl enable mpd
+        sudo systemctl enable lircd
+        ```
+    - [Librespot](https://github.com/librespot-org/librespot) is provided in the distribution package
 
 - ### RSPlayer
-Install rsplayer:
-```
-wget TODO
-sudo dpkg -i --force-overwrites rsplayer.deb
-sudo systemctl enable rsplayer
-```
+    Install rsplayer:
+    ```
+    wget TODO
+    sudo dpkg -i --force-overwrites rsplayer.deb
+    sudo systemctl enable rsplayer
+    ```
 - ### Verify installation
     - Reboot RPI with `sudo reboot`
     - After reboot is done, open browser and navigate to `http://<rpi ip address>:8000/#settings`
