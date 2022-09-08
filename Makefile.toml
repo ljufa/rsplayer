@@ -49,6 +49,7 @@ command = "cargo"
 args = ["run"]
 
 [tasks.backend_build_release]
+install_crate = { crate_name = "cross", binary = "cross", test_arg = "-V" }
 command = "cross"
 args =["build", "--target", "${TARGET}", "--release", "--workspace", "--exclude", "rsplayer_web_ui", "--package", "rsplayer", "--bin", "rsplayer"]
 
