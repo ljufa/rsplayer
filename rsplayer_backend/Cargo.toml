@@ -4,13 +4,13 @@ version = "0.2.0"
 authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
 edition = "2021"
 license-file =  "../LICENSE"
+description = "RSPlayer - Music Player for Raspberry PI and software controller for AK4xxx DAC chips"
 
 [package.metadata.deb]
 maintainer = "Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"
 copyright = "2021, Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"
-description = "RSPlayer - Music Player for Raspberry PI and software controller for AK4xxx DAC chips"
 depends = "mpd (>= 0.22), lirc (>= 0.10.1-6.3)"
-section = "media"
+section = "Sound"
 priority = "optional"
 assets = [
     ["../target/aarch64-unknown-linux-gnu/release/rsplayer", "usr/local/bin/", "755"],
@@ -64,7 +64,6 @@ evdev = { version = "0.11.4", features = ["tokio"]}
 
 #oled
 embedded-graphics = { version = "0.7.1" }
-# st7920 = {  version = "0.2.2" }
 
 # spotify
 [dependencies.rspotify]
@@ -74,7 +73,7 @@ default-features = false
 
 [profile.release]
 opt-level = 3
-# debug = false
-# debug-assertions = false
-# codegen-units = 1
-# strip = true
+debug = false
+debug-assertions = false
+codegen-units = 1
+strip = true
