@@ -27,7 +27,7 @@ env = { "CARGO_MAKE_WORKSPACE_SKIP_MEMBERS" = [
     "rsplayer_backend",
 ] }
 description = "Build with wasm-pack in release mode"
-install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V" }
+install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V", force = false }
 command = "wasm-pack"
 args = ["build", "--target", "web", "--out-name", "package"]
 
