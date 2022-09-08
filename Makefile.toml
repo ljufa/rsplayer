@@ -41,11 +41,6 @@ args =["build", "--target", "${TARGET}", "--release", "--workspace", "--exclude"
 
 [tasks.package_deb]
 install_crate = { crate_name = "cargo-deb", binary = "deb", test_arg = "--version", force = false }
-dependencies = [
-    "ui_release_build", 
-    "backend_build_release",
-    # "build_librespot_aarch64"
-]
 command = "cargo"
 args = ["deb", "--no-build", "-p", "rsplayer", "--deb-version", "${RELEASE_VERSION}"]
 
