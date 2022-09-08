@@ -44,7 +44,7 @@ install_crate = { crate_name = "cargo-deb", binary = "deb", test_arg = "--versio
 dependencies = [
     "ui_release_build", 
     "backend_build_release",
-    "build_librespot_aarch64"
+    # "build_librespot_aarch64"
 ]
 command = "cargo"
 args = ["deb", "--no-build", "-p", "rsplayer", "--deb-version", "${RELEASE_VERSION}"]
@@ -53,7 +53,7 @@ args = ["deb", "--no-build", "-p", "rsplayer", "--deb-version", "${RELEASE_VERSI
 cwd = "/tmp"
 script = [
     "rm -rf librespot",
-	"git clone git@github.com:librespot-org/librespot.git",
+	"git clone https://github.com/librespot-org/librespot.git",
 	"cd librespot",
     "git checkout master",
     "cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/Cross.toml .",
@@ -65,7 +65,7 @@ script = [
 cwd = "/tmp"
 script = [
     "rm -rf librespot",
-	"git clone git@github.com:librespot-org/librespot.git",
+	"git clone https://github.com/librespot-org/librespot.git",
 	"cd librespot",
     "git checkout master",
 	"cargo build --release --no-default-features --features alsa-backend",
