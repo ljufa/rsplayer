@@ -66,8 +66,9 @@ impl Song {
         }
         if let Some(title) = self.title.as_ref() {
             result.push_str(title.as_str());
+        } else {
+            result.push_str(self.file.as_str());
         }
-        result.push_str(self.file.as_str());
 
         if !result.is_empty() {
             Some(result)

@@ -67,7 +67,7 @@ TODO
 
 
 ## My Audio Streamer Implementation
-**[KiCad files](DOCS/kicad/rpi_connector/)** could be found here
+**[KiCad files](DOCS/kicad/)** could be found here
 
 ![front](DOCS/dev/my_streamer_front_small.jpg)
 ![back](DOCS/dev/my_streamer_back_small.jpg)
