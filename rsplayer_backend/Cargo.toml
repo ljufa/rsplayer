@@ -17,10 +17,10 @@ assets = [
     ["../target/aarch64-unknown-linux-gnu/release/rsplayer", "usr/local/bin/", "755"],
     ["../PKGS/debian-arm64/usr/local/bin/librespot", "usr/local/bin/", "755"],
     ["../PKGS/debian-arm64/etc/systemd/system/rsplayer.service", "etc/systemd/system/rsplayer.service", "644"],
-    ["../PKGS/debian-arm64/etc/lirc/lirc_options.conf", "etc/lirc", "644"],
+    ["../PKGS/debian-arm64/etc/lirc/lirc_options.conf", "etc/lirc/", "644"],
     ["../PKGS/debian-arm64/etc/lirc/lircd.conf.d/*", "etc/lirc/lircd.conf.d", "644"],
     ["../target/ui/release/pkg/*", "opt/rsplayer/ui/pkg", "644"],
-    ["../rsplayer_web_ui/public/*", "opt/rsplayer/ui", "644"],
+    ["../rsplayer_web_ui/public/**/*", "opt/rsplayer/ui", "644"],
 ]
 
 [dependencies]
