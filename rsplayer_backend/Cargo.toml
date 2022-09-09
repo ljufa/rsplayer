@@ -4,6 +4,7 @@ version = "0.2.0"
 authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
 edition = "2021"
 license-file =  "../LICENSE"
+repository = "https://github.com/ljufa/rsplayer"
 description = "RSPlayer - Music Player for Raspberry PI and software controller for AK4xxx DAC chips"
 
 [package.metadata.deb]
@@ -18,9 +19,8 @@ assets = [
     ["../PKGS/debian-arm64/etc/systemd/system/rsplayer.service", "etc/systemd/system/rsplayer.service", "644"],
     ["../PKGS/debian-arm64/etc/lirc/lirc_options.conf", "etc/lirc", "644"],
     ["../PKGS/debian-arm64/etc/lirc/lircd.conf.d/*", "etc/lirc/lircd.conf.d", "644"],
-    ["../rsplayer_web_ui/pkg/*", "opt/rsplayer/ui/pkg", "644"],
+    ["../target/ui/release/pkg/*", "opt/rsplayer/ui/pkg", "644"],
     ["../rsplayer_web_ui/public/*", "opt/rsplayer/ui", "644"],
-    ["../README.md", "usr/share/doc/rsplayer/README", "644"],
 ]
 
 [dependencies]
