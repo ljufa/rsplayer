@@ -1,0 +1,367 @@
+EESchema Schematic File Version 4
+EELAYER 30 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 7 8
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L Switch:SW_Push SW1
+U 1 1 6008CF9C
+P 1750 1350
+F 0 "SW1" V 1796 1302 50  0000 R CNN
+F 1 "Volume_UP" V 1705 1302 50  0000 R CNN
+F 2 "Button_Switch_THT:SW_PUSH_6mm" H 1750 1550 50  0001 C CNN
+F 3 "~" H 1750 1550 50  0001 C CNN
+	1    1750 1350
+	0    -1   -1   0   
+$EndComp
+$Comp
+L Switch:SW_Push SW2
+U 1 1 6008E428
+P 1750 1950
+F 0 "SW2" V 1796 1902 50  0000 R CNN
+F 1 "Volume_DOWN" V 1705 1902 50  0000 R CNN
+F 2 "Button_Switch_THT:SW_PUSH_6mm_H5mm" H 1750 2150 50  0001 C CNN
+F 3 "~" H 1750 2150 50  0001 C CNN
+	1    1750 1950
+	0    -1   -1   0   
+$EndComp
+$Comp
+L Switch:SW_Push SW3
+U 1 1 6008F0DA
+P 1750 2600
+F 0 "SW3" V 1796 2552 50  0000 R CNN
+F 1 "Select_output_spk_phn" V 1705 2552 50  0000 R CNN
+F 2 "Button_Switch_THT:SW_PUSH_6mm_H5mm" H 1750 2800 50  0001 C CNN
+F 3 "~" H 1750 2800 50  0001 C CNN
+	1    1750 2600
+	0    -1   -1   0   
+$EndComp
+$Comp
+L Interface_Optical:TSOP312xx U1
+U 1 1 60090649
+P 2150 3450
+F 0 "U1" H 2138 3875 50  0000 C CNN
+F 1 "TSOP312xx" H 2138 3784 50  0000 C CNN
+F 2 "OptoDevice:Vishay_CAST-3Pin" H 2100 3075 50  0001 C CNN
+F 3 "http://www.vishay.com/docs/82492/tsop312.pdf" H 2800 3750 50  0001 C CNN
+	1    2150 3450
+	1    0    0    -1  
+$EndComp
+$Comp
+L Connector_Generic:Conn_02x05_Odd_Even J3
+U 1 1 6009A36D
+P 3700 1800
+F 0 "J3" H 3750 2217 50  0000 C CNN
+F 1 "To_RPI_GPIO" H 3900 2150 50  0000 C CNN
+F 2 "Connector_IDC:IDC-Header_2x05_P2.54mm_Vertical" H 3700 1800 50  0001 C CNN
+F 3 "~" H 3700 1800 50  0001 C CNN
+	1    3700 1800
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR02
+U 1 1 600A066B
+P 2950 3900
+F 0 "#PWR02" H 2950 3650 50  0001 C CNN
+F 1 "GND" H 2955 3727 50  0000 C CNN
+F 2 "" H 2950 3900 50  0001 C CNN
+F 3 "" H 2950 3900 50  0001 C CNN
+	1    2950 3900
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	1750 1550 2950 1550
+Wire Wire Line
+	2950 1550 2950 2150
+Wire Wire Line
+	2550 3650 2950 3650
+Connection ~ 2950 3650
+Wire Wire Line
+	2950 3650 2950 3900
+Wire Wire Line
+	1750 2800 2950 2800
+Connection ~ 2950 2800
+Wire Wire Line
+	2950 2800 2950 3650
+Wire Wire Line
+	1750 2150 2950 2150
+Connection ~ 2950 2150
+Wire Wire Line
+	2950 2150 2950 2800
+$Comp
+L Relay:G6S-2 K1
+U 1 1 600A42E6
+P 5150 3250
+F 0 "K1" H 5780 3296 50  0000 L CNN
+F 1 "G6S-2" H 5780 3205 50  0000 L CNN
+F 2 "Relay_THT:Relay_DPDT_Omron_G6S-2" H 5150 3250 50  0001 L CNN
+F 3 "http://omronfs.omron.com/en_US/ecb/products/pdf/en-g6s.pdf" H 5150 3250 50  0001 C CNN
+	1    5150 3250
+	1    0    0    -1  
+$EndComp
+$Comp
+L Transistor_BJT:BC547 Q1
+U 1 1 600AD8B2
+P 4650 3900
+F 0 "Q1" H 4841 3946 50  0000 L CNN
+F 1 "BC547" H 4841 3855 50  0000 L CNN
+F 2 "Package_TO_SOT_THT:TO-92_Inline" H 4850 3825 50  0001 L CIN
+F 3 "https://www.onsemi.com/pub/Collateral/BC550-D.pdf" H 4650 3900 50  0001 L CNN
+	1    4650 3900
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:R R2
+U 1 1 600B0291
+P 4050 3450
+F 0 "R2" V 3843 3450 50  0000 C CNN
+F 1 "1k" V 3934 3450 50  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical" V 3980 3450 50  0001 C CNN
+F 3 "~" H 4050 3450 50  0001 C CNN
+	1    4050 3450
+	-1   0    0    1   
+$EndComp
+$Comp
+L power:GND #PWR06
+U 1 1 600B17EB
+P 4750 4100
+F 0 "#PWR06" H 4750 3850 50  0001 C CNN
+F 1 "GND" H 4755 3927 50  0000 C CNN
+F 2 "" H 4750 4100 50  0001 C CNN
+F 3 "" H 4750 4100 50  0001 C CNN
+	1    4750 4100
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	4750 3550 4750 3600
+$Comp
+L Diode:1N4004 D2
+U 1 1 600B381B
+P 4400 3250
+F 0 "D2" V 4354 3330 50  0000 L CNN
+F 1 "1N4004" V 4445 3330 50  0000 L CNN
+F 2 "Diode_SMD:D_MELF" H 4400 3075 50  0001 C CNN
+F 3 "http://www.vishay.com/docs/88503/1n4001.pdf" H 4400 3250 50  0001 C CNN
+	1    4400 3250
+	0    1    1    0   
+$EndComp
+Wire Wire Line
+	4400 3100 4400 2950
+Wire Wire Line
+	4400 2950 4750 2950
+Wire Wire Line
+	4400 3400 4400 3600
+Wire Wire Line
+	4400 3600 4750 3600
+Connection ~ 4750 3600
+Wire Wire Line
+	4750 3600 4750 3700
+$Comp
+L power:GND #PWR08
+U 1 1 600C2C68
+P 5150 1500
+F 0 "#PWR08" H 5150 1250 50  0001 C CNN
+F 1 "GND" H 5155 1327 50  0000 C CNN
+F 2 "" H 5150 1500 50  0001 C CNN
+F 3 "" H 5150 1500 50  0001 C CNN
+	1    5150 1500
+	1    0    0    -1  
+$EndComp
+$Comp
+L Connector:Conn_01x02_Male J7
+U 1 1 600A0FEC
+P 6500 3350
+F 0 "J7" H 6608 3531 50  0000 C CNN
+F 1 "220_IN_OUT" H 6608 3440 50  0000 C CNN
+F 2 "TerminalBlock_RND:TerminalBlock_RND_205-00001_1x02_P5.00mm_Horizontal" H 6500 3350 50  0001 C CNN
+F 3 "~" H 6500 3350 50  0001 C CNN
+	1    6500 3350
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	6300 3350 6300 3700
+Wire Wire Line
+	6300 3700 5550 3700
+Wire Wire Line
+	5550 3700 5550 3550
+Wire Wire Line
+	5650 2950 5650 2750
+Wire Wire Line
+	5650 2750 6300 2750
+Wire Wire Line
+	6300 2750 6300 3250
+Wire Wire Line
+	5150 3550 5150 3650
+Wire Wire Line
+	5050 2750 5250 2750
+Wire Wire Line
+	5250 2750 5250 2950
+Wire Wire Line
+	1750 1700 1750 1750
+$Comp
+L Connector:Conn_01x01_Male J4
+U 1 1 600CBA69
+P 5050 1800
+F 0 "J4" V 5112 1844 50  0000 L CNN
+F 1 "GPIO_To_Selector_Brd" V 5203 1844 50  0000 L CNN
+F 2 "Connector_PinHeader_1.00mm:PinHeader_1x01_P1.00mm_Vertical" H 5050 1800 50  0001 C CNN
+F 3 "~" H 5050 1800 50  0001 C CNN
+	1    5050 1800
+	0    1    1    0   
+$EndComp
+$Comp
+L Connector:Conn_01x02_Male J5
+U 1 1 600C8832
+P 5150 1300
+F 0 "J5" V 5212 1344 50  0000 L CNN
+F 1 "POWER_IN" V 5303 1344 50  0000 L CNN
+F 2 "TerminalBlock_RND:TerminalBlock_RND_205-00001_1x02_P5.00mm_Horizontal" H 5150 1300 50  0001 C CNN
+F 3 "~" H 5150 1300 50  0001 C CNN
+	1    5150 1300
+	0    1    1    0   
+$EndComp
+$Comp
+L power:GND #PWR09
+U 1 1 6011BDDA
+P 5150 2450
+F 0 "#PWR09" H 5150 2200 50  0001 C CNN
+F 1 "GND" H 5155 2277 50  0000 C CNN
+F 2 "" H 5150 2450 50  0001 C CNN
+F 3 "" H 5150 2450 50  0001 C CNN
+	1    5150 2450
+	1    0    0    -1  
+$EndComp
+$Comp
+L Connector:Conn_01x02_Male J6
+U 1 1 6011BDEC
+P 5150 2250
+F 0 "J6" V 5212 2294 50  0000 L CNN
+F 1 "POWER_OUT" V 5303 2294 50  0000 L CNN
+F 2 "TerminalBlock_RND:TerminalBlock_RND_205-00001_1x02_P5.00mm_Horizontal" H 5150 2250 50  0001 C CNN
+F 3 "~" H 5150 2250 50  0001 C CNN
+	1    5150 2250
+	0    1    1    0   
+$EndComp
+Wire Wire Line
+	5050 2450 5050 2750
+$Comp
+L power:GND #PWR04
+U 1 1 600CC1E6
+P 3500 1600
+F 0 "#PWR04" H 3500 1350 50  0001 C CNN
+F 1 "GND" H 3505 1427 50  0000 C CNN
+F 2 "" H 3500 1600 50  0001 C CNN
+F 3 "" H 3500 1600 50  0001 C CNN
+	1    3500 1600
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	4050 3600 4050 3900
+Wire Wire Line
+	4050 3900 4450 3900
+Text HLabel 4550 1050 2    50   Input ~ 0
+GPIO15
+Text HLabel 4200 1250 2    50   Input ~ 0
+GPIO18
+Text HLabel 4400 1800 2    50   Input ~ 0
+GPIO27
+Text HLabel 3300 1700 1    50   Input ~ 0
+GPIO17
+Text HLabel 4050 2400 0    50   Input ~ 0
+GPIO23
+Text HLabel 4600 2150 2    50   BiDi ~ 0
+GPIO9
+Wire Wire Line
+	4050 3300 4050 2350
+Wire Wire Line
+	4050 2350 3200 2350
+Wire Wire Line
+	3200 2350 3200 1900
+Wire Wire Line
+	3200 1900 3500 1900
+Wire Wire Line
+	5050 2000 4600 2000
+Wire Wire Line
+	4600 2000 4600 2150
+Wire Wire Line
+	4600 2150 3500 2150
+Wire Wire Line
+	3500 2150 3500 2000
+Wire Wire Line
+	1750 1150 1750 950 
+Wire Wire Line
+	1750 950  4200 950 
+Wire Wire Line
+	4200 950  4200 1700
+Wire Wire Line
+	4200 1700 4000 1700
+Wire Wire Line
+	1750 1700 1600 1700
+Wire Wire Line
+	1600 1700 1600 750 
+Wire Wire Line
+	1600 750  4550 750 
+Wire Wire Line
+	4550 750  4550 1600
+Wire Wire Line
+	4550 1600 4000 1600
+Wire Wire Line
+	1750 2400 3100 2400
+Wire Wire Line
+	3100 2400 3100 1700
+Wire Wire Line
+	3100 1700 3500 1700
+Wire Wire Line
+	2550 3450 3050 3450
+Wire Wire Line
+	3050 3450 3050 2700
+Wire Wire Line
+	3050 2700 4400 2700
+Wire Wire Line
+	4400 2700 4400 1800
+Wire Wire Line
+	4400 1800 4000 1800
+Text HLabel 5000 2700 2    50   Output ~ 0
+5V_SWITCH
+Text HLabel 6500 3350 2    50   Input ~ 0
+220V_IN
+Text HLabel 6500 3250 2    50   Output ~ 0
+220V_OUT
+Text HLabel 5050 1500 0    50   Input ~ 0
+5V_RPI
+Text HLabel 4400 2950 0    50   Input ~ 0
+5V_RPI
+Text HLabel 2550 3250 2    50   Input ~ 0
+5V_RPI
+Text HLabel 5750 1750 2    50   BiDi ~ 0
+GPIO22
+$Comp
+L Connector:Conn_01x01_Male J2
+U 1 1 601153B9
+P 5750 1550
+F 0 "J2" V 5812 1594 50  0000 L CNN
+F 1 "GPIO_To_Power_off_btn" V 5750 1600 50  0000 L CNN
+F 2 "Connector_PinHeader_1.00mm:PinHeader_1x01_P1.00mm_Vertical" H 5750 1550 50  0001 C CNN
+F 3 "~" H 5750 1550 50  0001 C CNN
+	1    5750 1550
+	0    1    1    0   
+$EndComp
+Wire Wire Line
+	5750 1750 4850 1750
+Wire Wire Line
+	4850 1750 4850 1900
+Wire Wire Line
+	4850 1900 4000 1900
+Text HLabel 5150 3650 2    50   Input ~ 0
+5V_RPI
+$EndSCHEMATC
