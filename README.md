@@ -1,8 +1,8 @@
 # RSPlayer - Music Player for Raspberry PI and software controller for AK4xxx DAC chips.
-### Currently it supports *Spotify* and *Music Player Daemon* as backend players and provide unique UI experience.
-### Optionaly you can connect input/output devices to GPIO header: 
-- #### *DAC board* for hardware volume control and other dac settings like sound quality and digital filter
-- #### *Rotary encoder* for volume control and power on 
+### Currently it supports *Spotify* and *Music Player Daemon* as backend players and provides a unique UI experience.
+### Optionally you can connect the following input/output hardware to the GPIO header:
+- #### *DAC board* for hardware volume control and other DAC settings like the sound quality and digital filter
+- #### *Rotary encoder* for volume control and power on
 - #### *IR Receiver* for player remote control
 - #### *OLED display* for player state info
 - #### *Relay* for output audio signal selection.
@@ -27,38 +27,38 @@ Optional:
 
 ## Installation - ssh access to rpi is required
 - ### Raspberry PI configuration
-    Tested on RPI4 with Raspberry Pi OS Lite (64-bit)
-    Make sure you have following entries in `/boot/config.txt`:
-    ```
-    dtparam=i2c_arm=on
-    dtparam=spi=on
-    dtoverlay=gpio-ir,gpio_pin=17
-    dtoverlay=rotary-encoder,pin_a=15,pin_b=18,relative_axis=1,steps-per-period=1
-    gpio=18,15,19=pu
-    gpio=22,23=op,dh
-    ```
+   Tested on RPI4 with Raspberry Pi OS Lite (64-bit)
+   Make sure you have the following entries in `/boot/config.txt`:
+   ```
+   dtparam=i2c_arm=on
+   dtparam=spi=on
+   dtoverlay=gpio-ir,gpio_pin=17
+   dtoverlay=rotary-encoder,pin_a=15,pin_b=18,relative_axis=1,steps-per-period=1
+   gpio=18,15,19=pu
+   gpio=22,23=op,dh
+   ```
 
 - ### Dependencies
-    - Install MPD and LIRC:
-        ```
-        sudo apt install -y mpd lirc
-        sudo systemctl enable mpd
-        sudo systemctl enable lircd
-        ```
-    - [Librespot](https://github.com/librespot-org/librespot) is provided in the distribution package
+   - Install MPD and LIRC:
+       ```
+       sudo apt install -y mpd lirc
+       sudo systemctl enable mpd
+       sudo systemctl enable lircd
+       ```
+   - [Librespot](https://github.com/librespot-org/librespot) is provided in the installation package
 
 - ### RSPlayer
-    Install rsplayer:
-    ```
-    wget https://github.com/ljufa/rsplayer/releases/download/v0.3.0/rsplayer_v0.3.0_arm64.deb
-    sudo dpkg -i --force-overwrites rsplayer_v0.3.0_arm64.deb
-    sudo systemctl enable rsplayer
-    ```
+   Install rsplayer:
+   ```
+   wget https://github.com/ljufa/rsplayer/releases/download/v0.3.0/rsplayer_v0.3.0_arm64.deb
+   sudo dpkg -i --force-overwrites rsplayer_v0.3.0_arm64.deb
+   sudo systemctl enable rsplayer
+   ```
 - ### Verify installation
-    - Reboot RPI with `sudo reboot`
-    - After reboot is done, open browser and navigate to `http://<rpi ip address>:8000/#settings`
-    - If page can not loaded check log for errors `journalctl -u rsplayer.service -f -n 300`
-
+   - Reboot RPI with `sudo reboot`
+   - After reboot is done, open browser and navigate to `http://<rpi ip address>:8000/#settings`
+   - If the page can not load check the log for errors with: `journalctl -u rsplayer.service -f -n 300`
+ 
 ## Configuration
 TODO
 
