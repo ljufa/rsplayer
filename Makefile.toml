@@ -8,34 +8,28 @@ RELEASE_VERSION = "0.2.2"
 default_to_workspace = false
 
 # ---- BUILD UI----
-
-[tasks.ui_release_build]
+[tasks.ui_build_release]
 env = { "CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS" = ["rsplayer_web_ui"] }
-run_task = { name = "_ui_release_build", fork = true }
+run_task = { name = "_ui_build_release", fork = true }
 
-[tasks.ui_copyremote]
+[tasks.ui_copy_remote]
 env = { RPI_DIR = "/opt/rsplayer/ui" }
-dependencies = ["ui_release_build"]
+dependencies = ["ui_build_release"]
 script = [
     "rsync -av --rsync-path=\"sudo rsync\" --delete rsplayer_web_ui/public/ rsplayer_web_ui/pkg pi@${RPI_HOST}:${RPI_DIR}",
 ]
 
-[tasks._ui_release_build]
+[tasks._ui_build_release]
 workspace = true
 env = { "CARGO_MAKE_WORKSPACE_SKIP_MEMBERS" = [
     "rsplayer_api_models",
     "rsplayer_backend",
 ] }
-description = "Build with wasm-pack in release mode"
 install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V", force = false }
 command = "wasm-pack"
 args = ["build", "--target", "web", "--out-name", "package", "--out-dir", "../target/ui/release/pkg"]
 
 # ---- BUILD Backend----
-[tasks.backend_run_local]
-command = "cargo"
-args = ["run"]
-
 [tasks.backend_build_release]
 install_crate = { crate_name = "cross", binary = "cross", test_arg = "-V", force = false }
 command = "cross"
@@ -53,7 +47,6 @@ args = [
     "rsplayer",
 ]
 
-
 [tasks.package_deb]
 install_crate = { crate_name = "cargo-deb", binary = "deb", test_arg = "--version", force = false }
 command = "cargo"
@@ -67,7 +60,7 @@ args = [
     "${RELEASE_VERSION}",
 ]
 
-[tasks.build_librespot_aarch64]
+[tasks.librespot_build_aarch64]
 cwd = "/tmp"
 script = [
     "rm -rf librespot",
@@ -78,19 +71,6 @@ script = [
     "cross build --target aarch64-unknown-linux-gnu --release --no-default-features --features alsa-backend",
     "cp -f target/aarch64-unknown-linux-gnu/release/librespot ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/PKGS/debian-arm64/usr/local/bin",
 ]
-
-[tasks.build_librespot_local]
-cwd = "/tmp"
-script = [
-    "rm -rf librespot",
-    "git clone https://github.com/librespot-org/librespot.git",
-    "cd librespot",
-    "git checkout master",
-    "cargo build --release --no-default-features --features alsa-backend",
-    "cp -f target/release/librespot ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/.run",
-    "rm -rf librespot",
-]
-
 
 # ---- LINT ----
 [tasks.clippy]
@@ -116,25 +96,28 @@ args = ["fmt"]
 
 
 # ---- Local DEV ----
+[tasks.backend_run_local]
+command = "cargo"
+args = ["run"]
 
 
-[tasks.backend_copyremote]
+[tasks.backend_copy_remote]
 dependencies = ["backend_build_release"]
 script = [
     "rsync -avvP --rsync-path=\"sudo rsync\" target/${TARGET}/release/rsplayer pi@${RPI_HOST}:/usr/local/bin",
 ]
 
-[tasks.ui_copylocal]
-dependencies = ["ui_dev_build"]
+[tasks.ui_copy_local]
+dependencies = ["ui_build_dev"]
 script = [
     "rsync -av --delete rsplayer_web_ui/pkg rsplayer_web_ui/public/ .run/ui",
 ]
 
-[tasks.ui_dev_build]
+[tasks.ui_build_dev]
 env = { "CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS" = ["rsplayer_web_ui"] }
-run_task = { name = "_ui_dev_build", fork = true }
+run_task = { name = "_ui_build_dev", fork = true }
 
-[tasks._ui_dev_build]
+[tasks._ui_build_dev]
 workspace = true
 description = "Build with wasm-pack"
 install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V" }
@@ -150,4 +133,16 @@ args = [
     "--no-default-features",
     "--features",
     "local",
+]
+
+[tasks.librespot_build_local]
+cwd = "/tmp"
+script = [
+    "rm -rf librespot",
+    "git clone https://github.com/librespot-org/librespot.git",
+    "cd librespot",
+    "git checkout master",
+    "cargo build --release --no-default-features --features alsa-backend",
+    "cp -f target/release/librespot ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/.run",
+    "rm -rf librespot",
 ]
