@@ -2,7 +2,6 @@
 image = "ljufa/rpi4-build-ak44:latest6"
 
 [target.aarch64-unknown-linux-gnu]
-image = "ljufa/rpi4-build-ak44:aarch64_7"
+image = "ljufa/rpi4-build-ak44:aarch64_11"
 linker = "clang"
 rustflags = ["-C","link-arg=-fuse-ld=/usr/bin/mold"]
-

@@ -1,75 +1,74 @@
-### Install build tools
-`cargo install cross`
+# RSPlayer - Music Player for Raspberry PI and software controller for AK4xxx DAC chips.
+### Currently it supports *Spotify* and *Music Player Daemon* as backend players and provide unique UI experience.
+### Optionaly you can connect input/output devices to GPIO header: 
+- #### *DAC board* for hardware volume control and other dac settings like sound quality and digital filter
+- #### *Rotary encoder* for volume control and power on 
+- #### *IR Receiver* for player remote control
+- #### *OLED display* for player state info
+- #### *Relay* for output audio signal selection.
+---
 
-### Build release
+## TODO: DEMO and Video
+## Hardware requirements
+Mandatory:
 
-`make release copytorpi`
+- Raspberry PI 4 - for best audio quality. It will work with older 64bit models as well.
 
-### Features
-#### Hardware integration
-* `hw_oled` - enable control of OLED module over gpio spi protocol
-* `hw_dac` - enable control of DAC chip, volume, filters, gain ...
-* `hw_ir_control` - enable IR input based on LIRC
+Optional:
+- Diy friendly AK44xx DAC board i.e. [Diyinhk](https://www.diyinhk.com/shop/audio-kits/), [JLSounds](http://jlsounds.com/products.html) ...
+- USB to I2S converter board. i.e. [WaveIO](https://luckit.biz/), [Amanero](https://amanero.com/), [JLSounds](http://jlsounds.com/products.html) ...
+- Infrared Receiver TSOP312xx. i.e. [TSOP31238](https://eu.mouser.com/ProductDetail/Vishay-Semiconductors/TSOP31238?qs=5rGgbCH0pB1jaK4I0GvRsw%3D%3D)
+- A1156 Apple Remote Control
+- Oled display ST7920 128x64 (from Amazon, Ebay ...)
+- Rotary Encoder (from Amazon, Ebay ...)
+- Headphone Amp board i.e. [Whammy](https://diyaudiostore.com/products/whammy-completion-kit?_pos=3&_sid=bf6542f23&_ss=r)
+- Power Supply
+- Metal Case
 
-#### Backend player integrations
-* `backend_mpd` - build with MPD - music player daemon integration  support
-* `backend_lms` - build with LMS - Logitech Media Server integration support
+## Installation - ssh access to rpi is required
+- ### Raspberry PI configuration
+    Tested on RPI4 with Raspberry Pi OS Lite (64-bit)
+    Make sure you have following entries in `/boot/config.txt`:
+    ```
+    dtparam=i2c_arm=on
+    dtparam=spi=on
+    dtoverlay=gpio-ir,gpio_pin=17
+    dtoverlay=rotary-encoder,pin_a=15,pin_b=18,relative_axis=1,steps-per-period=1
+    gpio=18,15,19=pu
+    gpio=22,23=op,dh
+    ```
+
+- ### Dependencies
+    - Install MPD and LIRC:
+        ```
+        sudo apt install -y mpd lirc
+        sudo systemctl enable mpd
+        sudo systemctl enable lircd
+        ```
+    - [Librespot](https://github.com/librespot-org/librespot) is provided in the distribution package
+
+- ### RSPlayer
+    Install rsplayer:
+    ```
+    wget TODO
+    sudo dpkg -i --force-overwrites rsplayer.deb
+    sudo systemctl enable rsplayer
+    ```
+- ### Verify installation
+    - Reboot RPI with `sudo reboot`
+    - After reboot is done, open browser and navigate to `http://<rpi ip address>:8000/#settings`
+    - If page can not loaded check log for errors `journalctl -u rsplayer.service -f -n 300`
+
+## Configuration
+TODO
+
+## Architecture
+![Diagram](DOCS/dev/architecture-2022-09-05-1620.png)
 
 
-### TODO:
+## My Audio Streamer Implementation
+**[KiCad files](DOCS/kicad/rpi_connector/)** could be found here
 
-##### Improvements
-* get rid of `.unwrap()` calls
-* refactor names all over the code
-* replace warp with axum or actix
-* better control over alsa device lock
-* control over samba mount points
-* make unit tests
-* detect dsd signal from waveio(when they implement it diyaudio.com)
-
-##### General
-* implement own player based on Symphonia
-* own media management with advanced search
-* use more information about song based on last.fm response, update id tags on local files?
-* lyrics
-* analyze audio files for song matching and similarity
-* streaming to local device (i.e. phone) for i.e. preview 
-* support more dac chips
-* support more oled models
-* try different audio backends: pipewire, oss, jack ...
-* convert PCM to DSD on the fly
-* integrate more online streaming services
-
-
-##### Player page
-* Show playing context if exists: player type, playlist, album ...
-* Show next playing song
-* Like playing item button
-* Seek to position
-* Better style for control buttons
-
-
-##### Queue page
-<!-- * Show playing context: playlist, album, manual queue ... -->
-<!-- * Search items  -->
-* Manage items (batch, on search results): clear, delete, play, playnext
-<!-- * Mark currently playing item -->
-* Pagination
-* Support Spotify podcast
-
-##### Playlist page
-
-* Search all playlists by name
-* Show items of selected playlist
-* Manage selected playlist:
-    * play item
-    * add item(s) to queue
-    * play next
-    * replace queue with item(s)
-    * delete playlist
-<!-- * Add more playing contexts (playlist types) provided by Spotify i.e. recommended, discover weekly... -->
-* Pagination
-
-##### Settings page
-* Show modal wait window while server is restarting. use ws status
-* Add all settings
+![front](DOCS/dev/my_streamer_front_small.jpg)
+![back](DOCS/dev/my_streamer_back_small.jpg)
+![inside](DOCS/dev/my_streamer_inside_small.jpg)

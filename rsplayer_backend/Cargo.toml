@@ -1,0 +1,79 @@
+[package]
+name = "rsplayer"
+version = "0.2.0"
+authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
+edition = "2021"
+license-file =  "../LICENSE"
+repository = "https://github.com/ljufa/rsplayer"
+description = "RSPlayer - Music Player for Raspberry PI and software controller for AK4xxx DAC chips"
+
+[package.metadata.deb]
+maintainer = "Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"
+copyright = "2021, Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"
+depends = "mpd (>= 0.22), lirc (>= 0.10.1-6.3)"
+section = "Sound"
+priority = "optional"
+assets = [
+    ["../target/aarch64-unknown-linux-gnu/release/rsplayer", "usr/local/bin/", "755"],
+    ["../PKGS/debian-arm64/usr/local/bin/librespot", "usr/local/bin/", "755"],
+    ["../PKGS/debian-arm64/etc/systemd/system/rsplayer.service", "etc/systemd/system/rsplayer.service", "644"],
+    ["../PKGS/debian-arm64/etc/lirc/lirc_options.conf", "etc/lirc", "644"],
+    ["../PKGS/debian-arm64/etc/lirc/lircd.conf.d/*", "etc/lirc/lircd.conf.d", "644"],
+    ["../target/ui/release/pkg/*", "opt/rsplayer/ui/pkg", "644"],
+    ["../rsplayer_web_ui/public/*", "opt/rsplayer/ui", "644"],
+]
+
+[dependencies]
+api_models = { path = "../rsplayer_api_models" }
+
+#logging
+log = "0.4"
+env_logger = "0.9.0"
+cfg-if = "1.0.0"
+
+#warp
+tokio = { version = "1.17.0", features = ["full", "tracing"] }
+warp = "0.3.2"
+futures = { version = "0.3.21", default-features = false }
+tokio-stream = "0.1.8"
+# async debug tokio-console
+console-subscriber = "0.1.7"
+tracing = "0.1"
+tracing-subscriber = "0.2.0"
+
+#mpd
+mpd = { version = "0.0.12" }
+
+#other
+failure = "0.1.7"
+unidecode = "0.3.0"
+alsa = "0.6.0"
+url = "2.2.0"
+num-traits = { version = "0.2.12", default-features = false }
+num-derive = { version = "0.3.2", default-features = false }
+pickledb = "0.5.1"
+log4rs = "1.0.0"
+
+#gpio, i2c
+gpio-cdev = { version = "0.5.1" }
+rpi_embedded = { version = "0.1.0" }
+linux-embedded-hal = { version = "0.3.0" }
+embedded-hal = { version = "0.2.4" }
+evdev = { version = "0.11.4", features = ["tokio"]}
+
+
+#oled
+embedded-graphics = { version = "0.7.1" }
+
+# spotify
+[dependencies.rspotify]
+version = "0.11.5"
+features = ["client-ureq", "ureq-rustls-tls"]
+default-features = false
+
+[profile.release]
+opt-level = 3
+debug = false
+debug-assertions = false
+codegen-units = 1
+strip = true
