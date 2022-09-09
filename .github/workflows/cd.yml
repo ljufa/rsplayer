@@ -14,7 +14,9 @@ jobs:
     - uses: actions/checkout@v2
     - uses: Swatinem/rust-cache@v1
     - uses: davidB/rust-cargo-make@v1
-    - uses: jetli/wasm-pack-action@v0.3.0
+    - uses: taiki-e/install-action@v1
+      with:
+        tool: cross,wasm-pack
     - name: Build UI
       run: cargo make ui_release_build
     - name: Build Backend 
@@ -26,5 +28,5 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')
       with:
         files: |
-          target/debian/*.deb
+          target/aarch64-unknown-linux-gnu/debian/*.deb
           
