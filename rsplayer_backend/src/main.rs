@@ -63,7 +63,7 @@ async fn main() {
     let (input_commands_tx, input_commands_rx) = tokio::sync::mpsc::channel(2);
 
     // start/resume playing after start
-    let _ = input_commands_tx.send(Command::Play).await;
+    _ = input_commands_tx.send(Command::Play).await;
 
     let (state_changes_tx, _) = broadcast::channel(20);
 

@@ -23,7 +23,7 @@ pub async fn monitor(player_svc: MutArcPlayerService, state_changes_tx: Sender<S
         let new_track_info = player.get_current_song();
         if last_track_info != new_track_info {
             if let Some(new) = new_track_info.as_ref() {
-                let _ = state_changes_tx.send(StateChangeEvent::CurrentSongEvent(new.clone()));
+                _ = state_changes_tx.send(StateChangeEvent::CurrentSongEvent(new.clone()));
             }
             last_track_info = new_track_info;
         }
@@ -31,7 +31,7 @@ pub async fn monitor(player_svc: MutArcPlayerService, state_changes_tx: Sender<S
         let new_player_info = player.get_player_info();
         if last_player_info != new_player_info {
             if let Some(new_p_info) = new_player_info.as_ref() {
-                let _ =
+                _ =
                     state_changes_tx.send(StateChangeEvent::PlayerInfoEvent(new_p_info.clone()));
             }
             last_player_info = new_player_info;
@@ -39,7 +39,7 @@ pub async fn monitor(player_svc: MutArcPlayerService, state_changes_tx: Sender<S
         // check progres info change
         let new_progress = player.get_song_progress();
         if last_progress != new_progress {
-            let _ = state_changes_tx.send(StateChangeEvent::SongTimeEvent(new_progress.clone()));
+            _ = state_changes_tx.send(StateChangeEvent::SongTimeEvent(new_progress.clone()));
             last_progress = new_progress;
         }
 
@@ -48,7 +48,7 @@ pub async fn monitor(player_svc: MutArcPlayerService, state_changes_tx: Sender<S
             player.get_playing_context(api_models::state::PlayingContextQuery::IgnoreSongs);
         if last_playing_context != new_playing_context {
             if let Some(new_pc) = new_playing_context.as_ref() {
-                let _ = state_changes_tx
+                _ = state_changes_tx
                     .send(StateChangeEvent::CurrentPlayingContextEvent(new_pc.clone()));
             }
             last_playing_context = new_playing_context;

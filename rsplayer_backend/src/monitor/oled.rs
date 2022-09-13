@@ -18,7 +18,7 @@ pub async fn write(state_changes_rx: Receiver<StateChangeEvent>, config: MutArcC
 }
 
 mod hw_oled {
-    use super::*;
+    use super::{Receiver, StateChangeEvent};
     use crate::monitor::myst7920::ST7920;
     use crate::{common, mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST};
     use api_models::{common::PlayerType, player::Song, settings::OLEDSettings, state::PlayerInfo};
@@ -65,10 +65,10 @@ mod hw_oled {
                 trace!("Command event received: {:?}", cmd_ev);
                 match cmd_ev {
                     Ok(StateChangeEvent::CurrentSongEvent(stat)) => {
-                        draw_track_info(&mut disp, &mut delay, stat);
+                        draw_track_info(&mut disp, &mut delay, &stat);
                     }
                     Ok(StateChangeEvent::StreamerStateEvent(sstatus)) => {
-                        draw_streamer_info(&mut disp, &mut delay, sstatus, active_player);
+                        draw_streamer_info(&mut disp, &mut delay, &sstatus, active_player);
                     }
                     Ok(StateChangeEvent::PlayerInfoEvent(pinfo)) => {
                         draw_player_info(&mut disp, &mut delay, pinfo);
@@ -85,7 +85,7 @@ mod hw_oled {
     fn draw_streamer_info(
         disp: &mut ST7920<Spidev, Pin, Pin>,
         delay: &mut dyn DelayUs<u32>,
-        status: StreamerState,
+        status: &StreamerState,
         active_player: PlayerType,
     ) {
         _ = disp.clear_buffer_region(1, 1, 120, 12, delay);
@@ -108,7 +108,7 @@ mod hw_oled {
     fn draw_track_info(
         disp: &mut ST7920<Spidev, Pin, Pin>,
         delay: &mut dyn DelayUs<u32>,
-        status: Song,
+        status: &Song,
     ) {
         //4. song
         let name = status.info_string();

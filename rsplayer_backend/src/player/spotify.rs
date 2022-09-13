@@ -40,7 +40,7 @@ impl SpotifyPlayerClient {
         if !settings.enabled {
             return Err(err_msg("Spotify integration is disabled."));
         }
-        let mut client = SpotifyOauth::new(settings);
+        let mut client = SpotifyOauth::new(&settings);
         if !client.is_token_present()? {
             return Err(err_msg(
                 "Spotify token not found, please complete configuration",
@@ -311,7 +311,7 @@ impl Player for SpotifyPlayerClient {
                     ) {
                         Ok(_) => {
                             if let Some(pc) = pc.playlist_page.as_mut() {
-                                pc.remove_item(id)
+                                pc.remove_item(&id)
                             }
                         }
                         Err(e) => error!("Failed to delete item {id} from playlist:{e}"),
@@ -368,7 +368,7 @@ impl Player for SpotifyPlayerClient {
             player_type: context.player_type,
             playlist_page: match query {
                 PlayingContextQuery::WithSearchTerm(term, offset) => {
-                    if term.len() == 0 {
+                    if term.is_empty() {
                         return context.clone();
                     } else {
                         context.playlist_page.as_ref().map(|pp| PlaylistPage {
@@ -386,7 +386,7 @@ impl Player for SpotifyPlayerClient {
                         })
                     }
                 }
-                PlayingContextQuery::CurrentSongPage => todo!(),
+                PlayingContextQuery::CurrentSongPage |
                 PlayingContextQuery::IgnoreSongs => None,
             },
         })
@@ -457,14 +457,14 @@ impl Player for SpotifyPlayerClient {
                         description: None,
                         image: sp.images.first().map(|i| i.url.clone()),
                         owner_name: sp.owner.display_name.clone(),
-                    }))
+                    }));
                 }
             }
             self.playlist_group = Some(Playlists { items });
         }
         self.playlist_group
             .as_ref()
-            .map_or(Playlists::default(), |pg| pg.clone())
+            .map_or(Playlists::default(), std::clone::Clone::clone)
     }
 
     fn get_dynamic_playlists(
@@ -524,11 +524,11 @@ impl Player for SpotifyPlayerClient {
     }
 
     fn load_song(&mut self, _song_id: String) {
-        todo!()
+        // todo!()
     }
 
     fn add_song_to_queue(&mut self, _song_id: String) {
-        todo!()
+        // todo!()
     }
 }
 
@@ -621,7 +621,7 @@ fn full_track_to_song(track: &FullTrack) -> Song {
         artist: track.artists.first().map(|a| a.name.clone()),
         genre: None,
         date: track.album.release_date.clone(),
-        file: track.href.as_ref().map_or("".to_string(), |u| u.clone()),
+        file: track.href.as_ref().map_or("".to_string(), std::clone::Clone::clone),
         title: Some(track.name.clone()),
         time: Some(track.duration),
         uri: track.album.images.first().map(|i| i.url.clone()),

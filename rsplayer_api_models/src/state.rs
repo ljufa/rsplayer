@@ -57,7 +57,7 @@ pub enum PlayingContextQuery {
 }
 // end todo
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct PlayerInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<PlayerState>,
@@ -126,17 +126,6 @@ pub enum AudioOut {
     HEAD,
 }
 
-impl Default for PlayerInfo {
-    fn default() -> Self {
-        Self {
-            state: None,
-            random: None,
-            audio_format_rate: None,
-            audio_format_bit: None,
-            audio_format_channels: None,
-        }
-    }
-}
 
 impl SongProgress {
     pub fn format_time(&self) -> String {

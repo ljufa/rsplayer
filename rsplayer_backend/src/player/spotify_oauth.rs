@@ -13,9 +13,9 @@ pub struct SpotifyOauth {
 }
 
 impl SpotifyOauth {
-    pub fn new(settings: SpotifySettings) -> Self {
+    pub fn new(settings: &SpotifySettings) -> Self {
         Self {
-            client: create_oauth(&settings),
+            client: create_oauth(settings),
             settings: settings.clone(),
         }
     }
@@ -39,7 +39,7 @@ impl SpotifyOauth {
                     match self.client.refetch_token()? {
                         Some(refreshed_token) => {
                             log::info!("Successfully refreshed expired token from token cache");
-                            *self.client.get_token().lock().unwrap() = Some(refreshed_token)
+                            *self.client.get_token().lock().unwrap() = Some(refreshed_token);
                         }
                         // If not, prompt the user for it
                         None => {

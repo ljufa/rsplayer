@@ -1,8 +1,8 @@
 use api_models::common::Volume;
 
-pub(crate) mod ak4497;
-pub(crate) mod alsa;
-pub(crate) mod audio_service;
+pub mod ak4497;
+pub mod alsa;
+pub mod audio_service;
 
 pub trait VolumeControlDevice {
     fn vol_up(&self) -> Volume;

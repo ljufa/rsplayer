@@ -5,11 +5,11 @@ use std::net::{SocketAddr, TcpStream};
 use std::str::FromStr;
 use std::time::Duration;
 
-use api_models::player::*;
+use api_models::player::Song;
 use api_models::playlist::{
     Category, DynamicPlaylistsPage, Playlist, PlaylistPage, PlaylistType, Playlists,
 };
-use api_models::settings::*;
+use api_models::settings::MpdSettings;
 use api_models::state::{
     PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, SongProgress,
 };
@@ -48,7 +48,7 @@ impl MpdPlayerClient {
         Ok(MpdPlayerClient {
             mpd_client: create_client(mpd_settings)?,
             mpd_server_url: mpd_settings.get_server_url(),
-            progress: Default::default(),
+            progress: SongProgress::default(),
             all_songs: vec![],
         })
     }
@@ -75,29 +75,29 @@ impl MpdPlayerClient {
 
 impl Player for MpdPlayerClient {
     fn play(&mut self) {
-        let _ = self.try_with_reconnect_result(|client| client.play());
+        _ = self.try_with_reconnect_result(|client| client.play());
     }
 
     fn pause(&mut self) {
-        let _ = self.try_with_reconnect_result(|client| client.pause(true));
+        _ = self.try_with_reconnect_result(|client| client.pause(true));
     }
 
     fn next_track(&mut self) {
-        let _ = self.try_with_reconnect_result(|client| client.next());
+        _ = self.try_with_reconnect_result(|client| client.next());
     }
 
     fn prev_track(&mut self) {
-        let _ = self.try_with_reconnect_result(|client| client.prev());
+        _ = self.try_with_reconnect_result(|client| client.prev());
     }
 
     fn stop(&mut self) {
-        let _ = self.try_with_reconnect_result(|client| client.stop());
+        _ = self.try_with_reconnect_result(|client| client.stop());
     }
 
     fn shutdown(&mut self) {
         info!("Shutting down MPD player!");
         self.stop();
-        let _ = self.mpd_client.close();
+        _ = self.mpd_client.close();
         info!("MPD player shutdown finished!");
     }
 
@@ -106,45 +106,45 @@ impl Player for MpdPlayerClient {
         if let Ok(status) = result {
             //todo: implement protection against going of the range
             let position = status.elapsed.unwrap().num_seconds() + seconds as i64;
-            let _ = self.mpd_client.rewind(position);
+            _ = self.mpd_client.rewind(position);
         };
     }
 
     fn random_toggle(&mut self) {
         let status = self.try_with_reconnect_result(|client| client.status());
         if let Ok(status) = status {
-            let _ = self.mpd_client.random(!status.random);
+            _ = self.mpd_client.random(!status.random);
         }
     }
 
     fn load_playlist(&mut self, pl_id: String) {
         if pl_id.starts_with(SAVED_PL_PREFIX) {
             let pl_id = pl_id.replace(SAVED_PL_PREFIX, "");
-            let _ = self.try_with_reconnect_result(|client| {
-                let _ = client.clear();
+            _ = self.try_with_reconnect_result(|client| {
+                _ = client.clear();
                 client.load(pl_id.clone(), ..)
             });
         } else if pl_id.starts_with(BY_GENRE_PL_PREFIX) {
             let pl_id = pl_id.replace(BY_GENRE_PL_PREFIX, "");
-            let _ = self.mpd_client.clear();
-            let _ = self
+            _ = self.mpd_client.clear();
+            _ = self
                 .mpd_client
                 .findadd(Query::new().and(mpd::Term::Tag("Genre".into()), pl_id));
         } else if pl_id.starts_with(BY_DATE_PL_PREFIX) {
             let pl_id = pl_id.replace(BY_DATE_PL_PREFIX, "");
-            let _ = self.mpd_client.clear();
-            let _ = self
+            _ = self.mpd_client.clear();
+            _ = self
                 .mpd_client
                 .findadd(Query::new().and(mpd::Term::Tag("Date".into()), pl_id));
         } else if pl_id.starts_with(BY_ARTIST_PL_PREFIX) {
             let pl_id = pl_id.replace(BY_ARTIST_PL_PREFIX, "");
-            let _ = self.mpd_client.clear();
-            let _ = self
+            _ = self.mpd_client.clear();
+            _ = self
                 .mpd_client
                 .findadd(Query::new().and(mpd::Term::Tag("Artist".into()), pl_id));
         } else if pl_id.starts_with(BY_FOLDER_PL_PREFIX) {
             let pl_id = pl_id.replace(BY_FOLDER_PL_PREFIX, "");
-            let _ = self.mpd_client.clear();
+            _ = self.mpd_client.clear();
             self.all_songs
                 .iter()
                 .filter(|s| {
@@ -155,12 +155,12 @@ impl Player for MpdPlayerClient {
                         .starts_with(pl_id.as_str())
                 })
                 .for_each(|s| {
-                    let _ = self
+                    _ = self
                         .mpd_client
                         .findadd(Query::new().and(mpd::Term::File, s.file.clone()));
                 });
         }
-        let _ = self.mpd_client.play();
+        _ = self.mpd_client.play();
     }
 
     fn load_album(&mut self, _album_id: String) {
@@ -169,13 +169,13 @@ impl Player for MpdPlayerClient {
 
     fn play_item(&mut self, id: String) {
         if let Ok(id) = id.parse::<u32>() {
-            let _ = self.try_with_reconnect_result(|client| client.switch(mpd::song::Id(id)));
+            _ = self.try_with_reconnect_result(|client| client.switch(mpd::song::Id(id)));
         }
     }
 
     fn remove_playlist_item(&mut self, id: String) {
         if let Ok(id) = id.parse::<u32>() {
-            let _ = self.try_with_reconnect_result(|client| client.delete(mpd::song::Id(id)));
+            _ = self.try_with_reconnect_result(|client| client.delete(mpd::song::Id(id)));
         }
     }
 

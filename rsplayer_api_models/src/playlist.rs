@@ -43,7 +43,7 @@ pub struct DynamicPlaylistsPage {
     pub limit: u32,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub struct Playlists {
     pub items: Vec<PlaylistType>,
 }
@@ -57,48 +57,32 @@ pub struct PlaylistPage {
 }
 
 impl PlaylistPage {
-    pub fn remove_item(&mut self, song_id: String) {
-        self.items.retain(|s| s.id != song_id)
+    pub fn remove_item(&mut self, song_id: &str) {
+        self.items.retain(|s| s.id != song_id);
     }
 }
 
-impl Default for Playlists {
-    fn default() -> Self {
-        Self {
-            items: Default::default(),
-        }
-    }
-}
 impl Playlists {
     pub fn has_saved(&self) -> bool {
-        self.items.iter().any(|i| i.is_saved())
+        self.items.iter().any(PlaylistType::is_saved)
     }
     pub fn has_featured(&self) -> bool {
-        self.items.iter().any(|i| i.is_featured())
+        self.items.iter().any(PlaylistType::is_featured)
     }
     pub fn has_new_releases(&self) -> bool {
-        self.items.iter().any(|i| i.is_new_release())
+        self.items.iter().any(PlaylistType::is_new_release)
     }
 }
 impl PlaylistType {
-    pub fn is_saved(&self) -> bool {
-        match *self {
-            PlaylistType::Saved(_) => true,
-            _ => false,
-        }
+    pub const fn is_saved(&self) -> bool {
+        matches!(*self, PlaylistType::Saved(_))
     }
-    pub fn is_featured(&self) -> bool {
-        match *self {
-            PlaylistType::Featured(_) => true,
-            _ => false,
-        }
+    pub const fn is_featured(&self) -> bool {
+        matches!(*self, PlaylistType::Featured(_))
     }
-
-    pub fn is_new_release(&self) -> bool {
-        match *self {
-            PlaylistType::NewRelease(_) => true,
-            _ => false,
-        }
+    
+    pub const fn is_new_release(&self) -> bool {
+        matches!(*self, PlaylistType::NewRelease(_))
     }
 }
 impl Category {

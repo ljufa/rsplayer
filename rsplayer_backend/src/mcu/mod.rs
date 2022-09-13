@@ -1,2 +1,2 @@
-pub(crate) mod gpio;
-pub(crate) mod i2c;
+pub mod gpio;
+pub mod i2c;

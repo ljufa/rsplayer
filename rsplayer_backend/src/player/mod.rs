@@ -1,12 +1,12 @@
-use api_models::player::*;
+use api_models::player::Song;
 use api_models::playlist::{Category, DynamicPlaylistsPage, Playlists};
 use api_models::state::{PlayerInfo, PlayingContext, PlayingContextQuery, SongProgress};
 
-pub(crate) mod mpd;
+pub mod mpd;
 
-pub(crate) mod player_service;
-pub(crate) mod spotify;
-pub(crate) mod spotify_oauth;
+pub mod player_service;
+pub mod spotify;
+pub mod spotify_oauth;
 
 pub trait Player {
     fn play(&mut self);

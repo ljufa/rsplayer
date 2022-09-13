@@ -70,10 +70,10 @@ impl Song {
             result.push_str(self.file.as_str());
         }
 
-        if !result.is_empty() {
-            Some(result)
-        } else {
+        if result.is_empty() {
             None
+        } else {
+            Some(result)
         }
     }
     pub fn get_title(&self) -> String {
@@ -87,10 +87,10 @@ impl Song {
         result
     }
     pub fn get_identifier(&self) -> String {
-        if !self.id.is_empty() {
-            self.id.clone()
-        } else {
+        if self.id.is_empty() {
             self.file.clone()
+        } else {
+            self.id.clone()
         }
     }
 
