@@ -1,5 +1,10 @@
 use api_models::common::Command;
-use api_models::common::Command::{AddSongToQueue, ChangeAudioOutput, LoadAlbum, LoadPlaylist, LoadSong, Next, Pause, Play, PlayItem, PowerOff, Prev, QueryCurrentPlayerInfo, QueryCurrentPlayingContext, QueryCurrentSong, QueryCurrentStreamerState, QueryDynamicPlaylists, QueryPlaylistItems, RandomToggle, RemovePlaylistItem, Rewind, SetVol, VolDown, VolUp};
+use api_models::common::Command::{
+    AddSongToQueue, ChangeAudioOutput, LoadAlbum, LoadPlaylist, LoadSong, Next, Pause, Play,
+    PlayItem, PowerOff, Prev, QueryCurrentPlayerInfo, QueryCurrentPlayingContext, QueryCurrentSong,
+    QueryCurrentStreamerState, QueryDynamicPlaylists, QueryPlaylistItems, RandomToggle,
+    RemovePlaylistItem, Rewind, SetVol, VolDown, VolUp,
+};
 use api_models::state::StateChangeEvent;
 
 use tokio::sync::broadcast::Sender;

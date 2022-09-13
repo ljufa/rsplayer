@@ -242,7 +242,8 @@ impl Player for MpdPlayerClient {
         };
         match query {
             PlayingContextQuery::WithSearchTerm(term, offset) => {
-                let mut songs = get_songs_from_command("playlistinfo", self.mpd_server_url.as_str());
+                let mut songs =
+                    get_songs_from_command("playlistinfo", self.mpd_server_url.as_str());
                 if term.len() > 3 {
                     songs = songs
                         .into_iter()
@@ -262,7 +263,8 @@ impl Player for MpdPlayerClient {
                 pc.playlist_page = Some(page);
             }
             PlayingContextQuery::CurrentSongPage => {
-                let mut songs = get_songs_from_command("playlistinfo", self.mpd_server_url.as_str());
+                let mut songs =
+                    get_songs_from_command("playlistinfo", self.mpd_server_url.as_str());
                 if let Some(cs) = &self.get_current_song() {
                     songs = songs
                         .into_iter()
@@ -591,7 +593,10 @@ fn create_client(mpd_settings: &MpdSettings) -> Result<Client> {
     }
     match connection {
         Some(c) => Ok(c),
-        None => Err(failure::format_err!("Failed connect to to MPD server! [{}]", last_error.unwrap())),
+        None => Err(failure::format_err!(
+            "Failed connect to to MPD server! [{}]",
+            last_error.unwrap()
+        )),
     }
 }
 
@@ -732,13 +737,12 @@ mod test {
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
-                let mut out_line = line.clone();
-                if line.contains("music_directory") {
-                    out_line = "music_directory\t\t\"/home/dragan/music\"".to_owned();
-                }
-                _ = out_buffer.write_fmt(format_args!("{}\n", out_line));
-                //println!("{}", line);
-            
+            let mut out_line = line.clone();
+            if line.contains("music_directory") {
+                out_line = "music_directory\t\t\"/home/dragan/music\"".to_owned();
+            }
+            _ = out_buffer.write_fmt(format_args!("{}\n", out_line));
+            //println!("{}", line);
         }
         _ = out_buffer.flush();
     }

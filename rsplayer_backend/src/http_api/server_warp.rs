@@ -120,7 +120,7 @@ mod filters {
     use std::collections::HashMap;
 
     use api_models::settings::Settings;
-    use warp::{Filter};
+    use warp::Filter;
 
     use super::{handlers, Config, PlayerServiceArc};
 
@@ -142,9 +142,13 @@ mod filters {
             .and(with_config(config))
             .and_then(handlers::get_settings)
     }
-    pub fn get_startup_error(error: &failure::Error) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone{
+    pub fn get_startup_error(
+        error: &failure::Error,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         let error_msg = error.to_string();
-        warp::get().and(warp::path!("api" / "start_error")).map(move || error_msg.to_string() )
+        warp::get()
+            .and(warp::path!("api" / "start_error"))
+            .map(move || error_msg.to_string())
     }
     pub fn get_static_playlists(
         player_service: PlayerServiceArc,

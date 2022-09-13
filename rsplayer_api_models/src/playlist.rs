@@ -80,7 +80,7 @@ impl PlaylistType {
     pub const fn is_featured(&self) -> bool {
         matches!(*self, PlaylistType::Featured(_))
     }
-    
+
     pub const fn is_new_release(&self) -> bool {
         matches!(*self, PlaylistType::NewRelease(_))
     }

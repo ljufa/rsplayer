@@ -50,7 +50,7 @@ impl AlsaPcmCard {
             &elapsed_time
         ))
     }
-    
+
     #[allow(dead_code)]
     pub fn is_device_in_use(&self) -> bool {
         alsa::PCM::new(self.device_name.as_str(), alsa::Direction::Playback, false).is_err()

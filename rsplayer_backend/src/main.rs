@@ -8,8 +8,8 @@ use std::time::Duration;
 
 use api_models::common::Command;
 use tokio::signal::unix::{Signal, SignalKind};
-use tokio::{spawn, select};
 use tokio::sync::broadcast;
+use tokio::{select, spawn};
 
 use config::Configuration;
 
@@ -118,7 +118,11 @@ async fn main() {
     info!("RSPlayer shutdown completed.");
 }
 #[allow(clippy::redundant_pub_crate)]
-async fn start_degraded(term_signal: &mut Signal, error: &failure::Error, config: &Arc<Mutex<Configuration>>) {
+async fn start_degraded(
+    term_signal: &mut Signal,
+    error: &failure::Error,
+    config: &Arc<Mutex<Configuration>>,
+) {
     warn!("Starting server in degraded mode.");
     let http_server_future = http_api::server_warp::start_degraded(config, error);
     select! {

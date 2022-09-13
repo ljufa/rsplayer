@@ -31,8 +31,7 @@ pub async fn monitor(player_svc: MutArcPlayerService, state_changes_tx: Sender<S
         let new_player_info = player.get_player_info();
         if last_player_info != new_player_info {
             if let Some(new_p_info) = new_player_info.as_ref() {
-                _ =
-                    state_changes_tx.send(StateChangeEvent::PlayerInfoEvent(new_p_info.clone()));
+                _ = state_changes_tx.send(StateChangeEvent::PlayerInfoEvent(new_p_info.clone()));
             }
             last_player_info = new_player_info;
         }
