@@ -68,7 +68,7 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
         Msg::PlaylistItemRemove(id) => {
             model.playing_context.as_mut().map(|ctx| {
                 ctx.playlist_page.as_mut().map(|page| {
-                    page.remove_item(id.clone());
+                    page.remove_item(&id);
                 })
             });
             orders.send_msg(Msg::SendCommand(Command::RemovePlaylistItem(id)));
