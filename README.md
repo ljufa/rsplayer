@@ -50,8 +50,8 @@ Optional:
 - ### RSPlayer
    Install rsplayer:
    ```
-   wget https://github.com/ljufa/rsplayer/releases/download/v0.3.0/rsplayer_v0.3.0_arm64.deb
-   sudo dpkg -i --force-overwrites rsplayer_v0.3.0_arm64.deb
+   wget https://github.com/ljufa/rsplayer/releases/download/0.3.2/rsplayer_0.3.2_arm64.deb
+   sudo dpkg -i --force-overwrites rsplayer_0.3.2_arm64.deb
    sudo systemctl enable rsplayer
    ```
 - ### Verify installation
