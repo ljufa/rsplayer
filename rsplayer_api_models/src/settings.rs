@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use validator::{validate_ip_v4, Validate, ValidationError};
 
-use crate::common::{FilterType, GainLevel, PlayerType, VolumeCrtlType};
+use crate::common::{FilterType, GainLevel, PlayerType, VolumeCrtlType, Command};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -104,6 +104,11 @@ pub struct IRInputControlerSettings {
     pub enabled: bool,
     pub remote_maker: String,
     pub input_socket_path: String,
+}
+pub struct RemoteKeyMapping {
+    maker: String,
+    mappings: HashMap<String, Command>
+
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OLEDSettings {

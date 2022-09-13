@@ -568,7 +568,7 @@ impl Drop for MpdPlayerClient {
 fn create_client(mpd_settings: &MpdSettings) -> Result<Client> {
     let mut tries = 0;
     let mut connection = None;
-
+    let mut last_error: Option<mpd::error::Error> = None;
     while tries < 5 {
         tries += 1;
         info!(
@@ -585,13 +585,13 @@ fn create_client(mpd_settings: &MpdSettings) -> Result<Client> {
             }
             Err(e) => {
                 error!("Failed to connect to mpd server {}", e);
-                // std::thread::sleep(Duration::from_secs(1))
+                last_error = Some(e);
             }
         }
     }
     match connection {
         Some(c) => Ok(c),
-        None => Err(failure::err_msg("Can't connecto to MPD server!")),
+        None => Err(failure::format_err!("Failed connect to to MPD server! [{}]", last_error.unwrap())),
     }
 }
 

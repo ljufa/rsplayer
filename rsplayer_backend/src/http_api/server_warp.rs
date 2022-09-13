@@ -39,7 +39,7 @@ type Config = Arc<Mutex<Configuration>>;
 type PlayerServiceArc = Arc<Mutex<PlayerService>>;
 type SyncSender = tokio::sync::mpsc::Sender<Command>;
 
-pub fn start_degraded(config: Config) -> impl Future<Output = ()> {
+pub fn start_degraded(config: Config, error: &failure::Error) -> impl Future<Output = ()> {
     let cors = warp::cors()
         .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
         .allow_any_origin();
@@ -54,6 +54,7 @@ pub fn start_degraded(config: Config) -> impl Future<Output = ()> {
         .or(filters::spotify_authorization_callback())
         .or(filters::get_spotify_account_info())
         .or(ui_static_content)
+        .or(filters::get_startup_error(error))
         .with(cors);
     warp::serve(routes).run(([0, 0, 0, 0], 8000))
 }
@@ -119,7 +120,7 @@ mod filters {
     use std::collections::HashMap;
 
     use api_models::settings::Settings;
-    use warp::Filter;
+    use warp::{Filter};
 
     use super::{handlers, Config, PlayerServiceArc};
 
@@ -140,6 +141,10 @@ mod filters {
             .and(warp::path!("api" / "settings"))
             .and(with_config(config))
             .and_then(handlers::get_settings)
+    }
+    pub fn get_startup_error(error: &failure::Error) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone{
+        let error_msg = error.to_string();
+        warp::get().and(warp::path!("api" / "start_error")).map(move || error_msg.to_string() )
     }
     pub fn get_static_playlists(
         player_service: PlayerServiceArc,

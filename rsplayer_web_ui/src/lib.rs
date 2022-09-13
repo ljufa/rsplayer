@@ -20,6 +20,7 @@ struct Model {
     page: Page,
     web_socket: WebSocket,
     web_socket_reconnector: Option<StreamHandle>,
+    startup_error: Option<String>,
 }
 
 pub enum Msg {
@@ -34,7 +35,9 @@ pub enum Msg {
     Settings(page::settings::Msg),
     Player(page::player::Msg),
     Playlist(page::playlist::Msg),
+    StartErrorReceived(String),
     Queue(page::queue::Msg),
+    Ignore,
 }
 
 // ------ Page ------
@@ -49,6 +52,16 @@ enum Page {
 }
 impl Page {
     fn init(url: Url, orders: &mut impl Orders<Msg>) -> Self {
+        orders.perform_cmd(async {
+            let response = fetch("/api/start_error")
+                .await
+                .expect("failed to get response");
+            if response.status().is_ok() {
+                Msg::StartErrorReceived(response.text().await.expect(""))
+            } else {
+                Msg::Ignore
+            }
+        });
         let slice = url.hash().map_or("", |p| {
             if p.contains('#') {
                 p.split_once('#').unwrap().0
@@ -104,6 +117,7 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
         page: Page::init(url, orders),
         web_socket: create_websocket(orders),
         web_socket_reconnector: None,
+        startup_error: None,
     }
 }
 
@@ -245,6 +259,10 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 }
             }
         }
+        Msg::StartErrorReceived(error_msg) => {
+            model.startup_error = Some(error_msg);
+        }
+        Msg::Ignore => {}
     }
 }
 
@@ -255,10 +273,29 @@ fn view(model: &Model) -> impl IntoNodes<Msg> {
     div![
         C!["container"],
         view_navigation_tabs(&model.page),
+        view_startup_error(model.startup_error.as_ref()),
         view_content(&model.page, &model.base_url),
     ]
 }
 
+fn view_startup_error(error_msg: Option<&String>) -> Node<Msg> {
+    error_msg.map_or(empty!(), |error| {
+        article![
+            C!["message", "is-danger"],
+            div![
+                C!["message-header"],
+                p![
+                    "Startup error! Please check  ",
+                    a![
+                        "settings.",
+                        ev(Ev::Click, |_| { Urls::settings_abs().go_and_load() }),
+                    ]
+                ],
+            ],
+            div![C!["message-body"], error]
+        ]
+    })
+}
 // ----- view_content ------
 
 fn view_content(page: &Page, base_url: &Url) -> Node<Msg> {
