@@ -1,0 +1,47 @@
+[env]
+RPI_HOST = "192.168.5.60"
+
+# ---- BUILD UI----
+[tasks.build_release]
+install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V", force = false }
+command = "wasm-pack"
+args = [
+    "build",
+    "--target",
+    "web",
+    "--out-name",
+    "package",
+    "--out-dir",
+    "../target/ui/pkg",
+]
+
+[tasks.copy_remote]
+env = { RPI_DIR = "/opt/rsplayer/ui" }
+dependencies = ["ui_build_release"]
+script = [
+    "rsync -av --rsync-path=\"sudo rsync\" --delete public/ ../target/ui/pkg pi@${RPI_HOST}:${RPI_DIR}",
+]
+
+
+[tasks.build_local]
+workspace = true
+description = "Build with wasm-pack"
+install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V", force = false }
+command = "wasm-pack"
+args = [
+    "build",
+    "--target",
+    "web",
+    "--out-name",
+    "package",
+    "--dev",
+    "--out-dir",
+    "../.run/ui/pkg",
+    "--",
+    "--no-default-features",
+    "--features",
+    "local",
+]
+[tasks.copy_local]
+dependencies = ["build_local"]
+script = ["rsync -av public/ ../.run/ui"]

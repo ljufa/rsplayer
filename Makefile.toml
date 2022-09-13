@@ -1,36 +1,14 @@
 [env]
-CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
-RPI_HOST = "192.168.5.60"
+RPI_HOST = "192.168.5.60" 
 TARGET = "aarch64-unknown-linux-gnu"
 RELEASE_VERSION = "0.2.2"
 
 [config]
 default_to_workspace = false
 
-# ---- BUILD UI----
-[tasks.ui_build_release]
-env = { "CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS" = ["rsplayer_web_ui"] }
-run_task = { name = "_ui_build_release", fork = true }
-
-[tasks.ui_copy_remote]
-env = { RPI_DIR = "/opt/rsplayer/ui" }
-dependencies = ["ui_build_release"]
-script = [
-    "rsync -av --rsync-path=\"sudo rsync\" --delete rsplayer_web_ui/public/ rsplayer_web_ui/pkg pi@${RPI_HOST}:${RPI_DIR}",
-]
-
-[tasks._ui_build_release]
-workspace = true
-env = { "CARGO_MAKE_WORKSPACE_SKIP_MEMBERS" = [
-    "rsplayer_api_models",
-    "rsplayer_backend",
-] }
-install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V", force = false }
-command = "wasm-pack"
-args = ["build", "--target", "web", "--out-name", "package", "--out-dir", "../target/ui/release/pkg"]
 
 # ---- BUILD Backend----
-[tasks.backend_build_release]
+[tasks.build_release]
 install_crate = { crate_name = "cross", binary = "cross", test_arg = "-V", force = false }
 command = "cross"
 args = [
@@ -38,16 +16,17 @@ args = [
     "--target",
     "${TARGET}",
     "--release",
-    "--workspace",
-    "--exclude",
-    "rsplayer_web_ui",
     "--package",
     "rsplayer",
     "--bin",
     "rsplayer",
 ]
+[tasks.build_ui_release]
+cwd = "rsplayer_web_ui"
+command = "cargo"
+args = ["make", "build_release"]
 
-[tasks.package_deb]
+[tasks.package_deb_release]
 install_crate = { crate_name = "cargo-deb", binary = "deb", test_arg = "--version", force = false }
 command = "cargo"
 args = [
@@ -60,7 +39,7 @@ args = [
     "${RELEASE_VERSION}",
 ]
 
-[tasks.librespot_build_aarch64]
+[tasks.librespot_build_release]
 cwd = "/tmp"
 script = [
     "rm -rf librespot",
@@ -81,11 +60,11 @@ args = [
     "clippy",
     "--all-features",
     "--",
-    "--deny",
+    "--allow",
     "warnings",
-    "--deny",
+    "--allow",
     "clippy::pedantic",
-    "--deny",
+    "--allow",
     "clippy::nursery",
 ]
 
@@ -96,44 +75,21 @@ args = ["fmt"]
 
 
 # ---- Local DEV ----
-[tasks.backend_run_local]
+[tasks.run_local]
+env = { "RUST_LOG"="rsplayer=debug", "RUST_BACKTRACE"="full"}
 command = "cargo"
 args = ["run"]
 
 
-[tasks.backend_copy_remote]
-dependencies = ["backend_build_release"]
+[tasks.copy_remote]
+dependencies = ["build_release"]
 script = [
     "rsync -avvP --rsync-path=\"sudo rsync\" target/${TARGET}/release/rsplayer pi@${RPI_HOST}:/usr/local/bin",
 ]
 
-[tasks.ui_copy_local]
-dependencies = ["ui_build_dev"]
-script = [
-    "rsync -av --delete rsplayer_web_ui/pkg rsplayer_web_ui/public/ .run/ui",
-]
+[tasks.package_deb_local]
+dependencies = ["build_ui_release", "build_release", "package_deb_release"]
 
-[tasks.ui_build_dev]
-env = { "CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS" = ["rsplayer_web_ui"] }
-run_task = { name = "_ui_build_dev", fork = true }
-
-[tasks._ui_build_dev]
-workspace = true
-description = "Build with wasm-pack"
-install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V" }
-command = "wasm-pack"
-args = [
-    "build",
-    "--target",
-    "web",
-    "--out-name",
-    "package",
-    "--dev",
-    "--",
-    "--no-default-features",
-    "--features",
-    "local",
-]
 
 [tasks.librespot_build_local]
 cwd = "/tmp"

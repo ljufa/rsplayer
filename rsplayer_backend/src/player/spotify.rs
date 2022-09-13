@@ -65,9 +65,10 @@ impl SpotifyPlayerClient {
     pub fn transfer_playback_to_device(&mut self) -> Result<()> {
         let mut dev = "".to_string();
         let mut tries = 0;
+        let device_name = self.oauth.settings.device_name.as_str();
         while tries < 15 {
             for d in self.oauth.client.device()? {
-                if d.name.contains(self.oauth.settings.device_name.as_str()) {
+                if d.name.contains(device_name) {
                     let device_id = d.id.as_ref();
                     if device_id.is_some() && !d.is_active {
                         self.oauth
@@ -79,12 +80,15 @@ impl SpotifyPlayerClient {
             }
             if dev.is_empty() {
                 tries += 1;
+                warn!("Spotify Device not found. Retry:{}", tries);
+                std::thread::sleep(Duration::from_millis(500));
             } else {
                 break;
             }
         }
         if dev.is_empty() {
-            return Err(err_msg("Device not found!"));
+            error!("Spotify device not found: {}", device_name);
+            return Err(err_msg(format!("Spotify device {} not found!", device_name)));
         }
         info!("Spotify client created sucessfully!");
         self.device_id = Some(dev);
@@ -364,17 +368,23 @@ impl Player for SpotifyPlayerClient {
             player_type: context.player_type,
             playlist_page: match query {
                 PlayingContextQuery::WithSearchTerm(term, offset) => {
-                    context.playlist_page.as_ref().map(|pp| PlaylistPage {
-                        total: 0,
-                        offset,
-                        limit: 0,
-                        items: pp
-                            .items
-                            .iter()
-                            .filter(|s| s.all_text().to_lowercase().contains(&term.to_lowercase()))
-                            .cloned()
-                            .collect(),
-                    })
+                    if term.len() == 0 {
+                        return context.clone();
+                    } else {
+                        context.playlist_page.as_ref().map(|pp| PlaylistPage {
+                            total: 0,
+                            offset,
+                            limit: 0,
+                            items: pp
+                                .items
+                                .iter()
+                                .filter(|s| {
+                                    s.all_text().to_lowercase().contains(&term.to_lowercase())
+                                })
+                                .cloned()
+                                .collect(),
+                        })
+                    }
                 }
                 PlayingContextQuery::CurrentSongPage => todo!(),
                 PlayingContextQuery::IgnoreSongs => None,

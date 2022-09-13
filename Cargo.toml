@@ -2,5 +2,5 @@
 members = [
     "rsplayer_api_models",
     "rsplayer_backend",
-    "rsplayer_web_ui"
 ]
+exclude = ["rsplayer_web_ui"]

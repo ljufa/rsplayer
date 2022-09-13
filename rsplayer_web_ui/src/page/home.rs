@@ -15,6 +15,7 @@ pub fn view<Ms>(base_url: &Url) -> Node<Ms> {
             a![C!["button", "is-dark", "mt-5", "is-size-5"], attrs!{At::Href => Urls::new(base_url).settings()},
                 strong!["This is your first first visit, please go to Settings to complete configuration."],
             ],
-        ]
+        ],
+        
     ]
 }
