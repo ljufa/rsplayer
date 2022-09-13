@@ -2,7 +2,7 @@ name: Release from tag
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "*.*.*"
 env:
   CARGO_TERM_COLOR: always
 
