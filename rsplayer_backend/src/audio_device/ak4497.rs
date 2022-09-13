@@ -2,7 +2,7 @@ use crate::common::Result;
 use api_models::common::GainLevel;
 
 use api_models::common::{FilterType, Volume};
-use api_models::settings::*;
+use api_models::settings::DacSettings;
 use api_models::state::VolumeState;
 use std::time::Duration;
 
@@ -24,11 +24,10 @@ impl VolumeControlDevice for DacAk4497 {
             .i2c_helper
             .read_register(3)
             .expect("Register read failed");
-        if let Some(new_val) = curr_val.checked_add(self.volume_step) {
-            self.set_vol(new_val as i64)
-        } else {
-            self.set_vol(255)
-        }
+        curr_val.checked_add(self.volume_step).map_or_else(
+            || self.set_vol(255),
+            |new_val| self.set_vol(i64::from(new_val)),
+        )
     }
 
     fn vol_down(&self) -> Volume {
@@ -37,7 +36,7 @@ impl VolumeControlDevice for DacAk4497 {
             .read_register(3)
             .expect("Register read failed");
         if let Some(new_val) = curr_val.checked_sub(self.volume_step) {
-            self.set_vol(new_val as i64)
+            self.set_vol(i64::from(new_val))
         } else {
             self.set_vol(0)
         }
@@ -49,10 +48,10 @@ impl VolumeControlDevice for DacAk4497 {
             .read_register(3)
             .expect("Register read failed");
         Volume {
-            step: self.volume_step as i64,
+            step: i64::from(self.volume_step),
             min: 0,
             max: 255,
-            current: curr_val as i64,
+            current: i64::from(curr_val),
         }
     }
 
@@ -63,7 +62,7 @@ impl VolumeControlDevice for DacAk4497 {
             current: value,
             max: 255,
             min: 0,
-            step: self.volume_step as i64,
+            step: i64::from(self.volume_step),
         }
     }
 }
@@ -202,11 +201,13 @@ impl DacAk4497 {
         Ok(level)
     }
 
+    #[allow(dead_code)]
     fn reset(&self) {
         self.i2c_helper.change_bit(0, 0, false);
         self.i2c_helper.change_bit(0, 0, true);
     }
 
+    #[allow(dead_code)]
     pub fn dsd_pcm(&self, dsd: bool) {
         // ChangeBit(ak4490, 0x01, 0, true);         // Enable soft mute
         // ChangeBit(ak4490, 0x02, 7, true);         // Set To DSD Mode
@@ -235,6 +236,7 @@ impl DacAk4497 {
         self.reset();
     }
 
+    #[allow(dead_code)]
     pub fn soft_mute(&self, flag: bool) {
         self.i2c_helper.change_bit(1, 0, flag);
     }

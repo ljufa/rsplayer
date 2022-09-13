@@ -10,7 +10,9 @@ use crate::common::Result;
 
 use super::VolumeControlDevice;
 
+#[allow(dead_code)]
 const WAIT_TIME_MS: u64 = 10000;
+#[allow(dead_code)]
 const DELAY_MS: u64 = 100;
 
 pub struct AlsaPcmCard {
@@ -18,9 +20,11 @@ pub struct AlsaPcmCard {
 }
 
 impl AlsaPcmCard {
+    #[allow(dead_code)]
     pub fn new(device_name: String) -> Self {
         AlsaPcmCard { device_name }
     }
+    #[allow(dead_code)]
     pub fn wait_unlock_audio_dev(&self) -> Result<()> {
         let mut elapsed_time: u64 = 0;
         while elapsed_time < WAIT_TIME_MS {
@@ -46,6 +50,8 @@ impl AlsaPcmCard {
             &elapsed_time
         ))
     }
+    
+    #[allow(dead_code)]
     pub fn is_device_in_use(&self) -> bool {
         alsa::PCM::new(self.device_name.as_str(), alsa::Direction::Playback, false).is_err()
     }
@@ -165,7 +171,7 @@ mod test {
 
     #[test]
     fn print_mixer_of_cards() {
-        for card in card::Iter::new().map(|c| c.unwrap()) {
+        for card in card::Iter::new().map(std::result::Result::unwrap) {
             println!(
                 "Card #{}: {} ({})",
                 card.get_index(),
@@ -202,7 +208,7 @@ mod test {
                 if selem.is_enumerated() {
                     print!("\t  Valid values: ");
                     for v in selem.iter_enum().unwrap() {
-                        print!("{}, ", v.unwrap())
+                        print!("{}, ", v.unwrap());
                     }
                     print!("\n\t  Current values: ");
                     for v in SelemChannelId::all()
@@ -218,7 +224,7 @@ mod test {
                     print!("\t  Capture channels: ");
                     for channel in SelemChannelId::all() {
                         if selem.has_capture_channel(*channel) {
-                            print!("{}, ", channel)
+                            print!("{}, ", channel);
                         };
                     }
                     println!();
@@ -249,7 +255,7 @@ mod test {
                     } else {
                         for channel in SelemChannelId::all() {
                             if selem.has_playback_channel(*channel) {
-                                print!("{}, ", channel)
+                                print!("{}, ", channel);
                             };
                         }
                     }

@@ -43,6 +43,7 @@ impl Configuration {
         format!("{}ui", CONFIG_DIR_PATH)
     }
 
+    #[allow(dead_code)]
     pub fn get_squeezelite_player_path() -> String {
         format!("{}squeezelite", EXEC_DIR_PATH)
     }

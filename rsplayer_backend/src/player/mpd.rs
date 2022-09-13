@@ -75,7 +75,7 @@ impl MpdPlayerClient {
 
 impl Player for MpdPlayerClient {
     fn play(&mut self) {
-        _ = self.try_with_reconnect_result(|client| client.play());
+        _ = self.try_with_reconnect_result(mpd::Client::play);
     }
 
     fn pause(&mut self) {
@@ -83,15 +83,15 @@ impl Player for MpdPlayerClient {
     }
 
     fn next_track(&mut self) {
-        _ = self.try_with_reconnect_result(|client| client.next());
+        _ = self.try_with_reconnect_result(mpd::Client::next);
     }
 
     fn prev_track(&mut self) {
-        _ = self.try_with_reconnect_result(|client| client.prev());
+        _ = self.try_with_reconnect_result(mpd::Client::prev);
     }
 
     fn stop(&mut self) {
-        _ = self.try_with_reconnect_result(|client| client.stop());
+        _ = self.try_with_reconnect_result(mpd::Client::stop);
     }
 
     fn shutdown(&mut self) {
@@ -102,16 +102,16 @@ impl Player for MpdPlayerClient {
     }
 
     fn rewind(&mut self, seconds: i8) {
-        let result = self.try_with_reconnect_result(|client| client.status());
+        let result = self.try_with_reconnect_result(mpd::Client::status);
         if let Ok(status) = result {
             //todo: implement protection against going of the range
-            let position = status.elapsed.unwrap().num_seconds() + seconds as i64;
+            let position = status.elapsed.unwrap().num_seconds() + i64::from(seconds);
             _ = self.mpd_client.rewind(position);
         };
     }
 
     fn random_toggle(&mut self) {
-        let status = self.try_with_reconnect_result(|client| client.status());
+        let status = self.try_with_reconnect_result(mpd::Client::status);
         if let Ok(status) = status {
             _ = self.mpd_client.random(!status.random);
         }
@@ -184,13 +184,13 @@ impl Player for MpdPlayerClient {
     }
 
     fn get_current_song(&mut self) -> Option<Song> {
-        let result = self.try_with_reconnect_result(|client| client.currentsong());
+        let result = self.try_with_reconnect_result(mpd::Client::currentsong);
         let song = result.unwrap_or(None);
         song.map(|s| map_song(&s))
     }
 
     fn get_player_info(&mut self) -> Option<PlayerInfo> {
-        let status = self.try_with_reconnect_result(|client| client.status());
+        let status = self.try_with_reconnect_result(mpd::Client::status);
         trace!("Mpd Status is {:?}", status);
         if let Ok(status) = status {
             let time = status.time.map_or((Duration::ZERO, Duration::ZERO), |t| {
@@ -216,7 +216,7 @@ impl Player for MpdPlayerClient {
             Some(PlayerInfo {
                 audio_format_bit: status.audio.map(|f| f.bits),
                 audio_format_rate: status.audio.map(|f| f.rate),
-                audio_format_channels: status.audio.map(|f| f.chans as u32),
+                audio_format_channels: status.audio.map(|f| u32::from(f.chans)),
                 random: Some(status.random),
                 state: Some(map_state(status.state)),
             })
@@ -242,7 +242,7 @@ impl Player for MpdPlayerClient {
         };
         match query {
             PlayingContextQuery::WithSearchTerm(term, offset) => {
-                let mut songs = get_songs_from_command("playlistinfo", self.mpd_server_url.clone());
+                let mut songs = get_songs_from_command("playlistinfo", self.mpd_server_url.as_str());
                 if term.len() > 3 {
                     songs = songs
                         .into_iter()
@@ -262,7 +262,7 @@ impl Player for MpdPlayerClient {
                 pc.playlist_page = Some(page);
             }
             PlayingContextQuery::CurrentSongPage => {
-                let mut songs = get_songs_from_command("playlistinfo", self.mpd_server_url.clone());
+                let mut songs = get_songs_from_command("playlistinfo", self.mpd_server_url.as_str());
                 if let Some(cs) = &self.get_current_song() {
                     songs = songs
                         .into_iter()
@@ -311,7 +311,7 @@ impl Player for MpdPlayerClient {
     fn get_static_playlists(&mut self) -> Playlists {
         // saved pls
         let pls = self
-            .try_with_reconnect_result(|client| client.playlists())
+            .try_with_reconnect_result(mpd::Client::playlists)
             .unwrap_or_default();
         let items: Vec<PlaylistType> = pls
             .iter()
@@ -335,7 +335,7 @@ impl Player for MpdPlayerClient {
         limit: u32,
     ) -> Vec<DynamicPlaylistsPage> {
         if self.all_songs.is_empty() {
-            self.all_songs = get_songs_from_command("listallinfo", self.mpd_server_url.clone());
+            self.all_songs = get_songs_from_command("listallinfo", self.mpd_server_url.as_str());
         };
         let mut result = vec![];
         for category_id in category_ids {
@@ -377,7 +377,7 @@ impl Player for MpdPlayerClient {
             let pl_name = playlist_id.replace(SAVED_PL_PREFIX, "");
             get_songs_from_command(
                 format!("listplaylistinfo {pl_name}").as_str(),
-                self.mpd_server_url.clone(),
+                self.mpd_server_url.as_str(),
             )
             .into_iter()
             .take(100)
@@ -428,7 +428,7 @@ impl Player for MpdPlayerClient {
     }
 }
 
-fn get_playlists_by_genre(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Vec<Playlist> {
+fn get_playlists_by_genre(all_songs: &[Song], offset: u32, limit: u32) -> Vec<Playlist> {
     let mut items = vec![];
     let mut genres: Vec<String> = all_songs
         .iter()
@@ -453,7 +453,7 @@ fn get_playlists_by_genre(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Vec
     items
 }
 
-fn get_playlists_by_date(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Vec<Playlist> {
+fn get_playlists_by_date(all_songs: &[Song], offset: u32, limit: u32) -> Vec<Playlist> {
     // dynamic pls
     let mut items = vec![];
     let mut dates: Vec<String> = all_songs.iter().filter_map(|s| s.date.clone()).collect();
@@ -476,7 +476,7 @@ fn get_playlists_by_date(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Vec<
     items
 }
 
-fn get_playlists_by_artist(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Vec<Playlist> {
+fn get_playlists_by_artist(all_songs: &[Song], offset: u32, limit: u32) -> Vec<Playlist> {
     let mut items = vec![];
     let mut artists: Vec<String> = all_songs
         .iter()
@@ -501,7 +501,7 @@ fn get_playlists_by_artist(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Ve
     items
 }
 
-fn get_playlists_by_folder(all_songs: &Vec<Song>, offset: u32, limit: u32) -> Vec<Playlist> {
+fn get_playlists_by_folder(all_songs: &[Song], offset: u32, limit: u32) -> Vec<Playlist> {
     let mut items = vec![];
     let second_level_folders: HashSet<String> = all_songs
         .iter()
@@ -551,7 +551,7 @@ fn tag_to_value(song: &MpdSong, key: &str) -> Option<String> {
     song.tags.iter().find(|t| t.0 == key).map(|kv| kv.1.clone())
 }
 
-fn map_state(mpd_state: mpd::status::State) -> PlayerState {
+const fn map_state(mpd_state: mpd::status::State) -> PlayerState {
     match mpd_state {
         mpd::State::Stop => PlayerState::STOPPED,
         mpd::State::Play => PlayerState::PLAYING,
@@ -561,7 +561,7 @@ fn map_state(mpd_state: mpd::status::State) -> PlayerState {
 
 impl Drop for MpdPlayerClient {
     fn drop(&mut self) {
-        self.shutdown()
+        self.shutdown();
     }
 }
 
@@ -595,9 +595,9 @@ fn create_client(mpd_settings: &MpdSettings) -> Result<Client> {
     }
 }
 
-fn create_socket_client(mpd_server_url: String) -> TcpStream {
+fn create_socket_client(mpd_server_url: &str) -> TcpStream {
     let client = TcpStream::connect_timeout(
-        &SocketAddr::from_str(mpd_server_url.as_str()).unwrap(),
+        &SocketAddr::from_str(mpd_server_url).unwrap(),
         Duration::from_secs(2),
     )
     .unwrap();
@@ -611,7 +611,7 @@ fn create_socket_client(mpd_server_url: String) -> TcpStream {
         .expect("Failed to set write timeout");
     client
 }
-fn get_songs_from_command(command: &str, mpd_server_url: String) -> Vec<Song> {
+fn get_songs_from_command(command: &str, mpd_server_url: &str) -> Vec<Song> {
     let mut full_cmd = String::new();
     full_cmd.push_str(command);
     full_cmd.push('\n');
@@ -664,7 +664,7 @@ fn get_songs_from_command(command: &str, mpd_server_url: String) -> Vec<Song> {
                     "Track" => song.track = to_opt_string(value),
                     "Time" => {
                         song.time = to_opt_string(value)
-                            .map(|f| Duration::from_secs(f.parse::<u64>().unwrap()))
+                            .map(|f| Duration::from_secs(f.parse::<u64>().unwrap()));
                     }
                     "Id" => song.id = value.trim().to_string(),
                     "Last-Modified" => song.last_modified = to_opt_string(value),
@@ -710,7 +710,7 @@ mod test {
 
     #[test]
     fn test_client() {
-        let songs = get_songs_from_command("currentsong", "localhost:6600".to_string());
+        let songs = get_songs_from_command("currentsong", "localhost:6600");
         assert_eq!(songs.len(), 1);
     }
 
@@ -731,15 +731,15 @@ mod test {
             //let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
                 continue;
-            } else {
+            }
                 let mut out_line = line.clone();
                 if line.contains("music_directory") {
                     out_line = "music_directory\t\t\"/home/dragan/music\"".to_owned();
                 }
-                out_buffer.write_fmt(format_args!("{}\n", out_line));
+                _ = out_buffer.write_fmt(format_args!("{}\n", out_line));
                 //println!("{}", line);
-            }
+            
         }
-        out_buffer.flush();
+        _ = out_buffer.flush();
     }
 }

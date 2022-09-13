@@ -58,11 +58,13 @@ install_crate = { rustup_component_name = "clippy", binary = "cargo-clippy", tes
 command = "cargo"
 args = [
     "clippy",
+    "--fix",
+    "--allow-dirty",
     "--all-features",
     "--",
-    # "--allow", "warnings",
-    # "--deny", "clippy::pedantic",
-    # "--deny", "clippy::nursery",
+    "--deny", "warnings",
+    "--deny", "clippy::pedantic",
+    "--deny", "clippy::nursery",
     "--allow","clippy::use_self",
     "--allow","clippy::module_name_repetitions",
     "--allow","clippy::must_use_candidate",

@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use api_models::common::Command;
 use tokio::signal::unix::{Signal, SignalKind};
-use tokio::spawn;
+use tokio::{spawn, select};
 use tokio::sync::broadcast;
 
 use config::Configuration;
@@ -26,6 +26,7 @@ mod mcu;
 mod monitor;
 mod player;
 
+#[allow(clippy::redundant_pub_crate)]
 #[tokio::main]
 async fn main() {
     env_logger::init();
@@ -42,19 +43,19 @@ async fn main() {
     let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate())
         .expect("failed to create signal future");
 
-    let ai_service = AudioInterfaceService::new(config.clone());
+    let ai_service = AudioInterfaceService::new(&config);
 
     if let Err(e) = &ai_service {
         error!("Audio service interface can't be created. error: {}", e);
-        start_degraded(&mut term_signal, e, config.clone()).await;
+        start_degraded(&mut term_signal, e, &config).await;
     }
     let ai_service = Arc::new(ai_service.unwrap());
     info!("Audio interface service successfully created.");
 
-    let player_service = PlayerService::new(config.clone());
+    let player_service = PlayerService::new(&config);
     if let Err(e) = &player_service {
         error!("Player service can't be created. error: {}", e);
-        start_degraded(&mut term_signal, e, config.clone()).await;
+        start_degraded(&mut term_signal, e, &config).await;
     }
 
     let player_service = Arc::new(Mutex::new(player_service.unwrap()));
@@ -70,11 +71,11 @@ async fn main() {
     let (http_server_future, websocket_future) = http_api::server_warp::start(
         state_changes_tx.subscribe(),
         input_commands_tx.clone(),
-        config.clone(),
+        &config,
         player_service.clone(),
     );
 
-    tokio::select! {
+    select! {
         _ = spawn(control::ir_lirc::listen(input_commands_tx.clone(), config.clone())) => {
             error!("Exit from IR Command thread.");
         }
@@ -116,11 +117,11 @@ async fn main() {
 
     info!("RSPlayer shutdown completed.");
 }
-
-async fn start_degraded(term_signal: &mut Signal, error: &failure::Error, config: Arc<Mutex<Configuration>>) {
+#[allow(clippy::redundant_pub_crate)]
+async fn start_degraded(term_signal: &mut Signal, error: &failure::Error, config: &Arc<Mutex<Configuration>>) {
     warn!("Starting server in degraded mode.");
     let http_server_future = http_api::server_warp::start_degraded(config, error);
-    tokio::select! {
+    select! {
         _ = http_server_future => {}
 
         _ = term_signal.recv() => {

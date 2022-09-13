@@ -14,7 +14,7 @@ pub struct AudioInterfaceService {
 }
 
 impl AudioInterfaceService {
-    pub fn new(config: MutArcConfiguration) -> Result<Self> {
+    pub fn new(config: &MutArcConfiguration) -> Result<Self> {
         let mut config = config.lock().expect("Unable to lock config");
         let settings = config.get_settings();
         let volume_ctrl_device: Box<dyn VolumeControlDevice + Send + Sync> =

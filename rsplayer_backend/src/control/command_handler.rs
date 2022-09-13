@@ -1,5 +1,5 @@
 use api_models::common::Command;
-use api_models::common::Command::*;
+use api_models::common::Command::{AddSongToQueue, ChangeAudioOutput, LoadAlbum, LoadPlaylist, LoadSong, Next, Pause, Play, PlayItem, PowerOff, Prev, QueryCurrentPlayerInfo, QueryCurrentPlayingContext, QueryCurrentSong, QueryCurrentStreamerState, QueryDynamicPlaylists, QueryPlaylistItems, RandomToggle, RemovePlaylistItem, Rewind, SetVol, VolDown, VolUp};
 use api_models::state::StateChangeEvent;
 
 use tokio::sync::broadcast::Sender;
@@ -18,7 +18,7 @@ pub async fn handle(
             trace!("Received command {:?}", cmd);
             match cmd {
                 SetVol(val) => {
-                    if let Ok(nv) = ai_service.set_volume(val as i64) {
+                    if let Ok(nv) = ai_service.set_volume(i64::from(val)) {
                         let new_dac_status =
                             config_store.lock().unwrap().save_volume_state(nv.current);
                         state_changes_sender

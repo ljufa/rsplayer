@@ -48,7 +48,7 @@ mod hw_oled {
             info!("Start OLED writer thread.");
             let options = SpidevOptions::new()
                 .bits_per_word(8)
-                .max_speed_hz(800000)
+                .max_speed_hz(800_000)
                 .mode(SpiModeFlags::SPI_CS_HIGH)
                 .build();
             spi.configure(&options).expect("error configuring SPI");

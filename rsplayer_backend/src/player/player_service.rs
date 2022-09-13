@@ -10,7 +10,7 @@ pub struct PlayerService {
 }
 
 impl PlayerService {
-    pub fn new(config: MutArcConfiguration) -> Result<Self> {
+    pub fn new(config: &MutArcConfiguration) -> Result<Self> {
         let settings = config.lock().unwrap().get_settings();
         Ok(PlayerService {
             player: Self::create_player(&settings)?,
@@ -25,7 +25,7 @@ impl PlayerService {
     fn create_player(settings: &Settings) -> Result<Box<dyn Player + Send>> {
         match &settings.active_player {
             PlayerType::SPF => {
-                let mut sp = SpotifyPlayerClient::new(settings.spotify_settings.clone())?;
+                let mut sp = SpotifyPlayerClient::new(&settings.spotify_settings)?;
                 sp.start_device()?;
                 sp.transfer_playback_to_device()?;
                 sp.play();

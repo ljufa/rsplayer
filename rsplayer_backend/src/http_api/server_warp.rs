@@ -39,7 +39,7 @@ type Config = Arc<Mutex<Configuration>>;
 type PlayerServiceArc = Arc<Mutex<PlayerService>>;
 type SyncSender = tokio::sync::mpsc::Sender<Command>;
 
-pub fn start_degraded(config: Config, error: &failure::Error) -> impl Future<Output = ()> {
+pub fn start_degraded(config: &Config, error: &failure::Error) -> impl Future<Output = ()> {
     let cors = warp::cors()
         .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
         .allow_any_origin();
@@ -48,7 +48,7 @@ pub fn start_degraded(config: Config, error: &failure::Error) -> impl Future<Out
 
     let routes = filters::settings_save(config.clone())
         .or(filters::settings_save(config.clone()))
-        .or(filters::get_settings(config))
+        .or(filters::get_settings(config.clone()))
         .or(filters::get_spotify_authorization_url())
         .or(filters::is_spotify_authorization_completed())
         .or(filters::spotify_authorization_callback())
@@ -62,7 +62,7 @@ pub fn start_degraded(config: Config, error: &failure::Error) -> impl Future<Out
 pub fn start(
     mut state_changes_rx: Receiver<StateChangeEvent>,
     input_commands_tx: SyncSender,
-    config: Config,
+    config: &Config,
     player_service: PlayerServiceArc,
 ) -> (impl Future<Output = ()>, impl Future<Output = ()>) {
     // Keep track of all connected users, key is usize, value
@@ -88,7 +88,7 @@ pub fn start(
 
     let routes = player_ws_path
         .or(filters::settings_save(config.clone()))
-        .or(filters::get_settings(config))
+        .or(filters::get_settings(config.clone()))
         .or(filters::get_static_playlists(player_service.clone()))
         .or(filters::get_playlist_items(player_service.clone()))
         .or(filters::get_playlist_categories(player_service))
