@@ -17,7 +17,7 @@ args = [
 
 [tasks.copy_remote]
 env = { RPI_DIR = "/opt/rsplayer/ui" }
-dependencies = ["ui_build_release"]
+dependencies = ["build_release"]
 script = [
     "rsync -av --rsync-path=\"sudo rsync\" --delete public/ ../target/ui/pkg pi@${RPI_HOST}:${RPI_DIR}",
 ]

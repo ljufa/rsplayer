@@ -310,26 +310,6 @@ fn view_settings(model: &Model) -> Node<Msg> {
             ],
             IF!(settings.mpd_settings.enabled => view_mpd(&settings.mpd_settings)),
             div![
-                C!["field", "control"],
-                ev(Ev::Click, |_| Msg::ToggleLmsEnabled),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "lms_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.lms_settings.enabled.as_at_value(),
-                    },
-                ],
-                label![
-                    C!("label"),
-                    "Enable Logitech Media Server integration?",
-                    attrs! {
-                        At::For => "lms_cb"
-                    }
-                ]
-            ],
-            IF!(settings.lms_settings.enabled => view_lms(&settings.lms_settings)),
-            div![
                 C!["field"],
                 ev(Ev::Click, |_| Msg::ToggleSpotifyEnabled),
                 input![
@@ -355,23 +335,20 @@ fn view_settings(model: &Model) -> Node<Msg> {
                 div![
                     C!["select"],
                     select![
+                        IF!(settings.spotify_settings.enabled => 
                         option![
                             attrs! {
                                 At::Value => "SPF"
                             },
                             IF!(settings.active_player == PlayerType::SPF => attrs!(At::Selected => "")),
                             "Spotify"
-                        ],
+                        ]),
+                        IF!(settings.mpd_settings.enabled => 
                         option![
                             attrs! {At::Value => "MPD"},
                             IF!(settings.active_player == PlayerType::MPD => attrs!(At::Selected => "")),
                             "Music player daemon",
-                        ],
-                        option![
-                            attrs! {At::Value => "LMS"},
-                            IF!(settings.active_player == PlayerType::LMS => attrs!(At::Selected => "")),
-                            "Logitech media server",
-                        ],
+                        ]),
                         input_ev(Ev::Change, Msg::SelectActivePlayer),
                     ],
                 ],
