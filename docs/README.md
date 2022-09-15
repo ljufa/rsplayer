@@ -54,7 +54,6 @@ To make configuration changes navigate to [http://rsplayer.local/#settings](http
 * _Music Player Daemon server host_ - Default value assumes that you have MPD server running on the same host, change only if not true
 * _Client port_ - MPD port, default value 6600
 
-<!-- ![mpd_config](_assets/mpd_conf.png) -->
 
 At this moment configuration of MPD through RSPlayer UI is not possible and has to be done manually by editing `/etc/mpd.conf` file. 
 Here is an example:
@@ -100,11 +99,8 @@ audio_output{
 Once you enter all values click _Authorize_ button which will show a permission popup from Spotify.
 After giving permission you should see `Success` message and the close button.
 
-<!-- ![](_assets/spotify_config.png) -->
 ### Active player
 Here you should choose which (enabled and configured) player you want to use.
-
-<!-- ![](_assets/active_player_config.png) -->
 
 ## External hardware devices
 If you are using GPIO-connected hardware enable and configure it here
@@ -114,22 +110,20 @@ If you are using GPIO-connected hardware enable and configure it here
 * _Digital filter_ - Select one of the digital filters supported by DAC
 * _Gain level_ - Select one of the analog output levels provided by DAC
 * _Sound settings_ - Select one of the sound profiles provided by DAC
-<!-- ![](_assets/dac_config.png) -->
+
 ### IR Remote control
 * _Remote maker_ - Chose the remote Model you want to use (atm only one remote is supported)
 * _LIRC socket path_ - The default value should work in most cases.
 
-<!-- ![](_assets/lirc_config.png) -->
 ### Volume control
 * _Volume control device_ - Select volume control device: Dac or Alsa
 * _Volume step_ - How many units to send to the control device for a single button press or encoder step
 * _Enable rotary encoder_ - Enable if you use a rotary encoder
 
-<!-- ![](_assets/volume_config.png) -->
 ### OLED
 * _Display model_ - Select OLED model (currently one supported)
 * _SPI Device path_ - The default value should work in most cases
-<!-- ![](_assets/oled_config.png) -->
+
 ### Audio output selector
 * Enable if you use output selection relay
  -------
