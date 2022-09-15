@@ -176,7 +176,7 @@ impl Default for Settings {
             },
             ir_control_settings: IRInputControlerSettings {
                 enabled: false,
-                remote_maker: "rsplayer".to_string(),
+                remote_maker: "Apple_A1156".to_string(),
                 input_socket_path: String::from("/var/run/lirc/lircd"),
             },
             oled_settings: OLEDSettings {

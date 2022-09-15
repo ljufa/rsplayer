@@ -34,84 +34,34 @@ pub async fn listen(input_commands_tx: Sender<Command>, config: MutArcConfigurat
                     let key = &result[17..end - 1];
                     debug!("Key is {}", key);
                     match key {
-                        "00 KEY_UP" => {
-                            input_commands_tx.send(Command::Play).await.expect("Error");
+                        "00 KEY_KPMINUS" => {
+                            input_commands_tx
+                                .send(Command::VolDown)
+                                .await
+                                .expect("Error");
                         }
-                        "00 KEY_DOWN" => {
-                            input_commands_tx.send(Command::Pause).await.expect("Error");
+                        "00 KEY_KPPLUS" => {
+                            input_commands_tx.send(Command::VolUp).await.expect("Error");
                         }
-                        "00 KEY_NEXT" => {
+                        "00 KEY_FASTFORWARD" => {
                             input_commands_tx.send(Command::Next).await.expect("Error");
                         }
-                        "00 KEY_PREVIOUS" => {
+                        "00 KEY_REWIND" => {
                             input_commands_tx.send(Command::Prev).await.expect("Error");
                         }
-                        "00 BTN_MOUSE" => {
-                            input_commands_tx
-                                .send(Command::RandomToggle)
-                                .await
-                                .expect("Error");
+                        "00 KEY_PLAY" => {
+                            input_commands_tx.send(Command::Play).await.expect("Error");
                         }
-                        "00 KEY_MEDIA" => {
-                            input_commands_tx
-                                .send(Command::LoadPlaylist(
-                                    "mpd_playlist_saved_remote".to_string(),
-                                ))
-                                .await
-                                .expect("Error");
+                        "06 KEY_PLAY" => {
+                            input_commands_tx.send(Command::Pause).await.expect("Error");
                         }
-                        "00 KEY_RADIO" => {
-                            input_commands_tx
-                                .send(Command::LoadPlaylist(
-                                    "mpd_playlist_saved_radio".to_string(),
-                                ))
-                                .await
-                                .expect("Error");
-                        }
-                        "00 KEY_WWW" => {
-                            input_commands_tx
-                                .send(Command::LoadPlaylist(
-                                    "mpd_playlist_saved_local".to_string(),
-                                ))
-                                .await
-                                .expect("Error");
-                        }
-                        "00 KEY_MENU" => {
-                            input_commands_tx
-                                .send(Command::ChangeAudioOutput)
-                                .await
-                                .expect("Error");
-                        }
-                        "05 KEY_POWER" => {
+                        "06 KEY_MENU" => {
                             input_commands_tx
                                 .send(Command::PowerOff)
                                 .await
                                 .expect("Error");
                         }
-                        _ => {
-                            let key_str = String::from(key);
-                            if key_str.ends_with("KEY_VOLUMEDOWN") {
-                                input_commands_tx
-                                    .send(Command::VolDown)
-                                    .await
-                                    .expect("Error");
-                            }
-                            if key_str.ends_with("KEY_VOLUMEUP") {
-                                input_commands_tx.send(Command::VolUp).await.expect("Error");
-                            }
-                            if key_str.ends_with("KEY_RIGHT") {
-                                input_commands_tx
-                                    .send(Command::Rewind(5))
-                                    .await
-                                    .expect("Error");
-                            }
-                            if key_str.ends_with("KEY_LEFT") {
-                                input_commands_tx
-                                    .send(Command::Rewind(-5))
-                                    .await
-                                    .expect("Error");
-                            }
-                        }
+                        _ => {}
                     }
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {

@@ -132,83 +132,76 @@ If you are using GPIO-connected hardware enable and configure it here
 <!-- ![](_assets/oled_config.png) -->
 ### Audio output selector
 * Enable if you use output selection relay
- 
--------
+ -------
 
 # Usage
-### Player
+## Player
 TODO
-### Queue page
+## Queue page
 TODO
-### Playlist page
+## Playlist page
  TODO
 
 -------
  
 # Roadmap
-### Improvements
-* [ ] get rid of `.unwrap()` calls
-* [ ] refactor names all over the code
-* [ ] replace warp with axum or actix
-* [ ] better control over alsa device lock
-* [ ] control over samba mount points
-* [ ] make unit tests
-* [ ] detect dsd signal from waveio(when they implement it diyaudio.com)
  
-### General
+## General
+* [ ] LMS backend support
+* [ ] Support more remote control models - configuration and key mapping
+* [ ] MPD Configuration using RSPlayer UI
+* [ ] Support more AK DAC models
+* [ ] integrate more online streaming services. Qobuz, Tidal, Soundcloud ...
+* [ ] DSP support (i.e. camillaDSP?)
 * [ ] implement own player based on Symphonia
 * [ ] own media management with advanced search
 * [ ] use more information about the song based on last.fm response, update id tags on local files?
 * [ ] lyrics
 * [ ] analyze audio files for song matching and similarity
 * [ ] streaming to local device (i.e. phone) for i.e. preview
-* [ ] support more dac chips
-* [ ] support more oled models
-* [ ] try different audio backends: pipewire, oss, jack ...
 * [ ] convert PCM to DSD on the fly
-* [ ] integrate more online streaming services
  
- 
-### Player page
+ ## Player page
+* [ ] Better design, show player control at the bottom of all pages
 * [ ] Show playing context if exists: player type, playlist, album ...
 * [ ] Show the next playing song
 * [ ] Like playing item button
 * [ ] Seek to position
-* [ ] Better style for control buttons
+  
+## Queue page
+* [ ] Manage items (batch, on search results): clear, delete, play, playnext
+* [ ] Pagination
+* [ ] Support Spotify podcast
  
- 
-### Queue page
-<!-- * Show playing context: playlist, album, manual queue ... -->
-<!-- * Search items  -->
-* Manage items (batch, on search results): clear, delete, play, playnext
-<!-- * Mark currently playing item -->
-* Pagination
-* Support Spotify podcast
- 
-### Playlist page
- 
-* Search all playlists by name
-* Show items of the selected playlist
-* Manage selected playlist:
+## Playlist page
+* [ ] Search all playlists by name
+* [ ] Show items of the selected playlist
+* [ ] Manage selected playlist:
    * play item
    * add item(s) to the queue
    * play next
    * replace queue with item(s)
    * delete playlist
-<!-- * Add more playing contexts (playlist types) provided by Spotify i.e. recommended, discover weekly... -->
-* Pagination
+* [ ] Pagination
  
-### Settings page
-* Show modal wait window while the server is restarting. use ws status
-* Add all settings
- 
+## Settings page
+* [ ] Show modal wait window while the server is restarting. use ws status
+* [ ] Add all settings
+
+## Code improvements
+* [ ] get rid of `.unwrap()` calls
+* [ ] refactor names all over the code
+* [ ] replace warp with axum or actix
+* [ ] better control over alsa device lock
+* [ ] control over network shares
+
 -------
  
 # Developing
  
-### Setup development platform device - Raspberry PI 4 with Ubuntu Server arm64 installation
+## Setup development platform device - Raspberry PI 4 with Ubuntu Server arm64 installation
  
-#### Setup OS
+## Setup OS
 * update and change user pass (optional)
 ```
 sudo apt update
@@ -232,7 +225,7 @@ sh -c "$(wget https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/to
 git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
 ```
  
-#### Mount network share
+## Mount network share
 ```bash
 sudo apt install -y nfs-common
 sudo mkdir /media/nfs
@@ -240,7 +233,7 @@ sudo mount /media/nfs
 mkdir /home/pi/music
 ln -s /media/nfs/MUSIC /home/pi/remote
 ```
-#### Setup new remote
+## Setup new remote
 ```bash
 irdb-get download apple/A1156.lircd.conf
 sudo cp A1156.lircd.conf /etc/lirc/lircd.conf.d
@@ -248,7 +241,7 @@ irrecord -d /dev/lirc0 dplayd.lircd.conf
 sudo cp dplayd.lircd.conf /etc/lirc/lircd.conf.d
 ```
  
-#### Install LMS
+## Install LMS
 ```bash
 wget http://downloads.slimdevices.com/nightly/8.2/lms/6e12028145512cef7d240c5d24c3b17e89ed8a6d/logitechmediaserver_8.2.0\~1609139175_arm.deb
 sudo dpkg -i logitechmediaserver_8.2.0\~1609139175_arm.deb
@@ -259,16 +252,16 @@ sudo cp squeezelite /home/ubuntu
 squeezelite -V "Luckit Audio 2.0 Output" -o hw:CARD=L20,DEV=0 -C 1 -v -z
 ```
   
-### Install build tools
+## Install build tools
 `cargo install make`
 
-### Update Makefile.toml
+## Update Makefile.toml
 set RPI_HOST to ip address of your device
  
-### Build and copy backend to dev platform rpi
+## Build and copy backend to dev platform rpi
 `cargo make copy_remote`
  
- ### Build and copy UI to dev platform rpi
+ ## Build and copy UI to dev platform rpi
 ```
 cd rsplayer_web_ui
 cargo make copy_remote

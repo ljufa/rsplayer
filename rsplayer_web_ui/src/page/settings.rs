@@ -335,7 +335,7 @@ fn view_settings(model: &Model) -> Node<Msg> {
                 div![
                     C!["select"],
                     select![
-                        IF!(settings.spotify_settings.enabled => 
+                        IF!(settings.spotify_settings.enabled =>
                         option![
                             attrs! {
                                 At::Value => "SPF"
@@ -343,7 +343,7 @@ fn view_settings(model: &Model) -> Node<Msg> {
                             IF!(settings.active_player == PlayerType::SPF => attrs!(At::Selected => "")),
                             "Spotify"
                         ]),
-                        IF!(settings.mpd_settings.enabled => 
+                        IF!(settings.mpd_settings.enabled =>
                         option![
                             attrs! {At::Value => "MPD"},
                             IF!(settings.active_player == PlayerType::MPD => attrs!(At::Selected => "")),
@@ -476,6 +476,20 @@ fn view_ir_control(ir_settings: &IRInputControlerSettings) -> Node<Msg> {
     div![
         div![
             C!["field"],
+            label!["Remote maker", C!["label"]],
+            div![
+                C!["control"],
+                div![
+                    C!["select"],
+                    select![option![
+                        attrs!( At::Value => "Apple_A1156"),
+                        "Apple - A1156"
+                    ]]
+                ],
+            ],
+        ],
+        div![
+            C!["field"],
             label!["LIRC socket path", C!["label"]],
             div![
                 C!["control"],
@@ -490,43 +504,10 @@ fn view_ir_control(ir_settings: &IRInputControlerSettings) -> Node<Msg> {
                 ],
             ],
         ],
-        div![
-            C!["field"],
-            label!["Remote maker", C!["label"]],
-            div![
-                C!["control"],
-                input![
-                    C!["input"],
-                    attrs! {
-                        At::Value => ir_settings.remote_maker
-                    },
-                    input_ev(Ev::Input, move |value| {
-                        Msg::InputLircRemoteMakerChanged(value)
-                    }),
-                ],
-            ],
-        ],
     ]
 }
 fn view_volume_control(volume_settings: &VolumeControlSettings) -> Node<Msg> {
     div![
-        div![
-            C!["field"],
-            label!["Volume step", C!["label"]],
-            div![
-                C!["control"],
-                input![
-                    C!["input"],
-                    attrs! {
-                        At::Value => volume_settings.volume_step
-                        At::Type => "number"
-                    },
-                    input_ev(Ev::Input, move |value| {
-                        Msg::InputVolumeStepChanged(value)
-                    }),
-                ],
-            ],
-        ],
         div![
             C!["field"],
             label!["Volume control device:", C!["label"]],
@@ -547,6 +528,24 @@ fn view_volume_control(volume_settings: &VolumeControlSettings) -> Node<Msg> {
                             VolumeCrtlType::from_str(v.as_str()).expect("msg")
                         )),
                     ],
+                ],
+            ],
+        ],
+
+        div![
+            C!["field"],
+            label!["Volume step", C!["label"]],
+            div![
+                C!["control"],
+                input![
+                    C!["input"],
+                    attrs! {
+                        At::Value => volume_settings.volume_step
+                        At::Type => "number"
+                    },
+                    input_ev(Ev::Input, move |value| {
+                        Msg::InputVolumeStepChanged(value)
+                    }),
                 ],
             ],
         ],
