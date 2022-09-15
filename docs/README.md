@@ -2,22 +2,21 @@
 * ### Install RPI OS
 If you are going to install RPI os from scratch it is important to enable ssh, and wifi and specify the hostname.
 
-> For os image select Raspberry PI OS Lite 64-bit
+  * For os image select _Raspberry PI OS Lite 64-bit_
+  * Click on the gear icon and enable the following options
 
-![Select RPI OS Lite 64bit](_assets/pi_imager_os_select.png)
+    ![](_assets/pi_imager_options.png ':size=450')
 
-> Click on the gear icon and enable the following options
-
-![](_assets/pi_imager_options.png)
 
 
 
 - ### Raspberry PI configuration  
-  >This step is optional and it is only needed if you want to connect hardware devices to the GPIO header
+  ?>This step is optional and it is only needed if you want to connect hardware devices to the GPIO header
+  
   After installation is done ssh login to RPI `ssh pi@rsplayer.local` and make the following changes:
   - Enable SPI and I2C options using `raspi-config` tool
   - Make sure you have the following entries in `/boot/config.txt`:
-     ```bash
+     ```json
      dtoverlay=gpio-ir,gpio_pin=17
      dtoverlay=rotary-encoder,pin_a=15,pin_b=18,relative_axis=1,steps-per-period=1
      gpio=18,15,19=pu
@@ -26,7 +25,7 @@ If you are going to install RPI os from scratch it is important to enable ssh, a
  
 - ### Install dependencies
   - Install MPD and LIRC:
-      ```
+      ```bash
       sudo apt install -y mpd lirc
       sudo systemctl enable mpd
       sudo systemctl enable lircd
@@ -34,8 +33,7 @@ If you are going to install RPI os from scratch it is important to enable ssh, a
   - [Librespot](https://github.com/librespot-org/librespot) is provided in the installation package
  
 - ### Install RSPlayer
-
-  ```
+  ```bash
   wget https://github.com/ljufa/rsplayer/releases/download/0.3.2/rsplayer_0.3.2_arm64.deb
   sudo dpkg -i --force-overwrites rsplayer_0.3.2_arm64.deb
   sudo systemctl enable rsplayer
@@ -43,7 +41,7 @@ If you are going to install RPI os from scratch it is important to enable ssh, a
 - ### Verify installation
   - Reboot RPI with `sudo reboot`
   - After the reboot is done, open the browser and navigate to [http://rsplayer.local/](http://rsplayer.local/)
-  - If the page can not load or there is an error message at top of the page please see the Troubleshooting section.
+  - If the page can not load or there is an error message at top of the page please see the [Troubleshooting](?id=troubleshooting) section.
  
 -------
 # Configuring
@@ -57,7 +55,7 @@ To make configuration changes navigate to [http://rsplayer.local/#settings](http
 
 At this moment configuration of MPD through RSPlayer UI is not possible and has to be done manually by editing `/etc/mpd.conf` file. 
 Here is an example:
-```
+```json
 playlist_directory        "/var/lib/mpd/playlists"
 db_file                   "/var/lib/mpd/tag_cache"
 state_file                "/var/lib/mpd/state"
@@ -84,9 +82,9 @@ audio_output{
 
 ```
 ### Spotify
->Spotify integration is possible for Spotify premium accounts only. 
+?>Spotify integration is possible for Spotify premium accounts only. 
 
->_All credentials entered here, and generated Spotify access token will be stored in plain text format on your RPI device so please make sure it is properly secured!_
+!>_All credentials entered here, and generated Spotify access token will be stored in plain text format on your RPI device so please make sure it is properly secured!_
 
 * _Spotify connect device name_ - you can provide your own name, it will be shown in the device list in official Spotify applications.
 * _Spotify username_ - your Spotify account username
@@ -137,7 +135,36 @@ TODO
  TODO
 
 -------
- 
+
+# Troubleshooting
+## Useful commands
+* get logs 
+```bash
+journalctl -u rsplayer.service -f -n 300
+```
+* restart rsplayer 
+```bash
+sudo systemctl restart rsplayer
+```
+
+## RSPlayer server can't start
+TODO
+
+## Can't connect to MPD error
+TODO
+
+## Playlist page is empty
+TODO
+
+## Spotify configuration
+### Callback url not valid
+
+### Developer client id not valid
+
+### TODO...
+
+-------
+
 # Roadmap
  
 ## General
@@ -183,9 +210,10 @@ TODO
 * [ ] Add all settings
 
 ## Code improvements
+* [ ] migrate away from `failure` crate
 * [ ] get rid of `.unwrap()` calls
 * [ ] refactor names all over the code
-* [ ] replace warp with axum or actix
+* [ ] replace `warp` with `axum` or `actix`
 * [ ] better control over alsa device lock
 * [ ] control over network shares
 
@@ -193,11 +221,11 @@ TODO
  
 # Developing
  
-## Setup development platform device - Raspberry PI 4 with Ubuntu Server arm64 installation
+## Setup development platform device - Raspberry PI 4 with RPI OS Lite 64-bit
  
 ## Setup OS
 * update and change user pass (optional)
-```
+```bash
 sudo apt update
 sudo apt upgrade
 passwd
@@ -245,7 +273,7 @@ tar zxvf download
 sudo cp squeezelite /home/ubuntu
 squeezelite -V "Luckit Audio 2.0 Output" -o hw:CARD=L20,DEV=0 -C 1 -v -z
 ```
-  
+
 ## Install build tools
 `cargo install make`
 
