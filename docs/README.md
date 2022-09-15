@@ -1,10 +1,22 @@
-Work in progress!
- 
-# Installing _(ssh access to rpi is required)_
-- ### Raspberry PI configuration
-  Tested on RPI4 with Raspberry Pi OS Lite (64-bit)
+# Installing
+* ### Install RPI OS
+If you are going to install RPI os from scratch it is important to enable ssh, and wifi and specify the hostname.
+
+> For os image select Raspberry PI OS Lite 64-bit
+
+![Select RPI OS Lite 64bit](_assets/pi_imager_os_select.png)
+
+> Click on the gear icon and enable the following options
+
+![](_assets/pi_imager_options.png)
+
+
+
+- ### Raspberry PI configuration  
+  >This step is optional and it is only needed if you want to connect hardware devices to the GPIO header
+  After installation is done ssh login to RPI `ssh pi@rsplayer.local` and make the following changes:
   - Enable SPI and I2C options using `raspi-config` tool
-  - Also make sure you have following entries in `/boot/config.txt`:
+  - Make sure you have the following entries in `/boot/config.txt`:
      ```bash
      dtoverlay=gpio-ir,gpio_pin=17
      dtoverlay=rotary-encoder,pin_a=15,pin_b=18,relative_axis=1,steps-per-period=1
@@ -12,7 +24,7 @@ Work in progress!
      gpio=22,23=op,dh
      ```
  
-- ### Dependencies
+- ### Install dependencies
   - Install MPD and LIRC:
       ```
       sudo apt install -y mpd lirc
@@ -21,8 +33,8 @@ Work in progress!
       ```
   - [Librespot](https://github.com/librespot-org/librespot) is provided in the installation package
  
-- ### RSPlayer
-  Install rsplayer:
+- ### Install RSPlayer
+
   ```
   wget https://github.com/ljufa/rsplayer/releases/download/0.3.2/rsplayer_0.3.2_arm64.deb
   sudo dpkg -i --force-overwrites rsplayer_0.3.2_arm64.deb
@@ -30,26 +42,107 @@ Work in progress!
   ```
 - ### Verify installation
   - Reboot RPI with `sudo reboot`
-  - After reboot is done, open browser and navigate to `http://<rpi ip address>:8000/#settings`
-  - If the page can not load check the log for errors with: `journalctl -u rsplayer.service -f -n 300`
+  - After the reboot is done, open the browser and navigate to [http://rsplayer.local/](http://rsplayer.local/)
+  - If the page can not load or there is an error message at top of the page please see the Troubleshooting section.
  
 -------
 # Configuring
+## Players
+To make any use of RSPlayer you need to enable and configure at least one player in the Players section.
+To make configuration changes navigate to [http://rsplayer.local/#settings](http://rsplayer.local/#settings).
 ### MPD
+* _Music Player Daemon server host_ - Default value assumes that you have MPD server running on the same host, change only if not true
+* _Client port_ - MPD port, default value 6600
+
+<!-- ![mpd_config](_assets/mpd_conf.png) -->
+
+At this moment configuration of MPD through RSPlayer UI is not possible and has to be done manually by editing `/etc/mpd.conf` file. 
+Here is an example:
+```
+playlist_directory        "/var/lib/mpd/playlists"
+db_file                   "/var/lib/mpd/tag_cache"
+state_file                "/var/lib/mpd/state"
+sticker_file              "/var/lib/mpd/sticker.sql"
+music_directory           "/var/lib/mpd/music"
+
+bind_to_address           "0.0.0.0"
+port                      "6600"
+log_level                 "default"
+restore_paused            "yes"
+auto_update               "yes"
+follow_outside_symlinks   "yes"
+follow_inside_symlinks    "yes"
+zeroconf_enabled          "no"
+filesystem_charset        "UTF-8"
+
+audio_output{
+  type                    "alsa"
+  name                    "usb audio device"
+  device                  "hw:1"
+  mixer_type              "none"
+  replay_gain_handler     "none"
+}
+
+```
 ### Spotify
+>Spotify integration is possible for Spotify premium accounts only. 
+
+>_All credentials entered here, and generated Spotify access token will be stored in plain text format on your RPI device so please make sure it is properly secured!_
+
+* _Spotify connect device name_ - you can provide your own name, it will be shown in the device list in official Spotify applications.
+* _Spotify username_ - your Spotify account username
+* _Spotify password_ - password for your Spotify account
+* _Developer client id_ - If you don't own a Spotify developer account and you want to use mine please reach me in the private email message.
+* _Developer secret_ - If you don't own a Spotify developer account and you want to use mine please reach me in the private email message.
+* _Auth callback url_ - Leave default value or change if your RPI hostname is different
+* _Audio device name_ - This is an audio device that will be used by Librespot it could be different from the one used by MPD.
+
+Once you enter all values click _Authorize_ button which will show a permission popup from Spotify.
+After giving permission you should see `Success` message and the close button.
+
+<!-- ![](_assets/spotify_config.png) -->
 ### Active player
+Here you should choose which (enabled and configured) player you want to use.
+
+<!-- ![](_assets/active_player_config.png) -->
+
+## External hardware devices
+If you are using GPIO-connected hardware enable and configure it here
 ### Dac
+* _DAC Chip_ - Currently there is only one AK DAC chip supported and tested
+* _DAC I2C Address_ - I2C address of the DAC
+* _Digital filter_ - Select one of the digital filters supported by DAC
+* _Gain level_ - Select one of the analog output levels provided by DAC
+* _Sound settings_ - Select one of the sound profiles provided by DAC
+<!-- ![](_assets/dac_config.png) -->
 ### IR Remote control
+* _Remote maker_ - Chose the remote Model you want to use (atm only one remote is supported)
+* _LIRC socket path_ - The default value should work in most cases.
+
+<!-- ![](_assets/lirc_config.png) -->
 ### Volume control
+* _Volume control device_ - Select volume control device: Dac or Alsa
+* _Volume step_ - How many units to send to the control device for a single button press or encoder step
+* _Enable rotary encoder_ - Enable if you use a rotary encoder
+
+<!-- ![](_assets/volume_config.png) -->
 ### OLED
+* _Display model_ - Select OLED model (currently one supported)
+* _SPI Device path_ - The default value should work in most cases
+<!-- ![](_assets/oled_config.png) -->
 ### Audio output selector
+* Enable if you use output selection relay
  
 -------
+
 # Usage
 ### Player
+TODO
 ### Queue page
+TODO
 ### Playlist page
- 
+ TODO
+
 -------
  
 # Roadmap
@@ -63,25 +156,25 @@ Work in progress!
 * [ ] detect dsd signal from waveio(when they implement it diyaudio.com)
  
 ### General
-* implement own player based on Symphonia
-* own media management with advanced search
-* use more information about the song based on last.fm response, update id tags on local files?
-* lyrics
-* analyze audio files for song matching and similarity
-* streaming to local device (i.e. phone) for i.e. preview
-* support more dac chips
-* support more oled models
-* try different audio backends: pipewire, oss, jack ...
-* convert PCM to DSD on the fly
-* integrate more online streaming services
+* [ ] implement own player based on Symphonia
+* [ ] own media management with advanced search
+* [ ] use more information about the song based on last.fm response, update id tags on local files?
+* [ ] lyrics
+* [ ] analyze audio files for song matching and similarity
+* [ ] streaming to local device (i.e. phone) for i.e. preview
+* [ ] support more dac chips
+* [ ] support more oled models
+* [ ] try different audio backends: pipewire, oss, jack ...
+* [ ] convert PCM to DSD on the fly
+* [ ] integrate more online streaming services
  
  
 ### Player page
-* Show playing context if exists: player type, playlist, album ...
-* Show next playing song
-* Like playing item button
-* Seek to position
-* Better style for control buttons
+* [ ] Show playing context if exists: player type, playlist, album ...
+* [ ] Show the next playing song
+* [ ] Like playing item button
+* [ ] Seek to position
+* [ ] Better style for control buttons
  
  
 ### Queue page
@@ -113,7 +206,7 @@ Work in progress!
  
 # Developing
  
-### Raspberry PI 4 with Ubuntu Server arm64 installation
+### Setup development platform device - Raspberry PI 4 with Ubuntu Server arm64 installation
  
 #### Setup OS
 * update and change user pass (optional)
@@ -123,6 +216,8 @@ sudo apt upgrade
 passwd
 sudo reboot
 ```
+* copy ssh key
+`ssh-copy-id pi@$RPI_HOST`
  
 * install micro (optional)
 ```bash
@@ -137,10 +232,6 @@ sh -c "$(wget https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/to
 git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
 ```
  
-#### Copy configuration
-```bash
-make copy_config
-```
 #### Mount network share
 ```bash
 sudo apt install -y nfs-common
@@ -149,40 +240,7 @@ sudo mount /media/nfs
 mkdir /home/pi/music
 ln -s /media/nfs/MUSIC /home/pi/remote
 ```
-#### Build librespot (optional)
-```bash
-cd github
-git clone git@github.com:librespot-org/librespot.git && cd librespot
-cp ../dplauer/Cross.toml .
-cross build --target aarch64-unknown-linux-gnu --release --no-default-features --features alsa-backend
-```
-OR
-```bash
-make build_librespot
-```
-#### Install mpd
-```bash
-sudo apt install -y mpd
-sudo systemctl enable mpd
-```
-#### LIRC setup
-```bash
-sudo apt-get install -y lirc
-```
-`/boot/config.txt (optional already provided in copy_config)`
-```bash
-dtoverlay=gpio-ir,gpio_pin=27
-gpio=18,15,17=pu
-gpio=22,23,9=op,dh
-```
- 
- 
-#### Enable and start dplay service
-```bash
-sudo systemctl enable dplay.service
-sudo systemctl start dplay.service
-```
-#### setup new remote
+#### Setup new remote
 ```bash
 irdb-get download apple/A1156.lircd.conf
 sudo cp A1156.lircd.conf /etc/lirc/lircd.conf.d
@@ -200,24 +258,20 @@ tar zxvf download
 sudo cp squeezelite /home/ubuntu
 squeezelite -V "Luckit Audio 2.0 Output" -o hw:CARD=L20,DEV=0 -C 1 -v -z
 ```
- 
- 
+  
 ### Install build tools
-`cargo install cross`
- 
-### Build release
- 
-`make release copytorpi`
- 
-### Features
-#### Hardware integration
-* `hw_oled` - enable control of OLED module over gpio spi protocol
-* `hw_dac` - enable control of DAC chip, volume, filters, gain ...
-* `hw_ir_control` - enable IR input based on LIRC
- 
-#### Backend player integrations
-* `backend_mpd` - build with MPD - music player daemon integration  support
-* `backend_lms` - build with LMS - Logitech Media Server integration support
- 
- 
+`cargo install make`
 
+### Update Makefile.toml
+set RPI_HOST to ip address of your device
+ 
+### Build and copy backend to dev platform rpi
+`cargo make copy_remote`
+ 
+ ### Build and copy UI to dev platform rpi
+```
+cd rsplayer_web_ui
+cargo make copy_remote
+```
+
+... TODO ...

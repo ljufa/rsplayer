@@ -79,7 +79,7 @@ args = ["fmt"]
 
 # ---- Local DEV ----
 [tasks.run_local]
-env = { "RUST_LOG"="rsplayer=debug", "RUST_BACKTRACE"="full"}
+env = { "RUST_LOG"="rsplayer=debug,warp=debug", "RUST_BACKTRACE"="full", "RSPLAYER_HTTP_PORT"="8000"}
 command = "cargo"
 args = ["run"]
 

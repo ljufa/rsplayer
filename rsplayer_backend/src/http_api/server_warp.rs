@@ -8,6 +8,10 @@ use crate::player::player_service::PlayerService;
 
 use api_models::common::Command;
 use api_models::state::StateChangeEvent;
+use std::env;
+use std::net::Ipv4Addr;
+use std::net::SocketAddrV4;
+use std::net::TcpListener;
 use std::{
     collections::HashMap,
     sync::atomic::{AtomicUsize, Ordering},
@@ -56,7 +60,8 @@ pub fn start_degraded(config: &Config, error: &failure::Error) -> impl Future<Ou
         .or(ui_static_content)
         .or(filters::get_startup_error(error))
         .with(cors);
-    warp::serve(routes).run(([0, 0, 0, 0], 8000))
+
+    warp::serve(routes).run(([0, 0, 0, 0], get_port()))
 }
 
 pub fn start(
@@ -113,7 +118,7 @@ pub fn start(
             }
         }
     };
-    let http_handle = warp::serve(routes).run(([0, 0, 0, 0], 8000));
+    let http_handle = warp::serve(routes).run(([0, 0, 0, 0], get_port()));
     (http_handle, ws_handle)
 }
 mod filters {
@@ -414,4 +419,31 @@ async fn user_disconnected(my_id: usize, users: &Users) {
 
     // Stream closed up, so remove from the user list
     users.write().await.remove(&my_id);
+}
+
+fn get_port() -> u16 {
+    let fallback_port = 8000;
+    let default_port = "80";
+    let port = env::var("RSPLAYER_HTTP_PORT").unwrap_or_else(|_| default_port.to_string());
+    if let Ok(port) = port.parse::<u16>() {
+        if is_local_port_free(port) {
+            return port;
+        } else {
+            warn!(
+                "Desired port {} is unavailable, will try fallback port {}",
+                port, fallback_port
+            )
+        }
+        if is_local_port_free(fallback_port) {
+            return fallback_port;
+        } else {
+            error!("Fallback port {} is also unavailable", fallback_port);
+        }
+    }
+    panic!("Desired port [{}], default port [{}] and fallback port [{}] are unavailable! Please specify another value for RSPLAYER_HTTP_PORT in rsplayer.service file", port, default_port, fallback_port)
+}
+
+fn is_local_port_free(port: u16) -> bool {
+    let ipv4 = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+    TcpListener::bind(ipv4).is_ok()
 }

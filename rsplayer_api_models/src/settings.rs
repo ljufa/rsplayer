@@ -105,10 +105,7 @@ pub struct IRInputControlerSettings {
     pub remote_maker: String,
     pub input_socket_path: String,
 }
-// pub struct RemoteKeyMapping {
-//     maker: String,
-//     mappings: HashMap<String, Command>
-// }
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OLEDSettings {
     pub enabled: bool,
@@ -131,7 +128,7 @@ impl Default for Settings {
         let default_alsa_pcm_device = "hw:1";
         Settings {
             active_player: PlayerType::MPD,
-            output_selector_settings: OutputSelectorSettings { enabled: true },
+            output_selector_settings: OutputSelectorSettings { enabled: false },
             volume_ctrl_settings: VolumeControlSettings {
                 volume_step: 2,
                 ctrl_device: VolumeCrtlType::Dac,
@@ -141,7 +138,7 @@ impl Default for Settings {
             spotify_settings: SpotifySettings {
                 enabled: false,
                 device_name: String::from("rsplayer@rpi"),
-                auth_callback_url: String::from("http://rsplayer.lan:8000/api/spotify/callback"),
+                auth_callback_url: String::from("http://rsplayer.local/api/spotify/callback"),
                 developer_client_id: String::default(),
                 developer_secret: String::default(),
                 username: String::default(),
@@ -157,7 +154,7 @@ impl Default for Settings {
                 alsa_pcm_device_name: String::from(default_alsa_pcm_device),
             },
             dac_settings: DacSettings {
-                enabled: true,
+                enabled: false,
                 chip_id: String::from("AK4497"),
                 i2c_address: 0x13,
                 volume_step: 2,
@@ -178,7 +175,7 @@ impl Default for Settings {
                 available_alsa_control_devices: HashMap::new(),
             },
             ir_control_settings: IRInputControlerSettings {
-                enabled: true,
+                enabled: false,
                 remote_maker: "rsplayer".to_string(),
                 input_socket_path: String::from("/var/run/lirc/lircd"),
             },
