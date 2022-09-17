@@ -40,6 +40,7 @@ If you are going to install RPI os from scratch it is important to enable ssh, a
 - ### Verify installation
   - Reboot RPI with `sudo reboot`
   - After the reboot is done, open the browser and navigate to [http://rsplayer.local/](http://rsplayer.local/)
+  - If you can't access to http://rsplayer.local from your android phone use RPI ip address or PC browser. At the time mDns/zeroconf is not supported by Android.
   - If the page can not load or there is an error message at top of the page please see the [Troubleshooting](?id=troubleshooting) section.
  
 -------
@@ -82,6 +83,8 @@ audio_output {
 ```
 ### Spotify
 ?>Spotify integration is possible for Spotify premium accounts only. 
+
+?>First time Spotify setup should be done from desktop computer because Andorid does not support accessing RPI using host name i.e `rsplayer.local`
 
 !>_All credentials entered here, and generated Spotify access token will be stored in plain text format on your RPI device so please make sure it is properly secured!_
 
