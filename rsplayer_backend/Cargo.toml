@@ -10,7 +10,7 @@ description = "RSPlayer - Music Player for Raspberry PI and software controller 
 [package.metadata.deb]
 maintainer = "Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"
 copyright = "2021, Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"
-depends = "mpd (>= 0.22), lirc (>= 0.10.1-6.3)"
+suggests = "mpd (>= 0.22), lirc (>= 0.10.1-6.3)"
 section = "Sound"
 priority = "optional"
 assets = [

@@ -24,6 +24,7 @@ If you are going to install RPI os from scratch it is important to enable ssh, a
      ```
  
 - ### Install dependencies
+  ?> Both MPD and LIRCare optional, don't install if you don't want to use MPD backend and LIRC based remote control
   - Install MPD and LIRC:
       ```bash
       sudo apt install -y mpd lirc
