@@ -34,9 +34,7 @@ If you are going to install RPI os from scratch it is important to enable ssh, a
  
 - ### Install RSPlayer
   ```bash
-  wget https://github.com/ljufa/rsplayer/releases/download/0.3.2/rsplayer_0.3.2_arm64.deb
-  sudo dpkg -i --force-overwrites rsplayer_0.3.2_arm64.deb
-  sudo systemctl enable rsplayer
+  bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)
   ```
 - ### Verify installation
   - Reboot RPI with `sudo reboot`
@@ -72,7 +70,7 @@ follow_inside_symlinks    "yes"
 zeroconf_enabled          "no"
 filesystem_charset        "UTF-8"
 
-audio_output{
+audio_output {
   type                    "alsa"
   name                    "usb audio device"
   device                  "hw:1"

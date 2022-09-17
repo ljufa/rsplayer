@@ -132,7 +132,7 @@ impl Default for Settings {
             volume_ctrl_settings: VolumeControlSettings {
                 volume_step: 2,
                 ctrl_device: VolumeCrtlType::Dac,
-                rotary_enabled: true,
+                rotary_enabled: false,
                 rotary_event_device_path: "/dev/input/by-path/platform-rotary@f-event".to_string(),
             },
             spotify_settings: SpotifySettings {

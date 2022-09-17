@@ -11,7 +11,10 @@
 - #### *Relay* for output audio signal selection.
 ---
 
-## TODO: DEMO and Video
+## Demo videos
+[![Demo video](https://i9.ytimg.com/vi/kH-_5-JRHrw/mq1.jpg?sqp=CIzzl5kG&rs=AOn4CLAXXnuo8rCsOOVprXOIugOAbh-k4Q)](https://youtu.be/kH-_5-JRHrw)
+[![Demo video](https://i9.ytimg.com/vi/biqSZ9TTWOg/mq2.jpg?sqp=CLj1l5kG&rs=AOn4CLAOF7hZIwoKEX4a5SpUdEepM1dKbA)](https://youtu.be/biqSZ9TTWOg)
+
 ## Hardware requirements
 Mandatory:
 - Raspberry PI 4 - for best audio quality. It will work with older 64bit models as well.
