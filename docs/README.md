@@ -93,7 +93,17 @@ audio_output {
 * _Spotify password_ - password for your Spotify account
 * _Developer client id_ - If you don't own a Spotify developer account and you want to use mine please reach me in the private email message.
 * _Developer secret_ - If you don't own a Spotify developer account and you want to use mine please reach me in the private email message.
-* _Auth callback url_ - Leave default value or change if your RPI hostname is different
+* _Auth callback url_ - Change if your RPI hostname is different from `rsplayer.local`. Allowed values are:
+  * http://raspberrypi.local/api/spotify/callback
+  * http://raspberrypi.lan/api/spotify/callback
+  * http://raspberrypi/api/spotify/callback
+  * http://rsplayer.local/api/spotify/callback
+  * http://rsplayer.lan/api/spotify/callback
+  * http://rsplayer/api/spotify/callback
+  * http://pi.local/api/spotify/callback
+  * http://pi.lan/api/spotify/callback
+  * http://pi/api/spotify/callback
+  * http://localhost:8000/api/spotify/callback
 * _Audio device name_ - This is an audio device that will be used by Librespot it could be different from the one used by MPD.
 
 Once you enter all values click _Authorize_ button which will show a permission popup from Spotify.
@@ -174,6 +184,7 @@ TODO
 * [ ] Support more remote control models - configuration and key mapping
 * [ ] MPD Configuration using RSPlayer UI
 * [ ] Support more AK DAC models
+* [ ] Mute relay
 * [ ] integrate more online streaming services. Qobuz, Tidal, Soundcloud ...
 * [ ] DSP support (i.e. camillaDSP?)
 * [ ] implement own player based on Symphonia
