@@ -181,6 +181,7 @@ TODO
  
 ## General
 * [ ] LMS backend support
+* [ ] Browse/search whole music library
 * [ ] Support more remote control models - configuration and key mapping
 * [ ] MPD Configuration using RSPlayer UI
 * [ ] Support more AK DAC models

@@ -7,10 +7,14 @@
 - #### *IR Receiver* for player remote control
 - #### *OLED display* for player state info
 - #### *Relay* for output audio signal selection.
----
+
+-----
+## For quick start [jump to installation instructions](https://ljufa.github.io/rsplayer/#/?id=install-rsplayer)
+----
 ## Demo videos
 [![Demo video](https://img.youtube.com/vi/kH-_5-JRHrw/hqdefault.jpg)](https://youtu.be/kH-_5-JRHrw)
 [![Demo video](https://img.youtube.com/vi/biqSZ9TTWOg/hqdefault.jpg)](https://youtu.be/biqSZ9TTWOg)
+
 ## Hardware requirements
 Mandatory:
 - Raspberry PI 4 - for best audio quality. It will work with other 64-bit models as well.
