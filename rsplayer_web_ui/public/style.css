@@ -248,7 +248,7 @@ input[type=range].slider {
   padding: 5px;
   overflow-x: hidden;
   overflow-y: auto;
-  height: 800px;
+  height: 1200px;
   scroll-behavior: smooth;
 }
 

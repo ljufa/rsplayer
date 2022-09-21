@@ -34,16 +34,13 @@ mod hw_volume {
             loop {
                 trace!("Loop cycle");
                 let ev = events.next_event().await.expect("Error");
-                match ev.kind() {
-                    InputEventKind::RelAxis(_) => {
-                        trace!("Event: {:?}", ev);
-                        if ev.value() == 1 {
-                            let _ = input_commands_tx.send(Command::VolDown).await;
-                        } else {
-                            let _ = input_commands_tx.send(Command::VolUp).await;
-                        }
+                if let InputEventKind::RelAxis(_) = ev.kind() {
+                    trace!("Event: {:?}", ev);
+                    if ev.value() == 1 {
+                        let _ = input_commands_tx.send(Command::VolDown).await;
+                    } else {
+                        let _ = input_commands_tx.send(Command::VolUp).await;
                     }
-                    _ => {}
                 }
             }
         } else {

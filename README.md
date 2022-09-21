@@ -12,6 +12,7 @@
 ## For quick start [jump to installation instructions](https://ljufa.github.io/rsplayer/#/?id=install-rsplayer)
 ----
 ## Demo videos
+[![Demo video](https://img.youtube.com/vi/S-LKkZeLEQ0/hqdefault.jpg)](https://youtu.be/S-LKkZeLEQ0)
 [![Demo video](https://img.youtube.com/vi/kH-_5-JRHrw/hqdefault.jpg)](https://youtu.be/kH-_5-JRHrw)
 [![Demo video](https://img.youtube.com/vi/biqSZ9TTWOg/hqdefault.jpg)](https://youtu.be/biqSZ9TTWOg)
 
