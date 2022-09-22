@@ -1,3 +1,4 @@
+use api_models::common::SystemCommand;
 use api_models::serde_json;
 use futures::Future;
 use futures::FutureExt;
@@ -6,7 +7,7 @@ use futures::StreamExt;
 use crate::config::Configuration;
 use crate::player::player_service::PlayerService;
 
-use api_models::common::Command;
+use api_models::common::PlayerCommand;
 use api_models::state::StateChangeEvent;
 use std::env;
 use std::net::Ipv4Addr;
@@ -41,7 +42,8 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
 type Config = Arc<Mutex<Configuration>>;
 type PlayerServiceArc = Arc<Mutex<PlayerService>>;
-type SyncSender = tokio::sync::mpsc::Sender<Command>;
+type PlayerCommandSender = tokio::sync::mpsc::Sender<PlayerCommand>;
+type SystemCommandSender = tokio::sync::mpsc::Sender<SystemCommand>;
 
 pub fn start_degraded(config: &Config, error: &failure::Error) -> impl Future<Output = ()> {
     let cors = warp::cors()
@@ -66,7 +68,8 @@ pub fn start_degraded(config: &Config, error: &failure::Error) -> impl Future<Ou
 
 pub fn start(
     mut state_changes_rx: Receiver<StateChangeEvent>,
-    input_commands_tx: SyncSender,
+    player_commands_tx: PlayerCommandSender,
+    system_commands_tx: SystemCommandSender,
     config: &Config,
     player_service: PlayerServiceArc,
 ) -> (impl Future<Output = ()>, impl Future<Output = ()>) {
@@ -76,7 +79,8 @@ pub fn start(
     // Turn our "state" into a new Filter...
     let users_notify = users.clone();
     let users_f = warp::any().map(move || users.clone());
-    let input_commands_tx = warp::any().map(move || input_commands_tx.clone());
+    let player_commands_tx = warp::any().map(move || player_commands_tx.clone());
+    let system_commands_tx = warp::any().map(move || system_commands_tx.clone());
     let cors = warp::cors()
         .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
         .allow_any_origin();
@@ -84,11 +88,16 @@ pub fn start(
     let player_ws_path = warp::path!("api" / "ws")
         .and(warp::ws())
         .and(users_f)
-        .and(input_commands_tx)
-        .map(|ws: warp::ws::Ws, users, input_commands| {
-            // And then our closure will be called when it completes...
-            ws.on_upgrade(|websocket| user_connected(websocket, users, input_commands))
-        });
+        .and(player_commands_tx)
+        .and(system_commands_tx)
+        .map(
+            |ws: warp::ws::Ws, users, player_commands, system_commands| {
+                // And then our closure will be called when it completes...
+                ws.on_upgrade(|websocket| {
+                    user_connected(websocket, users, player_commands, system_commands)
+                })
+            },
+        );
     let ui_static_content = warp::get().and(warp::fs::dir(Configuration::get_static_dir_path()));
 
     let routes = player_ws_path
@@ -245,6 +254,7 @@ mod handlers {
         config.lock().unwrap().save_settings(&settings);
         // todo: find better way to trigger service restart by systemd
         let param = query.get("reload").unwrap();
+
         if param == "true" {
             match std::process::Command::new("sudo")
                 .arg("systemctl")
@@ -370,7 +380,12 @@ async fn notify_users(users_to_notify: &Users, status_change_event: StateChangeE
     }
 }
 
-async fn user_connected(ws: WebSocket, users: Users, input_commands_tx: SyncSender) {
+async fn user_connected(
+    ws: WebSocket,
+    users: Users,
+    player_commands_tx: PlayerCommandSender,
+    system_commands_tx: SystemCommandSender,
+) {
     // Use a counter to assign a new unique ID for this user.
     let user_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
 
@@ -403,8 +418,17 @@ async fn user_connected(ws: WebSocket, users: Users, input_commands_tx: SyncSend
         };
         info!("Got command from user {:?}", msg);
         if let Ok(cmd) = msg.to_str() {
-            let cmd: Command = serde_json::from_str(cmd).unwrap();
-            let _ = input_commands_tx.send(cmd).await;
+            let player_command: Option<PlayerCommand> = serde_json::from_str(cmd).ok();
+            if let Some(pc) = player_command {
+                _ = player_commands_tx.send(pc).await;
+            } else {
+                let system_command: Option<SystemCommand> = serde_json::from_str(cmd).ok();
+                if let Some(sc) = system_command {
+                    _ = system_commands_tx.send(sc).await;
+                } else {
+                    warn!("Unknown command received: [{}]", cmd);
+                }
+            }
         }
     }
 

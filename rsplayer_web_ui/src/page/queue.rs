@@ -1,6 +1,6 @@
 use api_models::player::Song;
 use api_models::state::{PlayingContext, PlayingContextQuery, StateChangeEvent};
-use api_models::{common::Command, state::PlayingContextType};
+use api_models::{common::PlayerCommand, state::PlayingContextType};
 use seed::prelude::web_sys::KeyboardEvent;
 use seed::{prelude::*, *};
 
@@ -18,7 +18,7 @@ pub struct Model {
 #[derive(Debug)]
 pub enum Msg {
     PlayingContextFetched(fetch::Result<Option<PlayingContext>>),
-    SendCommand(Command),
+    SendCommand(PlayerCommand),
     PlaylistItemSelected(String),
     PlaylistItemRemove(String),
     PlaylistItemShowMore,
@@ -33,8 +33,8 @@ pub enum Msg {
 
 pub(crate) fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     log!("Queue: init");
-    orders.send_msg(Msg::SendCommand(Command::QueryCurrentSong));
-    orders.send_msg(Msg::SendCommand(Command::QueryCurrentPlayingContext(
+    orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentSong));
+    orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
         PlayingContextQuery::WithSearchTerm(Default::default(), 0),
     )));
     Model {
@@ -63,7 +63,7 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
         }
         Msg::PlaylistItemSelected(id) => {
             model.current_song_id = Some(id.clone());
-            orders.send_msg(Msg::SendCommand(Command::PlayItem(id)));
+            orders.send_msg(Msg::SendCommand(PlayerCommand::PlayItem(id)));
         }
         Msg::PlaylistItemRemove(id) => {
             model.playing_context.as_mut().map(|ctx| {
@@ -71,11 +71,11 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
                     page.remove_item(&id);
                 })
             });
-            orders.send_msg(Msg::SendCommand(Command::RemovePlaylistItem(id)));
+            orders.send_msg(Msg::SendCommand(PlayerCommand::RemovePlaylistItem(id)));
         }
         Msg::WebSocketOpen => {
-            orders.send_msg(Msg::SendCommand(Command::QueryCurrentSong));
-            orders.send_msg(Msg::SendCommand(Command::QueryCurrentPlayingContext(
+            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentSong));
+            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
                 PlayingContextQuery::WithSearchTerm(Default::default(), 0),
             )));
             // orders.after_next_render(|_| scrollToId("current"));
@@ -88,21 +88,21 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
         }
         Msg::DoSearch => {
             model.waiting_response = true;
-            orders.send_msg(Msg::SendCommand(Command::QueryCurrentPlayingContext(
+            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
                 PlayingContextQuery::WithSearchTerm(model.search_input.clone(), 0),
             )));
         }
         Msg::ShowStartingFromCurrentSong => {
             model.waiting_response = true;
             model.search_input = "".to_string();
-            orders.send_msg(Msg::SendCommand(Command::QueryCurrentPlayingContext(
+            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
                 PlayingContextQuery::CurrentSongPage,
             )));
         }
         Msg::ClearSearch => {
             model.waiting_response = true;
             model.search_input = "".to_string();
-            orders.send_msg(Msg::SendCommand(Command::QueryCurrentPlayingContext(
+            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
                 PlayingContextQuery::WithSearchTerm("".to_string(), 0),
             )));
         }

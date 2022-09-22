@@ -1,31 +1,31 @@
-use api_models::common::Command;
+use api_models::common::SystemCommand;
 use tokio::sync::mpsc::Sender;
 
 use crate::common::MutArcConfiguration;
 
 // todo implement settings.is_enabled check
-pub async fn listen(input_commands_tx: Sender<Command>, config: MutArcConfiguration) {
+pub async fn listen(system_commands_tx: Sender<SystemCommand>, config: MutArcConfiguration) {
     let volume_settings = config
         .lock()
         .expect("Unable to lock config")
         .get_settings()
         .volume_ctrl_settings;
     if volume_settings.rotary_enabled {
-        hw_volume::listen(input_commands_tx, volume_settings).await;
+        hw_volume::listen(system_commands_tx, volume_settings).await;
     } else {
         crate::common::no_op_future().await;
     }
 }
 
 mod hw_volume {
-    use api_models::{common::Command, settings::VolumeControlSettings};
+    use api_models::{common::SystemCommand, settings::VolumeControlSettings};
 
     use tokio::sync::mpsc::Sender;
 
     use evdev::{Device, InputEventKind};
 
     pub async fn listen(
-        input_commands_tx: Sender<Command>,
+        system_commands_tx: Sender<SystemCommand>,
         volume_settings: VolumeControlSettings,
     ) {
         if let Ok(device) = Device::open(volume_settings.rotary_event_device_path) {
@@ -37,9 +37,9 @@ mod hw_volume {
                 if let InputEventKind::RelAxis(_) = ev.kind() {
                     trace!("Event: {:?}", ev);
                     if ev.value() == 1 {
-                        let _ = input_commands_tx.send(Command::VolDown).await;
+                        let _ = system_commands_tx.send(SystemCommand::VolDown).await;
                     } else {
-                        let _ = input_commands_tx.send(Command::VolUp).await;
+                        let _ = system_commands_tx.send(SystemCommand::VolUp).await;
                     }
                 }
             }

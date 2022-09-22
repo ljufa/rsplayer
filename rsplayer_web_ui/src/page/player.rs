@@ -25,7 +25,8 @@ pub struct Model {
 pub enum Msg {
     StatusChangeEventReceived(StateChangeEvent),
     AlbumImageUpdated(Image),
-    SendCommand(Command),
+    SendPlayerCommand(PlayerCommand),
+    SendSystemCommand(SystemCommand),
     WebSocketOpen,
 }
 #[derive(Debug, Deserialize)]
@@ -48,9 +49,9 @@ pub struct Image {
 // ------ ------
 
 pub(crate) fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
-    orders.send_msg(Msg::SendCommand(Command::QueryCurrentSong));
-    orders.send_msg(Msg::SendCommand(Command::QueryCurrentPlayerInfo));
-    orders.send_msg(Msg::SendCommand(Command::QueryCurrentStreamerState));
+    orders.send_msg(Msg::SendPlayerCommand(PlayerCommand::QueryCurrentSong));
+    orders.send_msg(Msg::SendPlayerCommand(PlayerCommand::QueryCurrentPlayerInfo));
+    orders.send_msg(Msg::SendPlayerCommand(PlayerCommand::QueryCurrentStreamerState));
     Model {
         streamer_status: StreamerState {
             selected_audio_output: AudioOut::SPKR,
@@ -101,20 +102,18 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
             model.remote_error = Some(error)
         }
 
-        Msg::SendCommand(cmd) => {
+        Msg::SendSystemCommand(cmd) => {
             log!("Player {}", cmd);
-            match cmd {
-                Command::SwitchToPlayer(_) => model.waiting_response = true,
-                Command::SetVol(vol) => model.streamer_status.volume_state.volume = vol as i64,
-                _ => (),
+            if let SystemCommand::SetVol(vol) = cmd {
+                model.streamer_status.volume_state.volume = vol as i64
             }
             orders.skip();
         }
 
         Msg::WebSocketOpen => {
-            orders.send_msg(Msg::SendCommand(Command::QueryCurrentSong));
-            orders.send_msg(Msg::SendCommand(Command::QueryCurrentPlayerInfo));
-            orders.send_msg(Msg::SendCommand(Command::QueryCurrentStreamerState));
+            orders.send_msg(Msg::SendPlayerCommand(PlayerCommand::QueryCurrentSong));
+            orders.send_msg(Msg::SendPlayerCommand(PlayerCommand::QueryCurrentPlayerInfo));
+            orders.send_msg(Msg::SendPlayerCommand(PlayerCommand::QueryCurrentStreamerState));
         }
 
         _ => {
@@ -273,19 +272,19 @@ fn view_controls_down(model: &Model) -> Node<Msg> {
         C!["centered", "is-bottom"],
         a![
             C!["player-button-play", "player-button-prev",],
-            ev(Ev::Click, |_| Msg::SendCommand(Command::Prev)),
+            ev(Ev::Click, |_| Msg::SendPlayerCommand(PlayerCommand::Prev)),
         ],
         a![
             C!["player-button-play", IF!(playing => "player-button-pause" )],
             ev(Ev::Click, move |_| if playing {
-                Msg::SendCommand(Command::Pause)
+                Msg::SendPlayerCommand(PlayerCommand::Pause)
             } else {
-                Msg::SendCommand(Command::Play)
+                Msg::SendPlayerCommand(PlayerCommand::Play)
             })
         ],
         a![
             C!["player-button-play", "player-button-next"],
-            ev(Ev::Click, |_| Msg::SendCommand(Command::Next))
+            ev(Ev::Click, |_| Msg::SendPlayerCommand(PlayerCommand::Next))
         ],
     ]
 }
@@ -313,22 +312,22 @@ fn view_controls_up(model: &Model) -> Node<Msg> {
             button![
                 C!["small-button"],
                 span![C!("icon"), i![C!("fas fa-volume-down")]],
-                ev(Ev::Click, |_| Msg::SendCommand(Command::VolDown))
+                ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::VolDown))
             ],
             button![
                 C!["small-button"],
                 span![C!("icon"), i![C!("fas fa-volume-up")]],
-                ev(Ev::Click, |_| Msg::SendCommand(Command::VolUp))
+                ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::VolUp))
             ],
             button![
                 C!["small-button"],
                 span![C!["icon"], i![C!("material-icons"), shuffle]],
-                ev(Ev::Click, |_| Msg::SendCommand(Command::RandomToggle)),
+                ev(Ev::Click, |_| Msg::SendPlayerCommand(PlayerCommand::RandomToggle)),
             ],
             button![
                 C!["small-button"],
                 span![C!["icon"], i![C!("material-icons"), audio_out]],
-                ev(Ev::Click, |_| Msg::SendCommand(Command::ChangeAudioOutput))
+                ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::ChangeAudioOutput))
             ]
         ]
     ]
@@ -355,8 +354,8 @@ fn view_volume_slider(volume_state: &VolumeState) -> Node<Msg> {
             attrs! {"min"=> 140},
             attrs! {"type"=> "range"},
             // attrs! {"disabled"=> "disabled"},
-            input_ev(Ev::Change, move |selected| Msg::SendCommand(
-                Command::SetVol(u8::from_str(selected.as_str()).unwrap())
+            input_ev(Ev::Change, move |selected| Msg::SendSystemCommand(
+                SystemCommand::SetVol(u8::from_str(selected.as_str()).unwrap())
             )),
         ],
     ]

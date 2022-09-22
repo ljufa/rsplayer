@@ -6,7 +6,7 @@ use std::panic;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use api_models::common::Command;
+use api_models::common::PlayerCommand;
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::{select, spawn};
@@ -61,26 +61,29 @@ async fn main() {
     let player_service = Arc::new(Mutex::new(player_service.unwrap()));
     info!("Player service successfully created.");
 
-    let (input_commands_tx, input_commands_rx) = tokio::sync::mpsc::channel(2);
+    let (player_commands_tx, player_commands_rx) = tokio::sync::mpsc::channel(2);
+
+    let (system_commands_tx, system_commands_rx) = tokio::sync::mpsc::channel(2);
 
     // start/resume playing after start
-    _ = input_commands_tx.send(Command::Play).await;
+    _ = player_commands_tx.send(PlayerCommand::Play).await;
 
     let (state_changes_tx, _) = broadcast::channel(20);
 
     let (http_server_future, websocket_future) = http_api::server_warp::start(
         state_changes_tx.subscribe(),
-        input_commands_tx.clone(),
+        player_commands_tx.clone(),
+        system_commands_tx.clone(),
         &config,
         player_service.clone(),
     );
 
     select! {
-        _ = spawn(control::ir_lirc::listen(input_commands_tx.clone(), config.clone())) => {
+        _ = spawn(control::ir_lirc::listen(player_commands_tx.clone(), system_commands_tx.clone(), config.clone())) => {
             error!("Exit from IR Command thread.");
         }
 
-        _ = spawn(control::volume_rotary::listen(input_commands_tx.clone(), config.clone())) => {
+        _ = spawn(control::volume_rotary::listen(system_commands_tx.clone(), config.clone())) => {
             error!("Exit from Volume control thread.");
         }
 
@@ -92,10 +95,17 @@ async fn main() {
             error!("Exit from status monitor thread.");
         }
 
-        _ = spawn(command_handler::handle(
+        _ = spawn(command_handler::handle_player_commands(
                 player_service.clone(),
-                ai_service,config.clone(),
-                input_commands_rx,
+                config.clone(),
+                player_commands_rx,
+                state_changes_tx.clone())) => {
+            error!("Exit from command handler thread.");
+        }
+        _ = spawn(command_handler::handle_system_commands(
+                ai_service,
+                config.clone(),
+                system_commands_rx,
                 state_changes_tx.clone())) => {
             error!("Exit from command handler thread.");
         }

@@ -230,7 +230,7 @@ TODO
 * [ ] replace `warp` with `axum` or `actix`
 * [ ] better control over alsa device lock
 * [ ] control over network shares
-* [ ] use separate message channel for system commands: volup, voldown, poweroff, restart ...
+* [ ] ~~use separate message channel for system commands: volup, voldown, poweroff, restart ...~~
 * [ ] write generic fun and macros to reduce code duplication in UI
 
 -------

@@ -218,7 +218,10 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 
         Msg::Player(msg) => {
             if let Page::Player(player_model) = &mut model.page {
-                if let page::player::Msg::SendCommand(cmd) = &msg {
+                if let page::player::Msg::SendPlayerCommand(cmd) = &msg {
+                    _ = model.web_socket.send_json(cmd);
+                }
+                if let page::player::Msg::SendSystemCommand(cmd) = &msg {
                     _ = model.web_socket.send_json(cmd);
                 }
                 page::player::update(msg, player_model, &mut orders.proxy(Msg::Player));

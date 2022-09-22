@@ -33,31 +33,39 @@ pub struct Volume {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub enum Command {
-    VolUp,
-    VolDown,
-    SetVol(u8),
+pub enum PlayerCommand {
+    // Player commands
     Next,
     Prev,
     Pause,
     Play,
     PlayItem(String),
     RemovePlaylistItem(String),
-    SwitchToPlayer(PlayerType),
-    PowerOff,
-    ChangeAudioOutput,
     RandomToggle,
     Rewind(i8),
     LoadPlaylist(String),
     LoadAlbum(String),
     LoadSong(String),
     AddSongToQueue(String),
+
+    // Query commands
     QueryCurrentSong,
     QueryCurrentPlayerInfo,
     QueryCurrentStreamerState,
     QueryCurrentPlayingContext(PlayingContextQuery),
     QueryDynamicPlaylists(Vec<String>, u32, u32),
     QueryPlaylistItems(String),
+}
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub enum SystemCommand {
+    // System commands
+    VolUp,
+    VolDown,
+    SetVol(u8),
+    PowerOff,
+    RestartSystem,
+    RestartRSPlayer,
+    ChangeAudioOutput,
 }
 
 #[derive(

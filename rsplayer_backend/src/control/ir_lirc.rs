@@ -1,14 +1,19 @@
 use std::io;
 use std::str;
 
-use api_models::common::Command;
+use api_models::common::PlayerCommand;
 
+use api_models::common::SystemCommand;
 use tokio::net::UnixStream;
 use tokio::sync::mpsc::Sender;
 
 use crate::common::MutArcConfiguration;
 
-pub async fn listen(input_commands_tx: Sender<Command>, config: MutArcConfiguration) {
+pub async fn listen(
+    player_commands_tx: Sender<PlayerCommand>,
+    system_commands_tx: Sender<SystemCommand>,
+    config: MutArcConfiguration,
+) {
     let ir_settings = config.lock().unwrap().get_settings().ir_control_settings;
     let maker = &ir_settings.remote_maker;
 
@@ -35,29 +40,44 @@ pub async fn listen(input_commands_tx: Sender<Command>, config: MutArcConfigurat
                     debug!("Key is {}", key);
                     match key {
                         "00 KEY_KPMINUS" => {
-                            input_commands_tx
-                                .send(Command::VolDown)
+                            system_commands_tx
+                                .send(SystemCommand::VolDown)
                                 .await
                                 .expect("Error");
                         }
                         "00 KEY_KPPLUS" => {
-                            input_commands_tx.send(Command::VolUp).await.expect("Error");
+                            system_commands_tx
+                                .send(SystemCommand::VolUp)
+                                .await
+                                .expect("Error");
                         }
                         "00 KEY_FASTFORWARD" => {
-                            input_commands_tx.send(Command::Next).await.expect("Error");
+                            player_commands_tx
+                                .send(PlayerCommand::Next)
+                                .await
+                                .expect("Error");
                         }
                         "00 KEY_REWIND" => {
-                            input_commands_tx.send(Command::Prev).await.expect("Error");
+                            player_commands_tx
+                                .send(PlayerCommand::Prev)
+                                .await
+                                .expect("Error");
                         }
                         "00 KEY_PLAY" => {
-                            input_commands_tx.send(Command::Play).await.expect("Error");
+                            player_commands_tx
+                                .send(PlayerCommand::Play)
+                                .await
+                                .expect("Error");
                         }
                         "06 KEY_PLAY" => {
-                            input_commands_tx.send(Command::Pause).await.expect("Error");
+                            player_commands_tx
+                                .send(PlayerCommand::Pause)
+                                .await
+                                .expect("Error");
                         }
                         "06 KEY_MENU" => {
-                            input_commands_tx
-                                .send(Command::PowerOff)
+                            system_commands_tx
+                                .send(SystemCommand::PowerOff)
                                 .await
                                 .expect("Error");
                         }

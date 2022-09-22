@@ -104,7 +104,7 @@ impl SpotifyPlayerClient {
                 || self.playing_context.as_ref().unwrap().id != ctx.uri
             {
                 debug!("Update playing context!");
-                self.playing_context = self.to_playing_context(ctx);
+                self.playing_context = self.get_playing_context(ctx);
             }
         } else {
             self.playing_context = None;
@@ -122,7 +122,7 @@ impl SpotifyPlayerClient {
         }
     }
 
-    fn to_playing_context(&mut self, context: &rspotify::model::Context) -> Option<PlayingContext> {
+    fn get_playing_context(&mut self, context: &rspotify::model::Context) -> Option<PlayingContext> {
         match context._type {
             Type::Playlist => {
                 if let Ok(pl) = self.oauth.client.playlist(

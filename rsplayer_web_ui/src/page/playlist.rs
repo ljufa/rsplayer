@@ -4,7 +4,7 @@ use api_models::playlist::DynamicPlaylistsPage;
 use api_models::state::StateChangeEvent;
 
 use api_models::{
-    common::*,
+    common::PlayerCommand,
     player::*,
     playlist::{Category, PlaylistType, Playlists},
 };
@@ -31,7 +31,7 @@ pub enum Msg {
     StaticPlaylistsFetched(fetch::Result<Playlists>),
     CategoriesFetched(fetch::Result<Vec<Category>>),
     StatusChangeEventReceived(StateChangeEvent),
-    SendCommand(Command),
+    SendCommand(PlayerCommand),
     ShowPlaylistItemsClicked(bool, String, String),
     LoadPlaylistIntoQueue(String),
     LoadAlbumQueue(String),
@@ -93,7 +93,7 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
                 .collect();
             log!("Cat ids", cat_ids);
             model.category_offset += cat_ids.len();
-            orders.send_msg(Msg::SendCommand(Command::QueryDynamicPlaylists(
+            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryDynamicPlaylists(
                 cat_ids,
                 0,
                 DYNAMIC_PLAYLIST_PAGE_SIZE,
@@ -132,7 +132,7 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
             model.waiting_response = true;
             model.selected_playlist_id = playlist_id.clone();
             model.selected_playlist_name = playlist_name;
-            orders.send_msg(Msg::SendCommand(Command::QueryPlaylistItems(playlist_id)));
+            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryPlaylistItems(playlist_id)));
         }
         Msg::CloseSelectedPlaylistItemsModal => {
             model.selected_playlist_items = Default::default();
@@ -148,16 +148,16 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
         }
         Msg::SendCommand(cmd) => log!("Cmd:", cmd),
         Msg::LoadPlaylistIntoQueue(pl_id) => {
-            orders.send_msg(Msg::SendCommand(Command::LoadPlaylist(pl_id)));
+            orders.send_msg(Msg::SendCommand(PlayerCommand::LoadPlaylist(pl_id)));
         }
         Msg::AddSongToQueue(song_id) => {
-            orders.send_msg(Msg::SendCommand(Command::AddSongToQueue(song_id)));
+            orders.send_msg(Msg::SendCommand(PlayerCommand::AddSongToQueue(song_id)));
         }
         Msg::PlaySongFromPlaylist(song_id) => {
-            orders.send_msg(Msg::SendCommand(Command::LoadSong(song_id)));
+            orders.send_msg(Msg::SendCommand(PlayerCommand::LoadSong(song_id)));
         }
         Msg::LoadAlbumQueue(album_id) => {
-            orders.send_msg(Msg::SendCommand(Command::LoadAlbum(album_id)));
+            orders.send_msg(Msg::SendCommand(PlayerCommand::LoadAlbum(album_id)));
         }
         _ => {}
     }

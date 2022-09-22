@@ -1,5 +1,5 @@
 use api_models::{
-    common::{Command, FilterType, GainLevel, PlayerType, VolumeCrtlType},
+    common::{PlayerCommand, FilterType, GainLevel, PlayerType, VolumeCrtlType, SystemCommand},
     settings::*,
     spotify::SpotifyAccountInfo,
     validator::Validate,
@@ -68,11 +68,11 @@ pub enum Msg {
     InputDacSoundSettingsChanged(String),
 
     // --- Buttons ----
-    SaveSettings,
+    SaveSettingsAndRestart,
     SettingsSaved(fetch::Result<Settings>),
 
     RemoteConfiguration(Settings),
-    SendCommand(Command),
+    SendCommand(SystemCommand),
 }
 
 // ------ ------
@@ -114,7 +114,7 @@ pub(crate) fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
 
 pub(crate) fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
-        Msg::SaveSettings => {
+        Msg::SaveSettingsAndRestart => {
             // todo: show modal wait window while server is restarting. use ws status.
             let settings = model.settings.clone();
             orders.perform_cmd(async {
@@ -457,18 +457,34 @@ fn view_settings(model: &Model) -> Node<Msg> {
                 C!("control"),
                 button![
                     C!["button", "is-dark"],
-                    "Save",
-                    ev(Ev::Click, |_| Msg::SaveSettings)
+                    "Save & restart player",
+                    ev(Ev::Click, |_| Msg::SaveSettingsAndRestart)
                 ]
             ],
             div![
                 C!("control"),
                 button![
                     C!["button", "is-dark"],
-                    "Back",
-                    ev(Ev::Click, |_| Urls::player_abs().go_and_load())
+                    "Restart player",
+                    ev(Ev::Click, |_| Msg::SendCommand(SystemCommand::RestartRSPlayer))
                 ]
-            ]
+            ],
+            div![
+                C!("control"),
+                button![
+                    C!["button", "is-dark"],
+                    "Restart system",
+                    ev(Ev::Click, |_| Msg::SendCommand(SystemCommand::RestartSystem))
+                ]
+            ],
+            div![
+                C!("control"),
+                button![
+                    C!["button", "is-dark"],
+                    "Shutdown system",
+                    ev(Ev::Click, |_| Msg::SendCommand(SystemCommand::PowerOff))
+                ]
+            ]   ,
         ]
     ]
 }
@@ -934,6 +950,7 @@ fn view_spotify(model: &Model) -> Node<Msg> {
         ]
     ]
 }
+#[allow(dead_code)]
 fn view_lms(lms_settings: &LmsSettings) -> Node<Msg> {
     div![
         style! {
