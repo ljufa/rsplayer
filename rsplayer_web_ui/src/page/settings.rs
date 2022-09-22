@@ -1,5 +1,5 @@
 use api_models::{
-    common::{PlayerCommand, FilterType, GainLevel, PlayerType, VolumeCrtlType, SystemCommand},
+    common::{FilterType, GainLevel, PlayerType, VolumeCrtlType, SystemCommand},
     settings::*,
     spotify::SpotifyAccountInfo,
     validator::Validate,
@@ -8,7 +8,7 @@ use seed::{prelude::*, *};
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 
-use crate::Urls;
+
 
 const API_SETTINGS_PATH: &str = "/api/settings";
 const API_SPOTIFY_GET_AUTH_URL_PATH: &str = "/api/spotify/get-url";

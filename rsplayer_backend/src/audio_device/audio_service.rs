@@ -26,7 +26,7 @@ impl AudioInterfaceService {
                     &settings.dac_settings,
                 )?
             } else {
-                AlsaMixer::new(settings.alsa_settings.device_name, "Master".to_string(), 0)?
+                AlsaMixer::new(settings.alsa_settings.device_name)?
             };
         let mut line_handle = None;
         if settings.output_selector_settings.enabled {

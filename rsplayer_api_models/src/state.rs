@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use strum_macros::EnumProperty;
 
 use crate::{
-    common::PlayerType,
+    common::{PlayerType, Volume},
     player::Song,
     playlist::{DynamicPlaylistsPage, PlaylistPage},
 };
@@ -78,7 +78,7 @@ pub struct PlayerInfo {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamerState {
     pub selected_audio_output: AudioOut,
-    pub volume_state: VolumeState,
+    pub volume_state: Volume,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, EnumProperty, Serialize, Deserialize)]
@@ -94,21 +94,10 @@ pub enum StateChangeEvent {
     PlaylistItemsEvent(Vec<Song>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct VolumeState {
-    pub volume: i64,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct SongProgress {
     pub total_time: Duration,
     pub current_time: Duration,
-}
-
-impl Default for VolumeState {
-    fn default() -> Self {
-        Self { volume: 180 }
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -140,7 +129,7 @@ impl Default for StreamerState {
     fn default() -> Self {
         Self {
             selected_audio_output: AudioOut::SPKR,
-            volume_state: VolumeState::default(),
+            volume_state: Volume::default(),
         }
     }
 }

@@ -3,7 +3,6 @@ use api_models::common::GainLevel;
 
 use api_models::common::{FilterType, Volume};
 use api_models::settings::DacSettings;
-use api_models::state::VolumeState;
 use std::time::Duration;
 
 use crate::mcu::gpio;
@@ -68,7 +67,7 @@ impl VolumeControlDevice for DacAk4497 {
 }
 
 impl DacAk4497 {
-    pub fn new(dac_state: VolumeState, settings: &DacSettings) -> Result<Box<Self>> {
+    pub fn new(dac_state: Volume, settings: &DacSettings) -> Result<Box<Self>> {
         let dac = Self {
             i2c_helper: I2CHelper::new(settings.i2c_address)?,
             volume_step: settings.volume_step,
@@ -77,7 +76,7 @@ impl DacAk4497 {
         Ok(Box::new(dac))
     }
 
-    fn initialize(&self, dac_state: VolumeState, dac_settings: &DacSettings) -> Result<()> {
+    fn initialize(&self, volume: Volume, dac_settings: &DacSettings) -> Result<()> {
         // reset dac
         press_pdn_button();
         // try talking to dac,
@@ -102,7 +101,7 @@ impl DacAk4497 {
 
         self.i2c_helper.write_register(0, 0b1000_1111);
         self.i2c_helper.write_register(1, 0b1010_0010);
-        self.set_vol(dac_state.volume);
+        self.set_vol(volume.current);
         self.filter(dac_settings.filter)?;
         self.set_gain(dac_settings.gain)?;
         self.hi_load(dac_settings.heavy_load)?;

@@ -1,3 +1,4 @@
+use api_models::common::Volume;
 use api_models::settings::Settings;
 use api_models::state::{AudioOut, StreamerState};
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
@@ -102,13 +103,11 @@ impl Configuration {
         sstate.clone()
     }
 
-    pub fn save_volume_state(&mut self, volume: i64) -> StreamerState {
+    pub fn save_volume_state(&mut self, volume: Volume) -> StreamerState {
         let mut ss = self.get_streamer_status();
-        let mut ds = ss.volume_state.clone();
-        ds.volume = volume;
-        ss.volume_state = ds;
+        ss.volume_state = volume;
         self.save_streamer_state(&ss);
-        ss.clone()
+        ss
     }
 
     fn save_streamer_state(&mut self, streamer_status: &StreamerState) {

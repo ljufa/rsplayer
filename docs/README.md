@@ -180,15 +180,15 @@ TODO
 # Roadmap
  
 ## General
-* [ ] LMS backend support
 * [ ] Browse/search whole music library
+* [ ] implement own player based on Symphonia
+* [ ] LMS backend support
 * [ ] Support more remote control models - configuration and key mapping
 * [ ] MPD Configuration using RSPlayer UI
 * [ ] Support more AK DAC models
 * [ ] Mute relay
 * [ ] integrate more online streaming services. Qobuz, Tidal, Soundcloud ...
 * [ ] DSP support (i.e. camillaDSP?)
-* [ ] implement own player based on Symphonia
 * [ ] own media management with advanced search
 * [ ] use more information about the song based on last.fm response, update id tags on local files?
 * [ ] lyrics
@@ -197,15 +197,15 @@ TODO
 * [ ] convert PCM to DSD on the fly
  
  ## Player page
+* [ ] Seek to position
 * [ ] Better design, show player control at the bottom of all pages
 * [ ] Show playing context if exists: player type, playlist, album ...
 * [ ] Show the next playing song
 * [ ] Like playing item button
-* [ ] Seek to position
   
 ## Queue page
-* [ ] Manage items (batch, on search results): clear, delete, play, playnext
 * [ ] Pagination
+* [ ] Manage items (batch, on search results): clear, delete, play, playnext
 * [ ] Support Spotify podcast
  
 ## Playlist page

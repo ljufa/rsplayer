@@ -55,7 +55,7 @@ pub(crate) fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
     Model {
         streamer_status: StreamerState {
             selected_audio_output: AudioOut::SPKR,
-            volume_state: VolumeState::default(),
+            volume_state: Volume::default(),
         },
         player_info: None,
         current_song: None,
@@ -105,7 +105,7 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
         Msg::SendSystemCommand(cmd) => {
             log!("Player {}", cmd);
             if let SystemCommand::SetVol(vol) = cmd {
-                model.streamer_status.volume_state.volume = vol as i64
+                model.streamer_status.volume_state.current = vol as i64
             }
             orders.skip();
         }
@@ -333,7 +333,7 @@ fn view_controls_up(model: &Model) -> Node<Msg> {
     ]
 }
 
-fn view_volume_slider(volume_state: &VolumeState) -> Node<Msg> {
+fn view_volume_slider(volume_state: &Volume) -> Node<Msg> {
     div![
         style! {
             St::Padding => "1.2rem",
@@ -341,19 +341,18 @@ fn view_volume_slider(volume_state: &VolumeState) -> Node<Msg> {
         C!["has-text-centered"],
         span![
             C!["is-size-6", "has-text-light",],
-            format!("Volume: {}/{}", volume_state.volume, 255)
+            format!("Volume: {}/{}", volume_state.current, volume_state.max)
         ],
         input![
             C!["slider", "is-fullwidth", "is-success"],
             style! {
                 St::PaddingRight => "1.2rem"
             },
-            attrs! {"value"=> volume_state.volume},
-            attrs! {"step"=> 1},
-            attrs! {"max"=> 255},
-            attrs! {"min"=> 140},
+            attrs! {"value"=> volume_state.current},
+            attrs! {"step"=> volume_state.step},
+            attrs! {"max"=> volume_state.max},
+            attrs! {"min"=> volume_state.min},
             attrs! {"type"=> "range"},
-            // attrs! {"disabled"=> "disabled"},
             input_ev(Ev::Change, move |selected| Msg::SendSystemCommand(
                 SystemCommand::SetVol(u8::from_str(selected.as_str()).unwrap())
             )),
