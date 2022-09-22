@@ -57,13 +57,13 @@ pickledb = "0.5.1"
 #gpio, i2c
 gpio-cdev = { version = "0.5.1" }
 rpi_embedded = { version = "0.1.0" }
-linux-embedded-hal = { version = "0.4.0-alpha.3" }
+linux-embedded-hal = { version = "0.3.2" }
 embedded-hal = { version = "0.2.7" }
 evdev = { version = "0.12.0", features = ["tokio"]}
 
-
 #oled
 embedded-graphics = { version = "0.7.1" }
+st7920 = { version = "0.3.0"}
 
 # spotify
 [dependencies.rspotify]

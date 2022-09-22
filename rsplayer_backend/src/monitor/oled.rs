@@ -19,7 +19,7 @@ pub async fn write(state_changes_rx: Receiver<StateChangeEvent>, config: MutArcC
 
 mod hw_oled {
     use super::{Receiver, StateChangeEvent};
-    use crate::monitor::myst7920::ST7920;
+    use st7920::ST7920;
     use crate::{common, mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST};
     use api_models::{common::PlayerType, player::Song, settings::OLEDSettings, state::PlayerInfo};
     use embedded_graphics::{
