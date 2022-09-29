@@ -152,7 +152,7 @@ impl Player for MpdPlayerClient {
                         .split('/')
                         .nth(1)
                         .unwrap_or_default()
-                        .starts_with(pl_id.as_str())
+                        .eq_ignore_ascii_case(pl_id.as_str())
                 })
                 .for_each(|s| {
                     _ = self
@@ -244,15 +244,12 @@ impl Player for MpdPlayerClient {
             PlayingContextQuery::WithSearchTerm(term, offset) => {
                 let mut songs =
                     get_songs_from_command("playlistinfo", self.mpd_server_url.as_str());
-                if term.len() > 3 {
-                    songs = songs
-                        .into_iter()
-                        .filter(|s| s.all_text().to_lowercase().contains(&term.to_lowercase()))
-                        .collect();
+                if term.len() > 2 {
+                    songs.retain(|s| s.all_text().to_lowercase().contains(&term.to_lowercase()));
                 }
                 let page = PlaylistPage {
                     total: songs.len(),
-                    offset,
+                    offset: offset + PAGE_SIZE,
                     limit: PAGE_SIZE,
                     items: songs
                         .into_iter()

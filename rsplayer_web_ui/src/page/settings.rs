@@ -44,11 +44,12 @@ pub enum Msg {
     InputSpotifyDeviceNameChange(String),
     InputSpotifyUsernameChange(String),
     InputSpotifyPasswordChange(String),
+    InputSpotifyAlsaDeviceFormatChanged(AlsaDeviceFormat),
 
     InputSpotifyDeveloperClientId(String),
     InputSpotifyDeveloperClientSecret(String),
     InputSpotifyAuthCallbackUrl(String),
-    InputSpotifyAlsaDeviceName(String),
+    InputAlsaDeviceName(String),
     InputLircInputSocketPathChanged(String),
     InputLircRemoteMakerChanged(String),
     InputRotaryEventDevicePathChanged(String),
@@ -178,11 +179,11 @@ pub(crate) fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>)
         Msg::InputSpotifyAuthCallbackUrl(value) => {
             model.settings.spotify_settings.auth_callback_url = value;
         }
-        Msg::InputSpotifyAlsaDeviceName(value) => {
-            model.settings.spotify_settings.alsa_device_name = value;
+        Msg::InputSpotifyAlsaDeviceFormatChanged(value) => {
+            model.settings.spotify_settings.alsa_device_format = value;
         }
-        Msg::InputAlsaDeviceChanged(d) => {
-            model.settings.alsa_settings.device_name = d;
+        Msg::InputAlsaDeviceName(value) => {
+            model.settings.alsa_settings.device_name = value;
         }
         Msg::InputDacFilterChanged(f) => {
             model.settings.dac_settings.filter = f;
@@ -351,6 +352,25 @@ fn view_settings(model: &Model) -> Node<Msg> {
                         ]),
                         input_ev(Ev::Change, Msg::SelectActivePlayer),
                     ],
+                ],
+            ],
+            div![
+                C!["field"],
+                label!["Audio device name", C!["label"]],
+                div![
+                    C!["select"],
+                    select![model.settings
+                        .alsa_settings
+                        .available_alsa_pcm_devices
+                        .iter()
+                        .map(|d|
+                            option![
+                                IF!(model.settings.alsa_settings.device_name == *d.0 => attrs!(At::Selected => "")),
+                                attrs! {At::Value => d.0},
+                                d.1
+                            ])
+                        ],
+                    input_ev(Ev::Change, Msg::InputAlsaDeviceName),
                 ],
             ],
         ],
@@ -896,33 +916,6 @@ fn view_spotify(model: &Model) -> Node<Msg> {
                 ]
             ],
         ],
-
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["Audio device name", C!["label"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["select"],
-                    select![model.settings
-                        .alsa_settings
-                        .available_alsa_pcm_devices
-                        .iter()
-                        .map(|d|
-                            option![
-                                IF!(spot_settings.alsa_device_name == *d.0 => attrs!(At::Selected => "")),
-                                attrs! {At::Value => d.0},
-                                d.1
-                            ])
-                        ],
-                    input_ev(Ev::Change, Msg::InputSpotifyAlsaDeviceName),
-                ],
-            ]
-        ],
-
         div![
             C!["field", "is-horizontal"],
             div![
@@ -947,7 +940,40 @@ fn view_spotify(model: &Model) -> Node<Msg> {
                     }
                 ]
             ]
-        ]
+        ],
+        div![
+            C!["field", "is-horizontal"],
+            div![
+                C!["field-label", "is-small"],
+                label!["Audio device format (for librespot)", C!["label"]],
+            ],
+            div![
+                C!["field-body"],
+                div![
+                    C!["field"],
+                    div![C!["control"],
+                    div![
+                        C!["select"],
+                        select![
+                            AlsaDeviceFormat::iter().map(|fs| {
+                                let v: &str = fs.into();
+                                option![
+                                    attrs!( At::Value => v),
+                                    IF!(spot_settings.alsa_device_format == fs => attrs!(At::Selected => "")),
+                                    v
+                                ]
+                            }),
+                            input_ev(Ev::Change, move |v| Msg::InputSpotifyAlsaDeviceFormatChanged(
+                                AlsaDeviceFormat::from_str(v.as_str()).expect("msg")
+                            )),
+                        ],
+                    ],
+    
+                    ]
+                ]
+            ],
+        ],
+
     ]
 }
 #[allow(dead_code)]

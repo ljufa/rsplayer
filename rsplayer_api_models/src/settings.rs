@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
+use num_derive::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
+use strum_macros::{EnumString, EnumIter, IntoStaticStr};
 use validator::{validate_ip_v4, Validate, ValidationError};
 
 use crate::common::{FilterType, GainLevel, PlayerType, VolumeCrtlType};
@@ -47,9 +49,33 @@ pub struct SpotifySettings {
     pub developer_secret: String,
     #[validate(url)]
     pub auth_callback_url: String,
-    #[validate(length(min = 3))]
-    pub alsa_device_name: String,
     pub bitrate: u16,
+    pub alsa_device_format: AlsaDeviceFormat,
+    #[serde(skip_deserializing)]
+    pub alsa_device_name: String,
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    FromPrimitive,
+    ToPrimitive,
+    EnumString,
+    EnumIter,
+    IntoStaticStr,
+)]
+pub enum AlsaDeviceFormat {
+    F64,
+    F32,
+    S32,
+    S24,
+    S24_3,
+    S16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,8 +107,6 @@ fn validate_ip(val: &str) -> Result<(), ValidationError> {
 pub struct AlsaSettings {
     pub device_name: String,
     pub available_alsa_pcm_devices: HashMap<String, String>,
-    #[serde(skip_deserializing)]
-    pub available_alsa_control_devices: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -123,9 +147,9 @@ impl MpdSettings {
         format!("{}:{}", self.server_host, self.server_port)
     }
 }
+pub const DEFAULT_ALSA_PCM_DEVICE: &str = "hw:1";
 impl Default for Settings {
     fn default() -> Self {
-        let default_alsa_pcm_device = "hw:1";
         Settings {
             active_player: PlayerType::MPD,
             output_selector_settings: OutputSelectorSettings { enabled: false },
@@ -143,7 +167,8 @@ impl Default for Settings {
                 developer_secret: String::default(),
                 username: String::default(),
                 password: String::default(),
-                alsa_device_name: format!("plug{}", default_alsa_pcm_device),
+                alsa_device_format: AlsaDeviceFormat::S16,
+                alsa_device_name: DEFAULT_ALSA_PCM_DEVICE.to_string(),
                 bitrate: 320,
             },
             lms_settings: LmsSettings {
@@ -151,7 +176,7 @@ impl Default for Settings {
                 server_host: String::from("localhost"),
                 cli_port: 9090,
                 server_port: 9000,
-                alsa_pcm_device_name: String::from(default_alsa_pcm_device),
+                alsa_pcm_device_name: String::from(DEFAULT_ALSA_PCM_DEVICE),
             },
             dac_settings: DacSettings {
                 enabled: false,
@@ -170,9 +195,8 @@ impl Default for Settings {
                 server_port: 6600,
             },
             alsa_settings: AlsaSettings {
-                device_name: String::from(default_alsa_pcm_device),
+                device_name: String::from(DEFAULT_ALSA_PCM_DEVICE),
                 available_alsa_pcm_devices: HashMap::new(),
-                available_alsa_control_devices: HashMap::new(),
             },
             ir_control_settings: IRInputControlerSettings {
                 enabled: false,

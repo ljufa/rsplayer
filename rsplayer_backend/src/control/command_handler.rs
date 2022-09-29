@@ -203,7 +203,6 @@ pub async fn handle_system_commands(
                 }
                 PowerOff => {
                     std::process::Command::new("/sbin/poweroff")
-                        .arg("--halt")
                         .spawn()
                         .expect("halt command failed");
                 }

@@ -29,6 +29,7 @@ pub enum Msg {
     ClearSearch,
     ShowStartingFromCurrentSong,
     LocateCurrentSong,
+    LoadMoreItems(usize)
 }
 
 pub(crate) fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
@@ -54,7 +55,7 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
         Msg::StatusChangeEventReceived(StateChangeEvent::CurrentPlayingContextEvent(pc)) => {
             model.waiting_response = false;
             model.playing_context = Some(pc);
-            // orders.after_next_render(|_| scrollToId("current"));
+            
         }
         Msg::StatusChangeEventReceived(StateChangeEvent::CurrentSongEvent(evt)) => {
             model.waiting_response = false;
@@ -108,6 +109,12 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
         }
         Msg::LocateCurrentSong => {
             scrollToId("current");
+        }
+        Msg::LoadMoreItems(offset) =>{
+            scrollToId("listtop");
+            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
+                PlayingContextQuery::WithSearchTerm(model.search_input.clone(), offset),
+            )));
         }
 
         _ => {
@@ -236,6 +243,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
         return empty!();
     }
     let pctx = model.playing_context.as_ref().unwrap();
+    
     div![
         IF!(pctx.image_url.is_some() =>
             style! {
@@ -259,8 +267,9 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                 ]],
                 view_context_info(&pctx.context_type, pctx),
             ],],
-            if pctx.playlist_page.is_some() {
-                let iter = pctx.playlist_page.as_ref().unwrap().items.iter();
+            if let Some(page) = pctx.playlist_page.as_ref() {
+                let offset = page.offset;
+                let iter = page.items.iter();
                 div![
                     div![
                         C!["transparent field has-addons"],
@@ -307,8 +316,13 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                             ],
                         ],
                     ],
-                    div![C!["scroll-list list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
+                    div![id!("listtop"), C!["scroll-list list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
                         iter.map(|it| { view_queue_item(it, pctx, model)  })
+                    ],
+                    button![
+                        C!["button","is-fullwidth", "is-outlined", "is-dark"],
+                        "Load more", 
+                        ev(Ev::Click, move |_| Msg::LoadMoreItems(offset))
                     ]
                 ]
             } else {

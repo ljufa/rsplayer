@@ -648,6 +648,7 @@ fn simple_track_to_song(track: &SimplifiedTrack) -> Song {
 
 fn start_librespot(settings: &SpotifySettings) -> Result<Child> {
     info!("Starting librespot process");
+    let format: &'static str = settings.alsa_device_format.into();
     let child = std::process::Command::new(Configuration::get_librespot_path())
         .arg("--disable-audio-cache")
         .arg("--bitrate")
@@ -662,6 +663,7 @@ fn start_librespot(settings: &SpotifySettings) -> Result<Child> {
         .arg(settings.password.clone())
         .arg("--device")
         .arg(settings.alsa_device_name.clone())
+        .arg("--format").arg(format)
         .arg("--initial-volume")
         .arg("100")
         .arg("--autoplay")
