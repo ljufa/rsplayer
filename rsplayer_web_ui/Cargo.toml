@@ -22,3 +22,7 @@ api_models = { path = "../rsplayer_api_models" }
 remote = []
 local = []
 default = ["remote"]
+
+[profile.release]
+lto = true
+opt-level = "s"

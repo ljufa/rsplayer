@@ -6,3 +6,5 @@
 .run
 .spotify_token_cache.json
 notes
+PKGS/devrpi/etc/fstab
+PKGS/devrpi/etc/wpa_supplicant/wpa_supplicant.conf

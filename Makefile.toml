@@ -27,7 +27,7 @@ command = "cargo"
 args = ["make", "build_release"]
 
 [tasks.package_deb_release]
-install_crate = { crate_name = "cargo-deb", binary = "deb", test_arg = "--version", force = false }
+install_crate = { crate_name = "cargo-deb", binary = "cargo-deb", test_arg = "--version", force = false }
 command = "cargo"
 args = [
     "deb",
