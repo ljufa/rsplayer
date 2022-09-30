@@ -93,7 +93,7 @@ mod hw_oled {
         Text::new(
             format!(
                 "P:{:?}|O:{:?}|V:{:?}",
-                active_player, status.selected_audio_output, status.volume_state
+                active_player, status.selected_audio_output, status.volume_state.current
             )
             .as_str(),
             Point::new(1, 10),
