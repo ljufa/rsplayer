@@ -245,7 +245,7 @@ fn view_save_playlist_modal(model: &Model) -> Node<Msg> {
             footer![
                 C!["modal-card-foot"],
                 button![
-                    C!["button", "is-success"],
+                    C!["button", "is-dark"],
                     "Save",
                     ev(Ev::Click, move |_| Msg::SaveAsPlaylist)
                 ],
@@ -296,7 +296,7 @@ fn view_add_url_modal(model: &Model) -> Node<Msg> {
             footer![
                 C!["modal-card-foot"],
                 button![
-                    C!["button", "is-success"],
+                    C!["button", "is-dark"],
                     "Add",
                     ev(Ev::Click, move |_| Msg::AddUrlToQueue)
                 ],
@@ -450,7 +450,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                 let iter = page.items.iter();
                 div![
                     div![
-                        C!["transparent field has-addons"],
+                        C!["transparent field has-addons has-background-dark-transparent"],
                         div![C!["control"],
                             input![
                                 C!["input"],
@@ -474,18 +474,18 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                         div![C!["control"],
                             a![
                                 attrs!(At::Title =>"Search"),
-                                i![C!("material-icons is-large-icon"), "search"],
+                                i![C!["material-icons", "is-large-icon", "white-icon"], "search"],
                                 ev(Ev::Click, move |_| Msg::DoSearch)
                             ],
                             a![
                                 attrs!(At::Title =>"Clear search / Show all songs"),
-                                i![C!("material-icons is-large-icon"), "backspace"],
+                                i![C!["material-icons", "is-large-icon", "white-icon"], "backspace"],
                                 ev(Ev::Click, move |_| Msg::ClearSearch)
                             ],
                         ],
                     ],
                     div![
-                        C!["transparent field has-addons"],
+                        C!["transparent field has-addons has-background-dark-transparent"],
                         style!{
                             St::BorderStyle => "groove",
 
@@ -493,22 +493,22 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                         div![C!["control"],
                         a![
                             attrs!(At::Title => "Add URL to queue"),
-                            i![C!("material-icons is-large-icon"), "queue"],
+                            i![C!["material-icons", "is-large-icon", "white-icon"], "queue"],
                             ev(Ev::Click, move |_| Msg::AddUrlButtonClick)
                         ],
                         a![
                             attrs!(At::Title =>"Save queue as playlist"),
-                            i![C!("material-icons is-large-icon"), "save"],
+                            i![C!["material-icons", "is-large-icon", "white-icon"], "save"],
                             ev(Ev::Click, move |_| Msg::SaveAsPlaylistButtonClick)
                         ],
                         a![
                             attrs!(At::Title =>"Show queue starting from current song"),
-                            i![C!("material-icons is-large-icon"), "filter_center_focus"],
+                            i![C!["material-icons", "is-large-icon", "white-icon"], "filter_center_focus"],
                             ev(Ev::Click, move |_| Msg::ShowStartingFromCurrentSong)
                         ],
                         a![
                             attrs!(At::Title =>"Clear queue"),
-                            i![C!("material-icons is-large-icon"), "clear"],
+                            i![C!["material-icons", "is-large-icon", "white-icon"], "clear"],
                             ev(Ev::Click, move |_| Msg::ClearQueue)
                         ],
                     ]],
@@ -572,13 +572,13 @@ fn view_queue_item(song: &Song, playing_context: &PlayingContext, model: &Model)
                 a![
                     C!["is-hidden-mobile"],
                     attrs!(At::Title =>"Play song"),
-                    C!["icon"],
+                    C!["white-icon"],
                     i![C!("material-icons"), "play_arrow"],
                     ev(Ev::Click, move |_| Msg::PlaylistItemSelected(id2))
                 ],
                 a![
                     attrs!(At::Title =>"Remove song from queue"),
-                    C!["icon"],
+                    C!["white-icon"],
                     i![C!("material-icons"), "delete"],
                     ev(Ev::Click, move |_| Msg::PlaylistItemRemove(id1))
                 ],
