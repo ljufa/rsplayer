@@ -50,8 +50,12 @@ pub struct Image {
 
 pub(crate) fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
     orders.send_msg(Msg::SendPlayerCommand(PlayerCommand::QueryCurrentSong));
-    orders.send_msg(Msg::SendPlayerCommand(PlayerCommand::QueryCurrentPlayerInfo));
-    orders.send_msg(Msg::SendPlayerCommand(PlayerCommand::QueryCurrentStreamerState));
+    orders.send_msg(Msg::SendPlayerCommand(
+        PlayerCommand::QueryCurrentPlayerInfo,
+    ));
+    orders.send_msg(Msg::SendPlayerCommand(
+        PlayerCommand::QueryCurrentStreamerState,
+    ));
     Model {
         streamer_status: StreamerState {
             selected_audio_output: AudioOut::SPKR,
@@ -112,8 +116,12 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
 
         Msg::WebSocketOpen => {
             orders.send_msg(Msg::SendPlayerCommand(PlayerCommand::QueryCurrentSong));
-            orders.send_msg(Msg::SendPlayerCommand(PlayerCommand::QueryCurrentPlayerInfo));
-            orders.send_msg(Msg::SendPlayerCommand(PlayerCommand::QueryCurrentStreamerState));
+            orders.send_msg(Msg::SendPlayerCommand(
+                PlayerCommand::QueryCurrentPlayerInfo,
+            ));
+            orders.send_msg(Msg::SendPlayerCommand(
+                PlayerCommand::QueryCurrentStreamerState,
+            ));
         }
 
         _ => {
@@ -312,7 +320,9 @@ fn view_controls_up(model: &Model) -> Node<Msg> {
             button![
                 C!["small-button"],
                 span![C!("icon"), i![C!("fas fa-volume-down")]],
-                ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::VolDown))
+                ev(Ev::Click, |_| Msg::SendSystemCommand(
+                    SystemCommand::VolDown
+                ))
             ],
             button![
                 C!["small-button"],
@@ -322,12 +332,16 @@ fn view_controls_up(model: &Model) -> Node<Msg> {
             button![
                 C!["small-button"],
                 span![C!["icon"], i![C!("material-icons"), shuffle]],
-                ev(Ev::Click, |_| Msg::SendPlayerCommand(PlayerCommand::RandomToggle)),
+                ev(Ev::Click, |_| Msg::SendPlayerCommand(
+                    PlayerCommand::RandomToggle
+                )),
             ],
             button![
                 C!["small-button"],
                 span![C!["icon"], i![C!("material-icons"), audio_out]],
-                ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::ChangeAudioOutput))
+                ev(Ev::Click, |_| Msg::SendSystemCommand(
+                    SystemCommand::ChangeAudioOutput
+                ))
             ]
         ]
     ]

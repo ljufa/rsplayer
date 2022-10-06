@@ -86,8 +86,30 @@ pub async fn handle_player_commands(
                 .get_current_player()
                 .random_toggle(),
 
-            LoadSong(_song_id) => {}
-            AddSongToQueue(_song_id) => {}
+            LoadSong(song_id) => player_service
+                .lock()
+                .unwrap()
+                .get_current_player()
+                .load_song(song_id),
+            AddSongToQueue(song_id) => player_service
+                .lock()
+                .unwrap()
+                .get_current_player()
+                .add_song_to_queue(song_id),
+            PlayerCommand::ClearQueue => {
+                player_service
+                    .lock()
+                    .unwrap()
+                    .get_current_player()
+                    .clear_queue();
+            }
+            PlayerCommand::SaveQueueAsPlaylist(playlist_name) => {
+                player_service
+                    .lock()
+                    .unwrap()
+                    .get_current_player()
+                    .save_queue_as_playlist(playlist_name);
+            }
             /*
              * Query commands
              */
@@ -168,8 +190,7 @@ pub async fn handle_system_commands(
             match cmd {
                 SetVol(val) => {
                     if let Ok(nv) = ai_service.set_volume(i64::from(val)) {
-                        let new_state =
-                            config_store.lock().unwrap().save_volume_state(nv);
+                        let new_state = config_store.lock().unwrap().save_volume_state(nv);
                         state_changes_sender
                             .send(StateChangeEvent::StreamerStateEvent(new_state))
                             .expect("Send event failed.");
@@ -177,8 +198,7 @@ pub async fn handle_system_commands(
                 }
                 VolUp => {
                     if let Ok(nv) = ai_service.volume_up() {
-                        let new_state =
-                            config_store.lock().unwrap().save_volume_state(nv);
+                        let new_state = config_store.lock().unwrap().save_volume_state(nv);
                         state_changes_sender
                             .send(StateChangeEvent::StreamerStateEvent(new_state))
                             .expect("Send event failed.");
@@ -186,8 +206,7 @@ pub async fn handle_system_commands(
                 }
                 VolDown => {
                     if let Ok(nv) = ai_service.volume_down() {
-                        let new_state =
-                            config_store.lock().unwrap().save_volume_state(nv);
+                        let new_state = config_store.lock().unwrap().save_volume_state(nv);
                         state_changes_sender
                             .send(StateChangeEvent::StreamerStateEvent(new_state))
                             .expect("Send event failed.");

@@ -47,6 +47,8 @@ pub enum PlayerCommand {
     LoadAlbum(String),
     LoadSong(String),
     AddSongToQueue(String),
+    ClearQueue,
+    SaveQueueAsPlaylist(String),
 
     // Query commands
     QueryCurrentSong,

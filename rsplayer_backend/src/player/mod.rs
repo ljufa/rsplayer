@@ -36,4 +36,6 @@ pub trait Player {
         limit: u32,
     ) -> Vec<DynamicPlaylistsPage>;
     fn get_playlist_items(&mut self, playlist_id: String) -> Vec<Song>;
+    fn clear_queue(&mut self);
+    fn save_queue_as_playlist(&mut self, playlist_name: String);
 }

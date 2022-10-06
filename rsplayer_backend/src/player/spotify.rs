@@ -523,6 +523,14 @@ impl Player for SpotifyPlayerClient {
     fn add_song_to_queue(&mut self, _song_id: String) {
         // todo!()
     }
+
+    fn clear_queue(&mut self) {
+        // todo!()
+    }
+
+    fn save_queue_as_playlist(&mut self, _playlist_name: String) {
+        // todo!()
+    }
 }
 
 fn simplified_playlist_to_playlist_type(

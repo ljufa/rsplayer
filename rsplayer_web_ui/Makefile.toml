@@ -37,10 +37,6 @@ args = [
     "--dev",
     "--out-dir",
     "../.run/ui/pkg",
-    "--",
-    "--no-default-features",
-    "--features",
-    "local",
 ]
 [tasks.copy_local]
 dependencies = ["build_local"]

@@ -71,6 +71,47 @@ impl MpdPlayerClient {
             Err(e) => Err(failure::format_err!("{}", e)),
         }
     }
+
+    fn execute_mpd_command<F, R>(
+        &mut self,
+        command: String,
+        mut transform_response_fn: F,
+    ) -> Option<R>
+    where
+        F: FnMut(&mut BufReader<&mut TcpStream>) -> Option<R>,
+    {
+        let mut full_cmd = String::new();
+        full_cmd.push_str(&command);
+        full_cmd.push('\n');
+        let mut client = create_socket_client(&self.mpd_server_url);
+        client
+            .write_all(full_cmd.as_bytes())
+            .expect("Can't write to socket");
+
+        let mut reader = BufReader::new(&mut client);
+        transform_response_fn(&mut reader)
+    }
+
+    fn get_songs_in_queue(&mut self) -> Vec<Song> {
+        self.execute_mpd_command("playlistinfo".to_owned(), |reader| {
+            Some(mpd_response_to_songs(reader))
+        })
+        .unwrap()
+    }
+
+    fn get_all_songs_in_library(&mut self) -> Vec<Song> {
+        self.execute_mpd_command("listallinfo".to_owned(), |reader| {
+            Some(mpd_response_to_songs(reader))
+        })
+        .unwrap()
+    }
+
+    fn get_songs_in_playlist(&mut self, playlist_name: String) -> Vec<Song> {
+        self.execute_mpd_command(format!("listplaylistinfo \"{playlist_name}\""), |reader| {
+            Some(mpd_response_to_songs(reader))
+        })
+        .unwrap()
+    }
 }
 
 impl Player for MpdPlayerClient {
@@ -242,8 +283,7 @@ impl Player for MpdPlayerClient {
         };
         match query {
             PlayingContextQuery::WithSearchTerm(term, offset) => {
-                let mut songs =
-                    get_songs_from_command("playlistinfo", self.mpd_server_url.as_str());
+                let mut songs = self.get_songs_in_queue();
                 if term.len() > 2 {
                     songs.retain(|s| s.all_text().to_lowercase().contains(&term.to_lowercase()));
                 }
@@ -260,8 +300,7 @@ impl Player for MpdPlayerClient {
                 pc.playlist_page = Some(page);
             }
             PlayingContextQuery::CurrentSongPage => {
-                let mut songs =
-                    get_songs_from_command("playlistinfo", self.mpd_server_url.as_str());
+                let mut songs = self.get_songs_in_queue();
                 if let Some(cs) = &self.get_current_song() {
                     songs = songs
                         .into_iter()
@@ -334,7 +373,7 @@ impl Player for MpdPlayerClient {
         limit: u32,
     ) -> Vec<DynamicPlaylistsPage> {
         if self.all_songs.is_empty() {
-            self.all_songs = get_songs_from_command("listallinfo", self.mpd_server_url.as_str());
+            self.all_songs = self.get_all_songs_in_library();
         };
         let mut result = vec![];
         for category_id in category_ids {
@@ -374,13 +413,10 @@ impl Player for MpdPlayerClient {
     fn get_playlist_items(&mut self, playlist_id: String) -> Vec<Song> {
         if playlist_id.starts_with(SAVED_PL_PREFIX) {
             let pl_name = playlist_id.replace(SAVED_PL_PREFIX, "");
-            get_songs_from_command(
-                format!("listplaylistinfo {pl_name}").as_str(),
-                self.mpd_server_url.as_str(),
-            )
-            .into_iter()
-            .take(100)
-            .collect()
+            self.get_songs_in_playlist(pl_name)
+                .into_iter()
+                .take(100)
+                .collect()
         } else if playlist_id.starts_with(BY_GENRE_PL_PREFIX) {
             let pl_name = playlist_id.replace(BY_GENRE_PL_PREFIX, "");
             self.all_songs
@@ -418,12 +454,27 @@ impl Player for MpdPlayerClient {
         }
     }
 
-    fn load_song(&mut self, _song_id: String) {
+    fn load_song(&mut self, song_id: String) {
+        self.clear_queue();
+        self.add_song_to_queue(song_id);
+        self.play();
+    }
+
+    fn add_song_to_queue(&mut self, song_id: String) {
+        self.execute_mpd_command(format!("add \"{song_id}\""), |reader| -> Option<String> {
+            let mut out: String = "".to_string();
+            reader.read_line(&mut out).expect("Failed to read response");
+            debug!("Response line {}", out);
+            None
+        });
+    }
+
+    fn clear_queue(&mut self) {
         _ = self.mpd_client.clear();
     }
 
-    fn add_song_to_queue(&mut self, _song_id: String) {
-        todo!()
+    fn save_queue_as_playlist(&mut self, playlist_name: String) {
+        _ = self.mpd_client.save(playlist_name);
     }
 }
 
@@ -613,17 +664,7 @@ fn create_socket_client(mpd_server_url: &str) -> TcpStream {
         .expect("Failed to set write timeout");
     client
 }
-fn get_songs_from_command(command: &str, mpd_server_url: &str) -> Vec<Song> {
-    let mut full_cmd = String::new();
-    full_cmd.push_str(command);
-    full_cmd.push('\n');
-    let mut client = create_socket_client(mpd_server_url);
-    client
-        .write_all(full_cmd.as_bytes())
-        .expect("Can't write to socket");
-
-    let mut reader = BufReader::new(&mut client);
-
+fn mpd_response_to_songs(reader: &mut BufReader<&mut TcpStream>) -> Vec<Song> {
     let mut read_buffer = String::new();
     // skip header lines
     for _ in 1..15 {
@@ -708,11 +749,11 @@ mod test {
         io::{self, BufRead, Write},
     };
 
-    use super::get_songs_from_command;
+    use super::mpd_response_to_songs;
 
     #[test]
     fn test_client() {
-        let songs = get_songs_from_command("currentsong", "localhost:6600");
+        let songs = mpd_response_to_songs("currentsong", "localhost:6600");
         assert_eq!(songs.len(), 1);
     }
 

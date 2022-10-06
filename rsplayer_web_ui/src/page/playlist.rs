@@ -132,7 +132,9 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
             model.waiting_response = true;
             model.selected_playlist_id = playlist_id.clone();
             model.selected_playlist_name = playlist_name;
-            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryPlaylistItems(playlist_id)));
+            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryPlaylistItems(
+                playlist_id,
+            )));
         }
         Msg::CloseSelectedPlaylistItemsModal => {
             model.selected_playlist_items = Default::default();

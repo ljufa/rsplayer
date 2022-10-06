@@ -16,6 +16,5 @@ pub fn view<Ms>(base_url: &Url) -> Node<Ms> {
                 strong!["This is your first first visit, please go to Settings to complete configuration."],
             ],
         ],
-        
     ]
 }

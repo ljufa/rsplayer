@@ -12,6 +12,10 @@ pub struct Model {
     current_song_id: Option<String>,
     search_input: String,
     waiting_response: bool,
+    show_add_url_modal: bool,
+    add_url_input: String,
+    show_save_playlist_modal: bool,
+    save_playlist_input: String,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -29,7 +33,17 @@ pub enum Msg {
     ClearSearch,
     ShowStartingFromCurrentSong,
     LocateCurrentSong,
-    LoadMoreItems(usize)
+    LoadMoreItems(usize),
+    AddUrlButtonClick,
+    AddUrlInputChanged(String),
+    AddUrlToQueue,
+    CloseAddUrlModal,
+    ClearQueue,
+    SaveAsPlaylistButtonClick,
+    SaveAsPlaylistInputChanged(String),
+    CloseSaveAsPlaylistModal,
+    SaveAsPlaylist,
+    KeyPressed(web_sys::KeyboardEvent),
 }
 
 pub(crate) fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
@@ -38,11 +52,19 @@ pub(crate) fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
         PlayingContextQuery::WithSearchTerm(Default::default(), 0),
     )));
+    orders.stream(streams::window_event(Ev::KeyDown, |event| {
+        Msg::KeyPressed(event.unchecked_into())
+    }));
+
     Model {
         playing_context: None,
         current_song_id: None,
         waiting_response: true,
         search_input: Default::default(),
+        show_add_url_modal: false,
+        add_url_input: Default::default(),
+        show_save_playlist_modal: false,
+        save_playlist_input: Default::default(),
     }
 }
 
@@ -55,7 +77,6 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
         Msg::StatusChangeEventReceived(StateChangeEvent::CurrentPlayingContextEvent(pc)) => {
             model.waiting_response = false;
             model.playing_context = Some(pc);
-            
         }
         Msg::StatusChangeEventReceived(StateChangeEvent::CurrentSongEvent(evt)) => {
             model.waiting_response = false;
@@ -110,10 +131,65 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
         Msg::LocateCurrentSong => {
             scrollToId("current");
         }
-        Msg::LoadMoreItems(offset) =>{
+        Msg::LoadMoreItems(offset) => {
             scrollToId("listtop");
             orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
                 PlayingContextQuery::WithSearchTerm(model.search_input.clone(), offset),
+            )));
+        }
+        Msg::AddUrlButtonClick => {
+            model.show_add_url_modal = true;
+        }
+        Msg::CloseAddUrlModal => {
+            model.show_add_url_modal = false;
+            model.add_url_input = Default::default();
+        }
+        Msg::KeyPressed(event) => {
+            if event.key() == "Escape" {
+                model.show_add_url_modal = false;
+                model.add_url_input = Default::default();
+                model.show_save_playlist_modal = false;
+                model.save_playlist_input = Default::default();
+            }
+        }
+        Msg::AddUrlInputChanged(value) => {
+            model.add_url_input = value;
+        }
+        Msg::AddUrlToQueue => {
+            if model.show_add_url_modal && model.add_url_input.len() > 3 {
+                orders.send_msg(Msg::SendCommand(PlayerCommand::AddSongToQueue(
+                    model.add_url_input.clone(),
+                )));
+                model.show_add_url_modal = false;
+                model.add_url_input = Default::default();
+            }
+            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
+                PlayingContextQuery::WithSearchTerm(Default::default(), 0),
+            )));
+        }
+        Msg::SaveAsPlaylistButtonClick => {
+            model.show_save_playlist_modal = true;
+        }
+        Msg::SaveAsPlaylistInputChanged(value) => {
+            model.save_playlist_input = value;
+        }
+        Msg::CloseSaveAsPlaylistModal => {
+            model.save_playlist_input = Default::default();
+            model.show_save_playlist_modal = false;
+        }
+        Msg::SaveAsPlaylist => {
+            if model.show_save_playlist_modal && model.save_playlist_input.len() > 3 {
+                orders.send_msg(Msg::SendCommand(PlayerCommand::SaveQueueAsPlaylist(
+                    model.save_playlist_input.clone(),
+                )));
+                model.show_save_playlist_modal = false;
+                model.save_playlist_input = Default::default();
+            }
+        }
+        Msg::ClearQueue => {
+            orders.send_msg(Msg::SendCommand(PlayerCommand::ClearQueue));
+            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
+                PlayingContextQuery::WithSearchTerm(Default::default(), 0),
             )));
         }
 
@@ -127,10 +203,112 @@ pub fn view(model: &Model) -> Node<Msg> {
     log!("Queue: view");
     div![
         crate::view_spinner_modal(model.waiting_response),
+        view_add_url_modal(model),
+        view_save_playlist_modal(model),
         view_queue_items(model)
     ]
 }
+fn view_save_playlist_modal(model: &Model) -> Node<Msg> {
+    div![
+        C!["modal", IF!(model.show_save_playlist_modal => "is-active")],
+        div![
+            C!["modal-background"],
+            ev(Ev::Click, |_| Msg::CloseSaveAsPlaylistModal),
+        ],
+        div![
+            id!("add-url-items-modal"),
+            C!["modal-card"],
+            header![
+                C!["modal-card-head"],
+                p![C!["modal-card-title"], "Enter playlist name"],
+                button![
+                    C!["delete", "is-large"],
+                    attrs!(At::AriaLabel =>"close"),
+                    ev(Ev::Click, |_| Msg::CloseSaveAsPlaylistModal)
+                ],
+            ],
+            section![
+                C!["modal-card-body"],
+                input![
+                    C!["input", "is-large"],
+                    input_ev(Ev::Input, Msg::SaveAsPlaylistInputChanged),
+                    ev(Ev::KeyDown, |keyboard_event| {
+                        if keyboard_event.value_of().to_string() == "[object KeyboardEvent]" {
+                            let kev: KeyboardEvent = keyboard_event.unchecked_into();
+                            IF!(kev.key_code() == 13 => Msg::SaveAsPlaylist)
+                        } else {
+                            None
+                        }
+                    }),
+                ],
+            ],
+            footer![
+                C!["modal-card-foot"],
+                button![
+                    C!["button", "is-medium", "is-success"],
+                    "Save",
+                    ev(Ev::Click, move |_| Msg::SaveAsPlaylist)
+                ],
+                button![
+                    C!["button", "is-medium"],
+                    "Cancel",
+                    ev(Ev::Click, move |_| Msg::CloseSaveAsPlaylistModal)
+                ],
+            ]
+        ]
+    ]
+}
 
+fn view_add_url_modal(model: &Model) -> Node<Msg> {
+    div![
+        C!["modal", IF!(model.show_add_url_modal => "is-active")],
+        div![
+            C!["modal-background"],
+            ev(Ev::Click, |_| Msg::CloseAddUrlModal),
+        ],
+        div![
+            id!("add-url-items-modal"),
+            C!["modal-card"],
+            header![
+                C!["modal-card-head"],
+                p![C!["modal-card-title"], "Add streaming url"],
+                button![
+                    C!["delete", "is-large"],
+                    attrs!(At::AriaLabel =>"close"),
+                    ev(Ev::Click, |_| Msg::CloseAddUrlModal)
+                ],
+            ],
+            section![
+                C!["modal-card-body"],
+                input![
+                    C!["input", "is-large"],
+                    input_ev(Ev::Input, Msg::AddUrlInputChanged),
+                    ev(Ev::KeyDown, |keyboard_event| {
+                        if keyboard_event.value_of().to_string() == "[object KeyboardEvent]" {
+                            let kev: KeyboardEvent = keyboard_event.unchecked_into();
+                            IF!(kev.key_code() == 13 => Msg::AddUrlToQueue)
+                        } else {
+                            None
+                        }
+                    }),
+                ],
+            ],
+            footer![
+                C!["modal-card-foot"],
+                button![
+                    C!["button", "is-medium", "is-success"],
+                    "Add",
+                    ev(Ev::Click, move |_| Msg::AddUrlToQueue)
+                ],
+                button![
+                    C!["button", "is-medium"],
+                    "Cancel",
+                    ev(Ev::Click, move |_| Msg::CloseAddUrlModal)
+                ],
+            ]
+        ]
+    ]
+}
 fn view_context_info(
     context_type: &PlayingContextType,
     playing_context: &PlayingContext,
@@ -243,7 +421,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
         return empty!();
     }
     let pctx = model.playing_context.as_ref().unwrap();
-    
+
     div![
         IF!(pctx.image_url.is_some() =>
             style! {
@@ -304,18 +482,38 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                                 i![C!("material-icons is-large-icon"), "backspace"],
                                 ev(Ev::Click, move |_| Msg::ClearSearch)
                             ],
-                            a![
-                                attrs!(At::Title =>"Show queue starting from current song"),
-                                i![C!("material-icons is-large-icon"), "filter_center_focus"],
-                                ev(Ev::Click, move |_| Msg::ShowStartingFromCurrentSong)
-                            ],
-                            a![
-                                attrs!(At::Title =>"Locate current song"),
-                                i![C!("material-icons is-large-icon"), "adjust"],
-                                ev(Ev::Click, move |_| Msg::LocateCurrentSong)
-                            ],
                         ],
                     ],
+                    div![
+                        C!["transparent field has-addons"],
+                        style!{
+                            St::BorderTopStyle => "grove",
+
+                        },
+                        div![C!["control"],
+                        a![
+                            attrs!(At::Title => "Add URL to queue"),
+                            i![C!("material-icons is-large-icon"), "queue"],
+                            ev(Ev::Click, move |_| Msg::AddUrlButtonClick)
+                        ],
+                        a![
+                            attrs!(At::Title =>"Save queue as playlist"),
+                            i![C!("material-icons is-large-icon"), "save"],
+                            ev(Ev::Click, move |_| Msg::SaveAsPlaylistButtonClick)
+                        ],
+                        a![
+                            attrs!(At::Title =>"Show queue starting from current song"),
+                            i![C!("material-icons is-large-icon"), "filter_center_focus"],
+                            ev(Ev::Click, move |_| Msg::ShowStartingFromCurrentSong)
+                        ],
+                        a![
+                            attrs!(At::Title =>"Clear queue"),
+                            i![C!("material-icons is-large-icon"), "clear"],
+                            ev(Ev::Click, move |_| Msg::ClearQueue)
+                        ],
+                    ]],
+
+                    // queue items
                     div![id!("listtop"), C!["scroll-list list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
                         iter.map(|it| { view_queue_item(it, pctx, model)  })
                     ],
