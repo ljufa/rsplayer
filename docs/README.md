@@ -104,10 +104,12 @@ audio_output {
   * http://pi.lan/api/spotify/callback
   * http://pi/api/spotify/callback
   * http://localhost:8000/api/spotify/callback
-* _Audio device name_ - This is an audio device that will be used by Librespot it could be different from the one used by MPD.
 
 Once you enter all values click _Authorize_ button which will show a permission popup from Spotify.
 After giving permission you should see `Success` message and the close button.
+
+### Audio device name 
+This is an audio device that will be used by Librespot and MPD
 
 ### Active player
 Here you should choose which (enabled and configured) player you want to use.

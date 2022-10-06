@@ -111,7 +111,7 @@ pub fn start(
         .or(filters::spotify_authorization_callback())
         .or(filters::get_spotify_account_info())
         .or(ui_static_content)
-        .with(cors);
+        .with(cors).with(warp::compression::gzip());
 
     let ws_handle = async move {
         loop {

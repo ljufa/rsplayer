@@ -33,7 +33,7 @@ cfg-if = "1.0.0"
 
 #warp
 tokio = { version = "1", features = ["full", "tracing"] }
-warp = "0.3.2"
+warp = {version = "0.3.3", features = ["compression"]}
 futures = { version = "0.3.24", default-features = false }
 tokio-stream = "0.1.10"
 # async debug tokio-console

@@ -434,7 +434,11 @@ input[type=range].slider {
 .is-large-icon {
   font-size: 36px;
   padding-left: 15px;
-  color: #5a5b5e;
+  transition: transform .2s ease;
+}
+.is-large-icon:hover,
+.is-large-icon:focus {
+  transform: scale(1.2);
 }
 .section {
   overflow: hidden;

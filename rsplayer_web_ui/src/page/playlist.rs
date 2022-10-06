@@ -193,7 +193,7 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
                     i![C!("is-large-icon material-icons"), "play_circle_filled"],
                     ev(Ev::Click, move |_| Msg::LoadPlaylistIntoQueue(selected_playlist_id))
                 ],
-                p![C!["modal-card-title"], "Playlist - ", model.selected_playlist_name.clone()],
+                p![C!["modal-card-title"],style!(St::MarginLeft => "20px"), "Playlist - ", model.selected_playlist_name.clone()],
                 button![C!["delete", "is-large"], attrs!(At::AriaLabel =>"close"), ev(Ev::Click, |_| Msg::CloseSelectedPlaylistItemsModal)],
             ],
             section![

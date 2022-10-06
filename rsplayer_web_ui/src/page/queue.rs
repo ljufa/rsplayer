@@ -230,7 +230,7 @@ fn view_save_playlist_modal(model: &Model) -> Node<Msg> {
             section![
                 C!["modal-card-body"],
                 input![
-                    C!["input", "is-large"],
+                    C!["input"],
                     input_ev(Ev::Input, Msg::SaveAsPlaylistInputChanged),
                     ev(Ev::KeyDown, |keyboard_event| {
                         if keyboard_event.value_of().to_string() == "[object KeyboardEvent]" {
@@ -245,12 +245,12 @@ fn view_save_playlist_modal(model: &Model) -> Node<Msg> {
             footer![
                 C!["modal-card-foot"],
                 button![
-                    C!["button", "is-medium", "is-success"],
+                    C!["button", "is-success"],
                     "Save",
                     ev(Ev::Click, move |_| Msg::SaveAsPlaylist)
                 ],
                 button![
-                    C!["button", "is-medium"],
+                    C!["button"],
                     "Cancel",
                     ev(Ev::Click, move |_| Msg::CloseSaveAsPlaylistModal)
                 ],
@@ -271,9 +271,9 @@ fn view_add_url_modal(model: &Model) -> Node<Msg> {
             C!["modal-card"],
             header![
                 C!["modal-card-head"],
-                p![C!["modal-card-title"], "Add streaming url"],
+                p![C!["modal-card-title"], "Add streaming URL"],
                 button![
-                    C!["delete", "is-large"],
+                    C!["delete", "is-medium"],
                     attrs!(At::AriaLabel =>"close"),
                     ev(Ev::Click, |_| Msg::CloseAddUrlModal)
                 ],
@@ -281,7 +281,7 @@ fn view_add_url_modal(model: &Model) -> Node<Msg> {
             section![
                 C!["modal-card-body"],
                 input![
-                    C!["input", "is-large"],
+                    C!["input"],
                     input_ev(Ev::Input, Msg::AddUrlInputChanged),
                     ev(Ev::KeyDown, |keyboard_event| {
                         if keyboard_event.value_of().to_string() == "[object KeyboardEvent]" {
@@ -296,12 +296,12 @@ fn view_add_url_modal(model: &Model) -> Node<Msg> {
             footer![
                 C!["modal-card-foot"],
                 button![
-                    C!["button", "is-medium", "is-success"],
+                    C!["button", "is-success"],
                     "Add",
                     ev(Ev::Click, move |_| Msg::AddUrlToQueue)
                 ],
                 button![
-                    C!["button", "is-medium"],
+                    C!["button"],
                     "Cancel",
                     ev(Ev::Click, move |_| Msg::CloseAddUrlModal)
                 ],
@@ -487,7 +487,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                     div![
                         C!["transparent field has-addons"],
                         style!{
-                            St::BorderTopStyle => "grove",
+                            St::BorderStyle => "groove",
 
                         },
                         div![C!["control"],
