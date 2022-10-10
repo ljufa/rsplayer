@@ -200,9 +200,7 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
 }
 
 pub fn view(model: &Model) -> Node<Msg> {
-    log!("Queue: view");
     div![
-        crate::view_spinner_modal(model.waiting_response),
         view_add_url_modal(model),
         view_save_playlist_modal(model),
         view_queue_items(model)
@@ -431,6 +429,9 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                 St::MinHeight => "95vh"
             }
         ),
+        div![
+            IF!(model.waiting_response => progress![C!["progress", "is-small"], attrs!{ At::Max => "100"}, style!{ St::MarginBottom => "50px"}]),
+        ],
         div![
             style! {
                 St::Background => "rgba(86, 92, 86, 0.507)",

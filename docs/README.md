@@ -72,6 +72,10 @@ follow_inside_symlinks    "yes"
 zeroconf_enabled          "no"
 filesystem_charset        "UTF-8"
 
+input {
+  plugin "curl"
+}
+
 audio_output {
   type                    "alsa"
   name                    "usb audio device"
@@ -183,8 +187,9 @@ TODO
  
 ## General
 * [ ] Browse/search whole music library
-* [ ] implement own player based on Symphonia
+* [ ] Web radio browse/search/play
 * [ ] LMS backend support
+* [ ] implement own player based on Symphonia
 * [ ] Support more remote control models - configuration and key mapping
 * [ ] MPD Configuration using RSPlayer UI
 * [ ] Support more AK DAC models
@@ -194,9 +199,10 @@ TODO
 * [ ] own media management with advanced search
 * [ ] use more information about the song based on last.fm response, update id tags on local files?
 * [ ] lyrics
-* [ ] analyze audio files for song matching and similarity
+* [ ] analyze audio files for song matching and similarity (bliss-rs), create playlists from song
 * [ ] streaming to local device (i.e. phone) for i.e. preview
 * [ ] convert PCM to DSD on the fly
+<!-- * [ ] UPNP -->
  
  ## Player page
 * [ ] Seek to position
@@ -207,17 +213,17 @@ TODO
   
 ## Queue page
 * [ ] Pagination
-* [ ] Manage items (batch, on search results): clear, delete, play, playnext
+* [ ] Manage items (batch, on search results): ~~clear~~, ~~delete~~, ~~play~~, playnext
 * [ ] Support Spotify podcast
  
 ## Playlist page
 * [ ] Search all playlists by name
-* [ ] Show items of the selected playlist
+* [ ] ~~Show items of the selected playlist~~
 * [ ] Manage selected playlist:
-   * play item
-   * add item(s) to the queue
+   * ~~play item~~
+   * ~~add item(s) to the queue~~
    * play next
-   * replace queue with item(s)
+   * ~~replace queue with item(s)~~
    * delete playlist
 * [ ] Pagination
  
@@ -263,6 +269,10 @@ sudo mv micro /usr/bin
 sudo apt install -y zsh git fzf
 sh -c "$(wget https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh -O -)"
 git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
+edit `~/.zshrc` 
+ `plugins = (zsh-autosuggestions)`
+alias rdp=sudo systemctl restart rsplayer
+alias jdp=journalctl -u rsplayer.service -f -n 300
 ```
  
 ## Mount network share

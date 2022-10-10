@@ -1,7 +1,6 @@
 use std::process::Child;
 use std::time::Duration;
 
-use api_models::common::PlayerType;
 use api_models::player::Song;
 use api_models::playlist::{
     Album, Category, DynamicPlaylistsPage, Playlist, PlaylistPage, PlaylistType, Playlists,
@@ -12,12 +11,13 @@ use api_models::state::{
 };
 use failure::err_msg;
 use log::info;
-use num_traits::ToPrimitive;
+
 use rspotify::clients::{BaseClient, OAuthClient};
 use rspotify::model::{
-    AlbumId, ArtistId, FullTrack, Id, Market, Offset, PlayableId, PlayableItem, PlaylistId,
-    SimplifiedAlbum, SimplifiedTrack, TrackId, Type,
+    AlbumId, CurrentUserQueue, Id, Market, Offset, PlayableId, PlayableItem,
+    PlaylistId, SimplifiedAlbum, TrackId,
 };
+use rspotify::prelude::PlayContextId;
 
 use crate::common::Result;
 use crate::config::Configuration;
@@ -33,6 +33,7 @@ pub struct SpotifyPlayerClient {
     playing_context: Option<PlayingContext>,
     progress: Option<Duration>,
     playlist_group: Option<Playlists>,
+    force_context_update: bool,
 }
 
 impl SpotifyPlayerClient {
@@ -54,6 +55,7 @@ impl SpotifyPlayerClient {
             playing_context: None,
             progress: None,
             playlist_group: None,
+            force_context_update: false,
         })
     }
 
@@ -102,9 +104,13 @@ impl SpotifyPlayerClient {
         if let Some(ctx) = context {
             if self.playing_context.is_none()
                 || self.playing_context.as_ref().unwrap().id != ctx.uri
+                || self.force_context_update
             {
                 debug!("Update playing context!");
-                self.playing_context = self.get_playing_context(ctx);
+                self.playing_context = self.fetch_playing_context(ctx);
+                if self.force_context_update {
+                    self.force_context_update = false;
+                }
             }
         } else {
             self.playing_context = None;
@@ -122,80 +128,23 @@ impl SpotifyPlayerClient {
         }
     }
 
-    fn get_playing_context(&mut self, context: &rspotify::model::Context) -> Option<PlayingContext> {
-        match context._type {
-            Type::Playlist => {
-                if let Ok(pl) = self.oauth.client.playlist(
-                    &PlaylistId::from_id_or_uri(context.uri.as_str()).unwrap(), // todo: remove unwrap, sometimes it panic here
-                    None,
-                    None,
-                ) {
-                    Some(PlayingContext {
-                        player_type: api_models::common::PlayerType::SPF,
-                        context_type: api_models::state::PlayingContextType::Playlist {
-                            snapshot_id: pl.snapshot_id.clone(),
-                            description: pl.description.clone(),
-                            public: pl.public,
-                        },
-                        name: pl.name,
-                        id: pl.id.to_string(),
-                        image_url: pl.images.first().map(|i| i.url.clone()),
-                        playlist_page: Some(playlist_tracks_to_tracks(&pl.tracks)),
-                    })
-                } else {
-                    None
-                }
-            }
-            Type::Album => {
-                if let Ok(album) = self
-                    .oauth
-                    .client
-                    .album(&AlbumId::from_id_or_uri(context.uri.as_str()).unwrap())
-                {
-                    Some(PlayingContext {
-                        player_type: PlayerType::SPF,
-                        id: album.id.to_string(),
-                        name: album.name,
-                        image_url: album.images.first().map(|i| i.url.clone()),
-                        context_type: api_models::state::PlayingContextType::Album {
-                            artists: album.artists.iter().map(|fa| fa.name.clone()).collect(),
-                            label: album.label,
-                            release_date: album.release_date,
-                            genres: album.genres.clone(),
-                        },
-                        playlist_page: Some(album_tracks_to_tracks(&album.tracks)),
-                    })
-                } else {
-                    None
-                }
-            }
-            Type::Artist => {
-                let artist_id = &ArtistId::from_id_or_uri(context.uri.as_str()).unwrap();
-                if let Ok(author) = self.oauth.client.artist(artist_id) {
-                    Some(PlayingContext {
-                        id: author.id.to_string(),
-                        name: author.name.to_string(),
-                        player_type: PlayerType::SPF,
-                        context_type: api_models::state::PlayingContextType::Artist {
-                            genres: author.genres.clone(),
-                            popularity: author.popularity,
-                            followers: author.followers.total,
-                            description: Some("Top tracks".to_string()),
-                        },
-                        playlist_page: self
-                            .oauth
-                            .client
-                            .artist_top_tracks(artist_id, &rspotify::model::Market::FromToken)
-                            .map(|f| author_tracks_to_tracks(&f))
-                            .ok(),
-                        image_url: author.images.first().map(|i| i.url.clone()),
-                    })
-                } else {
-                    None
-                }
-            }
-            Type::Track | Type::User | Type::Show | Type::Episode | Type::Collection => None,
-        }
+    fn fetch_playing_context(
+        &mut self,
+        context: &rspotify::model::Context,
+    ) -> Option<PlayingContext> {
+        let queue = self.oauth.client.current_user_queue().ok();
+        Some(PlayingContext {
+            id: context.uri.clone(),
+            name: "Queue".to_string(),
+            player_type: api_models::common::PlayerType::SPF,
+            context_type: api_models::state::PlayingContextType::Playlist {
+                description: None,
+                public: None,
+                snapshot_id: "1".to_string(),
+            },
+            playlist_page: queue.map(|q| queue_to_page(&q)),
+            image_url: None,
+        })
     }
 }
 
@@ -244,12 +193,15 @@ impl Player for SpotifyPlayerClient {
     fn rewind(&mut self, _seconds: i8) {}
 
     fn random_toggle(&mut self) {
-        // self.oauth.client.shuffle(state, device_id)
+        if let Some(pi) = self.get_player_info() {
+            let current_shuffle = pi.random.unwrap_or_default();
+            _ = self.oauth.client.shuffle(!current_shuffle, None);
+        }
     }
 
     fn load_playlist(&mut self, pl_id: String) {
         _ = self.oauth.client.start_context_playback(
-            &PlaylistId::from_id_or_uri(pl_id.as_str()).unwrap(), //todo remove unwrap
+            PlayContextId::Playlist(PlaylistId::from_id_or_uri(pl_id.as_str()).unwrap()), //todo remove unwrap
             self.device_id.as_deref(),
             None,
             None,
@@ -257,7 +209,7 @@ impl Player for SpotifyPlayerClient {
     }
     fn load_album(&mut self, album_id: String) {
         _ = self.oauth.client.start_context_playback(
-            &AlbumId::from_id_or_uri(album_id.as_str()).unwrap(), //todo remove unwrap
+            PlayContextId::Album(AlbumId::from_id_or_uri(album_id.as_str()).unwrap()), //todo remove unwrap
             self.device_id.as_deref(),
             None,
             None,
@@ -269,7 +221,9 @@ impl Player for SpotifyPlayerClient {
             match &ctx.context_type {
                 PlayingContextType::Playlist { .. } => {
                     _ = self.oauth.client.start_context_playback(
-                        &PlaylistId::from_id_or_uri(ctx.id.as_str()).unwrap(),
+                        PlayContextId::Playlist(
+                            PlaylistId::from_id_or_uri(ctx.id.as_str()).unwrap(),
+                        ),
                         None,
                         Some(Offset::Uri(format!("spotify:track:{id}"))),
                         None,
@@ -277,7 +231,7 @@ impl Player for SpotifyPlayerClient {
                 }
                 PlayingContextType::Album { .. } => {
                     _ = self.oauth.client.start_context_playback(
-                        &AlbumId::from_id_or_uri(ctx.id.as_str()).unwrap(),
+                        PlayContextId::Album(AlbumId::from_id_or_uri(ctx.id.as_str()).unwrap()),
                         None,
                         Some(Offset::Uri(format!("spotify:track:{id}"))),
                         None,
@@ -287,10 +241,9 @@ impl Player for SpotifyPlayerClient {
             }
         } else {
             _ = self.oauth.client.start_uris_playback(
-                [
-                    &TrackId::from_id_or_uri(&id).expect("Unable to convert id to uri")
-                        as &dyn PlayableId,
-                ],
+                [PlayableId::Track(
+                    TrackId::from_id_or_uri(&id).expect("Unable to convert id to uri"),
+                )],
                 self.device_id.as_deref(),
                 None,
                 None,
@@ -301,10 +254,10 @@ impl Player for SpotifyPlayerClient {
     fn remove_playlist_item(&mut self, id: String) {
         if let Some(pc) = self.playing_context.as_mut() {
             if let PlayingContextType::Playlist { snapshot_id, .. } = &pc.context_type {
-                let track_id = &TrackId::from_id_or_uri(id.as_str()).unwrap();
-                let track_ids: Vec<&dyn PlayableId> = vec![track_id];
+                let track_id = PlayableId::Track(TrackId::from_id_or_uri(id.as_str()).unwrap());
+                let track_ids = vec![track_id];
                 match self.oauth.client.playlist_remove_all_occurrences_of_items(
-                    &PlaylistId::from_id_or_uri(pc.id.as_str()).unwrap(),
+                    PlaylistId::from_id_or_uri(pc.id.as_str()).unwrap(),
                     track_ids,
                     Some(snapshot_id),
                 ) {
@@ -389,7 +342,7 @@ impl Player for SpotifyPlayerClient {
     fn get_playlist_categories(&mut self) -> Vec<Category> {
         let categories = self.oauth.client.categories_manual(
             Some("en_DE"),
-            Some(&Market::FromToken),
+            Some(Market::FromToken),
             Some(50),
             Some(0),
         );
@@ -418,7 +371,7 @@ impl Player for SpotifyPlayerClient {
             // get featured
             let featured = self.oauth.client.featured_playlists(
                 None,
-                Some(&Market::FromToken),
+                Some(Market::FromToken),
                 None,
                 Some(20),
                 Some(0),
@@ -431,7 +384,7 @@ impl Player for SpotifyPlayerClient {
             let new_releases =
                 self.oauth
                     .client
-                    .new_releases_manual(Some(&Market::FromToken), Some(20), Some(0));
+                    .new_releases_manual(Some(Market::FromToken), Some(20), Some(0));
             if let Ok(releases) = new_releases {
                 for a in &releases.items {
                     items.push(album_to_playlist_type(a));
@@ -471,7 +424,7 @@ impl Player for SpotifyPlayerClient {
         for cat_id in &category_ids {
             let cat_pls = self.oauth.client.category_playlists_manual(
                 cat_id,
-                Some(&Market::FromToken),
+                Some(Market::FromToken),
                 Some(limit),
                 Some(offset),
             );
@@ -500,7 +453,7 @@ impl Player for SpotifyPlayerClient {
 
     fn get_playlist_items(&mut self, playlist_id: String) -> Vec<Song> {
         let items = self.oauth.client.playlist_items_manual(
-            &PlaylistId::from_id_or_uri(&playlist_id).unwrap(),
+            PlaylistId::from_id_or_uri(&playlist_id).unwrap(),
             None,
             None,
             Some(100),
@@ -520,8 +473,14 @@ impl Player for SpotifyPlayerClient {
         // todo!()
     }
 
-    fn add_song_to_queue(&mut self, _song_id: String) {
-        // todo!()
+    fn add_song_to_queue(&mut self, song_id: String) {
+        if let Ok(track_id) = TrackId::from_id_or_uri(song_id.as_str()) {
+            _ = self
+                .oauth
+                .client
+                .add_item_to_queue(PlayableId::Track(track_id), None);
+            self.force_context_update = true;
+        }
     }
 
     fn clear_queue(&mut self) {
@@ -571,86 +530,41 @@ fn album_to_playlist_type(album: &SimplifiedAlbum) -> PlaylistType {
     })
 }
 
-fn playlist_tracks_to_tracks(
-    tracks: &rspotify::model::Page<rspotify::model::PlaylistItem>,
-) -> PlaylistPage {
-    let items = tracks
-        .items
+fn queue_to_page(tracks: &CurrentUserQueue) -> PlaylistPage {
+    let items: Vec<Song> = tracks
+        .queue
         .iter()
-        .map_while(|tr| playable_item_to_song(tr.track.as_ref()))
+        .map_while(|tr| playable_item_to_song(Some(tr)))
         .collect();
     PlaylistPage {
-        total: tracks.total.to_usize().unwrap_or_default(),
-        offset: tracks.offset.to_usize().unwrap_or_default(),
-        limit: tracks.limit.to_usize().unwrap_or_default(),
-        items,
-    }
-}
-
-fn album_tracks_to_tracks(
-    tracks: &rspotify::model::Page<rspotify::model::SimplifiedTrack>,
-) -> PlaylistPage {
-    let items = tracks.items.iter().map(simple_track_to_song).collect();
-    PlaylistPage {
-        total: tracks.total.to_usize().unwrap_or_default(),
-        offset: tracks.offset.to_usize().unwrap_or_default(),
-        limit: tracks.limit.to_usize().unwrap_or_default(),
-        items,
-    }
-}
-fn author_tracks_to_tracks(tracks: &Vec<FullTrack>) -> PlaylistPage {
-    let items = tracks.iter().map(full_track_to_song).collect();
-    PlaylistPage {
-        total: tracks.len(),
+        total: tracks.queue.len(),
         offset: 0,
-        limit: 100,
+        limit: 0,
         items,
     }
 }
 
 fn playable_item_to_song(track: Option<&PlayableItem>) -> Option<Song> {
     match track {
-        Some(rspotify::model::PlayableItem::Track(track)) => Some(full_track_to_song(track)),
+        Some(rspotify::model::PlayableItem::Track(track)) => Some(Song {
+            id: track
+                .id
+                .as_ref()
+                .map_or("".to_string(), |id| id.id().to_string()),
+            album: Some(track.album.name.clone()),
+            artist: track.artists.first().map(|a| a.name.clone()),
+            genre: None,
+            date: track.album.release_date.clone(),
+            file: track
+                .href
+                .as_ref()
+                .map_or("".to_string(), std::clone::Clone::clone),
+            title: Some(track.name.clone()),
+            time: Some(track.duration),
+            image_url: track.album.images.first().map(|i| i.url.clone()),
+            ..Default::default()
+        }),
         _ => None,
-    }
-}
-
-fn full_track_to_song(track: &FullTrack) -> Song {
-    Song {
-        id: track
-            .id
-            .as_ref()
-            .map_or("".to_string(), |id| id.id().to_string()),
-        album: Some(track.album.name.clone()),
-        artist: track.artists.first().map(|a| a.name.clone()),
-        genre: None,
-        date: track.album.release_date.clone(),
-        file: track
-            .href
-            .as_ref()
-            .map_or("".to_string(), std::clone::Clone::clone),
-        title: Some(track.name.clone()),
-        time: Some(track.duration),
-        uri: track.album.images.first().map(|i| i.url.clone()),
-        ..Default::default()
-    }
-}
-
-fn simple_track_to_song(track: &SimplifiedTrack) -> Song {
-    Song {
-        id: track
-            .id
-            .as_ref()
-            .map_or("".to_string(), |id| id.id().to_string()),
-        album: None,
-        artist: track.artists.first().map(|a| a.name.clone()),
-        genre: None,
-        date: None,
-        file: "".to_string(),
-        title: Some(track.name.clone()),
-        time: Some(track.duration),
-        uri: None,
-        ..Default::default()
     }
 }
 
@@ -671,7 +585,8 @@ fn start_librespot(settings: &SpotifySettings) -> Result<Child> {
         .arg(settings.password.clone())
         .arg("--device")
         .arg(settings.alsa_device_name.clone())
-        .arg("--format").arg(format)
+        .arg("--format")
+        .arg(format)
         .arg("--initial-volume")
         .arg("100")
         .arg("--autoplay")

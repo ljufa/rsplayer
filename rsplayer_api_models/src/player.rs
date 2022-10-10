@@ -46,7 +46,7 @@ pub struct Song {
     pub composer: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub uri: Option<String>,
+    pub image_url: Option<String>,
 
     pub tags: HashMap<String, String>,
 

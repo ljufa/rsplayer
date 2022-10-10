@@ -593,7 +593,7 @@ fn map_song(song: &MpdSong) -> Song {
         time: tag_to_value(song, "Time").map(|t| Duration::from_secs(t.parse::<u64>().unwrap())),
         track: tag_to_value(song, "Track"),
         tags: HashMap::new(),
-        uri: None,
+        image_url: None,
     }
 }
 
@@ -749,23 +749,11 @@ mod test {
         io::{self, BufRead, Write},
     };
 
-    use super::mpd_response_to_songs;
-
-    #[test]
-    fn test_client() {
-        let songs = mpd_response_to_songs("currentsong", "localhost:6600");
-        assert_eq!(songs.len(), 1);
-    }
-
-    #[test]
-    fn test_trim() {
-        assert_eq!("\" Artist\n".replace('\"', "").trim(), "Artist");
-    }
-
     #[test]
     fn parse_config() {
-        let in_file = fs::File::open(".run/mpd.conf").unwrap();
-        let out_file = fs::File::create(".run/mpd_new.conf").unwrap();
+        let in_file = fs::File::open("/home/dlj/myworkspace/rsplayer/.run/mpd.conf").unwrap();
+        let out_file =
+            fs::File::create("/home/dlj/myworkspace/rsplayer/.run/mpd_new.conf").unwrap();
         let mut out_buffer = io::LineWriter::new(out_file);
 
         let lines = io::BufReader::new(in_file).lines();
@@ -779,8 +767,8 @@ mod test {
             if line.contains("music_directory") {
                 out_line = "music_directory\t\t\"/home/dragan/music\"".to_owned();
             }
+            if line.trim().starts_with("audio_output") {}
             _ = out_buffer.write_fmt(format_args!("{}\n", out_line));
-            //println!("{}", line);
         }
         _ = out_buffer.flush();
     }

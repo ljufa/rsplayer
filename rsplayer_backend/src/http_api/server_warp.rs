@@ -98,7 +98,9 @@ pub fn start(
                 })
             },
         );
-    let ui_static_content = warp::get().and(warp::fs::dir(Configuration::get_static_dir_path()));
+    let ui_static_content = warp::get()
+        .and(warp::fs::dir(Configuration::get_static_dir_path()))
+        .with(warp::compression::gzip());
 
     let routes = player_ws_path
         .or(filters::settings_save(config.clone()))
@@ -111,7 +113,7 @@ pub fn start(
         .or(filters::spotify_authorization_callback())
         .or(filters::get_spotify_account_info())
         .or(ui_static_content)
-        .with(cors).with(warp::compression::gzip());
+        .with(cors);
 
     let ws_handle = async move {
         loop {

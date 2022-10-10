@@ -76,14 +76,14 @@ pub(crate) fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
 pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
         Msg::AlbumImageUpdated(image) => {
-            model.current_song.as_mut().unwrap().uri = Some(image.text);
+            model.current_song.as_mut().unwrap().image_url = Some(image.text);
         }
 
         Msg::StatusChangeEventReceived(StateChangeEvent::CurrentSongEvent(song)) => {
             model.waiting_response = false;
             let ps = song.clone();
             model.current_song = Some(song);
-            if ps.uri.is_none() {
+            if ps.image_url.is_none() {
                 orders.perform_cmd(async { update_album_cover(ps).await });
             }
         }
@@ -376,7 +376,7 @@ fn view_volume_slider(volume_state: &Volume) -> Node<Msg> {
 
 fn get_background_image(model: &Model) -> String {
     if let Some(ps) = model.current_song.as_ref() {
-        format!("url({})", ps.uri.as_ref().map_or("/no_album.png", |f| f))
+        format!("url({})", ps.image_url.as_ref().map_or("/no_album.png", |f| f))
     } else {
         String::new()
     }

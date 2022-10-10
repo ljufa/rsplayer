@@ -67,7 +67,8 @@ st7920 = { version = "0.3.0"}
 
 # spotify
 [dependencies.rspotify]
-version = "0.11.5"
+git = "https://github.com/ljufa/rspotify.git"
+branch = "add_user_queue_ep"
 features = ["client-ureq", "ureq-rustls-tls"]
 default-features = false
 

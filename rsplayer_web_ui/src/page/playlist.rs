@@ -15,10 +15,10 @@ use crate::{attachCarousel, scrollToId};
 #[derive(Debug)]
 pub struct Model {
     pub static_playlists: Playlists,
+    pub static_playlist_loading: bool,
     pub dynamic_playlists: HashMap<Category, DynamicPlaylistsPage>,
     pub playlist_categories: Vec<Category>,
     pub category_offset: usize,
-    pub waiting_response: bool,
     pub dynamic_playlist_loading: bool,
     pub selected_playlist_items: Vec<Song>,
     pub selected_playlist_id: String,
@@ -50,9 +50,9 @@ pub(crate) fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
         Msg::KeyPressed(event.unchecked_into())
     }));
     Model {
-        waiting_response: true,
         dynamic_playlist_loading: false,
         static_playlists: Playlists::default(),
+        static_playlist_loading: true,
         playlist_categories: Default::default(),
         category_offset: 0,
         dynamic_playlists: Default::default(),
@@ -72,7 +72,7 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
     //log!("PL Update", msg);
     match msg {
         Msg::StaticPlaylistsFetched(pls) => {
-            model.waiting_response = false;
+            model.static_playlist_loading = false;
             model.static_playlists = pls.unwrap_or_default();
             orders.after_next_render(|_| {
                 attachCarousel("#featured-pl");
@@ -125,12 +125,10 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
             });
         }
         Msg::StatusChangeEventReceived(StateChangeEvent::PlaylistItemsEvent(playlist_items)) => {
-            model.waiting_response = false;
             model.selected_playlist_items = playlist_items;
         }
         Msg::ShowPlaylistItemsClicked(_is_dynamic, playlist_id, playlist_name) => {
-            model.waiting_response = true;
-            model.selected_playlist_id = playlist_id.clone();
+           model.selected_playlist_id = playlist_id.clone();
             model.selected_playlist_name = playlist_name;
             orders.send_msg(Msg::SendCommand(PlayerCommand::QueryPlaylistItems(
                 playlist_id,
@@ -167,7 +165,6 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
 
 pub fn view(model: &Model) -> Node<Msg> {
     div![
-        crate::view_spinner_modal(model.waiting_response),
         view_selected_playlist_items_modal(model),
         view_static_playlists(model),
         view_dynamic_playlists(model),
@@ -304,6 +301,10 @@ fn view_dynamic_playlists(model: &Model) -> Node<Msg> {
 
 fn view_static_playlists(model: &Model) -> Node<Msg> {
     section![
+        div![
+            IF!(model.static_playlist_loading => progress![C!["progress", "is-small"], attrs!{ At::Max => "100"}, style!{ St::MarginBottom => "50px"}]),
+        ],
+
         C!["section"],
         div![
             C!["container"],

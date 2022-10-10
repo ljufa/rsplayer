@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
-use strum_macros::{EnumString, EnumIter, IntoStaticStr};
+use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 use validator::{validate_ip_v4, Validate, ValidationError};
 
 use crate::common::{FilterType, GainLevel, PlayerType, VolumeCrtlType};
