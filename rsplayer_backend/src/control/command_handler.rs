@@ -189,28 +189,25 @@ pub async fn handle_system_commands(
             trace!("Received command {:?}", cmd);
             match cmd {
                 SetVol(val) => {
-                    if let Ok(nv) = ai_service.set_volume(i64::from(val)) {
-                        let new_state = config_store.lock().unwrap().save_volume_state(nv);
-                        state_changes_sender
-                            .send(StateChangeEvent::StreamerStateEvent(new_state))
-                            .expect("Send event failed.");
-                    }
+                    let nv = ai_service.set_volume(i64::from(val));
+                    let new_state = config_store.lock().unwrap().save_volume_state(nv);
+                    state_changes_sender
+                        .send(StateChangeEvent::StreamerStateEvent(new_state))
+                        .expect("Send event failed.");
                 }
                 VolUp => {
-                    if let Ok(nv) = ai_service.volume_up() {
-                        let new_state = config_store.lock().unwrap().save_volume_state(nv);
-                        state_changes_sender
-                            .send(StateChangeEvent::StreamerStateEvent(new_state))
-                            .expect("Send event failed.");
-                    }
+                    let nv = ai_service.volume_up();
+                    let new_state = config_store.lock().unwrap().save_volume_state(nv);
+                    state_changes_sender
+                        .send(StateChangeEvent::StreamerStateEvent(new_state))
+                        .expect("Send event failed.");
                 }
                 VolDown => {
-                    if let Ok(nv) = ai_service.volume_down() {
-                        let new_state = config_store.lock().unwrap().save_volume_state(nv);
-                        state_changes_sender
-                            .send(StateChangeEvent::StreamerStateEvent(new_state))
-                            .expect("Send event failed.");
-                    }
+                    let nv = ai_service.volume_down();
+                    let new_state = config_store.lock().unwrap().save_volume_state(nv);
+                    state_changes_sender
+                        .send(StateChangeEvent::StreamerStateEvent(new_state))
+                        .expect("Send event failed.");
                 }
                 ChangeAudioOutput => {
                     if let Some(out) = ai_service.toggle_output() {

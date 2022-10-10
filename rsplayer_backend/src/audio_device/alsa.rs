@@ -21,7 +21,7 @@ pub struct AlsaPcmCard {
 
 impl AlsaPcmCard {
     #[allow(dead_code)]
-    pub fn new(device_name: String) -> Self {
+    pub const fn new(device_name: String) -> Self {
         AlsaPcmCard { device_name }
     }
     #[allow(dead_code)]
@@ -82,8 +82,8 @@ pub struct AlsaMixer {
 }
 
 impl AlsaMixer {
-    pub fn new(card_name: String) -> Result<Box<Self>> {
-        Ok(Box::new(AlsaMixer { card_name }))
+    pub fn new(card_name: String) -> Box<Self> {
+        Box::new(AlsaMixer { card_name })
     }
 }
 

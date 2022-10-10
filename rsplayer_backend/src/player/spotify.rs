@@ -14,8 +14,8 @@ use log::info;
 
 use rspotify::clients::{BaseClient, OAuthClient};
 use rspotify::model::{
-    AlbumId, CurrentUserQueue, Id, Market, Offset, PlayableId, PlayableItem,
-    PlaylistId, SimplifiedAlbum, TrackId,
+    AlbumId, CurrentUserQueue, Id, Market, Offset, PlayableId, PlayableItem, PlaylistId,
+    SimplifiedAlbum, TrackId,
 };
 use rspotify::prelude::PlayContextId;
 
@@ -107,7 +107,7 @@ impl SpotifyPlayerClient {
                 || self.force_context_update
             {
                 debug!("Update playing context!");
-                self.playing_context = self.fetch_playing_context(ctx);
+                self.playing_context = Some(self.fetch_playing_context(ctx));
                 if self.force_context_update {
                     self.force_context_update = false;
                 }
@@ -131,9 +131,9 @@ impl SpotifyPlayerClient {
     fn fetch_playing_context(
         &mut self,
         context: &rspotify::model::Context,
-    ) -> Option<PlayingContext> {
+    ) -> PlayingContext {
         let queue = self.oauth.client.current_user_queue().ok();
-        Some(PlayingContext {
+        PlayingContext {
             id: context.uri.clone(),
             name: "Queue".to_string(),
             player_type: api_models::common::PlayerType::SPF,
@@ -144,7 +144,7 @@ impl SpotifyPlayerClient {
             },
             playlist_page: queue.map(|q| queue_to_page(&q)),
             image_url: None,
-        })
+        }
     }
 }
 

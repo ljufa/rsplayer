@@ -34,11 +34,10 @@ impl VolumeControlDevice for DacAk4497 {
             .i2c_helper
             .read_register(3)
             .expect("Register read failed");
-        if let Some(new_val) = curr_val.checked_sub(self.volume_step) {
-            self.set_vol(i64::from(new_val))
-        } else {
-            self.set_vol(0)
-        }
+        curr_val.checked_sub(self.volume_step).map_or_else(
+            || self.set_vol(0),
+            |new_val| self.set_vol(i64::from(new_val)),
+        )
     }
 
     fn get_vol(&self) -> Volume {
@@ -102,9 +101,9 @@ impl DacAk4497 {
         self.i2c_helper.write_register(0, 0b1000_1111);
         self.i2c_helper.write_register(1, 0b1010_0010);
         self.set_vol(volume.current);
-        self.filter(dac_settings.filter)?;
-        self.set_gain(dac_settings.gain)?;
-        self.hi_load(dac_settings.heavy_load)?;
+        self.filter(dac_settings.filter);
+        self.set_gain(dac_settings.gain);
+        self.hi_load(dac_settings.heavy_load);
         self.change_sound_setting(dac_settings.sound_sett)?;
         trace!("Dac registry After init");
         self.get_reg_values()
@@ -155,7 +154,7 @@ impl DacAk4497 {
         Ok(result)
     }
 
-    pub fn filter(&self, typ: FilterType) -> Result<FilterType> {
+    pub fn filter(&self, typ: FilterType) -> FilterType {
         match typ {
             FilterType::SharpRollOff => {
                 self.i2c_helper.change_bit(5, 0, false);
@@ -183,21 +182,19 @@ impl DacAk4497 {
                 self.i2c_helper.change_bit(2, 0, false);
             }
         }
-        Ok(typ)
+        typ
     }
 
-    pub fn hi_load(&self, flag: bool) -> Result<bool> {
+    pub fn hi_load(&self, flag: bool){
         self.i2c_helper.change_bit(8, 3, flag);
-        Ok(flag)
     }
 
-    pub fn set_gain(&self, level: GainLevel) -> Result<GainLevel> {
+    pub fn set_gain(&self, level: GainLevel) {
         match level {
             GainLevel::V25 => self.i2c_helper.write_register(7, 0b0000_0101),
             GainLevel::V28 => self.i2c_helper.write_register(7, 0b0000_0001),
             GainLevel::V375 => self.i2c_helper.write_register(7, 0b0000_1001),
         }
-        Ok(level)
     }
 
     #[allow(dead_code)]

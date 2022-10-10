@@ -74,14 +74,14 @@ impl MpdPlayerClient {
 
     fn execute_mpd_command<F, R>(
         &mut self,
-        command: String,
+        command: &str,
         mut transform_response_fn: F,
     ) -> Option<R>
     where
         F: FnMut(&mut BufReader<&mut TcpStream>) -> Option<R>,
     {
         let mut full_cmd = String::new();
-        full_cmd.push_str(&command);
+        full_cmd.push_str(command);
         full_cmd.push('\n');
         let mut client = create_socket_client(&self.mpd_server_url);
         client
@@ -93,21 +93,21 @@ impl MpdPlayerClient {
     }
 
     fn get_songs_in_queue(&mut self) -> Vec<Song> {
-        self.execute_mpd_command("playlistinfo".to_owned(), |reader| {
+        self.execute_mpd_command("playlistinfo", |reader| {
             Some(mpd_response_to_songs(reader))
         })
         .unwrap()
     }
 
     fn get_all_songs_in_library(&mut self) -> Vec<Song> {
-        self.execute_mpd_command("listallinfo".to_owned(), |reader| {
+        self.execute_mpd_command("listallinfo", |reader| {
             Some(mpd_response_to_songs(reader))
         })
         .unwrap()
     }
 
     fn get_songs_in_playlist(&mut self, playlist_name: String) -> Vec<Song> {
-        self.execute_mpd_command(format!("listplaylistinfo \"{playlist_name}\""), |reader| {
+        self.execute_mpd_command(format!("listplaylistinfo \"{playlist_name}\"").as_str(), |reader| {
             Some(mpd_response_to_songs(reader))
         })
         .unwrap()
@@ -461,7 +461,7 @@ impl Player for MpdPlayerClient {
     }
 
     fn add_song_to_queue(&mut self, song_id: String) {
-        self.execute_mpd_command(format!("add \"{song_id}\""), |reader| -> Option<String> {
+        self.execute_mpd_command(format!("add \"{song_id}\"").as_str(), |reader| -> Option<String> {
             let mut out: String = "".to_string();
             reader.read_line(&mut out).expect("Failed to read response");
             debug!("Response line {}", out);

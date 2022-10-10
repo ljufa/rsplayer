@@ -26,32 +26,33 @@ impl AudioInterfaceService {
                     &settings.dac_settings,
                 )?
             } else {
-                AlsaMixer::new(settings.alsa_settings.device_name)?
+                AlsaMixer::new(settings.alsa_settings.device_name)
             };
-        let mut line_handle = None;
-        if settings.output_selector_settings.enabled {
+        let line_handle = if settings.output_selector_settings.enabled {
             // restore last output state
             let out_sel_pin = gpio::get_output_pin_handle(GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY)?;
             match config.get_streamer_status().selected_audio_output {
                 AudioOut::SPKR => out_sel_pin.set_value(0)?,
                 AudioOut::HEAD => out_sel_pin.set_value(1)?,
             };
-            line_handle = Some(out_sel_pin);
-        }
+            Some(out_sel_pin)
+        } else {
+            None
+        };
         Ok(Self {
             volume_ctrl_device,
             output_selector_pin: line_handle,
         })
     }
 
-    pub fn set_volume(&self, value: i64) -> Result<Volume> {
-        Ok(self.volume_ctrl_device.set_vol(value))
+    pub fn set_volume(&self, value: i64) -> Volume {
+        self.volume_ctrl_device.set_vol(value)
     }
-    pub fn volume_up(&self) -> Result<Volume> {
-        Ok(self.volume_ctrl_device.vol_up())
+    pub fn volume_up(&self) -> Volume {
+        self.volume_ctrl_device.vol_up()
     }
-    pub fn volume_down(&self) -> Result<Volume> {
-        Ok(self.volume_ctrl_device.vol_down())
+    pub fn volume_down(&self) -> Volume {
+        self.volume_ctrl_device.vol_down()
     }
     pub fn toggle_output(&self) -> Option<AudioOut> {
         if let Some(out_sel_pin) = self.output_selector_pin.as_ref() {

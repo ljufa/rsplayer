@@ -454,17 +454,16 @@ fn get_port() -> u16 {
     if let Ok(port) = port.parse::<u16>() {
         if is_local_port_free(port) {
             return port;
-        } else {
-            warn!(
-                "Desired port {} is unavailable, will try fallback port {}",
-                port, fallback_port
-            )
         }
+        warn!(
+            "Desired port {} is unavailable, will try fallback port {}",
+            port, fallback_port
+        );
+
         if is_local_port_free(fallback_port) {
             return fallback_port;
-        } else {
-            error!("Fallback port {} is also unavailable", fallback_port);
         }
+        error!("Fallback port {} is also unavailable", fallback_port);
     }
     panic!("Desired port [{}], default port [{}] and fallback port [{}] are unavailable! Please specify another value for RSPLAYER_HTTP_PORT in rsplayer.service file", port, default_port, fallback_port)
 }

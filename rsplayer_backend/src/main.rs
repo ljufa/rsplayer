@@ -61,9 +61,9 @@ async fn main() {
     let player_service = Arc::new(Mutex::new(player_service.unwrap()));
     info!("Player service successfully created.");
 
-    let (player_commands_tx, player_commands_rx) = tokio::sync::mpsc::channel(2);
+    let (player_commands_tx, player_commands_rx) = tokio::sync::mpsc::channel(10);
 
-    let (system_commands_tx, system_commands_rx) = tokio::sync::mpsc::channel(2);
+    let (system_commands_tx, system_commands_rx) = tokio::sync::mpsc::channel(10);
 
     // start/resume playing after start
     _ = player_commands_tx.send(PlayerCommand::Play).await;
