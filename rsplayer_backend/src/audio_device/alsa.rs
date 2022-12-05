@@ -153,19 +153,39 @@ impl VolumeControlDevice for AlsaMixer {
 }
 #[cfg(test)]
 mod test {
+    use std::ffi::CString;
+
     use alsa::{
         card,
         mixer::{Selem, SelemChannelId, SelemId},
-        Mixer,
+        Mixer, device_name::HintIter,
     };
 
-    use super::AlsaPcmCard;
+    use crate::audio_device::VolumeControlDevice;
+
+    use super::{AlsaPcmCard, AlsaMixer};
+
+    #[test]
+    
+    fn test_set_volume(){
+        for t in &["pcm", "ctl", "rawmidi", "timer", "seq", "hwdep"] {
+            println!("{} devices:", t);
+            let i = HintIter::new(None, &*CString::new(*t).unwrap()).unwrap();
+            
+            for a in i { println!("  {:?}", a) }
+        }
+        
+        let volume_ctrl = AlsaMixer::new("hw:0".to_string());
+        
+        volume_ctrl.set_vol(80);
+        assert!(volume_ctrl.get_vol().current == 80);
+    }
 
     #[test]
     fn print_mixer_of_cards() {
         for card in card::Iter::new().map(std::result::Result::unwrap) {
             println!(
-                "Card #{}: {} ({})",
+                "[{}]:[{}]:[{}]",
                 card.get_index(),
                 card.get_name().unwrap(),
                 card.get_longname().unwrap()
@@ -175,9 +195,9 @@ mod test {
             for selem in mixer.iter().filter_map(Selem::new) {
                 let sid = selem.get_id();
                 println!(
-                    "\tMixer element: {},{}:",
+                    "\t{},{}:",
+                    sid.get_index(),
                     sid.get_name().unwrap(),
-                    sid.get_index()
                 );
 
                 if selem.has_volume() {

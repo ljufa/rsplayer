@@ -1,5 +1,5 @@
 ### Detailed documentation -> https://ljufa.github.io/rsplayer/
-# RSPlayer - Diy-friendly Music Player for Raspberry PI (or any other arm64 Linux computer).
+# RSPlayer - Diy-friendly Music Player for Raspberry PI (or any other arm Linux computer).
 ### Currently it works with *Spotify* and *Music Player Daemon* as backend players and provides a unique UI experience.
 ### Optionally you can connect the following input/output hardware to the GPIO header:
 - #### *DAC board* for hardware volume control and other DAC settings like the sound quality and digital filter
@@ -18,7 +18,7 @@
 
 ## Hardware requirements
 Mandatory:
-- Raspberry PI 4 - for best audio quality. It will work with other 64-bit models as well.
+- Raspberry PI 4 - for best audio quality. It will work with other models as well.
  
 Optional:
 - Diy friendly AK44xx DAC board i.e. [Diyinhk](https://www.diyinhk.com/shop/audio-kits/), [JLSounds](http://jlsounds.com/products.html) ...

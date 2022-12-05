@@ -1,5 +1,5 @@
 [env]
-RPI_HOST = "192.168.5.60" 
+RPI_HOST = "192.168.5.60"
 TARGET = "aarch64-unknown-linux-gnu"
 RELEASE_VERSION = "0.4.0"
 
@@ -35,6 +35,7 @@ args = [
     "-p",
     "rsplayer",
     "--target=${TARGET}",
+    "--variant=${TARGET}",
     "--deb-version",
     "${RELEASE_VERSION}",
 ]
@@ -47,8 +48,8 @@ script = [
     "cd librespot",
     "git checkout master",
     "cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/Cross.toml .",
-    "cross build --target aarch64-unknown-linux-gnu --release --no-default-features --features alsa-backend",
-    "cp -f target/aarch64-unknown-linux-gnu/release/librespot ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/PKGS/debian-arm64/usr/local/bin",
+    "cross build --target ${TARGET} --release --no-default-features --features alsa-backend",
+    "cp -f target/${TARGET}/release/librespot ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/PKGS/${TARGET}/usr/local/bin",
 ]
 
 # ---- LINT ----
@@ -62,13 +63,20 @@ args = [
     "--allow-dirty",
     "--all-features",
     "--",
-    "--deny", "warnings",
-    "--deny", "clippy::pedantic",
-    "--deny", "clippy::nursery",
-    "--allow","clippy::use_self",
-    "--allow","clippy::module_name_repetitions",
-    "--allow","clippy::must_use_candidate",
-    "--allow","clippy::let_underscore_drop"
+    "--deny",
+    "warnings",
+    "--deny",
+    "clippy::pedantic",
+    "--deny",
+    "clippy::nursery",
+    "--allow",
+    "clippy::use_self",
+    "--allow",
+    "clippy::module_name_repetitions",
+    "--allow",
+    "clippy::must_use_candidate",
+    "--allow",
+    "clippy::let_underscore_drop",
 ]
 
 [tasks.format]
@@ -79,7 +87,7 @@ args = ["fmt"]
 
 # ---- Local DEV ----
 [tasks.run_local]
-env = { "RUST_LOG"="rsplayer=debug,warp=debug", "RUST_BACKTRACE"="full", "RSPLAYER_HTTP_PORT"="8000"}
+env = { "RUST_LOG" = "rsplayer=debug,warp=debug", "RUST_BACKTRACE" = "full", "RSPLAYER_HTTP_PORT" = "8000" }
 command = "cargo"
 args = ["run"]
 
@@ -109,5 +117,12 @@ script = [
 [tasks.tag]
 script = [
     "git tag ${RELEASE_VERSION} main",
-    "git push origin ${RELEASE_VERSION}"
+    "git push origin ${RELEASE_VERSION}",
+]
+[tasks.push_docker_cross]
+script = [
+    "docker build -f Dockerfile.aarch64 . -t ljufa/rsplayer-cross-aarch64:latest",
+    "docker push ljufa/rsplayer-cross-aarch64:latest",
+    "docker build -f Dockerfile.armv7 . -t ljufa/rsplayer-cross-armv7:latest",
+    "docker push ljufa/rsplayer-cross-armv7:latest",
 ]

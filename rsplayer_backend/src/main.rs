@@ -4,6 +4,7 @@ extern crate log;
 
 use std::panic;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 // use std::time::Duration;
 
 use api_models::common::PlayerCommand;
@@ -65,9 +66,6 @@ async fn main() {
 
     let (system_commands_tx, system_commands_rx) = tokio::sync::mpsc::channel(10);
 
-    // start/resume playing after start
-    _ = player_commands_tx.send(PlayerCommand::Play).await;
-
     let (state_changes_tx, _) = broadcast::channel(20);
 
     let (http_server_future, websocket_future) = http_api::server_warp::start(
@@ -77,6 +75,9 @@ async fn main() {
         &config,
         player_service.clone(),
     );
+
+    // start/resume playing after start
+    _ = player_commands_tx.send(PlayerCommand::Play).await;
 
     select! {
         _ = spawn(control::ir_lirc::listen(player_commands_tx.clone(), system_commands_tx.clone(), config.clone())) => {
@@ -127,6 +128,7 @@ async fn main() {
 
     info!("RSPlayer shutdown completed.");
 }
+
 #[allow(clippy::redundant_pub_crate)]
 async fn start_degraded(
     term_signal: &mut Signal,

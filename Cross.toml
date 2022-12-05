@@ -1,7 +1,7 @@
 [target.armv7-unknown-linux-gnueabihf]
-image = "ljufa/rpi4-build-ak44:latest6"
+image = "ljufa/rsplayer-cross-armv7:latest"
 
 [target.aarch64-unknown-linux-gnu]
-image = "ljufa/rpi4-build-ak44:aarch64_11"
+image = "ljufa/rsplayer-cross-aarch64:latest"
 linker = "clang"
 rustflags = ["-C","link-arg=-fuse-ld=/usr/bin/mold"]

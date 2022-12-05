@@ -1,0 +1,19 @@
+[Unit]
+Description=RSPlayer backend server
+Documentation=https://github.com/ljufa/rsplayer
+Wants=network-online.target mpd.service lircd.service syslog.service
+After=network-online.target mpd.service lircd.service syslog.service
+
+[Service]
+# LimitMEMLOCK=655360
+Environment=RUST_BACKTRACE=full
+Environment=RSPLAYER_HTTP_PORT=80
+Environment=RUST_LOG=rsplayer=debug,warp=debug
+ExecStart=/usr/local/bin/rsplayer
+WorkingDirectory=/opt/rsplayer
+ExecStartPre=sleep 5
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

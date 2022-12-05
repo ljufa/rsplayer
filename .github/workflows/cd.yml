@@ -7,7 +7,29 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build_ui:
+    name: Build UI
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: Swatinem/rust-cache@v1
+    - uses: davidB/rust-cargo-make@v1
+    - uses: taiki-e/install-action@v1
+      with:
+        tool: wasm-pack
+    - name: Build release
+      run: cargo make build_ui_release
+    - name: Upload pkg dir
+      uses: actions/upload-artifact@v3
+      with:
+        name: web_ui
+        path: target/ui
+    
+  build_backend:
+    needs: build_ui
+    strategy:
+      matrix:
+        target: ["armv7-unknown-linux-gnueabihf","aarch64-unknown-linux-gnu"]
     name: Release
     runs-on: ubuntu-latest
     steps:
@@ -16,21 +38,39 @@ jobs:
     - uses: davidB/rust-cargo-make@v1
     - uses: taiki-e/install-action@v1
       with:
-        tool: cross,wasm-pack
-    - name: Build UI
-      run: cargo make build_ui_release
-    - name: Build Backend 
-      run: cargo make build_release
-    - name: Create deb
-      run: cargo make --env RELEASE_VERSION=${GITHUB_REF_NAME} package_deb_release
-    - name: Release deb file
-      uses: softprops/action-gh-release@v1
+        tool: cross
+    - name: Download web_ui
+      uses: actions/download-artifact@v3
+      with:
+        name: web_ui
+        path: target/ui
+    - name: Display structure of downloaded files
+      run: ls -R target
+    - name: Build Backend
+      run: cargo make --env TARGET=${{ matrix.target }} build_release
+    - name: Create deb package
+      run: cargo make --env RELEASE_VERSION=${GITHUB_REF_NAME} --env TARGET=${{ matrix.target }} package_deb_release
+    - name: Upload deb package
+      uses: actions/upload-artifact@v3
+      with:
+        name: deb-${{ matrix.target }}
+        path: target/${{ matrix.target }}/debian/*.deb
+  publish:
+    needs: build_backend
+    name: Release deb packages
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download deb packages
+      uses: actions/download-artifact@v3
+    - name: Display structure of downloaded files
+      run: ls -R
+    - uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        # draft: true
-        # prerelease: true
+        draft: true
+        prerelease: true
         generate_release_notes: true
         fail_on_unmatched_files: true
         files: |
-          target/aarch64-unknown-linux-gnu/debian/*.deb
+          **/*.deb
           
