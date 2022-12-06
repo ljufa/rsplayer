@@ -26,12 +26,16 @@ impl PlayerService {
         match &settings.active_player {
             PlayerType::SPF => {
                 let mut sp = SpotifyPlayerClient::new(&settings.spotify_settings)?;
-                sp.start_device()?;
+                sp.start_device(&settings.alsa_settings.device_name)?;
                 sp.transfer_playback_to_device()?;
                 sp.play();
                 Ok(Box::new(sp))
             }
-            PlayerType::MPD => Ok(Box::new(MpdPlayerClient::new(&settings.mpd_settings)?)),
+            PlayerType::MPD => {
+                let mut mpd = MpdPlayerClient::new(&settings.mpd_settings)?;
+                mpd.ensure_mpd_server_configuration(&settings.alsa_settings.device_name)?;
+                Ok(Box::new(mpd))
+            }
             _ => panic!("Unknown type"),
         }
     }

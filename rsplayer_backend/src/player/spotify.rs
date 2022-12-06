@@ -5,7 +5,7 @@ use api_models::player::Song;
 use api_models::playlist::{
     Album, Category, DynamicPlaylistsPage, Playlist, PlaylistPage, PlaylistType, Playlists,
 };
-use api_models::settings::SpotifySettings;
+use api_models::settings::{SpotifySettings, AlsaSettings};
 use api_models::state::{
     PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, PlayingContextType, SongProgress,
 };
@@ -59,8 +59,8 @@ impl SpotifyPlayerClient {
         })
     }
 
-    pub fn start_device(&mut self) -> Result<()> {
-        self.librespot_process = Some(start_librespot(&self.oauth.settings)?);
+    pub fn start_device(&mut self, alsa_device_name: &str) -> Result<()> {
+        self.librespot_process = Some(start_librespot(&self.oauth.settings, alsa_device_name)?);
         Ok(())
     }
 
@@ -568,7 +568,7 @@ fn playable_item_to_song(track: Option<&PlayableItem>) -> Option<Song> {
     }
 }
 
-fn start_librespot(settings: &SpotifySettings) -> Result<Child> {
+fn start_librespot(settings: &SpotifySettings, alsa_device_name: &str) -> Result<Child> {
     info!("Starting librespot process");
     let format: &'static str = settings.alsa_device_format.into();
     let child = std::process::Command::new(Configuration::get_librespot_path())
@@ -584,7 +584,7 @@ fn start_librespot(settings: &SpotifySettings) -> Result<Child> {
         .arg("--password")
         .arg(settings.password.clone())
         .arg("--device")
-        .arg(settings.alsa_device_name.clone())
+        .arg(alsa_device_name)
         .arg("--format")
         .arg(format)
         .arg("--initial-volume")

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use alsa::card;
 use alsa::device_name::HintIter;
 use alsa::mixer::{Selem, SelemChannelId};
 use alsa::pcm::State;
@@ -57,21 +58,11 @@ impl AlsaPcmCard {
     }
     pub fn get_all_cards() -> HashMap<String, String> {
         let mut result = HashMap::new();
-        let i = HintIter::new_str(None, "pcm").unwrap();
-        for a in i {
-            match a.direction {
-                Some(Direction::Playback) | None => {
-                    if let Some(name) = a.name {
-                        let key = name.clone();
-                        let mut value = name.clone();
-                        if let Some(desc) = a.desc {
-                            value = desc.replace('\n', " ");
-                        }
-                        result.insert(key, value);
-                    }
-                }
-                _ => {}
-            }
+        for card in card::Iter::new().map(std::result::Result::unwrap) {
+            result.insert(
+                format!("hw:{}", card.get_index()),
+                card.get_name().unwrap_or_default(),
+            );
         }
         result
     }
@@ -157,28 +148,33 @@ mod test {
 
     use alsa::{
         card,
+        device_name::HintIter,
         mixer::{Selem, SelemChannelId, SelemId},
-        Mixer, device_name::HintIter,
+        HCtl, Mixer,
     };
 
     use crate::audio_device::VolumeControlDevice;
 
-    use super::{AlsaPcmCard, AlsaMixer};
+    use super::{AlsaMixer, AlsaPcmCard};
 
     #[test]
-    
-    fn test_set_volume(){
+
+    fn test_set_volume() {
         for t in &["pcm", "ctl", "rawmidi", "timer", "seq", "hwdep"] {
             println!("{} devices:", t);
             let i = HintIter::new(None, &*CString::new(*t).unwrap()).unwrap();
-            
-            for a in i { println!("  {:?}", a) }
+            for a in i {
+                if a.direction == None {
+                    println!("  {:?}", a)
+
+                }
+            }
         }
-        
-        let volume_ctrl = AlsaMixer::new("hw:0".to_string());
-        
-        volume_ctrl.set_vol(80);
-        assert!(volume_ctrl.get_vol().current == 80);
+
+        // let volume_ctrl = AlsaMixer::new("hw:0".to_string());
+
+        // volume_ctrl.set_vol(80);
+        // assert!(volume_ctrl.get_vol().current == 80);
     }
 
     #[test]
@@ -190,15 +186,10 @@ mod test {
                 card.get_name().unwrap(),
                 card.get_longname().unwrap()
             );
-
             let mixer = Mixer::new(&format!("hw:{}", card.get_index()), false).unwrap();
             for selem in mixer.iter().filter_map(Selem::new) {
                 let sid = selem.get_id();
-                println!(
-                    "\t{},{}:",
-                    sid.get_index(),
-                    sid.get_name().unwrap(),
-                );
+                println!("\t{},{}:", sid.get_index(), sid.get_name().unwrap(),);
 
                 if selem.has_volume() {
                     print!("\t  Volume limits: ");
@@ -334,8 +325,9 @@ mod test {
     }
     #[test]
     fn list_devices() {
-        AlsaPcmCard::get_all_cards()
-            .iter()
-            .for_each(|kv| println!("{} - {}", kv.0, kv.1));
+        for h in HCtl::new("hw:0", false).expect("msg").elem_iter() {
+            println!("DD :{:?}", h.get_id());
+        }
     }
 }
+

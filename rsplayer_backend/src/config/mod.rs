@@ -77,7 +77,6 @@ impl Configuration {
                 .expect("Could not store default settings");
             default
         };
-        result.spotify_settings.alsa_device_name = result.alsa_settings.device_name.clone();
         result.alsa_settings.available_alsa_pcm_devices = AlsaPcmCard::get_all_cards();
         result
             .dac_settings

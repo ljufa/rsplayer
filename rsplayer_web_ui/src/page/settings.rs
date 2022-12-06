@@ -30,6 +30,7 @@ pub enum Msg {
     ToggleSpotifyEnabled,
     ToggleLmsEnabled,
     ToggleMpdEnabled,
+    ToggleMpdOverrideConfig,
     ToggleIrEnabled,
     ToggleOledEnabled,
     ToggleOutputSelectorEnabled,
@@ -38,6 +39,7 @@ pub enum Msg {
     // ---- Input capture ----
     InputMpdHostChange(String),
     InputMpdPortChange(u32),
+    InputMpdMusicDirectoryChanged(String),
     InputLMSHostChange,
     InputSpotifyDeviceNameChange(String),
     InputSpotifyUsernameChange(String),
@@ -151,11 +153,18 @@ pub(crate) fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>)
             model.settings.volume_ctrl_settings.rotary_enabled =
                 !model.settings.volume_ctrl_settings.rotary_enabled;
         }
+        Msg::ToggleMpdOverrideConfig => {
+            model.settings.mpd_settings.override_external_configuration =
+                !model.settings.mpd_settings.override_external_configuration;
+        }
         Msg::InputMpdHostChange(value) => {
             model.settings.mpd_settings.server_host = value;
         }
         Msg::InputMpdPortChange(value) => {
             model.settings.mpd_settings.server_port = value;
+        }
+        Msg::InputMpdMusicDirectoryChanged(value) => {
+            model.settings.mpd_settings.music_directory = value;
         }
         Msg::InputLMSHostChange => {}
         Msg::InputSpotifyDeviceNameChange(value) => {
@@ -1074,5 +1083,51 @@ fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
                 ]
             ],
         ],
+        div![
+            C!["field", "is-horizontal"],
+            ev(Ev::Click, |_| Msg::ToggleMpdOverrideConfig),
+            div![
+                C!["field-body"],
+                div![
+                    C!["control"],
+                    input![
+                        C!["switch"],
+                        attrs! {
+                            At::Name => "mpd_external_conf_cb"
+                            At::Type => "checkbox"
+                            At::Checked => mpd_settings.override_external_configuration.as_at_value(),
+                        },
+                    ],
+                    label![
+                        "Override existing mpd configuration",
+                        attrs! {
+                            At::For => "mpd_external_conf_cb"
+                        }
+                    ]
+                ],
+            ]
+        ],
+        IF!(mpd_settings.override_external_configuration =>
+                div![
+                    C!["field", "is-horizontal"],
+                        div![C!["field-label", "is-small"],
+                            label!["Music directory path", C!["label"]],
+                        ],
+                        div![C!["field-body"],
+                            div![
+                                C!["control", "has-icons-right"],
+                                input![
+                                    C!["input"],
+                                    attrs! {
+                                        At::Value => mpd_settings.music_directory
+                                    },
+                                    input_ev(Ev::Input, move |value| {
+                                        Msg::InputMpdMusicDirectoryChanged(value)
+                                    }),
+                                ],
+                            ]
+                        ]
+                ]
+        )
     ]
 }

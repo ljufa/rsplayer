@@ -51,8 +51,6 @@ pub struct SpotifySettings {
     pub auth_callback_url: String,
     pub bitrate: u16,
     pub alsa_device_format: AlsaDeviceFormat,
-    #[serde(skip_deserializing)]
-    pub alsa_device_name: String,
 }
 
 #[derive(
@@ -94,7 +92,10 @@ pub struct MpdSettings {
     pub server_host: String,
     #[validate(range(min = 1024, max = 65535))]
     pub server_port: u32,
+    pub override_external_configuration: bool,
+    pub music_directory: String,
 }
+
 fn validate_ip(val: &str) -> Result<(), ValidationError> {
     if validate_ip_v4(val) {
         Ok(())
@@ -148,6 +149,7 @@ impl MpdSettings {
     }
 }
 pub const DEFAULT_ALSA_PCM_DEVICE: &str = "hw:1";
+
 impl Default for Settings {
     fn default() -> Self {
         Settings {
@@ -168,7 +170,6 @@ impl Default for Settings {
                 username: String::default(),
                 password: String::default(),
                 alsa_device_format: AlsaDeviceFormat::S16,
-                alsa_device_name: DEFAULT_ALSA_PCM_DEVICE.to_string(),
                 bitrate: 320,
             },
             lms_settings: LmsSettings {
@@ -193,6 +194,8 @@ impl Default for Settings {
                 enabled: true,
                 server_host: String::from("127.0.0.1"),
                 server_port: 6600,
+                override_external_configuration: false,
+                music_directory: "/var/lib/mpd/music".into(),
             },
             alsa_settings: AlsaSettings {
                 device_name: String::from(DEFAULT_ALSA_PCM_DEVICE),

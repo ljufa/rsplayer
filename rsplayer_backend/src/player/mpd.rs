@@ -31,13 +31,42 @@ const CATEGORY_ID_BY_DATE: &str = "mpd_category_by_date";
 const CATEGORY_ID_BY_ARTIST: &str = "mpd_category_by_artist";
 const CATEGORY_ID_BY_FOLDER: &str = "mpd_category_by_folder";
 const PAGE_SIZE: usize = 80;
+const MPD_CONF_FILE_TEMPLATE: &str = r#"
+playlist_directory        "/var/lib/mpd/playlists"
+db_file                   "/var/lib/mpd/tag_cache"
+state_file                "/var/lib/mpd/state"
+sticker_file              "/var/lib/mpd/sticker.sql"
+music_directory           "{music_directory}"
+
+bind_to_address           "0.0.0.0"
+port                      "6600"
+log_level                 "default"
+restore_paused            "yes"
+auto_update               "yes"
+follow_outside_symlinks   "yes"
+follow_inside_symlinks    "yes"
+zeroconf_enabled          "no"
+filesystem_charset        "UTF-8"
+
+input {
+  plugin "curl"
+}
+
+audio_output {
+  type                    "alsa"
+  name                    "audio device"
+  device                  "{audio_device}"
+  mixer_type              "none"
+  replay_gain_handler     "none"
+}
+"#;
 
 #[derive(Debug)]
 pub struct MpdPlayerClient {
     mpd_client: Client,
-    mpd_server_url: String,
     progress: SongProgress,
     all_songs: Vec<Song>,
+    mpd_settings: MpdSettings,
 }
 
 impl MpdPlayerClient {
@@ -45,20 +74,43 @@ impl MpdPlayerClient {
         if !mpd_settings.enabled {
             return Err(failure::err_msg("MPD player integration is disabled."));
         }
+
         Ok(MpdPlayerClient {
             mpd_client: create_client(mpd_settings)?,
-            mpd_server_url: mpd_settings.get_server_url(),
             progress: SongProgress::default(),
             all_songs: vec![],
+            mpd_settings: mpd_settings.clone(),
         })
     }
+
+    pub fn ensure_mpd_server_configuration(&mut self, audio_device_name: &str) -> Result<()> {
+        let existing_content = std::fs::read_to_string("/etc/mpd.conf")?;
+        if self.mpd_settings.override_external_configuration {
+            let mut new_content = MPD_CONF_FILE_TEMPLATE.replace(
+                "{music_directory}",
+                self.mpd_settings.music_directory.as_str(),
+            );
+            new_content = new_content.replace("{audio_device}", audio_device_name);
+            if new_content != existing_content {
+                std::fs::copy("/etc/mpd.conf", "/tmp/mpd.conf.rsplayer.origin")?;
+                std::fs::write("/etc/mpd.conf", new_content)?;
+                std::process::Command::new("systemctl")
+                    .arg("restart")
+                    .arg("mpd")
+                    .spawn()?;
+                self.mpd_client = create_client(&self.mpd_settings)?;
+            }
+        }
+        Ok(())
+    }
+
     fn try_with_reconnect_result<F, R>(&mut self, mut command: F) -> Result<R>
     where
         F: FnMut(&mut Client) -> mpd::error::Result<R>,
     {
         let mut result = command(self.mpd_client.borrow_mut());
         if result.is_err() {
-            match Client::connect(self.mpd_server_url.as_str()) {
+            match Client::connect(self.mpd_settings.get_server_url().as_str()) {
                 Ok(cl) => {
                     self.mpd_client = cl;
                     result = command(self.mpd_client.borrow_mut());
@@ -83,7 +135,7 @@ impl MpdPlayerClient {
         let mut full_cmd = String::new();
         full_cmd.push_str(command);
         full_cmd.push('\n');
-        let mut client = create_socket_client(&self.mpd_server_url);
+        let mut client = create_socket_client(&self.mpd_settings.get_server_url());
         client
             .write_all(full_cmd.as_bytes())
             .expect("Can't write to socket");
@@ -93,23 +145,20 @@ impl MpdPlayerClient {
     }
 
     fn get_songs_in_queue(&mut self) -> Vec<Song> {
-        self.execute_mpd_command("playlistinfo", |reader| {
-            Some(mpd_response_to_songs(reader))
-        })
-        .unwrap()
+        self.execute_mpd_command("playlistinfo", |reader| Some(mpd_response_to_songs(reader)))
+            .unwrap()
     }
 
     fn get_all_songs_in_library(&mut self) -> Vec<Song> {
-        self.execute_mpd_command("listallinfo", |reader| {
-            Some(mpd_response_to_songs(reader))
-        })
-        .unwrap()
+        self.execute_mpd_command("listallinfo", |reader| Some(mpd_response_to_songs(reader)))
+            .unwrap()
     }
 
     fn get_songs_in_playlist(&mut self, playlist_name: String) -> Vec<Song> {
-        self.execute_mpd_command(format!("listplaylistinfo \"{playlist_name}\"").as_str(), |reader| {
-            Some(mpd_response_to_songs(reader))
-        })
+        self.execute_mpd_command(
+            format!("listplaylistinfo \"{playlist_name}\"").as_str(),
+            |reader| Some(mpd_response_to_songs(reader)),
+        )
         .unwrap()
     }
 }
@@ -461,12 +510,15 @@ impl Player for MpdPlayerClient {
     }
 
     fn add_song_to_queue(&mut self, song_id: String) {
-        self.execute_mpd_command(format!("add \"{song_id}\"").as_str(), |reader| -> Option<String> {
-            let mut out: String = "".to_string();
-            reader.read_line(&mut out).expect("Failed to read response");
-            debug!("Response line {}", out);
-            None
-        });
+        self.execute_mpd_command(
+            format!("add \"{song_id}\"").as_str(),
+            |reader| -> Option<String> {
+                let mut out: String = "".to_string();
+                reader.read_line(&mut out).expect("Failed to read response");
+                debug!("Response line {}", out);
+                None
+            },
+        );
     }
 
     fn clear_queue(&mut self) {
