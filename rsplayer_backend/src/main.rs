@@ -4,7 +4,7 @@ extern crate log;
 
 use std::panic;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+
 // use std::time::Duration;
 
 use api_models::common::PlayerCommand;
@@ -31,11 +31,6 @@ mod player;
 #[tokio::main]
 async fn main() {
     env_logger::init();
-    // #[cfg(debug_assertions)]
-    // console_subscriber::ConsoleLayer::builder()
-    //     .retention(Duration::from_secs(60))
-    //     .server_addr(([0, 0, 0, 0], 6669))
-    //     .init();
 
     info!("Starting RSPlayer!");
 

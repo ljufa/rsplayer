@@ -55,7 +55,7 @@ pub struct Song {
 
 impl Song {
     pub fn info_string(&self) -> Option<String> {
-        let mut result = "".to_string();
+        let mut result = String::new();
         if let Some(artist) = self.artist.as_ref() {
             result.push_str(artist.as_str());
             result.push('-');
@@ -77,7 +77,7 @@ impl Song {
         }
     }
     pub fn get_title(&self) -> String {
-        let mut result = "".to_string();
+        let mut result = String::new();
         if let Some(title) = self.title.as_ref() {
             result.push_str(title.as_str());
         }

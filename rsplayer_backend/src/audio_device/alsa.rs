@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use alsa::card;
-use alsa::device_name::HintIter;
+
 use alsa::mixer::{Selem, SelemChannelId};
 use alsa::pcm::State;
-use alsa::{Direction, Mixer};
+use alsa::{Mixer};
 use api_models::common::Volume;
 
 use crate::common::Result;
@@ -153,18 +153,18 @@ mod test {
         HCtl, Mixer,
     };
 
-    use crate::audio_device::VolumeControlDevice;
+    
 
-    use super::{AlsaMixer, AlsaPcmCard};
+    
 
     #[test]
 
     fn test_set_volume() {
         for t in &["pcm", "ctl", "rawmidi", "timer", "seq", "hwdep"] {
             println!("{} devices:", t);
-            let i = HintIter::new(None, &*CString::new(*t).unwrap()).unwrap();
+            let i = HintIter::new(None, &CString::new(*t).unwrap()).unwrap();
             for a in i {
-                if a.direction == None {
+                if a.direction.is_none() {
                     println!("  {:?}", a)
 
                 }

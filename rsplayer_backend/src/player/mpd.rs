@@ -375,22 +375,22 @@ impl Player for MpdPlayerClient {
             Category {
                 id: CATEGORY_ID_BY_ARTIST.to_string(),
                 name: "By Artist".to_string(),
-                icon: "".to_string(),
+                icon: String::new(),
             },
             Category {
                 id: CATEGORY_ID_BY_DATE.to_string(),
                 name: "By Date".to_string(),
-                icon: "".to_string(),
+                icon: String::new(),
             },
             Category {
                 id: CATEGORY_ID_BY_GENRE.to_string(),
                 name: "By Genre".to_string(),
-                icon: "".to_string(),
+                icon: String::new(),
             },
             Category {
                 id: CATEGORY_ID_BY_FOLDER.to_string(),
                 name: "By Directory".to_string(),
-                icon: "".to_string(),
+                icon: String::new(),
             },
         ]
     }
@@ -513,7 +513,7 @@ impl Player for MpdPlayerClient {
         self.execute_mpd_command(
             format!("add \"{song_id}\"").as_str(),
             |reader| -> Option<String> {
-                let mut out: String = "".to_string();
+                let mut out: String = String::new();
                 reader.read_line(&mut out).expect("Failed to read response");
                 debug!("Response line {}", out);
                 None
@@ -631,7 +631,7 @@ fn map_song(song: &MpdSong) -> Song {
     Song {
         file: song.file.clone(),
         title: song.title.clone(),
-        id: song.place.map_or("".to_string(), |p| p.id.0.to_string()),
+        id: song.place.map_or(String::new(), |p| p.id.0.to_string()),
         album: tag_to_value(song, "Album"),
         artist: tag_to_value(song, "Artist"),
         genre: tag_to_value(song, "Genre"),

@@ -74,7 +74,7 @@ pub fn lsgpio() {
                     let usage = if !flags.is_empty() {
                         format!("[{}]", flags.join(" "))
                     } else {
-                        "".to_owned()
+                        String::new()
                     };
 
                     println!(

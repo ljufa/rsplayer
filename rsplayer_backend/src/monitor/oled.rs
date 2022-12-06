@@ -112,7 +112,7 @@ mod hw_oled {
     ) {
         //4. song
         let name = status.info_string();
-        let mut title = "".to_string();
+        let mut title = String::new();
         if let Some(name) = name {
             const MAX_LEN: usize = 76;
             if name.len() > MAX_LEN {
@@ -156,15 +156,15 @@ mod hw_oled {
                 player_info.audio_format_channels.unwrap_or_default(),
                 player_info
                     .state
-                    .map_or("".to_string(), |s| if s == PlayerState::PLAYING {
+                    .map_or(String::new(), |s| if s == PlayerState::PLAYING {
                         "|>".to_string()
                     } else {
-                        "".to_string()
+                        String::new()
                     }),
-                player_info.random.map_or("".to_string(), |r| if r {
+                player_info.random.map_or(String::new(), |r| if r {
                     "|rnd".to_string()
                 } else {
-                    "".to_string()
+                    String::new()
                 })
             )
             .as_str(),

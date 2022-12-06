@@ -5,7 +5,7 @@ use api_models::player::Song;
 use api_models::playlist::{
     Album, Category, DynamicPlaylistsPage, Playlist, PlaylistPage, PlaylistType, Playlists,
 };
-use api_models::settings::{SpotifySettings, AlsaSettings};
+use api_models::settings::{SpotifySettings};
 use api_models::state::{
     PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, PlayingContextType, SongProgress,
 };
@@ -65,7 +65,7 @@ impl SpotifyPlayerClient {
     }
 
     pub fn transfer_playback_to_device(&mut self) -> Result<()> {
-        let mut dev = "".to_string();
+        let mut dev = String::new();
         let mut tries = 0;
         let device_name = self.oauth.settings.device_name.as_str();
         while tries < 15 {
@@ -121,7 +121,7 @@ impl SpotifyPlayerClient {
         if let Some(it) = context {
             if self.playing_item.is_none()
                 || self.playing_item.as_ref().unwrap().id
-                    != it.id().map_or("".to_string(), |id| id.id().to_string())
+                    != it.id().map_or(String::new(), |id| id.id().to_string())
             {
                 self.playing_item = playable_item_to_song(Some(it));
             }
@@ -354,7 +354,7 @@ impl Player for SpotifyPlayerClient {
                 .map(|c| Category {
                     id: c.id.clone(),
                     name: c.name.clone(),
-                    icon: c.icons.first().map_or("".to_string(), |i| i.url.clone()),
+                    icon: c.icons.first().map_or(String::new(), |i| i.url.clone()),
                 })
                 .collect();
             result.dedup();
@@ -517,12 +517,12 @@ fn album_to_playlist_type(album: &SimplifiedAlbum) -> PlaylistType {
         id: album
             .id
             .as_ref()
-            .map_or("".to_string(), std::string::ToString::to_string),
+            .map_or(String::new(), std::string::ToString::to_string),
         album_name: album.name.clone(),
         album_type: album
             .album_type
             .as_ref()
-            .map_or("".to_string(), std::clone::Clone::clone),
+            .map_or(String::new(), std::clone::Clone::clone),
         images: album.images.iter().map(|i| i.url.clone()).collect(),
         artists: album.artists.iter().map(|a| a.name.clone()).collect(),
         genres: vec![],
@@ -550,7 +550,7 @@ fn playable_item_to_song(track: Option<&PlayableItem>) -> Option<Song> {
             id: track
                 .id
                 .as_ref()
-                .map_or("".to_string(), |id| id.id().to_string()),
+                .map_or(String::new(), |id| id.id().to_string()),
             album: Some(track.album.name.clone()),
             artist: track.artists.first().map(|a| a.name.clone()),
             genre: None,
@@ -558,7 +558,7 @@ fn playable_item_to_song(track: Option<&PlayableItem>) -> Option<Song> {
             file: track
                 .href
                 .as_ref()
-                .map_or("".to_string(), std::clone::Clone::clone),
+                .map_or(String::new(), std::clone::Clone::clone),
             title: Some(track.name.clone()),
             time: Some(track.duration),
             image_url: track.album.images.first().map(|i| i.url.clone()),
