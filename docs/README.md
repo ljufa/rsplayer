@@ -186,6 +186,7 @@ TODO
 # Roadmap
  
 ## General
+* [ ] Allow seamless play from different sources at runtime, i.e. create playlist/queue from spotify song, local library, radio, youtube songs ...
 * [ ] Browse/search whole music library
 * [ ] Web radio browse/search/play
 * [ ] LMS backend support
