@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Result;
 use api_models::{player::Song, settings::MetadataStoreSettings};
-use log::{debug, info, warn};
+use log::{info, warn};
 use sled::Db;
 use symphonia::core::{
     formats::FormatOptions,
@@ -46,7 +46,7 @@ impl MetadataService {
             .follow_links(self.settings.follow_links)
             .sort_by_file_name()
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|de| de.file_type().is_file())
             .filter(|de| {
                 let ext = de.path().extension().map_or("no_ext".to_string(), |ex| {
