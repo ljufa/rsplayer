@@ -10,7 +10,7 @@ use api_models::state::StateChangeEvent;
 
 use tokio::sync::broadcast::Sender;
 
-use crate::common::{ArcAudioInterfaceSvc, MutArcConfiguration, MutArcPlayerService};
+use crate::common::{ArcAudioInterfaceSvc, MutArcConfiguration, MutArcPlayerService, MutArcMetadataSvc};
 
 pub async fn handle_player_commands(
     player_service: MutArcPlayerService,
@@ -26,76 +26,84 @@ pub async fn handle_player_commands(
         trace!("Received command {:?}", cmd);
         match cmd {
             Play => {
-                player_service.lock().unwrap().get_current_player().play();
+                player_service
+                    .lock()
+                    .unwrap()
+                    .get_current_player()
+                    .play_current_track();
             }
             PlayItem(id) => {
                 player_service
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .play_item(id);
+                    .play_track(id);
             }
             RemovePlaylistItem(id) => {
                 player_service
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .remove_playlist_item(id);
+                    .remove_track_from_queue(id);
             }
             Pause => {
-                player_service.lock().unwrap().get_current_player().pause();
+                player_service
+                    .lock()
+                    .unwrap()
+                    .get_current_player()
+                    .pause_current_track();
             }
             Next => {
                 player_service
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .next_track();
+                    .play_next_track();
             }
             Prev => {
                 player_service
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .prev_track();
+                    .play_prev_track();
             }
             Rewind(sec) => {
                 player_service
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .rewind(sec);
+                    .seek_current_track(sec);
             }
             LoadPlaylist(pl_id) => {
                 player_service
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .load_playlist(pl_id);
+                    .load_playlist_in_queue(pl_id);
             }
             LoadAlbum(album_id) => {
                 player_service
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .load_album(album_id);
+                    .load_album_in_queue(album_id);
             }
             RandomToggle => player_service
                 .lock()
                 .unwrap()
                 .get_current_player()
-                .random_toggle(),
+                .toggle_random_play(),
 
             LoadSong(song_id) => player_service
                 .lock()
                 .unwrap()
                 .get_current_player()
-                .load_song(song_id),
+                .load_track_in_queue(song_id),
             AddSongToQueue(song_id) => player_service
                 .lock()
                 .unwrap()
                 .get_current_player()
-                .add_song_to_queue(song_id),
+                .add_track_in_queue(song_id),
             PlayerCommand::ClearQueue => {
                 player_service
                     .lock()
@@ -118,7 +126,7 @@ pub async fn handle_player_commands(
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .get_current_song()
+                    .get_current_track()
                 {
                     state_changes_sender
                         .send(StateChangeEvent::CurrentSongEvent(song))
@@ -175,11 +183,13 @@ pub async fn handle_player_commands(
                     .send(StateChangeEvent::PlaylistItemsEvent(pl_items))
                     .unwrap();
             }
+            
         }
     }
 }
 pub async fn handle_system_commands(
     ai_service: ArcAudioInterfaceSvc,
+    metadata_service: MutArcMetadataSvc,
     config_store: MutArcConfiguration,
     mut input_commands_rx: tokio::sync::mpsc::Receiver<SystemCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
@@ -235,6 +245,7 @@ pub async fn handle_system_commands(
                         .spawn()
                         .expect("Failed to restart rsplayer service");
                 }
+                SystemCommand::RescanMetadata => metadata_service.lock().unwrap().scan_music_dir(),
             }
         }
     }

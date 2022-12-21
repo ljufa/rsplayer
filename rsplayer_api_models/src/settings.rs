@@ -19,6 +19,7 @@ pub struct Settings {
     pub ir_control_settings: IRInputControlerSettings,
     pub oled_settings: OLEDSettings,
     pub active_player: PlayerType,
+    pub metadata_settings: MetadataStoreSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,7 +94,13 @@ pub struct MpdSettings {
     #[validate(range(min = 1024, max = 65535))]
     pub server_port: u32,
     pub override_external_configuration: bool,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+pub struct MetadataStoreSettings {
     pub music_directory: String,
+    pub follow_links: bool,
+    pub supported_extensions: Vec<String>,
+    pub db_path: String,
 }
 
 fn validate_ip(val: &str) -> Result<(), ValidationError> {
@@ -120,7 +127,6 @@ pub struct DacSettings {
     pub sound_sett: u8,
     pub gain: GainLevel,
     pub heavy_load: bool,
-
     #[serde(skip_deserializing)]
     pub available_dac_chips: HashMap<String, String>,
 }
@@ -146,6 +152,23 @@ impl LmsSettings {
 impl MpdSettings {
     pub fn get_server_url(&self) -> String {
         format!("{}:{}", self.server_host, self.server_port)
+    }
+}
+
+impl Default for MetadataStoreSettings {
+    fn default() -> Self {
+        Self {
+            music_directory: "/var/lib/mpd/music".into(),
+            follow_links: true,
+            supported_extensions: vec![
+                "flac", "wav", "ape", "mp3", "m4a", "aac", "aiff", "alac", "ogg", "wv", "wma",
+                "mp4",
+            ]
+            .into_iter()
+            .map(std::borrow::ToOwned::to_owned)
+            .collect(),
+            db_path: "rsplayer.db".to_string(),
+        }
     }
 }
 pub const DEFAULT_ALSA_PCM_DEVICE: &str = "hw:1";
@@ -195,8 +218,8 @@ impl Default for Settings {
                 server_host: String::from("127.0.0.1"),
                 server_port: 6600,
                 override_external_configuration: false,
-                music_directory: "/var/lib/mpd/music".into(),
             },
+            metadata_settings: MetadataStoreSettings::default(),
             alsa_settings: AlsaSettings {
                 device_name: String::from(DEFAULT_ALSA_PCM_DEVICE),
                 available_alsa_pcm_devices: HashMap::new(),

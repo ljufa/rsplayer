@@ -68,6 +68,8 @@ pub enum SystemCommand {
     RestartSystem,
     RestartRSPlayer,
     ChangeAudioOutput,
+    // Metadata commands
+    RescanMetadata,
 }
 
 #[derive(
@@ -125,7 +127,7 @@ pub fn dur_to_string(duration: &Duration) -> String {
         let seconds = secs % 60;
         let minutes = (secs / 60) % 60;
         let hours = (secs / 60) / 60;
-        result = format!("{:0>2}:{:0>2}:{:0>2}", hours, minutes, seconds);
+        result = format!("{hours:0>2}:{minutes:0>2}:{seconds:0>2}");
     }
     result
 }

@@ -1,0 +1,15 @@
+[package]
+name = "rsplayer_metadata"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+walkdir = "2"
+symphonia = { version = "0.5.1", features = [ "aac", "alac", "mp3", "isomp4","flac" ] }
+log = { version = "0.4", features = ["release_max_level_info"] }
+sled = "0.34.7"
+api_models = {path = "../rsplayer_api_models"}
+serde_json = "1"
+anyhow = "1.0"

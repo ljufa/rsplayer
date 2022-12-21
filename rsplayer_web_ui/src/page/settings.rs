@@ -39,7 +39,7 @@ pub enum Msg {
     // ---- Input capture ----
     InputMpdHostChange(String),
     InputMpdPortChange(u32),
-    InputMpdMusicDirectoryChanged(String),
+    InputMetadataMusicDirectoryChanged(String),
     InputLMSHostChange,
     InputSpotifyDeviceNameChange(String),
     InputSpotifyUsernameChange(String),
@@ -58,6 +58,7 @@ pub enum Msg {
 
     ClickSpotifyAuthorizeButton,
     ClickSpotifyLogoutButton,
+    ClickRescanMetadataButton,
 
     SpotifyAccountInfoFetched(Option<SpotifyAccountInfo>),
     SpotifyAuthorizationUrlFetched(String),
@@ -163,8 +164,8 @@ pub(crate) fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>)
         Msg::InputMpdPortChange(value) => {
             model.settings.mpd_settings.server_port = value;
         }
-        Msg::InputMpdMusicDirectoryChanged(value) => {
-            model.settings.mpd_settings.music_directory = value;
+        Msg::InputMetadataMusicDirectoryChanged(value) => {
+            model.settings.metadata_settings.music_directory = value;
         }
         Msg::InputLMSHostChange => {}
         Msg::InputSpotifyDeviceNameChange(value) => {
@@ -380,6 +381,7 @@ fn view_settings(model: &Model) -> Node<Msg> {
                     input_ev(Ev::Change, Msg::InputAlsaDeviceName),
                 ],
             ],
+            view_metadata_storage(&model.settings.metadata_settings),
         ],
         section![
             C!["section"],
@@ -1032,6 +1034,28 @@ fn view_lms(lms_settings: &LmsSettings) -> Node<Msg> {
         ],
     ]
 }
+fn view_metadata_storage(metadata_settings: &MetadataStoreSettings) -> Node<Msg> {
+    div![
+        C!["field"],
+        label!["Music directory path", C!["label"]],
+        input![
+            C!["input"],
+            attrs! {
+                At::Value => metadata_settings.music_directory
+            },
+            input_ev(Ev::Input, move |value| {
+                Msg::InputMetadataMusicDirectoryChanged(value)
+            }),
+        ],
+        button![
+            C!["is-primary", "is-large"],
+            ev(Ev::Click, move |_| Msg::SendCommand(
+                SystemCommand::RescanMetadata
+            )),
+            "Rescan"
+        ]
+    ]
+}
 fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
     div![
         style! {
@@ -1099,7 +1123,7 @@ fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
                         },
                     ],
                     label![
-                        "Override existing mpd configuration",
+                        "Override existing mpd configuration (Music directory and Audio device)",
                         attrs! {
                             At::For => "mpd_external_conf_cb"
                         }
@@ -1107,27 +1131,5 @@ fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
                 ],
             ]
         ],
-        IF!(mpd_settings.override_external_configuration =>
-                div![
-                    C!["field", "is-horizontal"],
-                        div![C!["field-label", "is-small"],
-                            label!["Music directory path", C!["label"]],
-                        ],
-                        div![C!["field-body"],
-                            div![
-                                C!["control", "has-icons-right"],
-                                input![
-                                    C!["input"],
-                                    attrs! {
-                                        At::Value => mpd_settings.music_directory
-                                    },
-                                    input_ev(Ev::Input, move |value| {
-                                        Msg::InputMpdMusicDirectoryChanged(value)
-                                    }),
-                                ],
-                            ]
-                        ]
-                ]
-        )
     ]
 }

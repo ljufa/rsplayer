@@ -9,12 +9,7 @@ const SETTINGS_KEY: &str = "settings";
 const STREAMER_STATUS_KEY: &str = "streamer_status";
 
 #[cfg(debug_assertions)]
-const CONFIG_DIR_PATH: &str = ".run/";
-#[cfg(not(debug_assertions))]
-const CONFIG_DIR_PATH: &str = "./";
-
-#[cfg(debug_assertions)]
-const EXEC_DIR_PATH: &str = ".run/";
+const EXEC_DIR_PATH: &str = "./";
 #[cfg(not(debug_assertions))]
 const EXEC_DIR_PATH: &str = "/usr/local/bin/";
 
@@ -25,7 +20,7 @@ pub struct Configuration {
 impl Configuration {
     pub fn new() -> Configuration {
         if let Ok(db) = PickleDb::load(
-            CONFIG_DIR_PATH.to_owned() + "configuration.db",
+            "configuration.db",
             PickleDbDumpPolicy::AutoDump,
             SerializationMethod::Json,
         ) {
@@ -33,7 +28,7 @@ impl Configuration {
         } else {
             Configuration {
                 db: PickleDb::new(
-                    CONFIG_DIR_PATH.to_owned() + "configuration.db",
+                    "configuration.db",
                     PickleDbDumpPolicy::AutoDump,
                     SerializationMethod::Json,
                 ),
@@ -41,7 +36,7 @@ impl Configuration {
         }
     }
     pub fn get_static_dir_path() -> String {
-        format!("{}ui", CONFIG_DIR_PATH)
+        "ui".to_string()
     }
 
     #[allow(dead_code)]

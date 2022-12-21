@@ -155,7 +155,7 @@ impl Drop for SpotifyPlayerClient {
 }
 
 impl Player for SpotifyPlayerClient {
-    fn play(&mut self) {
+    fn play_current_track(&mut self) {
         let play = self
             .oauth
             .client
@@ -169,37 +169,37 @@ impl Player for SpotifyPlayerClient {
         }
     }
 
-    fn pause(&mut self) {
+    fn pause_current_track(&mut self) {
         _ = self.oauth.client.pause_playback(self.device_id.as_deref());
     }
-    fn next_track(&mut self) {
+    fn play_next_track(&mut self) {
         _ = self.oauth.client.next_track(self.device_id.as_deref());
     }
-    fn prev_track(&mut self) {
+    fn play_prev_track(&mut self) {
         _ = self.oauth.client.previous_track(self.device_id.as_deref());
     }
-    fn stop(&mut self) {
+    fn stop_current_track(&mut self) {
         _ = self.oauth.client.pause_playback(self.device_id.as_deref());
     }
 
     fn shutdown(&mut self) {
         info!("Shutting down Spotify player!");
         if self.device_id.is_some() {
-            self.stop();
+            self.stop_current_track();
         }
         _ = self.librespot_process.as_mut().unwrap().kill();
     }
 
-    fn rewind(&mut self, _seconds: i8) {}
+    fn seek_current_track(&mut self, _seconds: i8) {}
 
-    fn random_toggle(&mut self) {
+    fn toggle_random_play(&mut self) {
         if let Some(pi) = self.get_player_info() {
             let current_shuffle = pi.random.unwrap_or_default();
             _ = self.oauth.client.shuffle(!current_shuffle, None);
         }
     }
 
-    fn load_playlist(&mut self, pl_id: String) {
+    fn load_playlist_in_queue(&mut self, pl_id: String) {
         _ = self.oauth.client.start_context_playback(
             PlayContextId::Playlist(PlaylistId::from_id_or_uri(pl_id.as_str()).unwrap()), //todo remove unwrap
             self.device_id.as_deref(),
@@ -207,7 +207,7 @@ impl Player for SpotifyPlayerClient {
             None,
         );
     }
-    fn load_album(&mut self, album_id: String) {
+    fn load_album_in_queue(&mut self, album_id: String) {
         _ = self.oauth.client.start_context_playback(
             PlayContextId::Album(AlbumId::from_id_or_uri(album_id.as_str()).unwrap()), //todo remove unwrap
             self.device_id.as_deref(),
@@ -216,7 +216,7 @@ impl Player for SpotifyPlayerClient {
         );
     }
 
-    fn play_item(&mut self, id: String) {
+    fn play_track(&mut self, id: String) {
         if let Some(ctx) = &self.playing_context {
             match &ctx.context_type {
                 PlayingContextType::Playlist { .. } => {
@@ -251,7 +251,7 @@ impl Player for SpotifyPlayerClient {
         }
     }
 
-    fn remove_playlist_item(&mut self, id: String) {
+    fn remove_track_from_queue(&mut self, id: String) {
         if let Some(pc) = self.playing_context.as_mut() {
             if let PlayingContextType::Playlist { snapshot_id, .. } = &pc.context_type {
                 let track_id = PlayableId::Track(TrackId::from_id_or_uri(id.as_str()).unwrap());
@@ -285,7 +285,7 @@ impl Player for SpotifyPlayerClient {
         }
     }
 
-    fn get_current_song(&mut self) -> Option<Song> {
+    fn get_current_track(&mut self) -> Option<Song> {
         self.playing_item.clone()
     }
 
@@ -469,11 +469,11 @@ impl Player for SpotifyPlayerClient {
         }
     }
 
-    fn load_song(&mut self, _song_id: String) {
+    fn load_track_in_queue(&mut self, _song_id: String) {
         // todo!()
     }
 
-    fn add_song_to_queue(&mut self, song_id: String) {
+    fn add_track_in_queue(&mut self, song_id: String) {
         if let Ok(track_id) = TrackId::from_id_or_uri(song_id.as_str()) {
             _ = self
                 .oauth
@@ -488,6 +488,10 @@ impl Player for SpotifyPlayerClient {
     }
 
     fn save_queue_as_playlist(&mut self, _playlist_name: String) {
+        // todo!()
+    }
+
+    fn rescan_metadata(&mut self) {
         // todo!()
     }
 }

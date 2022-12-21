@@ -17,6 +17,7 @@ use config::Configuration;
 use crate::audio_device::audio_service::AudioInterfaceService;
 use crate::control::command_handler;
 use crate::player::player_service::PlayerService;
+use rsplayer_metadata::metadata::*;
 
 mod audio_device;
 mod common;
@@ -38,6 +39,14 @@ async fn main() {
 
     let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate())
         .expect("failed to create signal future");
+
+    let metadata_service =
+        MetadataService::new(&config.lock().unwrap().get_settings().metadata_settings);
+    if let Err(e) = &metadata_service {
+        error!("Metadata service can't be created. error: {}", e);
+        start_degraded(&mut term_signal, &failure::err_msg("Failed"), &config).await;
+    }
+    let metadata_service = Arc::new(Mutex::new(metadata_service.unwrap()));
 
     let ai_service = AudioInterfaceService::new(&config);
 
@@ -100,6 +109,7 @@ async fn main() {
         }
         _ = spawn(command_handler::handle_system_commands(
                 ai_service,
+                metadata_service,
                 config.clone(),
                 system_commands_rx,
                 state_changes_tx.clone())) => {

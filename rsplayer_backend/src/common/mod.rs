@@ -6,6 +6,7 @@ use std::{
 
 use api_models::state::StateChangeEvent;
 use failure::Error;
+use rsplayer_metadata::metadata::MetadataService;
 use tokio::sync::broadcast::Receiver;
 
 use crate::{
@@ -17,6 +18,7 @@ pub type Result<T> = result::Result<T, Error>;
 pub type MutArcConfiguration = Arc<Mutex<Configuration>>;
 pub type MutArcPlayerService = Arc<Mutex<PlayerService>>;
 pub type ArcAudioInterfaceSvc = Arc<AudioInterfaceService>;
+pub type MutArcMetadataSvc = Arc<Mutex<MetadataService>>;
 
 #[allow(dead_code)]
 pub async fn no_op_future() {

@@ -83,13 +83,15 @@ impl MpdPlayerClient {
         })
     }
 
-    pub fn ensure_mpd_server_configuration(&mut self, audio_device_name: &str) -> Result<()> {
+    pub fn ensure_mpd_server_configuration(
+        &mut self,
+        audio_device_name: &str,
+        music_directory: &str,
+    ) -> Result<()> {
         let existing_content = std::fs::read_to_string("/etc/mpd.conf")?;
         if self.mpd_settings.override_external_configuration {
-            let mut new_content = MPD_CONF_FILE_TEMPLATE.replace(
-                "{music_directory}",
-                self.mpd_settings.music_directory.as_str(),
-            );
+            let mut new_content =
+                MPD_CONF_FILE_TEMPLATE.replace("{music_directory}", music_directory);
             new_content = new_content.replace("{audio_device}", audio_device_name);
             if new_content != existing_content {
                 std::fs::copy("/etc/mpd.conf", "/tmp/mpd.conf.rsplayer.origin")?;
@@ -164,34 +166,34 @@ impl MpdPlayerClient {
 }
 
 impl Player for MpdPlayerClient {
-    fn play(&mut self) {
+    fn play_current_track(&mut self) {
         _ = self.try_with_reconnect_result(mpd::Client::play);
     }
 
-    fn pause(&mut self) {
+    fn pause_current_track(&mut self) {
         _ = self.try_with_reconnect_result(|client| client.pause(true));
     }
 
-    fn next_track(&mut self) {
+    fn play_next_track(&mut self) {
         _ = self.try_with_reconnect_result(mpd::Client::next);
     }
 
-    fn prev_track(&mut self) {
+    fn play_prev_track(&mut self) {
         _ = self.try_with_reconnect_result(mpd::Client::prev);
     }
 
-    fn stop(&mut self) {
+    fn stop_current_track(&mut self) {
         _ = self.try_with_reconnect_result(mpd::Client::stop);
     }
 
     fn shutdown(&mut self) {
         info!("Shutting down MPD player!");
-        self.stop();
+        self.stop_current_track();
         _ = self.mpd_client.close();
         info!("MPD player shutdown finished!");
     }
 
-    fn rewind(&mut self, seconds: i8) {
+    fn seek_current_track(&mut self, seconds: i8) {
         let result = self.try_with_reconnect_result(mpd::Client::status);
         if let Ok(status) = result {
             //todo: implement protection against going of the range
@@ -200,14 +202,14 @@ impl Player for MpdPlayerClient {
         };
     }
 
-    fn random_toggle(&mut self) {
+    fn toggle_random_play(&mut self) {
         let status = self.try_with_reconnect_result(mpd::Client::status);
         if let Ok(status) = status {
             _ = self.mpd_client.random(!status.random);
         }
     }
 
-    fn load_playlist(&mut self, pl_id: String) {
+    fn load_playlist_in_queue(&mut self, pl_id: String) {
         if pl_id.starts_with(SAVED_PL_PREFIX) {
             let pl_id = pl_id.replace(SAVED_PL_PREFIX, "");
             _ = self.try_with_reconnect_result(|client| {
@@ -253,17 +255,17 @@ impl Player for MpdPlayerClient {
         _ = self.mpd_client.play();
     }
 
-    fn load_album(&mut self, _album_id: String) {
+    fn load_album_in_queue(&mut self, _album_id: String) {
         todo!()
     }
 
-    fn play_item(&mut self, id: String) {
+    fn play_track(&mut self, id: String) {
         if let Ok(id) = id.parse::<u32>() {
             _ = self.try_with_reconnect_result(|client| client.switch(mpd::song::Id(id)));
         }
     }
 
-    fn remove_playlist_item(&mut self, id: String) {
+    fn remove_track_from_queue(&mut self, id: String) {
         if let Ok(id) = id.parse::<u32>() {
             _ = self.try_with_reconnect_result(|client| client.delete(mpd::song::Id(id)));
         }
@@ -273,7 +275,7 @@ impl Player for MpdPlayerClient {
         self.progress.clone()
     }
 
-    fn get_current_song(&mut self) -> Option<Song> {
+    fn get_current_track(&mut self) -> Option<Song> {
         let result = self.try_with_reconnect_result(mpd::Client::currentsong);
         let song = result.unwrap_or(None);
         song.map(|s| map_song(&s))
@@ -350,7 +352,7 @@ impl Player for MpdPlayerClient {
             }
             PlayingContextQuery::CurrentSongPage => {
                 let mut songs = self.get_songs_in_queue();
-                if let Some(cs) = &self.get_current_song() {
+                if let Some(cs) = &self.get_current_track() {
                     songs = songs
                         .into_iter()
                         .skip_while(|s| s.id != cs.id)
@@ -503,13 +505,13 @@ impl Player for MpdPlayerClient {
         }
     }
 
-    fn load_song(&mut self, song_id: String) {
+    fn load_track_in_queue(&mut self, song_id: String) {
         self.clear_queue();
-        self.add_song_to_queue(song_id);
-        self.play();
+        self.add_track_in_queue(song_id);
+        self.play_current_track();
     }
 
-    fn add_song_to_queue(&mut self, song_id: String) {
+    fn add_track_in_queue(&mut self, song_id: String) {
         self.execute_mpd_command(
             format!("add \"{song_id}\"").as_str(),
             |reader| -> Option<String> {
@@ -527,6 +529,10 @@ impl Player for MpdPlayerClient {
 
     fn save_queue_as_playlist(&mut self, playlist_name: String) {
         _ = self.mpd_client.save(playlist_name);
+    }
+
+    fn rescan_metadata(&mut self) {
+        _ = self.mpd_client.rescan();
     }
 }
 
