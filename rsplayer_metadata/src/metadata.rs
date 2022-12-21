@@ -74,10 +74,13 @@ impl MetadataService {
             info!("Scanning file:\t{}", file_p);
             match symphonia::default::get_probe().format(&hint, mss, &format_opts, &metadata_opts) {
                 Ok(mut probed) => {
-                    let song = build_song(file_p, &mut probed);
+                    let mut song = build_song(&mut probed);
+                    let db_key = hash_sha2(file_p);
+                    song.id = self.db.generate_id().unwrap_or_default().to_string();
+                    song.file = file_p.to_string();
                     self.scanning_progress += 1;
                     log::trace!("Add/update song in database: {:?}", song);
-                    _ = self.db.insert(file_p, song_to_bytes(&song));
+                    _ = self.db.insert(db_key, song_to_bytes(&song));
                 }
                 Err(err) => warn!("Error:{} {}", file_p, err),
             }
@@ -93,7 +96,7 @@ impl MetadataService {
     }
 }
 
-fn build_song(file_p: &str, probed: &mut ProbeResult) -> Song {
+fn build_song(probed: &mut ProbeResult) -> Song {
     let mut song = Song::default();
     if let Some(track) = probed.format.default_track() {
         let params = &track.codec_params;
@@ -134,9 +137,6 @@ fn build_song(file_p: &str, probed: &mut ProbeResult) -> Song {
             );
         }
     }
-
-    song.file = file_p.to_owned();
-    song.id = file_p.to_owned();
     song
 }
 
@@ -148,6 +148,12 @@ fn song_to_bytes(song: &Song) -> Vec<u8> {
 }
 fn bytes_to_song(bytes: Vec<u8>) -> Song {
     serde_json::from_slice(&bytes).unwrap()
+}
+fn hash_sha2(input: &str) -> Vec<u8> {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(input);
+    hasher.finalize().to_vec()
 }
 
 mod test {
@@ -161,7 +167,7 @@ mod test {
         let mut service = create_metadata_service();
         service.scan_music_dir();
         assert_eq!(service.db.len(), 5);
-        let result = service.db.get("assets/music.flac").unwrap();
+        let result = service.db.get(super::hash_sha2("assets/music.flac")).unwrap();
         if let Some(r) = result {
             let saved_song = super::bytes_to_song(r.to_vec());
             assert_eq!(saved_song.artist, Some("Artist".to_owned()));
@@ -169,7 +175,7 @@ mod test {
             assert!(saved_song.time.is_some());
             assert!(!saved_song.tags.is_empty());
         } else {
-            panic!("Failed");
+            panic!("Assertion failed");
         }
     }
 

@@ -1691,6 +1691,7 @@ dependencies = [
  "api_models",
  "log",
  "serde_json",
+ "sha2",
  "sled",
  "symphonia",
  "walkdir",
