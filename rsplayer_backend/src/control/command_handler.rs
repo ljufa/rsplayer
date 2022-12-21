@@ -10,7 +10,9 @@ use api_models::state::StateChangeEvent;
 
 use tokio::sync::broadcast::Sender;
 
-use crate::common::{ArcAudioInterfaceSvc, MutArcConfiguration, MutArcPlayerService, MutArcMetadataSvc};
+use crate::common::{
+    ArcAudioInterfaceSvc, MutArcConfiguration, MutArcMetadataSvc, MutArcPlayerService,
+};
 
 pub async fn handle_player_commands(
     player_service: MutArcPlayerService,
@@ -183,7 +185,6 @@ pub async fn handle_player_commands(
                     .send(StateChangeEvent::PlaylistItemsEvent(pl_items))
                     .unwrap();
             }
-            
         }
     }
 }
@@ -245,6 +246,7 @@ pub async fn handle_system_commands(
                         .spawn()
                         .expect("Failed to restart rsplayer service");
                 }
+                // todo: move to separate handler or spawn as a new task as it blocks other system commands
                 SystemCommand::RescanMetadata => metadata_service.lock().unwrap().scan_music_dir(),
             }
         }
