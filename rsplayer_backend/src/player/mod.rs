@@ -9,22 +9,22 @@ pub mod spotify;
 pub mod spotify_oauth;
 
 pub trait Player {
-    // Track 
-    fn play_current_track(&mut self);
-    fn pause_current_track(&mut self);
-    fn play_next_track(&mut self);
-    fn play_prev_track(&mut self);
-    fn stop_current_track(&mut self);
-    fn seek_current_track(&mut self, seconds: i8);
-    fn play_track(&mut self, id: String);
-    fn get_current_track(&mut self) -> Option<Song>;
+    // Song 
+    fn play_current_song(&mut self);
+    fn pause_current_song(&mut self);
+    fn play_next_song(&mut self);
+    fn play_prev_song(&mut self);
+    fn stop_current_song(&mut self);
+    fn seek_current_song(&mut self, seconds: i8);
+    fn play_song(&mut self, id: String);
+    fn get_current_song(&mut self) -> Option<Song>;
 
     // Queue 
     fn load_playlist_in_queue(&mut self, pl_id: String);
     fn load_album_in_queue(&mut self, album_id: String);
-    fn load_track_in_queue(&mut self, song_id: String);
-    fn remove_track_from_queue(&mut self, id: String);
-    fn add_track_in_queue(&mut self, song_id: String);
+    fn load_song_in_queue(&mut self, song_id: String);
+    fn remove_song_from_queue(&mut self, id: String);
+    fn add_song_in_queue(&mut self, song_id: String);
     fn clear_queue(&mut self);
     
     // Playlist
@@ -46,6 +46,6 @@ pub trait Player {
     fn toggle_random_play(&mut self);
     fn shutdown(&mut self);
 
-    // Metadata
+    // Metadata????
     fn rescan_metadata(&mut self);
 }

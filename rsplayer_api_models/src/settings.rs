@@ -167,7 +167,7 @@ impl Default for MetadataStoreSettings {
             .into_iter()
             .map(std::borrow::ToOwned::to_owned)
             .collect(),
-            db_path: "rsplayer.db".to_string(),
+            db_path: "metadata.db".to_string(),
         }
     }
 }

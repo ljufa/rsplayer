@@ -155,7 +155,7 @@ impl Drop for SpotifyPlayerClient {
 }
 
 impl Player for SpotifyPlayerClient {
-    fn play_current_track(&mut self) {
+    fn play_current_song(&mut self) {
         let play = self
             .oauth
             .client
@@ -169,28 +169,28 @@ impl Player for SpotifyPlayerClient {
         }
     }
 
-    fn pause_current_track(&mut self) {
+    fn pause_current_song(&mut self) {
         _ = self.oauth.client.pause_playback(self.device_id.as_deref());
     }
-    fn play_next_track(&mut self) {
+    fn play_next_song(&mut self) {
         _ = self.oauth.client.next_track(self.device_id.as_deref());
     }
-    fn play_prev_track(&mut self) {
+    fn play_prev_song(&mut self) {
         _ = self.oauth.client.previous_track(self.device_id.as_deref());
     }
-    fn stop_current_track(&mut self) {
+    fn stop_current_song(&mut self) {
         _ = self.oauth.client.pause_playback(self.device_id.as_deref());
     }
 
     fn shutdown(&mut self) {
         info!("Shutting down Spotify player!");
         if self.device_id.is_some() {
-            self.stop_current_track();
+            self.stop_current_song();
         }
         _ = self.librespot_process.as_mut().unwrap().kill();
     }
 
-    fn seek_current_track(&mut self, _seconds: i8) {}
+    fn seek_current_song(&mut self, _seconds: i8) {}
 
     fn toggle_random_play(&mut self) {
         if let Some(pi) = self.get_player_info() {
@@ -216,7 +216,7 @@ impl Player for SpotifyPlayerClient {
         );
     }
 
-    fn play_track(&mut self, id: String) {
+    fn play_song(&mut self, id: String) {
         if let Some(ctx) = &self.playing_context {
             match &ctx.context_type {
                 PlayingContextType::Playlist { .. } => {
@@ -251,7 +251,7 @@ impl Player for SpotifyPlayerClient {
         }
     }
 
-    fn remove_track_from_queue(&mut self, id: String) {
+    fn remove_song_from_queue(&mut self, id: String) {
         if let Some(pc) = self.playing_context.as_mut() {
             if let PlayingContextType::Playlist { snapshot_id, .. } = &pc.context_type {
                 let track_id = PlayableId::Track(TrackId::from_id_or_uri(id.as_str()).unwrap());
@@ -285,7 +285,7 @@ impl Player for SpotifyPlayerClient {
         }
     }
 
-    fn get_current_track(&mut self) -> Option<Song> {
+    fn get_current_song(&mut self) -> Option<Song> {
         self.playing_item.clone()
     }
 
@@ -469,11 +469,11 @@ impl Player for SpotifyPlayerClient {
         }
     }
 
-    fn load_track_in_queue(&mut self, _song_id: String) {
+    fn load_song_in_queue(&mut self, _song_id: String) {
         // todo!()
     }
 
-    fn add_track_in_queue(&mut self, song_id: String) {
+    fn add_song_in_queue(&mut self, song_id: String) {
         if let Ok(track_id) = TrackId::from_id_or_uri(song_id.as_str()) {
             _ = self
                 .oauth

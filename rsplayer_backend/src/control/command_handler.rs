@@ -30,49 +30,49 @@ pub async fn handle_player_commands(
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .play_current_track();
+                    .play_current_song();
             }
             PlayItem(id) => {
                 player_service
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .play_track(id);
+                    .play_song(id);
             }
             RemovePlaylistItem(id) => {
                 player_service
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .remove_track_from_queue(id);
+                    .remove_song_from_queue(id);
             }
             Pause => {
                 player_service
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .pause_current_track();
+                    .pause_current_song();
             }
             Next => {
                 player_service
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .play_next_track();
+                    .play_next_song();
             }
             Prev => {
                 player_service
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .play_prev_track();
+                    .play_prev_song();
             }
             Rewind(sec) => {
                 player_service
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .seek_current_track(sec);
+                    .seek_current_song(sec);
             }
             LoadPlaylist(pl_id) => {
                 player_service
@@ -98,12 +98,12 @@ pub async fn handle_player_commands(
                 .lock()
                 .unwrap()
                 .get_current_player()
-                .load_track_in_queue(song_id),
+                .load_song_in_queue(song_id),
             AddSongToQueue(song_id) => player_service
                 .lock()
                 .unwrap()
                 .get_current_player()
-                .add_track_in_queue(song_id),
+                .add_song_in_queue(song_id),
             PlayerCommand::ClearQueue => {
                 player_service
                     .lock()
@@ -126,7 +126,7 @@ pub async fn handle_player_commands(
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .get_current_track()
+                    .get_current_song()
                 {
                     state_changes_sender
                         .send(StateChangeEvent::CurrentSongEvent(song))
