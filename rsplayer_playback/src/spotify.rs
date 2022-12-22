@@ -7,7 +7,7 @@ use api_models::settings::SpotifySettings;
 use api_models::state::{
     PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, PlayingContextType, SongProgress,
 };
-use log::*;
+use log::{Log, debug, error, warn};
 use std::process::Child;
 use std::time::Duration;
 

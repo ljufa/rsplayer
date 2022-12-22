@@ -13,7 +13,7 @@ use api_models::settings::MpdSettings;
 use api_models::state::{
     PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, SongProgress,
 };
-use log::*;
+use log::{Log, debug, error, info, trace};
 use mpd::{Client, Query, Song as MpdSong};
 use api_models::num_traits::ToPrimitive;
 
@@ -408,7 +408,7 @@ impl Player for MpdPlayerClient {
             .map(|p| {
                 PlaylistType::Saved(Playlist {
                     name: p.name.clone(),
-                    id: format!("{}{}", SAVED_PL_PREFIX, p.name),
+                    id: format!("{SAVED_PL_PREFIX}{}", p.name),
                     description: None,
                     image: None,
                     owner_name: None,
@@ -553,7 +553,7 @@ fn get_playlists_by_genre(all_songs: &[Song], offset: u32, limit: u32) -> Vec<Pl
         .for_each(|g| {
             items.push(Playlist {
                 name: g.clone(),
-                id: format!("{}{}", BY_GENRE_PL_PREFIX, g),
+                id: format!("{BY_GENRE_PL_PREFIX}{g}"),
                 description: Some("Songs by genre ".to_string() + g),
                 image: None,
                 owner_name: None,
@@ -576,7 +576,7 @@ fn get_playlists_by_date(all_songs: &[Song], offset: u32, limit: u32) -> Vec<Pla
         .for_each(|date| {
             items.push(Playlist {
                 name: date.clone(),
-                id: format!("{}{}", BY_DATE_PL_PREFIX, date),
+                id: format!("{BY_DATE_PL_PREFIX}{date}"),
                 description: Some("Songs by date ".to_string() + date),
                 image: None,
                 owner_name: None,
@@ -601,7 +601,7 @@ fn get_playlists_by_artist(all_songs: &[Song], offset: u32, limit: u32) -> Vec<P
         .for_each(|art| {
             items.push(Playlist {
                 name: art.clone(),
-                id: format!("{}{}", BY_ARTIST_PL_PREFIX, art),
+                id: format!("{BY_ARTIST_PL_PREFIX}{art}"),
                 description: Some("Songs by artist ".to_string() + art),
                 image: None,
                 owner_name: None,
@@ -624,7 +624,7 @@ fn get_playlists_by_folder(all_songs: &[Song], offset: u32, limit: u32) -> Vec<P
         .for_each(|folder| {
             items.push(Playlist {
                 name: folder.clone(),
-                id: format!("{}{}", BY_FOLDER_PL_PREFIX, folder),
+                id: format!("{BY_FOLDER_PL_PREFIX}{folder}"),
                 description: Some("Songs by dir ".to_string() + folder),
                 image: None,
                 owner_name: None,
