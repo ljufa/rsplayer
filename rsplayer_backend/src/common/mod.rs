@@ -7,10 +7,6 @@ use api_models::state::StateChangeEvent;
 
 use tokio::sync::broadcast::Receiver;
 
-use crate::audio_device::audio_service::AudioInterfaceService;
-
-pub type ArcAudioInterfaceSvc = Arc<AudioInterfaceService>;
-
 
 #[allow(dead_code)]
 pub async fn no_op_future() {

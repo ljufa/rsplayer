@@ -1,4 +1,6 @@
 
+use std::sync::Arc;
+
 use crate::mcu::gpio::{self, GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY};
 use anyhow::Result;
 use api_models::common::{Volume, VolumeCrtlType};
@@ -9,6 +11,8 @@ use rsplayer_config::MutArcConfiguration;
 use super::ak4497::DacAk4497;
 use super::alsa::AlsaMixer;
 use super::VolumeControlDevice;
+
+pub type ArcAudioInterfaceSvc = Arc<AudioInterfaceService>;
 
 pub struct AudioInterfaceService {
     volume_ctrl_device: Box<dyn VolumeControlDevice + Sync + Send>,
