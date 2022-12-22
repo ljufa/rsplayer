@@ -8,25 +8,25 @@ use std::sync::{Arc, Mutex};
 // use std::time::Duration;
 
 use api_models::common::PlayerCommand;
+use rsplayer_playback::player_service::PlayerService;
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::{select, spawn};
 
-use config::Configuration;
+use rsplayer_config::Configuration;
 
 use crate::audio_device::audio_service::AudioInterfaceService;
 use crate::control::command_handler;
-use crate::player::player_service::PlayerService;
+
 use rsplayer_metadata::metadata::*;
 
 mod audio_device;
 mod common;
-mod config;
 mod control;
 mod http_api;
 mod mcu;
 mod monitor;
-mod player;
+
 
 #[allow(clippy::redundant_pub_crate)]
 #[tokio::main]
@@ -44,7 +44,7 @@ async fn main() {
         MetadataService::new(&config.lock().unwrap().get_settings().metadata_settings);
     if let Err(e) = &metadata_service {
         error!("Metadata service can't be created. error: {}", e);
-        start_degraded(&mut term_signal, &failure::err_msg("Failed"), &config).await;
+        start_degraded(&mut term_signal, &anyhow::format_err!("Failed to start metaservice"), &config).await;
     }
     let metadata_service = Arc::new(Mutex::new(metadata_service.unwrap()));
 
@@ -137,7 +137,7 @@ async fn main() {
 #[allow(clippy::redundant_pub_crate)]
 async fn start_degraded(
     term_signal: &mut Signal,
-    error: &failure::Error,
+    error: &anyhow::Error,
     config: &Arc<Mutex<Configuration>>,
 ) {
     warn!("Starting server in degraded mode.");

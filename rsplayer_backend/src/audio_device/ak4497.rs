@@ -1,4 +1,4 @@
-use crate::common::Result;
+use anyhow::Result;
 use api_models::common::GainLevel;
 
 use api_models::common::{FilterType, Volume};
@@ -140,7 +140,7 @@ impl DacAk4497 {
                 self.i2c_helper.change_bit(8, 1, false);
                 self.i2c_helper.change_bit(8, 2, true);
             }
-            _ => return Err(failure::format_err!("Unknown setting no {}", setting_no)),
+            _ => return Err(anyhow::format_err!("Unknown setting no {}", setting_no)),
         }
         Ok(setting_no)
     }

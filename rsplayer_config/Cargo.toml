@@ -1,0 +1,12 @@
+[package]
+name = "rsplayer_config"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+api_models = { path = "../rsplayer_api_models" }
+pickledb = "0.5.1"
+log = "0.4"
+env_logger = "0.9"

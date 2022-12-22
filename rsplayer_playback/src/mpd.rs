@@ -13,10 +13,12 @@ use api_models::settings::MpdSettings;
 use api_models::state::{
     PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, SongProgress,
 };
+use log::*;
 use mpd::{Client, Query, Song as MpdSong};
-use num_traits::ToPrimitive;
+use api_models::num_traits::ToPrimitive;
 
-use crate::common::Result;
+use anyhow::Result;
+
 
 use super::Player;
 
@@ -72,7 +74,7 @@ pub struct MpdPlayerClient {
 impl MpdPlayerClient {
     pub fn new(mpd_settings: &MpdSettings) -> Result<MpdPlayerClient> {
         if !mpd_settings.enabled {
-            return Err(failure::err_msg("MPD player integration is disabled."));
+            return Err(anyhow::format_err!("MPD player integration is disabled."));
         }
 
         Ok(MpdPlayerClient {
@@ -122,7 +124,7 @@ impl MpdPlayerClient {
         }
         match result {
             Ok(r) => Ok(r),
-            Err(e) => Err(failure::format_err!("{}", e)),
+            Err(e) => Err(anyhow::format_err!("{}", e)),
         }
     }
 
@@ -318,7 +320,6 @@ impl Player for MpdPlayerClient {
         }
     }
 
-    #[tracing::instrument]
     fn get_playing_context(&mut self, query: PlayingContextQuery) -> Option<PlayingContext> {
         let mut pc = PlayingContext {
             id: "1".to_string(),
@@ -699,7 +700,7 @@ fn create_client(mpd_settings: &MpdSettings) -> Result<Client> {
     }
     match connection {
         Some(c) => Ok(c),
-        None => Err(failure::format_err!(
+        None => Err(anyhow::format_err!(
             "Failed connect to to MPD server! [{}]",
             last_error.unwrap()
         )),
@@ -798,36 +799,4 @@ fn mpd_response_to_songs(reader: &mut BufReader<&mut TcpStream>) -> Vec<Song> {
 
 fn to_opt_string(value: &str) -> Option<String> {
     String::from_str(value.replace('\"', "").trim()).ok()
-}
-
-#[cfg(test)]
-mod test {
-    use std::{
-        fs,
-        io::{self, BufRead, Write},
-    };
-
-    #[test]
-    fn parse_config() {
-        let in_file = fs::File::open("/home/dlj/myworkspace/rsplayer/.run/mpd.conf").unwrap();
-        let out_file =
-            fs::File::create("/home/dlj/myworkspace/rsplayer/.run/mpd_new.conf").unwrap();
-        let mut out_buffer = io::LineWriter::new(out_file);
-
-        let lines = io::BufReader::new(in_file).lines();
-        for line in lines {
-            let line = line.unwrap();
-            //let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-            let mut out_line = line.clone();
-            if line.contains("music_directory") {
-                out_line = "music_directory\t\t\"/home/dragan/music\"".to_owned();
-            }
-            if line.trim().starts_with("audio_output") {}
-            _ = out_buffer.write_fmt(format_args!("{}\n", out_line));
-        }
-        _ = out_buffer.flush();
-    }
 }

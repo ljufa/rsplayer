@@ -1,0 +1,26 @@
+[package]
+name = "rsplayer_playback"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# local
+api_models = { path = "../rsplayer_api_models" }
+rsplayer_metadata = { path = "../rsplayer_metadata" }
+rsplayer_config = { path = "../rsplayer_config" }
+
+# general
+anyhow = "1.0"
+log = { version = "0.4" }
+
+#mpd
+mpd = { version = "0.0.12" }
+
+# spotify
+[dependencies.rspotify]
+git = "https://github.com/ljufa/rspotify.git"
+branch = "add_user_queue_ep"
+features = ["client-ureq", "ureq-rustls-tls"]
+default-features = false

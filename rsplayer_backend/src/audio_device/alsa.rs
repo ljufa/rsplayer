@@ -7,7 +7,7 @@ use alsa::pcm::State;
 use alsa::{Mixer};
 use api_models::common::Volume;
 
-use crate::common::Result;
+use anyhow::Result;
 
 use super::VolumeControlDevice;
 
@@ -45,7 +45,7 @@ impl AlsaPcmCard {
             std::thread::sleep(std::time::Duration::from_millis(DELAY_MS));
             elapsed_time += DELAY_MS;
         }
-        Err(failure::format_err!(
+        Err(anyhow::format_err!(
             "Audio device [{}] remains locked after [{}]ms",
             self.device_name,
             &elapsed_time

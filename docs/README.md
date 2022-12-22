@@ -186,6 +186,7 @@ TODO
 # Roadmap
  
 ## General
+* [ ] Move configuration to human readable yaml file and make it backward compatible (migration support)
 * [ ] Convert volume units to db
 * [ ] Loudness limitter by BS1770
 * [ ] Allow seamless play from different sources at runtime, i.e. create playlist/queue from spotify song, local library, radio, youtube songs ...

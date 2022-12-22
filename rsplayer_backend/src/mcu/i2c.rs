@@ -1,6 +1,6 @@
 use rpi_embedded::i2c::I2c;
 
-use crate::common::Result;
+use anyhow::Result;
 
 pub struct I2CHelper {
     i2c: I2c,
@@ -17,7 +17,7 @@ impl I2CHelper {
         let mut out = [0u8];
         match self.i2c.cmd_read(reg_addr, &mut out) {
             Ok(_) => Ok(out[0]),
-            Err(_err) => Err(failure::err_msg("error")),
+            Err(_err) => Err(anyhow::format_err!("error")),
         }
     }
 

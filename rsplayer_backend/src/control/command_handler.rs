@@ -8,11 +8,12 @@ use api_models::common::SystemCommand::{ChangeAudioOutput, PowerOff, SetVol, Vol
 use api_models::common::{PlayerCommand, SystemCommand};
 use api_models::state::StateChangeEvent;
 
+use rsplayer_config::MutArcConfiguration;
+use rsplayer_metadata::MutArcMetadataSvc;
+use rsplayer_playback::player_service::MutArcPlayerService;
 use tokio::sync::broadcast::Sender;
 
-use crate::common::{
-    ArcAudioInterfaceSvc, MutArcConfiguration, MutArcMetadataSvc, MutArcPlayerService,
-};
+use crate::common::ArcAudioInterfaceSvc;
 
 pub async fn handle_player_commands(
     player_service: MutArcPlayerService,

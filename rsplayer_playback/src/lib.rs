@@ -2,11 +2,12 @@ use api_models::player::Song;
 use api_models::playlist::{Category, DynamicPlaylistsPage, Playlists};
 use api_models::state::{PlayerInfo, PlayingContext, PlayingContextQuery, SongProgress};
 
-pub mod mpd;
-
 pub mod player_service;
-pub mod spotify;
+pub mod mpd;
 pub mod spotify_oauth;
+pub mod spotify;
+
+
 
 pub trait Player {
     // Song 

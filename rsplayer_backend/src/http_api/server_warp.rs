@@ -4,11 +4,13 @@ use futures::Future;
 use futures::FutureExt;
 use futures::StreamExt;
 
-use crate::config::Configuration;
-use crate::player::player_service::PlayerService;
+use rsplayer_config::Configuration;
+
 
 use api_models::common::PlayerCommand;
 use api_models::state::StateChangeEvent;
+
+use rsplayer_playback::player_service::MutArcPlayerService;
 use std::env;
 use std::net::Ipv4Addr;
 use std::net::SocketAddrV4;
@@ -41,11 +43,11 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 /// - Value is a sender of `warp::ws::Message`
 type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
 type Config = Arc<Mutex<Configuration>>;
-type PlayerServiceArc = Arc<Mutex<PlayerService>>;
+
 type PlayerCommandSender = tokio::sync::mpsc::Sender<PlayerCommand>;
 type SystemCommandSender = tokio::sync::mpsc::Sender<SystemCommand>;
 
-pub fn start_degraded(config: &Config, error: &failure::Error) -> impl Future<Output = ()> {
+pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Output = ()> {
     let cors = warp::cors()
         .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
         .allow_any_origin();
@@ -71,7 +73,7 @@ pub fn start(
     player_commands_tx: PlayerCommandSender,
     system_commands_tx: SystemCommandSender,
     config: &Config,
-    player_service: PlayerServiceArc,
+    player_service: MutArcPlayerService,
 ) -> (impl Future<Output = ()>, impl Future<Output = ()>) {
     // Keep track of all connected users, key is usize, value
     // is a websocket sender.
@@ -136,9 +138,11 @@ mod filters {
     use std::collections::HashMap;
 
     use api_models::settings::Settings;
+    use rsplayer_playback::player_service::MutArcPlayerService;
     use warp::Filter;
 
-    use super::{handlers, Config, PlayerServiceArc};
+    use super::{handlers, Config};
+    
 
     pub fn settings_save(
         config: Config,
@@ -159,7 +163,7 @@ mod filters {
             .and_then(handlers::get_settings)
     }
     pub fn get_startup_error(
-        error: &failure::Error,
+        error: &anyhow::Error,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         let error_msg = error.to_string();
         warp::get()
@@ -167,7 +171,7 @@ mod filters {
             .map(move || error_msg.to_string())
     }
     pub fn get_static_playlists(
-        player_service: PlayerServiceArc,
+        player_service: MutArcPlayerService,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "playlist"))
@@ -176,7 +180,7 @@ mod filters {
     }
 
     pub fn get_playlist_categories(
-        player_service: PlayerServiceArc,
+        player_service: MutArcPlayerService,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "categories"))
@@ -185,7 +189,7 @@ mod filters {
     }
 
     pub fn get_playlist_items(
-        player_service: PlayerServiceArc,
+        player_service: MutArcPlayerService,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "playlist" / String))
@@ -225,8 +229,8 @@ mod filters {
     }
 
     fn with_player_svc(
-        player_svc: PlayerServiceArc,
-    ) -> impl Filter<Extract = (PlayerServiceArc,), Error = std::convert::Infallible> + Clone {
+        player_svc: MutArcPlayerService,
+    ) -> impl Filter<Extract = (MutArcPlayerService,), Error = std::convert::Infallible> + Clone {
         warp::any().map(move || player_svc.clone())
     }
 
@@ -239,12 +243,12 @@ mod filters {
 
 mod handlers {
     use std::{collections::HashMap, convert::Infallible};
+    use rsplayer_playback::spotify_oauth::SpotifyOauth;
 
-    use crate::{config, player::spotify_oauth::SpotifyOauth};
-
-    use super::{Config, PlayerServiceArc};
+    use super::{Config, MutArcPlayerService};
     use api_models::settings::Settings;
 
+    use rsplayer_config::Configuration;
     use warp::hyper::StatusCode;
 
     pub async fn save_settings(
@@ -284,7 +288,7 @@ mod handlers {
     }
 
     pub async fn get_static_playlists(
-        player_service: PlayerServiceArc,
+        player_service: MutArcPlayerService,
     ) -> Result<impl warp::Reply, Infallible> {
         Ok(warp::reply::json(
             &player_service
@@ -295,7 +299,7 @@ mod handlers {
         ))
     }
     pub async fn get_playlist_categories(
-        player_service: PlayerServiceArc,
+        player_service: MutArcPlayerService,
     ) -> Result<impl warp::Reply, Infallible> {
         Ok(warp::reply::json(
             &player_service
@@ -308,7 +312,7 @@ mod handlers {
 
     pub async fn get_spotify_authorization_url() -> Result<impl warp::Reply, Infallible> {
         let mut spotify_oauth =
-            SpotifyOauth::new(&config::Configuration::new().get_settings().spotify_settings);
+            SpotifyOauth::new(&Configuration::new().get_settings().spotify_settings);
         match &spotify_oauth.get_authorization_url() {
             Ok(url) => Ok(warp::reply::with_status(url.clone(), StatusCode::OK)),
             Err(e) => Ok(warp::reply::with_status(
@@ -319,7 +323,7 @@ mod handlers {
     }
     pub async fn is_spotify_authorization_completed() -> Result<impl warp::Reply, Infallible> {
         let mut spotify_oauth =
-            SpotifyOauth::new(&config::Configuration::new().get_settings().spotify_settings);
+            SpotifyOauth::new(&Configuration::new().get_settings().spotify_settings);
         match &spotify_oauth.is_token_present() {
             Ok(auth) => Ok(warp::reply::with_status(auth.to_string(), StatusCode::OK)),
             Err(e) => Ok(warp::reply::with_status(
@@ -332,7 +336,7 @@ mod handlers {
         url: HashMap<String, String>,
     ) -> Result<impl warp::Reply, Infallible> {
         let mut spotify_oauth =
-            SpotifyOauth::new(&config::Configuration::new().get_settings().spotify_settings);
+            SpotifyOauth::new(&Configuration::new().get_settings().spotify_settings);
         match &spotify_oauth.authorize_callback(url.get("code").unwrap()) {
             Ok(_) => Ok(warp::reply::html(
                 r#"<html>
@@ -353,13 +357,13 @@ mod handlers {
 
     pub async fn get_spotify_account_info() -> Result<impl warp::Reply, Infallible> {
         let mut spotify_oauth =
-            SpotifyOauth::new(&config::Configuration::new().get_settings().spotify_settings);
+            SpotifyOauth::new(&Configuration::new().get_settings().spotify_settings);
         Ok(warp::reply::json(&spotify_oauth.get_account_info()))
     }
 
     pub async fn get_playlist_items(
         playlist_name: String,
-        player_service: PlayerServiceArc,
+        player_service: MutArcPlayerService,
     ) -> Result<impl warp::Reply, Infallible> {
         Ok(warp::reply::json(
             &player_service

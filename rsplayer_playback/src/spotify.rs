@@ -1,17 +1,19 @@
-use std::process::Child;
-use std::time::Duration;
-
+use anyhow::Result;
 use api_models::player::Song;
 use api_models::playlist::{
     Album, Category, DynamicPlaylistsPage, Playlist, PlaylistPage, PlaylistType, Playlists,
 };
-use api_models::settings::{SpotifySettings};
+use api_models::settings::SpotifySettings;
 use api_models::state::{
     PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, PlayingContextType, SongProgress,
 };
-use failure::err_msg;
+use log::*;
+use std::process::Child;
+use std::time::Duration;
+
 use log::info;
 
+use rsplayer_config::Configuration;
 use rspotify::clients::{BaseClient, OAuthClient};
 use rspotify::model::{
     AlbumId, CurrentUserQueue, Id, Market, Offset, PlayableId, PlayableItem, PlaylistId,
@@ -19,9 +21,7 @@ use rspotify::model::{
 };
 use rspotify::prelude::PlayContextId;
 
-use crate::common::Result;
-use crate::config::Configuration;
-use crate::player::Player;
+use crate::Player;
 
 use super::spotify_oauth::SpotifyOauth;
 
@@ -39,11 +39,11 @@ pub struct SpotifyPlayerClient {
 impl SpotifyPlayerClient {
     pub fn new(settings: &SpotifySettings) -> Result<SpotifyPlayerClient> {
         if !settings.enabled {
-            return Err(err_msg("Spotify integration is disabled."));
+            return Err(anyhow::format_err!("Spotify integration is disabled."));
         }
         let mut client = SpotifyOauth::new(settings);
         if !client.is_token_present()? {
-            return Err(err_msg(
+            return Err(anyhow::format_err!(
                 "Spotify token not found, please complete configuration",
             ));
         }
@@ -90,10 +90,10 @@ impl SpotifyPlayerClient {
         }
         if dev.is_empty() {
             error!("Spotify device not found: {}", device_name);
-            return Err(err_msg(format!(
+            return Err(anyhow::format_err!(
                 "Spotify device {} not found!",
                 device_name
-            )));
+            ));
         }
         info!("Spotify client created sucessfully!");
         self.device_id = Some(dev);
@@ -128,10 +128,7 @@ impl SpotifyPlayerClient {
         }
     }
 
-    fn fetch_playing_context(
-        &mut self,
-        context: &rspotify::model::Context,
-    ) -> PlayingContext {
+    fn fetch_playing_context(&mut self, context: &rspotify::model::Context) -> PlayingContext {
         let queue = self.oauth.client.current_user_queue().ok();
         PlayingContext {
             id: context.uri.clone(),
@@ -597,7 +594,7 @@ fn start_librespot(settings: &SpotifySettings, alsa_device_name: &str) -> Result
         .spawn();
     match child {
         Ok(c) => Ok(c),
-        Err(e) => Err(failure::format_err!(
+        Err(e) => Err(anyhow::format_err!(
             "Can't start librespot process. Error: {}",
             e
         )),

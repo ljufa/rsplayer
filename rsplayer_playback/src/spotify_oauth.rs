@@ -4,7 +4,7 @@ use rspotify::{
     scopes, AuthCodeSpotify, Config, Credentials, OAuth,
 };
 
-use crate::common::Result;
+use anyhow::Result;
 
 #[derive(Clone)]
 pub struct SpotifyOauth {

@@ -1,7 +1,7 @@
 // Gpio uses BCM pin numbering. BCM GPIO 23 is tied to physical pin 16.
 use gpio_cdev::{chips, Chip, LineDirection, LineHandle, LineRequestFlags};
 
-use crate::common::Result;
+use anyhow::Result;
 
 pub const GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY: u32 = 9;
 

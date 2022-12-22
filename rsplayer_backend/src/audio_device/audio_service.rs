@@ -1,8 +1,10 @@
-use crate::common::{MutArcConfiguration, Result};
+
 use crate::mcu::gpio::{self, GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY};
+use anyhow::Result;
 use api_models::common::{Volume, VolumeCrtlType};
 use api_models::state::AudioOut;
 use gpio_cdev::LineHandle;
+use rsplayer_config::MutArcConfiguration;
 
 use super::ak4497::DacAk4497;
 use super::alsa::AlsaMixer;

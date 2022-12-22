@@ -1,9 +1,14 @@
+use std::sync::Arc;
+
+use anyhow::Result;
 use api_models::common::PlayerType;
 use api_models::settings::Settings;
 
-use super::mpd::MpdPlayerClient;
-use super::{spotify::SpotifyPlayerClient, Player};
-use crate::common::{MutArcConfiguration, Result};
+use rsplayer_config::MutArcConfiguration;
+use rspotify::sync::Mutex;
+use crate::{mpd::MpdPlayerClient, spotify::SpotifyPlayerClient, Player};
+
+pub type MutArcPlayerService = Arc<Mutex<PlayerService>>;
 
 pub struct PlayerService {
     player: Box<dyn Player + Send>,

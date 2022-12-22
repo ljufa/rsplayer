@@ -1,7 +1,6 @@
 use api_models::common::SystemCommand;
+use rsplayer_config::MutArcConfiguration;
 use tokio::sync::mpsc::Sender;
-
-use crate::common::MutArcConfiguration;
 
 // todo implement settings.is_enabled check
 pub async fn listen(system_commands_tx: Sender<SystemCommand>, config: MutArcConfiguration) {
