@@ -243,7 +243,7 @@ mod filters {
 
 mod handlers {
     use std::{collections::HashMap, convert::Infallible};
-    use rsplayer_playback::spotify_oauth::SpotifyOauth;
+    use rsplayer_playback::spotify::oauth::SpotifyOauth;
 
     use super::{Config, MutArcPlayerService};
     use api_models::settings::Settings;

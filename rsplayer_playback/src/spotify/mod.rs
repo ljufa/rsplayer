@@ -7,7 +7,7 @@ use api_models::settings::SpotifySettings;
 use api_models::state::{
     PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, PlayingContextType, SongProgress,
 };
-use log::{Log, debug, error, warn};
+use log::{debug, error, warn};
 use std::process::Child;
 use std::time::Duration;
 
@@ -23,7 +23,9 @@ use rspotify::prelude::PlayContextId;
 
 use crate::Player;
 
-use super::spotify_oauth::SpotifyOauth;
+use self::oauth::SpotifyOauth;
+
+pub mod oauth;
 
 pub struct SpotifyPlayerClient {
     librespot_process: Option<Child>,

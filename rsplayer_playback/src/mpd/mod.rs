@@ -13,7 +13,7 @@ use api_models::settings::MpdSettings;
 use api_models::state::{
     PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, SongProgress,
 };
-use log::{Log, debug, error, info, trace};
+use log::{debug, error, info, trace};
 use mpd::{Client, Query, Song as MpdSong};
 use api_models::num_traits::ToPrimitive;
 

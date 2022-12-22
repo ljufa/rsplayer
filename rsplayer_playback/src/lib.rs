@@ -4,7 +4,6 @@ use api_models::state::{PlayerInfo, PlayingContext, PlayingContextQuery, SongPro
 
 pub mod player_service;
 pub mod mpd;
-pub mod spotify_oauth;
 pub mod spotify;
 
 

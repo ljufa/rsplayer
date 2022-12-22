@@ -1,6 +1,3 @@
-extern crate env_logger;
-#[macro_use]
-extern crate log;
 
 use std::panic;
 use std::sync::{Arc, Mutex};
@@ -12,7 +9,8 @@ use rsplayer_playback::player_service::PlayerService;
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::{select, spawn};
-
+use env_logger;
+use log::*;
 use rsplayer_config::Configuration;
 
 use crate::audio_device::audio_service::AudioInterfaceService;
