@@ -96,8 +96,8 @@ assets = [
 [dependencies]
 api_models = { path = "../rsplayer_api_models" }
 rsplayer_metadata = { path = "../rsplayer_metadata" }
-rsplayer_config ={ path = "../rsplayer_config"}
-rsplayer_playback ={ path = "../rsplayer_playback"}
+rsplayer_config = { path = "../rsplayer_config" }
+rsplayer_playback = { path = "../rsplayer_playback" }
 
 #logging
 log = "0.4"

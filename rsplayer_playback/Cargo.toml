@@ -18,9 +18,32 @@ log = { version = "0.4" }
 #mpd
 mpd = { version = "0.0.12" }
 
-# spotify
-[dependencies.rspotify]
-git = "https://github.com/ljufa/rspotify.git"
-branch = "add_user_queue_ep"
-features = ["client-ureq", "ureq-rustls-tls"]
-default-features = false
+# symphonia
+symphonia = { version = "0.5.1", features = [
+    "aac",
+    "alac",
+    "mp3",
+    "isomp4",
+    "flac",
+    "wav",
+    "ogg",
+    "vorbis",
+    "pcm",
+] }
+cpal = { path = "/home/dlj/github/cpal" }
+rb = "0.3.2"
+
+#spotify
+rspotify = { git = "https://github.com/ljufa/rspotify.git", branch = "add_user_queue_ep", features = [
+    "client-ureq",
+    "ureq-rustls-tls",
+], default-features = false }
+
+# sled 
+sled = "0.34.7"
+
+mockall_double = "0.3.0"
+
+[dev-dependencies]
+mockall = "0.11.0"
+

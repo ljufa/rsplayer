@@ -1,3 +1,6 @@
+extern crate env_logger;
+#[macro_use]
+extern crate log;
 
 use std::panic;
 use std::sync::{Arc, Mutex};
@@ -9,8 +12,7 @@ use rsplayer_playback::player_service::PlayerService;
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::{select, spawn};
-use env_logger;
-use log::*;
+
 use rsplayer_config::Configuration;
 
 use crate::audio_device::audio_service::AudioInterfaceService;
@@ -44,7 +46,7 @@ async fn main() {
         error!("Metadata service can't be created. error: {}", e);
         start_degraded(&mut term_signal, &anyhow::format_err!("Failed to start metaservice"), &config).await;
     }
-    let metadata_service = Arc::new(Mutex::new(metadata_service.unwrap()));
+    let metadata_service = Arc::new(metadata_service.unwrap());
 
     let ai_service = AudioInterfaceService::new(&config);
 
@@ -55,7 +57,7 @@ async fn main() {
     let ai_service = Arc::new(ai_service.unwrap());
     info!("Audio interface service successfully created.");
 
-    let player_service = PlayerService::new(&config);
+    let player_service = PlayerService::new(&config, metadata_service.clone());
     if let Err(e) = &player_service {
         error!("Player service can't be created. error: {}", e);
         start_degraded(&mut term_signal, e, &config).await;

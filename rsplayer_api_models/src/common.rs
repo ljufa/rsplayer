@@ -109,6 +109,7 @@ pub enum PlayerType {
     SPF,
     MPD,
     LMS,
+    RSP
 }
 impl Display for PlayerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -116,6 +117,7 @@ impl Display for PlayerType {
             PlayerType::SPF => f.write_str("Spotify"),
             PlayerType::MPD => f.write_str("Music Player Deamon"),
             PlayerType::LMS => f.write_str("Logitech Media Server"),
+            PlayerType::RSP => f.write_str("RSPlayer - based on Symphonia rust crate"),
         }
     }
 }

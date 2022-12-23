@@ -5,7 +5,7 @@ use api_models::state::{PlayerInfo, PlayingContext, PlayingContextQuery, SongPro
 pub mod player_service;
 pub mod mpd;
 pub mod spotify;
-
+pub mod rsp;
 
 
 pub trait Player {

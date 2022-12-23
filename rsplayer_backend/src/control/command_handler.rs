@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use api_models::common::PlayerCommand::{
     AddSongToQueue, LoadAlbum, LoadPlaylist, LoadSong, Next, Pause, Play, PlayItem, Prev,
     QueryCurrentPlayerInfo, QueryCurrentPlayingContext, QueryCurrentSong,
@@ -9,7 +11,7 @@ use api_models::common::{PlayerCommand, SystemCommand};
 use api_models::state::StateChangeEvent;
 
 use rsplayer_config::MutArcConfiguration;
-use rsplayer_metadata::MutArcMetadataSvc;
+use rsplayer_metadata::metadata::MetadataService;
 use rsplayer_playback::player_service::MutArcPlayerService;
 use tokio::sync::broadcast::Sender;
 
@@ -193,7 +195,7 @@ pub async fn handle_player_commands(
 }
 pub async fn handle_system_commands(
     ai_service: ArcAudioInterfaceSvc,
-    metadata_service: MutArcMetadataSvc,
+    metadata_service: Arc<MetadataService>,
     config_store: MutArcConfiguration,
     mut input_commands_rx: tokio::sync::mpsc::Receiver<SystemCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
@@ -250,7 +252,7 @@ pub async fn handle_system_commands(
                         .expect("Failed to restart rsplayer service");
                 }
                 // todo: move to separate handler or spawn as a new task as it blocks other system commands
-                SystemCommand::RescanMetadata => metadata_service.lock().unwrap().scan_music_dir(),
+                SystemCommand::RescanMetadata => metadata_service.scan_music_dir(),
             }
         }
     }

@@ -10,7 +10,12 @@ api_models = {path = "../rsplayer_api_models"}
 walkdir = "2"
 symphonia = { version = "0.5.1", features = [ "aac", "alac", "mp3", "isomp4","flac" ] }
 log = { version = "0.4", features = ["release_max_level_info"] }
+env_logger = "0.10.0"
 sled = "0.34.7"
 serde_json = "1"
 anyhow = "1.0"
-sha2 = "0.10"
+md5 = "0.7.0"
+mockall = "0.11.2"
+
+[dev-dependencies]
+random-string = "1.0.0"
