@@ -358,6 +358,11 @@ fn view_settings(model: &Model) -> Node<Msg> {
                             IF!(settings.active_player == PlayerType::MPD => attrs!(At::Selected => "")),
                             "Music player daemon",
                         ]),
+                        option![
+                            attrs! {At::Value => "RSP"},
+                            IF!(settings.active_player == PlayerType::RSP => attrs!(At::Selected => "")),
+                            "RSPlayer - experimental",
+                        ],
                         input_ev(Ev::Change, Msg::SelectActivePlayer),
                     ],
                 ],

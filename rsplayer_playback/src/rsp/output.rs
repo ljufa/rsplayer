@@ -39,7 +39,7 @@ mod cpal {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     use rb::*;
 
-    use log::{debug, error, info};
+    use log::{debug, error, info, trace};
 
     pub struct CpalAudioOutput;
 
@@ -67,12 +67,12 @@ mod cpal {
                 .unwrap()
                 .find(|d| d.name().unwrap() == "default")
                 .unwrap();
-            info!("Spec: {:?}", spec);
+            trace!("Spec: {:?}", spec);
             device
                 .supported_output_configs()
                 .unwrap()
                 .into_iter()
-                .for_each(|o| info!("Output config {:?}", o));
+                .for_each(|o| trace!("Output config {:?}", o));
 
             let config = match device.default_output_config() {
                 Ok(config) => config,

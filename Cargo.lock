@@ -83,6 +83,7 @@ name = "api_models"
 version = "0.2.0"
 dependencies = [
  "lazy_static",
+ "md5",
  "num-derive",
  "num-traits",
  "regex",
@@ -2133,7 +2134,6 @@ dependencies = [
  "api_models",
  "env_logger 0.10.0",
  "log",
- "md5",
  "mockall",
  "random-string",
  "serde_json",
@@ -2149,10 +2149,12 @@ dependencies = [
  "anyhow",
  "api_models",
  "cpal",
+ "env_logger 0.10.0",
  "log",
  "mockall",
  "mockall_double",
  "mpd",
+ "random-string",
  "rb",
  "rsplayer_config",
  "rsplayer_metadata",

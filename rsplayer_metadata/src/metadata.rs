@@ -1,10 +1,11 @@
 use std::{
     fs::File,
-    time::{self, Duration}, sync::{Arc, Mutex},
+    sync::{Arc, Mutex},
+    time::{self, Duration},
 };
 
 use anyhow::Result;
-use api_models::{player::Song, settings::MetadataStoreSettings};
+use api_models::{player::Song, settings::MetadataStoreSettings, common::hash_md5};
 use log::{info, warn};
 use sled::Db;
 use symphonia::core::{
@@ -17,7 +18,6 @@ use walkdir::WalkDir;
 
 use mockall::automock;
 
-
 pub struct MetadataService {
     db: Db,
     settings: MetadataStoreSettings,
@@ -28,13 +28,10 @@ impl MetadataService {
     pub fn new(settings: &MetadataStoreSettings) -> Result<Self> {
         let settings = settings.clone();
         let db = sled::open(settings.db_path.as_str())?;
-        Ok(MetadataService {
-            db,
-            settings,
-        })
+        Ok(MetadataService { db, settings })
     }
     pub fn get_song(&self, song_id: &str) -> Option<Song> {
-        if let Ok(Some(song)) = self.db.get(hash_key(song_id)) {
+        if let Ok(Some(song)) = self.db.get(hash_md5(song_id)) {
             Song::bytes_to_song(song.to_vec())
         } else {
             None
@@ -78,12 +75,12 @@ impl MetadataService {
             match symphonia::default::get_probe().format(&hint, mss, &format_opts, &metadata_opts) {
                 Ok(mut probed) => {
                     let mut song = build_song(&mut probed);
-                    let db_key = hash_key(file_p);
+                    let db_key = hash_md5(file_p);
                     song.id = db_key.clone();
                     song.file = file_p.to_string();
                     log::trace!("Add/update song in database: {:?}", song);
                     _ = self.db.insert(&db_key, song.to_json_string_bytes());
-                    count +=1;
+                    count += 1;
                 }
                 Err(err) => warn!("Error:{} {}", file_p, err),
             }
@@ -95,8 +92,11 @@ impl MetadataService {
             start_time.elapsed().as_secs()
         );
     }
-}
 
+    pub fn get_all_songs_iterator(&self) -> impl Iterator<Item = Option<Song>>{
+        self.db.iter().filter_map(|s| s.ok()).map(|s| Song::bytes_to_song(s.1.to_vec()))
+    }
+}
 
 fn build_song(probed: &mut ProbeResult) -> Song {
     let mut song = Song::default();
@@ -146,29 +146,27 @@ fn from_tag_value_to_option(tag: &Tag) -> Option<String> {
     Some(tag.value.to_string())
 }
 
-fn hash_key(input: &str) -> String {
-    format!("{:x}",md5::compute(input))
-}
+
 
 #[cfg(test)]
 pub mod test {
+    use super::MetadataService;
     use api_models::{player::Song, settings::MetadataStoreSettings};
     use std::path::Path;
-    use super::MetadataService;
     pub struct Context {
         pub db_dir: String,
-        pub music_dir: String
+        pub music_dir: String,
     }
     impl Default for Context {
         fn default() -> Self {
             let rnd = random_string::generate(6, "utf8");
-            
+
             Self {
                 db_dir: format!("/tmp/rsptest{}", rnd),
-                music_dir: "assets".to_owned()
+                music_dir: "assets".to_owned(),
             }
         }
-    } 
+    }
 
     impl Drop for Context {
         fn drop(&mut self) {
@@ -186,7 +184,7 @@ pub mod test {
         assert_eq!(service.db.len(), 5);
         let result = service
             .db
-            .get(super::hash_key("assets/music.flac"))
+            .get(super::hash_md5("assets/music.flac"))
             .unwrap();
         if let Some(r) = result {
             let saved_song = Song::bytes_to_song(r.to_vec()).unwrap();
@@ -201,7 +199,6 @@ pub mod test {
 
     #[test]
     fn should_get_song() {
-        env_logger::init();
         let service = create_metadata_service(Context::default());
         service.scan_music_dir();
         let song = service.get_song("assets/music.mp3");

@@ -133,3 +133,7 @@ pub fn dur_to_string(duration: &Duration) -> String {
     }
     result
 }
+
+pub fn hash_md5(input: &str) -> String {
+    format!("{:x}", md5::compute(input))
+}

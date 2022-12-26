@@ -23,6 +23,7 @@ pub struct PlayerService {
 }
 
 impl PlayerService {
+    
     pub fn new(
         config: &MutArcConfiguration,
         metadata_service: Arc<MetadataService>,

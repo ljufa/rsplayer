@@ -16,3 +16,4 @@ strum = "0.24.1"
 strum_macros = "0.24.3"
 num-traits = { version = "0.2.15", default-features = false }
 num-derive = { version = "0.3.3", default-features = false }
+md5 = "0.7.0"

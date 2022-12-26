@@ -24,9 +24,9 @@ use symphonia::core::meta::{ColorMode, MetadataOptions, MetadataRevision, Tag, V
 use symphonia::core::probe::{Hint, ProbeResult};
 use symphonia::core::units::{Time, TimeBase};
 
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 
-use super::output::{AudioOutput, try_open};
+use super::output::{try_open, AudioOutput};
 
 pub fn play_file(path_str: &str) -> Result<()> {
     let mut hint = Hint::new();
@@ -37,7 +37,7 @@ pub fn play_file(path_str: &str) -> Result<()> {
                 hint.with_extension(extension_str);
             }
         }
-        Box::new(File::open(path).unwrap())
+        Box::new(File::open(path)?)
     };
     let mss = MediaSourceStream::new(source, Default::default());
     let format_opts = FormatOptions::default();
@@ -59,7 +59,6 @@ pub fn play_file(path_str: &str) -> Result<()> {
     }
 }
 
-
 #[derive(Copy, Clone)]
 struct PlayTrackOptions {
     track_id: u32,
@@ -71,7 +70,6 @@ fn play(
     track_num: Option<usize>,
     seek_time: Option<f64>,
     decode_opts: &DecoderOptions,
-    
 ) -> Result<()> {
     // If the user provided a track number, select that track if it exists, otherwise, select the
     // first track with a known codec.
@@ -101,7 +99,6 @@ fn play(
         match reader.seek(SeekMode::Accurate, seek_to) {
             Ok(seeked_to) => seeked_to.required_ts,
             Err(Error::ResetRequired) => {
-                
                 track_id = first_supported_track(reader.tracks()).unwrap().id;
                 0
             }
@@ -122,19 +119,13 @@ fn play(
     let mut track_info = PlayTrackOptions { track_id, seek_ts };
 
     let result = loop {
-        match play_track(
-            &mut reader,
-            &mut audio_output,
-            track_info,
-            decode_opts,
-            
-        ) {
+        match play_track(&mut reader, &mut audio_output, track_info, decode_opts) {
             Err(Error::ResetRequired) => {
                 // The demuxer indicated that a reset is required. This is sometimes seen with
                 // streaming OGG (e.g., Icecast) wherein the entire contents of the container change
                 // (new tracks, codecs, metadata, etc.). Therefore, we must select a new track and
                 // recreate the decoder.
-            
+
                 // Select the first supported track since the user's selected track number might no
                 // longer be valid or make sense.
                 let track_id = first_supported_track(reader.tracks()).unwrap().id;
@@ -174,12 +165,16 @@ fn play_track(
     // Create a decoder for the track.
     let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, decode_opts)?;
 
-
     // Decode and play the packets belonging to the selected track.
     let result = loop {
         // Get the next packet from the format reader.
         let packet = match reader.next_packet() {
             Ok(packet) => packet,
+            Err(symphonia::core::errors::Error::IoError(error))
+                if error.kind() == std::io::ErrorKind::UnexpectedEof =>
+            {
+                break Ok(())
+            }
             Err(err) => break Err(err),
         };
 
@@ -211,7 +206,6 @@ fn play_track(
                 // Write the decoded audio samples to the audio output if the presentation timestamp
                 // for the packet is >= the seeked position (0 if not seeking).
                 if packet.ts() >= play_opts.seek_ts {
-
                     if let Some(audio_output) = audio_output {
                         audio_output.write(decoded).unwrap()
                     }
@@ -225,6 +219,7 @@ fn play_track(
             Err(err) => break Err(err),
         }
     };
+    debug!("Play finished with result {:?}", result);
 
     // Regardless of result, finalize the decoder to get the verification result.
     let finalize_result = decoder.finalize();
