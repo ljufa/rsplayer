@@ -1,6 +1,5 @@
 use std::{
     fs::File,
-    sync::{Arc, Mutex},
     time::{self, Duration},
 };
 
@@ -94,7 +93,7 @@ impl MetadataService {
     }
 
     pub fn get_all_songs_iterator(&self) -> impl Iterator<Item = Option<Song>>{
-        self.db.iter().filter_map(|s| s.ok()).map(|s| Song::bytes_to_song(s.1.to_vec()))
+        self.db.iter().filter_map(std::result::Result::ok).map(|s| Song::bytes_to_song(s.1.to_vec()))
     }
 }
 
@@ -162,7 +161,7 @@ pub mod test {
             let rnd = random_string::generate(6, "utf8");
 
             Self {
-                db_dir: format!("/tmp/rsptest{}", rnd),
+                db_dir: format!("/tmp/rsptest{rnd}"),
                 music_dir: "assets".to_owned(),
             }
         }
@@ -213,7 +212,7 @@ pub mod test {
         }
         let settings = MetadataStoreSettings {
             db_path: path.to_string(),
-            music_directory: context.music_dir.to_owned(),
+            music_directory: context.music_dir.clone(),
             ..Default::default()
         };
         MetadataService::new(&settings).expect("Failed to create service")

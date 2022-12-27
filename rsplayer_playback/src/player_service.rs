@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use api_models::{common::PlayerType, settings::PlaybackQueueSetting};
+use api_models::common::PlayerType;
 use api_models::settings::Settings;
 
 use crate::{
     mpd::MpdPlayerClient,
-    rsp::{self, queue::PlaybackQueue, RsPlayer},
+    rsp::RsPlayer,
     spotify::SpotifyPlayerClient,
     Player,
 };
@@ -23,7 +23,6 @@ pub struct PlayerService {
 }
 
 impl PlayerService {
-    
     pub fn new(
         config: &MutArcConfiguration,
         metadata_service: Arc<MetadataService>,
@@ -60,10 +59,7 @@ impl PlayerService {
                 Ok(Box::new(mpd))
             }
             PlayerType::RSP => {
-                let rsp = RsPlayer {
-                    queue: PlaybackQueue::new(&settings.playback_queue_settings),
-                    metadata_service,
-                };
+                let rsp = RsPlayer::new(metadata_service);
                 Ok(Box::new(rsp))
             }
             _ => panic!("Unknown type"),

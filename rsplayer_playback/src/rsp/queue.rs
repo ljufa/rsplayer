@@ -1,9 +1,9 @@
 use api_models::{player::Song, settings::PlaybackQueueSetting};
-use log::debug;
+use log::{debug, trace};
 use sled::{Db, IVec};
 
 pub struct PlaybackQueue {
-    pub db: Db,
+    db: Db,
     current_song_id: Option<IVec>,
     queue: Vec<IVec>,
 }
@@ -13,7 +13,7 @@ impl PlaybackQueue {
         let db = sled::open(&settings.db_path).expect("Failed to open queue db");
         let queue: Vec<IVec> = db
             .iter()
-            .filter_map(|item| item.ok())
+            .filter_map(std::result::Result::ok)
             .map(|item| item.0)
             .collect();
 
@@ -46,13 +46,13 @@ impl PlaybackQueue {
             return false;
         };
         self.current_song_id = Some(next.clone());
-        print_key(self.current_song_id.as_ref().unwrap(), "Next current key=");
+        trace_print_key(self.current_song_id.as_ref().unwrap(), "Next current key=");
         true
     }
 
     pub fn add(&mut self, song: Song) {
         let key = IVec::from(song.id.as_bytes());
-        print_key(&key, "Add key=");
+        trace_print_key(&key, "Add key=");
         self.db
             .insert(&key, song.to_json_string_bytes())
             .expect("Failed to add song to the queue database");
@@ -74,7 +74,7 @@ impl PlaybackQueue {
             None
         };
         if result.is_some() {
-            print_key(result.as_ref().unwrap(), "Current key is=");
+            trace_print_key(result.as_ref().unwrap(), "Current key is=");
         }
         result
     }
@@ -91,8 +91,8 @@ impl PlaybackQueue {
         });
     }
 }
-fn print_key(key: &IVec, msg: &str) {
-    debug!(
+fn trace_print_key(key: &IVec, msg: &str) {
+    trace!(
         "{}{}",
         msg,
         String::from_utf8(key.to_vec()).expect("Invalid utf8 in key")
@@ -110,13 +110,13 @@ mod test {
     fn should_replace_queue_with_new_songs() {
         let mut queue = create_queue();
         for ext in 0..10 {
-            queue.add(create_song(format!("ext{}", ext).as_str()));
+            queue.add(create_song(format!("ext{ext}").as_str()));
         }
         assert_eq!(queue.db.len(), 10);
 
         let mut new_songs = Vec::new();
         for ext in 11..15 {
-            new_songs.push(Some(create_song(format!("2ext{}", ext).as_str())));
+            new_songs.push(Some(create_song(format!("2ext{ext}").as_str())));
         }
         queue.replace_all(new_songs.iter().cloned());
         assert_eq!(queue.db.len(), 4);
@@ -158,11 +158,11 @@ mod test {
         })
     }
     fn create_song(ext: &str) -> Song {
-        let file = format!("assets/music.{}", ext);
+        let file = format!("assets/music.{ext}");
         let id = hash_md5(&file);
         Song {
-            file,
             id,
+            file,
             ..Default::default()
         }
     }
@@ -176,7 +176,7 @@ mod test {
             _ = env_logger::builder().is_test(true).try_init();
             let rnd = random_string::generate(6, "utf8");
             Self {
-                db_dir: format!("/tmp/test_queue{}", rnd),
+                db_dir: format!("/tmp/test_queue{rnd}"),
             }
         }
     }

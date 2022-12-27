@@ -37,9 +37,9 @@ mod cpal {
 
     use cpal;
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-    use rb::*;
+    use rb::{RB, RbConsumer, RbProducer, SpscRb};
 
-    use log::{debug, error, info, trace};
+    use log::{error, trace};
 
     pub struct CpalAudioOutput;
 
