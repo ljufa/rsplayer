@@ -5,8 +5,8 @@ pub mod settings;
 pub mod spotify;
 pub mod state;
 
+pub use num_derive;
+pub use num_traits;
 pub use serde;
 pub use serde_json;
 pub use validator;
-pub use num_traits;
-pub use num_derive;

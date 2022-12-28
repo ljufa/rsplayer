@@ -27,7 +27,6 @@ mod http_api;
 mod mcu;
 mod monitor;
 
-
 #[allow(clippy::redundant_pub_crate)]
 #[tokio::main]
 async fn main() {
@@ -44,7 +43,12 @@ async fn main() {
         MetadataService::new(&config.lock().unwrap().get_settings().metadata_settings);
     if let Err(e) = &metadata_service {
         error!("Metadata service can't be created. error: {}", e);
-        start_degraded(&mut term_signal, &anyhow::format_err!("Failed to start metaservice"), &config).await;
+        start_degraded(
+            &mut term_signal,
+            &anyhow::format_err!("Failed to start metaservice"),
+            &config,
+        )
+        .await;
     }
     let metadata_service = Arc::new(metadata_service.unwrap());
 

@@ -37,7 +37,7 @@ mod cpal {
 
     use cpal;
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-    use rb::{RB, RbConsumer, RbProducer, SpscRb};
+    use rb::{RbConsumer, RbProducer, SpscRb, RB};
 
     use log::{error, trace};
 
@@ -59,13 +59,17 @@ mod cpal {
     impl AudioOutputSample for i32 {}
 
     impl CpalAudioOutput {
-        pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
+        pub fn try_open(
+            spec: SignalSpec,
+            duration: Duration,
+            audio_device: String,
+        ) -> Result<Box<dyn AudioOutput>> {
             // Get default host.
             let host = cpal::default_host();
             let device = host
                 .devices()
                 .unwrap()
-                .find(|d| d.name().unwrap() == "default")
+                .find(|d| d.name().unwrap() == audio_device)
                 .unwrap();
             trace!("Spec: {:?}", spec);
             device
@@ -203,6 +207,10 @@ mod cpal {
         }
     }
 }
-pub fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
-    cpal::CpalAudioOutput::try_open(spec, duration)
+pub fn try_open(
+    spec: SignalSpec,
+    duration: Duration,
+    audio_device: String,
+) -> Result<Box<dyn AudioOutput>> {
+    cpal::CpalAudioOutput::try_open(spec, duration, audio_device)
 }

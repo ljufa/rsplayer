@@ -1,28 +1,27 @@
 use std::{
-    ops::Deref,
-    sync::{
-        mpsc::{Receiver, Sender},
-        Arc,
-    },
+    sync::{Arc, Mutex},
     thread::JoinHandle,
     vec,
 };
 
+use anyhow::Result;
 use api_models::{
-    playlist::{Playlist, PlaylistType, Playlists},
+    playlist::{Playlist, PlaylistPage, PlaylistType, Playlists},
     settings::PlaybackQueueSetting,
-    state::{PlayerInfo, PlayerState, SongProgress},
+    state::{PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, SongProgress},
 };
-use log::{debug, error, info};
+
 use mockall_double::double;
 
-use ::symphonia::core::errors::Result;
 #[double]
 use rsplayer_metadata::metadata::MetadataService;
 
 use crate::Player;
 
-use self::{queue::PlaybackQueue, symphonia::SymphoniaPlayer};
+use self::{
+    queue::PlaybackQueue,
+    symphonia::{PlaybackResult, SymphoniaPlayer},
+};
 mod output;
 pub mod playlist;
 pub mod queue;
@@ -31,36 +30,39 @@ mod symphonia;
 pub enum PlayerCmd {}
 pub enum PlayerEvt {}
 pub struct RsPlayer {
-    queue: PlaybackQueue,
+    queue: Arc<Mutex<PlaybackQueue>>,
     metadata_service: Arc<MetadataService>,
-    tx_cmd: Sender<PlayerCmd>,
     symphonia_player: SymphoniaPlayer,
-    play_handle: Vec<JoinHandle<()>>,
+    play_handle: Vec<JoinHandle<Result<PlaybackResult>>>,
 }
 impl RsPlayer {
-    pub fn new(metadata_service: Arc<MetadataService>) -> Self {
-        let (tx, rx) = std::sync::mpsc::channel();
+    pub fn new(metadata_service: Arc<MetadataService>, audio_device: String) -> Self {
+        let queue = Arc::new(Mutex::new(PlaybackQueue::new(
+            &PlaybackQueueSetting::default(),
+        )));
         RsPlayer {
-            queue: PlaybackQueue::new(&PlaybackQueueSetting::default()),
+            queue: queue.clone(),
             metadata_service,
-            tx_cmd: tx,
-            symphonia_player: SymphoniaPlayer::new(rx),
+            symphonia_player: SymphoniaPlayer::new(queue, audio_device),
             play_handle: vec![],
         }
     }
 
-    fn await_playing_song_to_finish(&mut self) {
-        self.play_handle.drain(..).for_each(|r| r.join().unwrap());
+    fn await_playing_song_to_finish(&mut self) -> Vec<Result<PlaybackResult>> {
+        let mut results = vec![];
+        self.play_handle.drain(..).for_each(|r| {
+            if let Ok(res) = r.join() {
+                results.push(res);
+            }
+        });
+        results
     }
 }
 
 impl Player for RsPlayer {
-    fn play_current_song(&mut self) {
-        if let Some(next) = self.queue.get_current_song() {
-            debug!("Playing song {:?}", next);
-            self.play_handle
-                .push(self.symphonia_player.play_file(next.file));
-        }
+    fn play_queue_from_current_song(&mut self) {
+        self.play_handle
+            .push(self.symphonia_player.play_all_in_queue());
     }
 
     fn pause_current_song(&mut self) {
@@ -69,8 +71,8 @@ impl Player for RsPlayer {
 
     fn play_next_song(&mut self) {
         self.stop_current_song();
-        self.queue.move_current_to_next_song();
-        self.play_current_song();
+        self.queue.lock().unwrap().move_current_to_next_song();
+        self.play_queue_from_current_song();
     }
 
     fn play_prev_song(&mut self) {
@@ -91,13 +93,15 @@ impl Player for RsPlayer {
     }
 
     fn get_current_song(&mut self) -> Option<api_models::player::Song> {
-        self.queue.get_current_song()
+        self.queue.lock().unwrap().get_current_song()
     }
 
     fn load_playlist_in_queue(&mut self, playlist_id: String) {
         if &playlist_id == "RSP::Static::All" {
-            let all_iter = self.metadata_service.get_all_songs_iterator();
-            self.queue.replace_all(all_iter);
+            self.queue
+                .lock()
+                .unwrap()
+                .replace_all(self.metadata_service.get_all_songs_iterator());
         }
     }
 
@@ -115,7 +119,7 @@ impl Player for RsPlayer {
 
     fn add_song_in_queue(&mut self, song_id: String) {
         if let Some(song) = self.metadata_service.get_song(&song_id) {
-            self.queue.add(song)
+            self.queue.lock().unwrap().add_song(song)
         }
     }
 
@@ -175,9 +179,35 @@ impl Player for RsPlayer {
 
     fn get_playing_context(
         &mut self,
-        _query: api_models::state::PlayingContextQuery,
+        query: api_models::state::PlayingContextQuery,
     ) -> Option<api_models::state::PlayingContext> {
-        None
+        let mut pc = PlayingContext {
+            id: "1".to_string(),
+            name: "Queue".to_string(),
+            player_type: api_models::common::PlayerType::RSP,
+            context_type: api_models::state::PlayingContextType::Playlist {
+                description: None,
+                public: None,
+                snapshot_id: "1".to_string(),
+            },
+            playlist_page: None,
+            image_url: None,
+        };
+        let page_size = 50;
+        match query {
+            PlayingContextQuery::WithSearchTerm(_term, offset) => {
+                let (total, songs) = self.queue.lock().unwrap().get_queue_page(offset, page_size);
+                let page = PlaylistPage {
+                    total,
+                    offset: offset + page_size,
+                    limit: page_size,
+                    items: songs,
+                };
+                pc.playlist_page = Some(page);
+            }
+            _ => {}
+        }
+        Some(pc)
     }
 
     fn get_song_progress(&mut self) -> api_models::state::SongProgress {
@@ -199,20 +229,20 @@ impl Player for RsPlayer {
 
 #[cfg(test)]
 mod test {
-    use std::{env, path::Path, sync::mpsc::channel};
+    use std::{env, path::Path};
 
     use super::*;
     use crate::Player;
     use api_models::{player::Song, settings::PlaybackQueueSetting};
+    use log::info;
 
     #[test]
     fn should_play_all_songs_in_queue() {
         let mut player = create_player();
         player.add_song_in_queue("mp3".to_owned());
-        player.add_song_in_queue("wav".to_owned());
         player.add_song_in_queue("flac".to_owned());
-        player.play_current_song();
-        player.await_playing_song_to_finish();
+        player.play_queue_from_current_song();
+        assert!(player.await_playing_song_to_finish()[0].is_ok());
     }
 
     fn create_player() -> RsPlayer {
@@ -240,14 +270,13 @@ mod test {
             Some(result)
         });
 
-        let (tx, rx) = channel();
+        let queue = Arc::new(Mutex::new(PlaybackQueue::new(&PlaybackQueueSetting {
+            db_path: ctx.db_dir.clone(),
+        })));
         RsPlayer {
             metadata_service: Arc::new(ms),
-            queue: PlaybackQueue::new(&PlaybackQueueSetting {
-                db_path: ctx.db_dir.clone(),
-            }),
-            tx_cmd: tx,
-            symphonia_player: SymphoniaPlayer::new(rx),
+            queue: queue.clone(),
+            symphonia_player: SymphoniaPlayer::new(queue, "default".to_string()),
             play_handle: vec![],
         }
     }

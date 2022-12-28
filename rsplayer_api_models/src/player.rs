@@ -54,7 +54,6 @@ pub struct Song {
 }
 
 impl Song {
-
     pub fn to_json_string_bytes(&self) -> Vec<u8> {
         serde_json::to_vec(self).expect("Song serialization failed!")
     }
@@ -62,9 +61,9 @@ impl Song {
     pub fn bytes_to_song(bytes: Vec<u8>) -> Option<Song> {
         serde_json::from_slice(&bytes).ok()
     }
-    
+
     pub fn info_string(&self) -> Option<String> {
-        let mut result = String::new(); 
+        let mut result = String::new();
         if let Some(artist) = self.artist.as_ref() {
             result.push_str(artist.as_str());
             result.push('-');
@@ -140,7 +139,4 @@ impl Song {
 
         result
     }
-    
-    
-    
 }

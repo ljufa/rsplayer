@@ -2,8 +2,6 @@ use api_models::state::StateChangeEvent;
 use rsplayer_config::MutArcConfiguration;
 use tokio::sync::broadcast::Receiver;
 
-
-
 pub async fn write(state_changes_rx: Receiver<StateChangeEvent>, config: MutArcConfiguration) {
     let settings = config.lock().expect("Unable to lock config").get_settings();
     if settings.oled_settings.enabled {

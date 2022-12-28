@@ -5,6 +5,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::str::FromStr;
 use std::time::Duration;
 
+use api_models::num_traits::ToPrimitive;
 use api_models::player::Song;
 use api_models::playlist::{
     Category, DynamicPlaylistsPage, Playlist, PlaylistPage, PlaylistType, Playlists,
@@ -15,10 +16,8 @@ use api_models::state::{
 };
 use log::{debug, error, info, trace};
 use mpd::{Client, Query, Song as MpdSong};
-use api_models::num_traits::ToPrimitive;
 
 use anyhow::Result;
-
 
 use super::Player;
 
@@ -168,7 +167,7 @@ impl MpdPlayerClient {
 }
 
 impl Player for MpdPlayerClient {
-    fn play_current_song(&mut self) {
+    fn play_queue_from_current_song(&mut self) {
         _ = self.try_with_reconnect_result(mpd::Client::play);
     }
 
@@ -509,7 +508,7 @@ impl Player for MpdPlayerClient {
     fn load_song_in_queue(&mut self, song_id: String) {
         self.clear_queue();
         self.add_song_in_queue(song_id);
-        self.play_current_song();
+        self.play_queue_from_current_song();
     }
 
     fn add_song_in_queue(&mut self, song_id: String) {

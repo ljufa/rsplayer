@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
-use api_models::{player::Song, settings::MetadataStoreSettings, common::hash_md5};
+use api_models::{common::hash_md5, player::Song, settings::MetadataStoreSettings};
 use log::{info, warn};
 use sled::Db;
 use symphonia::core::{
@@ -92,8 +92,11 @@ impl MetadataService {
         );
     }
 
-    pub fn get_all_songs_iterator(&self) -> impl Iterator<Item = Option<Song>>{
-        self.db.iter().filter_map(std::result::Result::ok).map(|s| Song::bytes_to_song(s.1.to_vec()))
+    pub fn get_all_songs_iterator(&self) -> impl Iterator<Item = Option<Song>> {
+        self.db
+            .iter()
+            .filter_map(std::result::Result::ok)
+            .map(|s| Song::bytes_to_song(s.1.to_vec()))
     }
 }
 
@@ -144,8 +147,6 @@ fn build_song(probed: &mut ProbeResult) -> Song {
 fn from_tag_value_to_option(tag: &Tag) -> Option<String> {
     Some(tag.value.to_string())
 }
-
-
 
 #[cfg(test)]
 pub mod test {

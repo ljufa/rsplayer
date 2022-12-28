@@ -6,7 +6,6 @@ use futures::StreamExt;
 
 use rsplayer_config::Configuration;
 
-
 use api_models::common::PlayerCommand;
 use api_models::state::StateChangeEvent;
 
@@ -142,7 +141,6 @@ mod filters {
     use warp::Filter;
 
     use super::{handlers, Config};
-    
 
     pub fn settings_save(
         config: Config,
@@ -230,7 +228,8 @@ mod filters {
 
     fn with_player_svc(
         player_svc: MutArcPlayerService,
-    ) -> impl Filter<Extract = (MutArcPlayerService,), Error = std::convert::Infallible> + Clone {
+    ) -> impl Filter<Extract = (MutArcPlayerService,), Error = std::convert::Infallible> + Clone
+    {
         warp::any().map(move || player_svc.clone())
     }
 
@@ -242,8 +241,10 @@ mod filters {
 }
 
 mod handlers {
-    use std::{collections::HashMap, convert::Infallible};
     use rsplayer_playback::spotify::oauth::SpotifyOauth;
+    use std::{collections::HashMap, convert::Infallible};
+
+    use crate::audio_device::alsa::AlsaPcmCard;
 
     use super::{Config, MutArcPlayerService};
     use api_models::settings::Settings;
@@ -284,7 +285,9 @@ mod handlers {
     }
 
     pub async fn get_settings(config: Config) -> Result<impl warp::Reply, Infallible> {
-        Ok(warp::reply::json(&config.lock().unwrap().get_settings()))
+        let settings = &mut config.lock().unwrap().get_settings();
+        settings.alsa_settings.available_alsa_pcm_devices = AlsaPcmCard::get_all_cards();
+        Ok(warp::reply::json(settings))
     }
 
     pub async fn get_static_playlists(

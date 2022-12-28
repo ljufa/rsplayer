@@ -1,5 +1,5 @@
 use api_models::{player::Song, settings::PlaybackQueueSetting};
-use log::{debug, trace};
+use log::trace;
 use sled::{Db, IVec};
 
 pub struct PlaybackQueue {
@@ -45,13 +45,17 @@ impl PlaybackQueue {
         let Some(next) = iter.next() else {
             return false;
         };
+        if self.current_song_id.as_ref() == Some(next) {
+            self.current_song_id = None;
+            return false;
+        }
         self.current_song_id = Some(next.clone());
         trace_print_key(self.current_song_id.as_ref().unwrap(), "Next current key=");
         true
     }
 
-    pub fn add(&mut self, song: Song) {
-        let key = IVec::from(song.id.as_bytes());
+    pub fn add_song(&mut self, song: Song) {
+        let key = IVec::from(song.file.as_bytes());
         trace_print_key(&key, "Add key=");
         self.db
             .insert(&key, song.to_json_string_bytes())
@@ -84,11 +88,39 @@ impl PlaybackQueue {
         self.queue.clear();
         iter.for_each(|song| {
             if let Some(song) = song.as_ref() {
-                let key = IVec::from(song.id.clone().as_bytes());
+                let key = IVec::from(song.file.clone().as_bytes());
                 _ = self.db.insert(&key, song.to_json_string_bytes());
                 self.queue.push(key)
             }
         });
+    }
+    pub fn get_queue_page(&mut self, offset: usize, limit: usize) -> (usize, Vec<Song>) {
+        let total = self.db.len();
+        let from = self
+            .queue
+            .get(offset)
+            .unwrap_or_else(|| self.queue.first().unwrap());
+        let to = self
+            .queue
+            .get(offset + limit)
+            .unwrap_or_else(|| self.queue.get(limit).unwrap());
+        trace_print_key(from, "From=");
+        trace_print_key(to, "To=");
+        (
+            total,
+            self.db
+                .range(from.to_vec()..to.to_vec())
+                .filter_map(std::result::Result::ok)
+                .map_while(|s| Song::bytes_to_song(s.1.to_vec()))
+                .collect(),
+        )
+    }
+    pub fn get_all_songs(&mut self) -> Vec<Song> {
+        self.db
+            .iter()
+            .filter_map(std::result::Result::ok)
+            .map_while(|s| Song::bytes_to_song(s.1.to_vec()))
+            .collect()
     }
 }
 fn trace_print_key(key: &IVec, msg: &str) {
@@ -110,7 +142,7 @@ mod test {
     fn should_replace_queue_with_new_songs() {
         let mut queue = create_queue();
         for ext in 0..10 {
-            queue.add(create_song(format!("ext{ext}").as_str()));
+            queue.add_song(create_song(format!("ext{ext}").as_str()));
         }
         assert_eq!(queue.db.len(), 10);
 
@@ -129,19 +161,19 @@ mod test {
     #[test]
     fn should_get_first_added_song_as_current() {
         let mut queue = create_queue();
-        queue.add(create_song("mp3"));
-        queue.add(create_song("wav"));
-        queue.add(create_song("flac"));
+        queue.add_song(create_song("mp3"));
+        queue.add_song(create_song("wav"));
+        queue.add_song(create_song("flac"));
         assert_eq!(queue.get_current_song().unwrap().file, "assets/music.mp3");
     }
 
     #[test]
     fn should_move_current_by_one() {
         let mut queue = create_queue();
-        queue.add(create_song("mp3"));
-        queue.add(create_song("flac"));
-        queue.add(create_song("wav"));
-        queue.add(create_song("aac"));
+        queue.add_song(create_song("mp3"));
+        queue.add_song(create_song("flac"));
+        queue.add_song(create_song("wav"));
+        queue.add_song(create_song("aac"));
         assert_eq!(queue.get_current_song().unwrap().file, "assets/music.mp3");
         assert!(queue.move_current_to_next_song());
         assert_eq!(queue.get_current_song().unwrap().file, "assets/music.flac");
@@ -149,6 +181,41 @@ mod test {
         assert_eq!(queue.get_current_song().unwrap().file, "assets/music.wav");
         assert!(queue.move_current_to_next_song());
         assert_eq!(queue.get_current_song().unwrap().file, "assets/music.aac");
+    }
+
+    #[test]
+    fn should_return_false_move_at_the_end() {
+        let mut queue = create_queue();
+        queue.add_song(create_song("mp3"));
+        queue.add_song(create_song("flac"));
+        assert_eq!(queue.get_current_song().unwrap().file, "assets/music.mp3");
+        assert!(queue.move_current_to_next_song());
+        assert_eq!(queue.get_current_song().unwrap().file, "assets/music.flac");
+        // return false on last
+        assert!(!queue.move_current_to_next_song());
+    }
+
+    #[test]
+    fn should_return_all() {
+        let mut queue = create_queue();
+        for ext in 0..100 {
+            queue.add_song(create_song(format!("ext{ext}").as_str()));
+        }
+        let all = queue.get_all_songs();
+        assert_eq!(all.len(), 100);
+        assert_eq!(all[0].file, "assets/music.ext0");
+    }
+    #[test]
+    fn should_return_page() {
+        let mut queue = create_queue();
+        for ext in 0..100 {
+            queue.add_song(create_song(format!("ext{ext}").as_str()));
+        }
+        let (total, songs) = queue.get_queue_page(50, 10);
+        assert_eq!(total, 100);
+        assert_eq!(songs.len(), 11);
+        assert_eq!(songs[0].file, "assets/music.ext50");
+        assert_eq!(songs[9].file, "assets/music.ext59");
     }
 
     fn create_queue() -> PlaybackQueue {

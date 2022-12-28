@@ -112,3 +112,9 @@ impl Configuration {
             .expect("Can't store new player state");
     }
 }
+
+impl Default for Configuration {
+    fn default() -> Self {
+        Self::new()
+    }
+}

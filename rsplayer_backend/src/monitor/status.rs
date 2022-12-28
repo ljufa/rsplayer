@@ -1,5 +1,3 @@
-
-
 use api_models::state::SongProgress;
 use api_models::state::StateChangeEvent;
 use rsplayer_playback::player_service::MutArcPlayerService;

@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
-use alsa::card;
+use alsa::{card, Direction};
 
+use alsa::device_name::HintIter;
 use alsa::mixer::{Selem, SelemChannelId};
 use alsa::pcm::State;
-use alsa::{Mixer};
+use alsa::Mixer;
 use api_models::common::Volume;
 
 use anyhow::Result;
@@ -56,13 +57,24 @@ impl AlsaPcmCard {
     pub fn is_device_in_use(&self) -> bool {
         alsa::PCM::new(self.device_name.as_str(), alsa::Direction::Playback, false).is_err()
     }
+
     pub fn get_all_cards() -> HashMap<String, String> {
         let mut result = HashMap::new();
-        for card in card::Iter::new().map(std::result::Result::unwrap) {
-            result.insert(
-                format!("hw:{}", card.get_index()),
-                card.get_name().unwrap_or_default(),
-            );
+        let i = HintIter::new_str(None, "pcm").unwrap();
+        for a in i {
+            match a.direction {
+                Some(Direction::Playback) | None => {
+                    if let Some(name) = a.name {
+                        let key = name.clone();
+                        let mut value = name.clone();
+                        if let Some(desc) = a.desc {
+                            value = desc.replace('\n', " ");
+                        }
+                        result.insert(key, value);
+                    }
+                }
+                _ => {}
+            }
         }
         result
     }
@@ -153,10 +165,6 @@ mod test {
         HCtl, Mixer,
     };
 
-    
-
-    
-
     #[test]
 
     fn test_set_volume() {
@@ -166,7 +174,6 @@ mod test {
             for a in i {
                 if a.direction.is_none() {
                     println!("  {:?}", a)
-
                 }
             }
         }
@@ -330,4 +337,3 @@ mod test {
         }
     }
 }
-

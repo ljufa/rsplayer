@@ -20,7 +20,7 @@ pub struct Settings {
     pub oled_settings: OLEDSettings,
     pub active_player: PlayerType,
     pub metadata_settings: MetadataStoreSettings,
-    pub playback_queue_settings: PlaybackQueueSetting
+    pub playback_queue_settings: PlaybackQueueSetting,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,8 +105,8 @@ pub struct MetadataStoreSettings {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
-pub struct PlaybackQueueSetting{
-    pub db_path: String
+pub struct PlaybackQueueSetting {
+    pub db_path: String,
 }
 
 fn validate_ip(val: &str) -> Result<(), ValidationError> {
@@ -179,7 +179,9 @@ impl Default for MetadataStoreSettings {
 }
 impl Default for PlaybackQueueSetting {
     fn default() -> Self {
-        Self { db_path: "queue.db".to_string() }
+        Self {
+            db_path: "queue.db".to_string(),
+        }
     }
 }
 pub const DEFAULT_ALSA_PCM_DEVICE: &str = "hw:1";

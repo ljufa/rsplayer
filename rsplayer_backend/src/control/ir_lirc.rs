@@ -8,8 +8,6 @@ use rsplayer_config::MutArcConfiguration;
 use tokio::net::UnixStream;
 use tokio::sync::mpsc::Sender;
 
-
-
 pub async fn listen(
     player_commands_tx: Sender<PlayerCommand>,
     system_commands_tx: Sender<SystemCommand>,

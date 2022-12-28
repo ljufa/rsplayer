@@ -4,12 +4,7 @@ use anyhow::Result;
 use api_models::common::PlayerType;
 use api_models::settings::Settings;
 
-use crate::{
-    mpd::MpdPlayerClient,
-    rsp::RsPlayer,
-    spotify::SpotifyPlayerClient,
-    Player,
-};
+use crate::{mpd::MpdPlayerClient, rsp::RsPlayer, spotify::SpotifyPlayerClient, Player};
 use mockall_double::double;
 use rsplayer_config::MutArcConfiguration;
 #[double]
@@ -47,7 +42,7 @@ impl PlayerService {
                 let mut sp = SpotifyPlayerClient::new(&settings.spotify_settings)?;
                 sp.start_device(&settings.alsa_settings.device_name)?;
                 sp.transfer_playback_to_device()?;
-                sp.play_current_song();
+                sp.play_queue_from_current_song();
                 Ok(Box::new(sp))
             }
             PlayerType::MPD => {
@@ -59,7 +54,8 @@ impl PlayerService {
                 Ok(Box::new(mpd))
             }
             PlayerType::RSP => {
-                let rsp = RsPlayer::new(metadata_service);
+                let rsp =
+                    RsPlayer::new(metadata_service, settings.alsa_settings.device_name.clone());
                 Ok(Box::new(rsp))
             }
             _ => panic!("Unknown type"),

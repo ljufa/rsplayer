@@ -17,8 +17,6 @@ use tokio::sync::broadcast::Sender;
 
 use crate::audio_device::audio_service::ArcAudioInterfaceSvc;
 
-
-
 pub async fn handle_player_commands(
     player_service: MutArcPlayerService,
     config_store: MutArcConfiguration,
@@ -37,7 +35,7 @@ pub async fn handle_player_commands(
                     .lock()
                     .unwrap()
                     .get_current_player()
-                    .play_current_song();
+                    .play_queue_from_current_song();
             }
             PlayItem(id) => {
                 player_service

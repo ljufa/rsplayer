@@ -1,12 +1,7 @@
-
-use std::{
-    sync::{Arc},
-    time::Duration,
-};
 use api_models::state::StateChangeEvent;
+use std::{sync::Arc, time::Duration};
 
 use tokio::sync::broadcast::Receiver;
-
 
 #[allow(dead_code)]
 pub async fn no_op_future() {

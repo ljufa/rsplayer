@@ -185,7 +185,7 @@ impl DacAk4497 {
         typ
     }
 
-    pub fn hi_load(&self, flag: bool){
+    pub fn hi_load(&self, flag: bool) {
         self.i2c_helper.change_bit(8, 3, flag);
     }
 

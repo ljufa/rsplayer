@@ -1,4 +1,3 @@
-
 use std::sync::Arc;
 
 use crate::mcu::gpio::{self, GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY};
