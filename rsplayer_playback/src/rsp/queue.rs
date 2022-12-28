@@ -100,18 +100,13 @@ impl PlaybackQueue {
             .queue
             .get(offset)
             .unwrap_or_else(|| self.queue.first().unwrap());
-        let to = self
-            .queue
-            .get(offset + limit)
-            .unwrap_or_else(|| self.queue.get(limit).unwrap());
         trace_print_key(from, "From=");
-        trace_print_key(to, "To=");
         (
             total,
             self.db
-                .range(from.to_vec()..to.to_vec())
+                .range(from.to_vec()..)
                 .filter_map(std::result::Result::ok)
-                .map_while(|s| Song::bytes_to_song(s.1.to_vec()))
+                .take(limit).map_while(|s| Song::bytes_to_song(s.1.to_vec()))
                 .collect(),
         )
     }
@@ -205,18 +200,20 @@ mod test {
         assert_eq!(all.len(), 100);
         assert_eq!(all[0].file, "assets/music.ext0");
     }
+
     #[test]
     fn should_return_page() {
         let mut queue = create_queue();
-        for ext in 0..100 {
-            queue.add_song(create_song(format!("ext{ext}").as_str()));
+        for ext in 'a'..='z' {
+            queue.add_song(create_song(format!("{ext}").as_str()));
         }
-        let (total, songs) = queue.get_queue_page(50, 10);
-        assert_eq!(total, 100);
-        assert_eq!(songs.len(), 11);
-        assert_eq!(songs[0].file, "assets/music.ext50");
-        assert_eq!(songs[9].file, "assets/music.ext59");
+        let (total, songs) = queue.get_queue_page(0, 10);
+        assert_eq!(total, 26);
+        assert_eq!(songs.len(), 10);
+        assert_eq!(songs[0].file, "assets/music.a");
+        assert_eq!(songs[9].file, "assets/music.j");
     }
+
 
     fn create_queue() -> PlaybackQueue {
         let ctx = Context::default();
