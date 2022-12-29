@@ -115,6 +115,7 @@ mod hw_oled {
         if let Some(name) = name {
             const MAX_LEN: usize = 76;
             if name.len() > MAX_LEN {
+                // todo: it is panicking here for some chars  (panicked at 'byte index 75 is not a char boundary; it is inside 'š' (bytes 74..76) of `Đorđe Balašević-Marim ja)
                 title = unidecode(&name[0..MAX_LEN - 1]);
             } else {
                 title = unidecode(name.as_str());

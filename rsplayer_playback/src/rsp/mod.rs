@@ -70,13 +70,17 @@ impl Player for RsPlayer {
     }
 
     fn play_next_song(&mut self) {
-        self.stop_current_song();
-        self.queue.lock().unwrap().move_current_to_next_song();
-        self.play_queue_from_current_song();
+        if self.queue.lock().unwrap().move_current_to_next_song() {
+            self.stop_current_song();
+            self.play_queue_from_current_song();
+        }
     }
 
     fn play_prev_song(&mut self) {
-        // todo!()
+        if self.queue.lock().unwrap().move_current_to_previous_song() {
+            self.stop_current_song();
+            self.play_queue_from_current_song();
+        }
     }
 
     fn stop_current_song(&mut self) {
@@ -88,8 +92,11 @@ impl Player for RsPlayer {
         // todo!()
     }
 
-    fn play_song(&mut self, _id: String) {
-        // todo!()
+    fn play_song(&mut self, song_id: String) {
+        if self.queue.lock().unwrap().move_current_to(song_id) {
+            self.stop_current_song();
+            self.play_queue_from_current_song();
+        }
     }
 
     fn get_current_song(&mut self) -> Option<api_models::player::Song> {
@@ -164,14 +171,17 @@ impl Player for RsPlayer {
     }
 
     fn get_player_info(&mut self) -> Option<api_models::state::PlayerInfo> {
+        let random_next = self.queue.lock().unwrap().get_random_next();
         if self.symphonia_player.is_playing() {
             Some(PlayerInfo {
                 state: Some(PlayerState::PLAYING),
+                random: Some(random_next),
                 ..Default::default()
             })
         } else {
             Some(PlayerInfo {
                 state: Some(PlayerState::PAUSED),
+                random: Some(random_next),
                 ..Default::default()
             })
         }
@@ -205,7 +215,8 @@ impl Player for RsPlayer {
                 };
                 pc.playlist_page = Some(page);
             }
-            _ => {}
+            PlayingContextQuery::CurrentSongPage => {}
+            PlayingContextQuery::IgnoreSongs => {}
         }
         Some(pc)
     }
@@ -215,7 +226,7 @@ impl Player for RsPlayer {
     }
 
     fn toggle_random_play(&mut self) {
-        // todo!()
+        self.queue.lock().unwrap().toggle_random_next();
     }
 
     fn shutdown(&mut self) {
