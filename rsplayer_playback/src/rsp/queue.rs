@@ -40,7 +40,7 @@ impl PlaybackQueue {
         }
         self.random_next
     }
-    
+
     pub fn get_random_next(&self) -> bool {
         self.random_next
     }
@@ -100,7 +100,7 @@ impl PlaybackQueue {
 
     pub fn move_current_to(&mut self, song_id: String) -> bool {
         let Some(song) = self.queue_db.iter()
-                                    .filter_map(|r| r.ok() )
+                                    .filter_map(std::result::Result::ok )
                                     .map_while(|kv| Song::bytes_to_song(kv.1.to_vec()))
                                     .find(|song| song.id == song_id) else {
             return false;
@@ -333,7 +333,6 @@ mod test {
         assert!(queue.toggle_random_next());
         queue.move_current_to_next_song();
         assert_ne!(queue.get_current_song().unwrap().file, "assets/music.1");
-
     }
 
     fn create_queue() -> PlaybackQueue {

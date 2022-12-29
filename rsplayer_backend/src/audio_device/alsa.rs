@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use alsa::{card, Direction};
+use alsa::Direction;
 
 use alsa::device_name::HintIter;
 use alsa::mixer::{Selem, SelemChannelId};

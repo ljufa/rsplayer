@@ -1,5 +1,5 @@
 use api_models::state::StateChangeEvent;
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use tokio::sync::broadcast::Receiver;
 
