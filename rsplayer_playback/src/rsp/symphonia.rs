@@ -12,7 +12,7 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::default::{get_codecs, get_probe};
 
-use log::{debug, warn};
+use log::{debug, error, info, warn};
 
 use super::output::try_open;
 use super::queue::PlaybackQueue;
@@ -50,12 +50,16 @@ impl SymphoniaPlayer {
                 let Some(song) = queue.lock().unwrap().get_current_song() else {
                         break Ok(PlaybackResult::QueueFinished);
                     };
-                let play_result =
-                    play_file(song.file.clone(), running.clone(), audio_device.clone())
-                        .join()
-                        .unwrap()?;
-                if play_result == PlaybackResult::PlaybackStopped {
-                    break Ok(play_result);
+                match play_file(song.file.clone(), running.clone(), audio_device.clone()).join() {
+                    Ok(Ok(PlaybackResult::PlaybackStopped)) => {
+                        break Ok(PlaybackResult::PlaybackStopped);
+                    }
+                    Err(err) => {
+                        error!("Failed to play file {}. Error: {:?}", song.file, err);
+                    }
+                    res => {
+                        info!("Playback finished with result {:?}", res);
+                    }
                 }
                 if !queue.lock().unwrap().move_current_to_next_song() {
                     break Ok(PlaybackResult::QueueFinished);
@@ -120,14 +124,13 @@ fn play_file(
             // Get the next packet from the format reader.
             let packet = match reader.next_packet() {
                 Ok(packet) => packet,
-                Err(symphonia::core::errors::Error::IoError(error))
-                    if error.kind() == std::io::ErrorKind::UnexpectedEof =>
-                {
+                Err(Error::IoError(error)) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
                     break Ok(PlaybackResult::SongFinished);
                 }
                 Err(err) => break Err(err.into()),
             };
 
+            debug!("Packet: trackid={};ts={}", packet.track_id(), packet.ts());
             // Decode the packet into audio samples.
             match decoder.decode(&packet) {
                 Ok(decoded) => {
@@ -143,16 +146,19 @@ fn play_file(
                         let duration = decoded.capacity() as u64;
 
                         // Try to open the audio output.
-                        audio_output
-                            .replace(try_open(spec, duration, audio_device.clone()).unwrap());
+                        let Ok(audio_out) = try_open(spec, duration, audio_device.clone()) else {
+                            break Err(format_err!("Failed to open audio output {}", audio_device));
+                        };
+                        audio_output.replace(audio_out);
                     } else {
                         // TODO: Check the audio spec. and duration hasn't changed.
                     }
                     // Write the decoded audio samples to the audio output if the presentation timestamp
                     // for the packet is >= the seeked position (0 if not seeking).
+
                     if packet.ts() > 0 {
                         if let Some(audio_output) = audio_output.as_mut() {
-                            audio_output.write(decoded).unwrap();
+                            _ = audio_output.write(decoded);
                         }
                     }
                 }

@@ -12,6 +12,7 @@ pub struct PlaybackQueue {
 }
 
 impl PlaybackQueue {
+
     pub fn new(settings: &PlaybackQueueSetting) -> Self {
         let db = sled::open(&settings.db_path).expect("Failed to open queue db");
         let status_db = db.open_tree("status").expect("Failed to open status tree");
