@@ -57,7 +57,7 @@ impl SymphoniaPlayer {
             .name("player".to_string())
             .spawn(move || {
                 let mut num_failed = 0;
-                let loop_result = loop {
+                loop {
                     let Some(song) = queue.get_current_song() else {
                         break Ok(PlaybackResult::QueueFinished);
                     };
@@ -85,8 +85,7 @@ impl SymphoniaPlayer {
                     if !queue.move_current_to_next_song() {
                         break Ok(PlaybackResult::QueueFinished);
                     }
-                };
-                loop_result
+                }
             })
             .expect("Failed to start player thread")
     }

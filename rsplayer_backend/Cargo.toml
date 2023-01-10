@@ -15,6 +15,36 @@ suggests = "mpd (>= 0.22), lirc (>= 0.10.1-6.3)"
 section = "Sound"
 priority = "optional"
 
+
+[package.metadata.deb.variants.x86_64-unknown-linux-gnu]
+assets = [
+    [
+        "../target/x86_64-unknown-linux-gnu/release/rsplayer",
+        "usr/local/bin/",
+        "755",
+    ],
+    [
+        "../PKGS/x86_64-unknown-linux-gnu/usr/local/bin/librespot",
+        "usr/local/bin/",
+        "755",
+    ],
+    [
+        "../PKGS/debian/etc/systemd/system/rsplayer.service",
+        "etc/systemd/system/rsplayer.service",
+        "644",
+    ],
+    [
+        "../target/ui/pkg/*",
+        "opt/rsplayer/ui/pkg",
+        "644",
+    ],
+    [
+        "../rsplayer_web_ui/public/**/*",
+        "opt/rsplayer/ui",
+        "644",
+    ],
+]
+
 [package.metadata.deb.variants.aarch64-unknown-linux-gnu]
 assets = [
     [

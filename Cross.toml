@@ -5,3 +5,6 @@ image = "ljufa/rsplayer-cross-armv7:latest"
 image = "ljufa/rsplayer-cross-aarch64:latest"
 linker = "clang"
 rustflags = ["-C","link-arg=-fuse-ld=/usr/bin/mold"]
+
+[target.x86_64-unknown-linux-gnu]
+image = "ljufa/rsplayer-cross-x86_64:latest"

@@ -165,4 +165,6 @@ script = [
     "docker push ljufa/rsplayer-cross-aarch64:latest",
     "docker build -f Dockerfile.armv7 . -t ljufa/rsplayer-cross-armv7:latest",
     "docker push ljufa/rsplayer-cross-armv7:latest",
+    "docker build -f Dockerfile.x86_64 . -t ljufa/rsplayer-cross-x86_64:latest",
+    "docker push ljufa/rsplayer-cross-x86_64:latest",
 ]
