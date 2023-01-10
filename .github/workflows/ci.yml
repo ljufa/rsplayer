@@ -1,0 +1,21 @@
+name: Build and test
+on:
+  push:
+    branches:
+      - "master"
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+    
+  build_backend:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: Swatinem/rust-cache@v1
+    - uses: davidB/rust-cargo-make@v1
+    - name: Clippy lint
+      run: cargo make clippy
+    - name: Run tests
+      run: cargo test
+  

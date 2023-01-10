@@ -10,7 +10,7 @@ use rsplayer_config::MutArcConfiguration;
 #[double]
 use rsplayer_metadata::metadata::MetadataService;
 
-pub type MutArcPlayerService = Arc<PlayerService>;
+pub type ArcPlayerService = Arc<PlayerService>;
 
 pub struct PlayerService {
     player: Box<dyn Player + Send + Sync>,

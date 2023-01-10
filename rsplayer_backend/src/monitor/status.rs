@@ -1,11 +1,11 @@
 use api_models::state::SongProgress;
 use api_models::state::StateChangeEvent;
-use rsplayer_playback::player_service::MutArcPlayerService;
+use rsplayer_playback::player_service::ArcPlayerService;
 
 use std::time::Duration;
 use tokio::sync::broadcast::Sender;
 
-pub async fn monitor(player_svc: MutArcPlayerService, state_changes_tx: Sender<StateChangeEvent>) {
+pub async fn monitor(player_svc: ArcPlayerService, state_changes_tx: Sender<StateChangeEvent>) {
     info!("Status monitor thread started.");
     let mut last_track_info = None;
     let mut last_player_info = None;

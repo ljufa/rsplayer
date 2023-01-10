@@ -12,14 +12,14 @@ use api_models::state::StateChangeEvent;
 
 use rsplayer_config::MutArcConfiguration;
 use rsplayer_metadata::metadata::MetadataService;
-use rsplayer_playback::player_service::MutArcPlayerService;
+use rsplayer_playback::player_service::ArcPlayerService;
 use tokio::sync::broadcast::Sender;
 
 use crate::audio_device::audio_service::ArcAudioInterfaceSvc;
 
 #[allow(clippy::too_many_lines)]
 pub async fn handle_player_commands(
-    player_service: MutArcPlayerService,
+    player_service: ArcPlayerService,
     config_store: MutArcConfiguration,
     mut input_commands_rx: tokio::sync::mpsc::Receiver<PlayerCommand>,
     state_changes_sender: Sender<StateChangeEvent>,

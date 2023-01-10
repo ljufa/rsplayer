@@ -9,7 +9,7 @@ use rsplayer_config::Configuration;
 use api_models::common::PlayerCommand;
 use api_models::state::StateChangeEvent;
 
-use rsplayer_playback::player_service::MutArcPlayerService;
+use rsplayer_playback::player_service::ArcPlayerService;
 use std::env;
 use std::net::Ipv4Addr;
 use std::net::SocketAddrV4;
@@ -72,7 +72,7 @@ pub fn start(
     player_commands_tx: PlayerCommandSender,
     system_commands_tx: SystemCommandSender,
     config: &Config,
-    player_service: MutArcPlayerService,
+    player_service: ArcPlayerService,
 ) -> (impl Future<Output = ()>, impl Future<Output = ()>) {
     // Keep track of all connected users, key is usize, value
     // is a websocket sender.
@@ -139,7 +139,7 @@ mod filters {
     use std::collections::HashMap;
 
     use api_models::settings::Settings;
-    use rsplayer_playback::player_service::MutArcPlayerService;
+    use rsplayer_playback::player_service::ArcPlayerService;
     use warp::Filter;
 
     use super::{handlers, Config};
@@ -171,7 +171,7 @@ mod filters {
             .map(move || error_msg.to_string())
     }
     pub fn get_static_playlists(
-        player_service: MutArcPlayerService,
+        player_service: ArcPlayerService,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "playlist"))
@@ -180,7 +180,7 @@ mod filters {
     }
 
     pub fn get_playlist_categories(
-        player_service: MutArcPlayerService,
+        player_service: ArcPlayerService,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "categories"))
@@ -189,7 +189,7 @@ mod filters {
     }
 
     pub fn get_playlist_items(
-        player_service: MutArcPlayerService,
+        player_service: ArcPlayerService,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "playlist" / String))
@@ -229,9 +229,8 @@ mod filters {
     }
 
     fn with_player_svc(
-        player_svc: MutArcPlayerService,
-    ) -> impl Filter<Extract = (MutArcPlayerService,), Error = std::convert::Infallible> + Clone
-    {
+        player_svc: ArcPlayerService,
+    ) -> impl Filter<Extract = (ArcPlayerService,), Error = std::convert::Infallible> + Clone {
         warp::any().map(move || player_svc.clone())
     }
 
@@ -249,7 +248,7 @@ mod handlers {
 
     use crate::audio_device::alsa::AlsaPcmCard;
 
-    use super::{Config, MutArcPlayerService};
+    use super::{ArcPlayerService, Config};
     use api_models::settings::Settings;
 
     use rsplayer_config::Configuration;
@@ -294,14 +293,14 @@ mod handlers {
     }
 
     pub async fn get_static_playlists(
-        player_service: MutArcPlayerService,
+        player_service: ArcPlayerService,
     ) -> Result<impl warp::Reply, Infallible> {
         Ok(warp::reply::json(
             &player_service.get_current_player().get_static_playlists(),
         ))
     }
     pub async fn get_playlist_categories(
-        player_service: MutArcPlayerService,
+        player_service: ArcPlayerService,
     ) -> Result<impl warp::Reply, Infallible> {
         Ok(warp::reply::json(
             &player_service
@@ -364,7 +363,7 @@ mod handlers {
 
     pub async fn get_playlist_items(
         playlist_name: String,
-        player_service: MutArcPlayerService,
+        player_service: ArcPlayerService,
     ) -> Result<impl warp::Reply, Infallible> {
         Ok(warp::reply::json(
             &player_service
