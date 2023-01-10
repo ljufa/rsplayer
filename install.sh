@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
 set -e
 device_arch=`arch`
-echo ${device_arch}
+# device_arch="armv7l"
+# device_arch="armv7l"
+# device_arch="x86_64"
+
+echo "Device architecture is:"${device_arch}
 arch_expr="unknown"
-arch_aarch64="aarch64"
-arch_armhf="armv7l"
-if [ "$device_arch" = "$arch_aarch64" ]; then
+
+if [ "$device_arch" = "aarch64" ]; then
     arch_expr="_arm64"
-else
+elif [ "$device_arch" = "x86_64" ]; then
+    arch_expr="_amd64"
+elif [ "$device_arch" = "armv7l" ]; then
     arch_expr="_armhf"
+else
+    arch_expr="unknown_architecture"
 fi
-echo ${arch_expr}
+
+echo "Detected architecture suffix is:"${arch_expr}
 URL=`curl -s https://api.github.com/repos/ljufa/rsplayer/releases/latest | grep browser_download_url | grep ${arch_expr} | cut -d '"' -f 4`
 echo Downloading installation package from $URL ...
 wget -O rsplayer${arch_expr}.deb  $URL

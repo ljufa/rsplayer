@@ -1,7 +1,7 @@
 [env]
 RPI_HOST = "192.168.5.60"
 TARGET = "aarch64-unknown-linux-gnu"
-RELEASE_VERSION = "0.4.0"
+RELEASE_VERSION = "0.4.3"
 
 [config]
 default_to_workspace = false
