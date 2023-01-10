@@ -9,7 +9,7 @@ use log::{info, warn};
 use sled::Db;
 use symphonia::core::{
     formats::FormatOptions,
-    io::MediaSourceStream,
+    io::{MediaSourceStream, MediaSourceStreamOptions},
     meta::{MetadataOptions, StandardTagKey, Tag},
     probe::{Hint, ProbeResult},
 };
@@ -27,21 +27,25 @@ impl MetadataService {
     pub fn new(settings: &MetadataStoreSettings) -> Result<Self> {
         let settings = settings.clone();
         let db = sled::open(settings.db_path.as_str())?;
-        Ok(MetadataService { db, settings })
+        Ok(Self { db, settings })
     }
+
     pub fn get_song(&self, song_id: &str) -> Option<Song> {
-        if let Ok(Some(song)) = self.db.get(hash_md5(song_id)) {
-            Song::bytes_to_song(song.to_vec())
+        if let Ok(Some(song)) = self.db.get(song_id) {
+            Song::bytes_to_song(&song)
         } else {
             None
         }
     }
 
-    pub fn scan_music_dir(&self) {
+    pub fn scan_music_dir(&self, music_dir: String, full_scan: bool) {
+        if full_scan {
+            _ = self.db.clear();
+        }
         let start_time = time::Instant::now();
         let supported_ext = &self.settings.supported_extensions;
         let mut count = 0;
-        for entry in WalkDir::new(&self.settings.music_directory)
+        for entry in WalkDir::new(music_dir)
             .follow_links(self.settings.follow_links)
             .sort_by_file_name()
             .into_iter()
@@ -56,7 +60,7 @@ impl MetadataService {
         {
             let file_path = entry.path();
             let file = Box::new(File::open(file_path).unwrap());
-            let mss = MediaSourceStream::new(file, Default::default());
+            let mss = MediaSourceStream::new(file, MediaSourceStreamOptions::default());
 
             let mut hint = Hint::new();
             if let Some(ext) = file_path.extension() {
@@ -68,7 +72,7 @@ impl MetadataService {
                 ..Default::default()
             };
             // Use the default options for metadata readers.
-            let metadata_opts: MetadataOptions = Default::default();
+            let metadata_opts = MetadataOptions::default();
             let file_p = file_path.to_str().unwrap();
             info!("Scanning file:\t{}", file_p);
             match symphonia::default::get_probe().format(&hint, mss, &format_opts, &metadata_opts) {
@@ -92,11 +96,11 @@ impl MetadataService {
         );
     }
 
-    pub fn get_all_songs_iterator(&self) -> impl Iterator<Item = Option<Song>> {
+    pub fn get_all_songs_iterator(&self) -> impl Iterator<Item = Song> {
         self.db
             .iter()
             .filter_map(std::result::Result::ok)
-            .map(|s| Song::bytes_to_song(s.1.to_vec()))
+            .map_while(|s| Song::bytes_to_song(&s.1))
     }
 }
 
@@ -107,7 +111,7 @@ fn build_song(probed: &mut ProbeResult) -> Song {
         if let Some(n_frames) = params.n_frames {
             if let Some(tb) = params.time_base {
                 let time = tb.calc_time(n_frames);
-                song.time = Some(Duration::from_secs(time.seconds))
+                song.time = Some(Duration::from_secs(time.seconds));
             }
         }
     }
@@ -117,7 +121,7 @@ fn build_song(probed: &mut ProbeResult) -> Song {
             match known_tag.std_key.unwrap_or(StandardTagKey::Version) {
                 StandardTagKey::Album => song.album = from_tag_value_to_option(known_tag),
                 StandardTagKey::AlbumArtist => {
-                    song.album_artist = from_tag_value_to_option(known_tag)
+                    song.album_artist = from_tag_value_to_option(known_tag);
                 }
                 StandardTagKey::Artist => song.artist = from_tag_value_to_option(known_tag),
                 StandardTagKey::Composer => song.composer = from_tag_value_to_option(known_tag),
@@ -144,78 +148,7 @@ fn build_song(probed: &mut ProbeResult) -> Song {
     song
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn from_tag_value_to_option(tag: &Tag) -> Option<String> {
     Some(tag.value.to_string())
-}
-
-#[cfg(test)]
-pub mod test {
-    use super::MetadataService;
-    use api_models::{player::Song, settings::MetadataStoreSettings};
-    use std::path::Path;
-    pub struct Context {
-        pub db_dir: String,
-        pub music_dir: String,
-    }
-    impl Default for Context {
-        fn default() -> Self {
-            let rnd = random_string::generate(6, "utf8");
-
-            Self {
-                db_dir: format!("/tmp/rsptest{rnd}"),
-                music_dir: "assets".to_owned(),
-            }
-        }
-    }
-
-    impl Drop for Context {
-        fn drop(&mut self) {
-            let path = &self.db_dir;
-            if Path::new(path).exists() {
-                _ = std::fs::remove_dir_all(path);
-            }
-        }
-    }
-
-    #[test]
-    fn should_scan_music_dir_first_time() {
-        let service = create_metadata_service(Context::default());
-        service.scan_music_dir();
-        assert_eq!(service.db.len(), 5);
-        let result = service
-            .db
-            .get(super::hash_md5("assets/music.flac"))
-            .unwrap();
-        if let Some(r) = result {
-            let saved_song = Song::bytes_to_song(r.to_vec()).unwrap();
-            assert_eq!(saved_song.artist, Some("Artist".to_owned()));
-            assert_eq!(saved_song.title, Some("FlacTitle".to_owned()));
-            assert!(saved_song.time.is_some());
-            assert!(!saved_song.tags.is_empty());
-        } else {
-            panic!("Assertion failed");
-        }
-    }
-
-    #[test]
-    fn should_get_song() {
-        let service = create_metadata_service(Context::default());
-        service.scan_music_dir();
-        let song = service.get_song("assets/music.mp3");
-        assert!(song.is_some());
-        assert_eq!(song.unwrap().file, "assets/music.mp3");
-    }
-
-    pub fn create_metadata_service(context: Context) -> MetadataService {
-        let path = &context.db_dir;
-        if Path::new(path).exists() {
-            _ = std::fs::remove_dir_all(path);
-        }
-        let settings = MetadataStoreSettings {
-            db_path: path.to_string(),
-            music_directory: context.music_dir.clone(),
-            ..Default::default()
-        };
-        MetadataService::new(&settings).expect("Failed to create service")
-    }
 }

@@ -116,6 +116,7 @@ pub enum AudioOut {
 }
 
 impl SongProgress {
+    #[must_use]
     pub fn format_time(&self) -> String {
         format!(
             "{} / {}",

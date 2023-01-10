@@ -17,6 +17,7 @@ use tokio::sync::broadcast::Sender;
 
 use crate::audio_device::audio_service::ArcAudioInterfaceSvc;
 
+#[allow(clippy::too_many_lines)]
 pub async fn handle_player_commands(
     player_service: MutArcPlayerService,
     config_store: MutArcConfiguration,
@@ -32,107 +33,60 @@ pub async fn handle_player_commands(
         match cmd {
             Play => {
                 player_service
-                    .lock()
-                    .unwrap()
                     .get_current_player()
                     .play_queue_from_current_song();
             }
             PlayItem(id) => {
-                player_service
-                    .lock()
-                    .unwrap()
-                    .get_current_player()
-                    .play_song(id);
+                player_service.get_current_player().play_song(&id);
             }
             RemovePlaylistItem(id) => {
                 player_service
-                    .lock()
-                    .unwrap()
                     .get_current_player()
-                    .remove_song_from_queue(id);
+                    .remove_song_from_queue(&id);
             }
             Pause => {
-                player_service
-                    .lock()
-                    .unwrap()
-                    .get_current_player()
-                    .pause_current_song();
+                player_service.get_current_player().pause_current_song();
             }
             Next => {
-                player_service
-                    .lock()
-                    .unwrap()
-                    .get_current_player()
-                    .play_next_song();
+                player_service.get_current_player().play_next_song();
             }
             Prev => {
-                player_service
-                    .lock()
-                    .unwrap()
-                    .get_current_player()
-                    .play_prev_song();
+                player_service.get_current_player().play_prev_song();
             }
             Rewind(sec) => {
-                player_service
-                    .lock()
-                    .unwrap()
-                    .get_current_player()
-                    .seek_current_song(sec);
+                player_service.get_current_player().seek_current_song(sec);
             }
             LoadPlaylist(pl_id) => {
                 player_service
-                    .lock()
-                    .unwrap()
                     .get_current_player()
-                    .load_playlist_in_queue(pl_id);
+                    .load_playlist_in_queue(&pl_id);
             }
             LoadAlbum(album_id) => {
                 player_service
-                    .lock()
-                    .unwrap()
                     .get_current_player()
-                    .load_album_in_queue(album_id);
+                    .load_album_in_queue(&album_id);
             }
-            RandomToggle => player_service
-                .lock()
-                .unwrap()
-                .get_current_player()
-                .toggle_random_play(),
+            RandomToggle => player_service.get_current_player().toggle_random_play(),
 
             LoadSong(song_id) => player_service
-                .lock()
-                .unwrap()
                 .get_current_player()
-                .load_song_in_queue(song_id),
+                .load_song_in_queue(&song_id),
             AddSongToQueue(song_id) => player_service
-                .lock()
-                .unwrap()
                 .get_current_player()
-                .add_song_in_queue(song_id),
+                .add_song_in_queue(&song_id),
             PlayerCommand::ClearQueue => {
-                player_service
-                    .lock()
-                    .unwrap()
-                    .get_current_player()
-                    .clear_queue();
+                player_service.get_current_player().clear_queue();
             }
             PlayerCommand::SaveQueueAsPlaylist(playlist_name) => {
                 player_service
-                    .lock()
-                    .unwrap()
                     .get_current_player()
-                    .save_queue_as_playlist(playlist_name);
+                    .save_queue_as_playlist(&playlist_name);
             }
             /*
              * Query commands
              */
             QueryCurrentSong => {
-                if let Some(song) = player_service
-                    .lock()
-                    .unwrap()
-                    .get_current_player()
-                    .get_current_song()
-                {
+                if let Some(song) = player_service.get_current_player().get_current_song() {
                     state_changes_sender
                         .send(StateChangeEvent::CurrentSongEvent(song))
                         .unwrap();
@@ -140,8 +94,6 @@ pub async fn handle_player_commands(
             }
             QueryCurrentPlayingContext(query) => {
                 if let Some(pc) = player_service
-                    .lock()
-                    .unwrap()
                     .get_current_player()
                     .get_playing_context(query)
                 {
@@ -151,12 +103,7 @@ pub async fn handle_player_commands(
                 }
             }
             QueryCurrentPlayerInfo => {
-                if let Some(pi) = player_service
-                    .lock()
-                    .unwrap()
-                    .get_current_player()
-                    .get_player_info()
-                {
+                if let Some(pi) = player_service.get_current_player().get_player_info() {
                     state_changes_sender
                         .send(StateChangeEvent::PlayerInfoEvent(pi))
                         .unwrap();
@@ -169,21 +116,19 @@ pub async fn handle_player_commands(
                     .unwrap();
             }
             QueryDynamicPlaylists(category_ids, offset, limit) => {
-                let dynamic_pls = player_service
-                    .lock()
-                    .unwrap()
-                    .get_current_player()
-                    .get_dynamic_playlists(category_ids, offset, limit);
+                let dynamic_pls = player_service.get_current_player().get_dynamic_playlists(
+                    category_ids,
+                    offset,
+                    limit,
+                );
                 state_changes_sender
                     .send(StateChangeEvent::DynamicPlaylistsPageEvent(dynamic_pls))
                     .unwrap();
             }
             QueryPlaylistItems(playlist_id) => {
                 let pl_items = player_service
-                    .lock()
-                    .unwrap()
                     .get_current_player()
-                    .get_playlist_items(playlist_id);
+                    .get_playlist_items(&playlist_id);
                 state_changes_sender
                     .send(StateChangeEvent::PlaylistItemsEvent(pl_items))
                     .unwrap();
@@ -249,8 +194,13 @@ pub async fn handle_system_commands(
                         .spawn()
                         .expect("Failed to restart rsplayer service");
                 }
-                // todo: move to separate handler or spawn as a new task as it blocks other system commands
-                SystemCommand::RescanMetadata => metadata_service.scan_music_dir(),
+                SystemCommand::RescanMetadata(music_dir) => {
+                    let mtds = metadata_service.clone();
+                    std::thread::Builder::new()
+                        .name("metadata_scanner".to_string())
+                        .spawn(move || mtds.scan_music_dir(music_dir, true))
+                        .expect("Failed to start metadata scanner thread");
+                }
             }
         }
     }

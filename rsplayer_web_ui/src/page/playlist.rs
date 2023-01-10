@@ -5,10 +5,10 @@ use api_models::state::StateChangeEvent;
 
 use api_models::{
     common::PlayerCommand,
-    player::*,
+    player::Song,
     playlist::{Category, PlaylistType, Playlists},
 };
-use seed::{prelude::*, *};
+use seed::{prelude::*, C, FutureExt, IF, a, attrs, button, div, empty, figure, header, i, id, img, log, nodes, p, progress, raw, section, span, style};
 
 use crate::{attachCarousel, scrollToId};
 
@@ -43,7 +43,7 @@ pub enum Msg {
     LoadMoreCategories,
 }
 
-pub(crate) fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
+pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     orders.perform_cmd(async { Msg::StaticPlaylistsFetched(get_playlists().await) });
     orders.perform_cmd(async { Msg::CategoriesFetched(get_playlist_categories().await) });
     orders.stream(streams::window_event(Ev::KeyDown, |event| {
@@ -68,7 +68,7 @@ pub(crate) fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
 const DYNAMIC_PLAYLIST_PAGE_SIZE: u32 = 12;
 const CATEGORY_PAGE_SIZE: usize = 10;
 
-pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
+pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
     //log!("PL Update", msg);
     match msg {
         Msg::StaticPlaylistsFetched(pls) => {
@@ -108,7 +108,7 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
             if !dynamic_pls.is_empty() {
                 model.dynamic_playlists.clear();
             }
-            dynamic_pls.iter().for_each(|dpl| {
+            for dpl in &dynamic_pls {
                 if let Some(cat) = model
                     .playlist_categories
                     .iter()
@@ -118,17 +118,17 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
                         model.dynamic_playlists.insert(cat.clone(), dpl.clone());
                         let cid = cat.sanitized_id();
                         orders.after_next_render(move |_| {
-                            attachCarousel(&format!("#cat-{}", cid));
+                            attachCarousel(&format!("#cat-{cid}"));
                         });
                     }
                 }
-            });
+            }
         }
         Msg::StatusChangeEventReceived(StateChangeEvent::PlaylistItemsEvent(playlist_items)) => {
             model.selected_playlist_items = playlist_items;
         }
         Msg::ShowPlaylistItemsClicked(_is_dynamic, playlist_id, playlist_name) => {
-           model.selected_playlist_id = playlist_id.clone();
+            model.selected_playlist_id = playlist_id.clone();
             model.selected_playlist_name = playlist_name;
             orders.send_msg(Msg::SendCommand(PlayerCommand::QueryPlaylistItems(
                 playlist_id,
@@ -271,7 +271,7 @@ fn view_dynamic_playlists(model: &Model) -> Node<Msg> {
                                             figure![
                                                 C!["image", "is-square"],
                                                 img![
-                                                    attrs! {At::Src => playlist.image.as_ref().map_or("/no_album.png".to_string(),|i| i.clone())}
+                                                    attrs! {At::Src => playlist.image.as_ref().map_or("/no_album.png".to_string(),std::clone::Clone::clone)}
                                                 ]
                                             ],
                                             span![
@@ -286,7 +286,7 @@ fn view_dynamic_playlists(model: &Model) -> Node<Msg> {
                                                 playlist.name.clone(),
                                                 playlist.owner_name
                                                     .as_ref()
-                                                    .map_or("".to_string(), |ow| format!(" by {ow}"))
+                                                    .map_or(String::new(), |ow| format!(" by {ow}"))
                                             ],
                                         ]
                                     ]
@@ -304,7 +304,6 @@ fn view_static_playlists(model: &Model) -> Node<Msg> {
         div![
             IF!(model.static_playlist_loading => progress![C!["progress", "is-small"], attrs!{ At::Max => "100"}, style!{ St::MarginBottom => "50px"}]),
         ],
-
         C!["section"],
         div![
             C!["container"],
@@ -373,7 +372,7 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                         figure![
                             C!["image", "is-square"],
                             img![
-                                attrs! {At::Src => pl.image.as_ref().map_or("/no_album.png".to_string(),|i| i.clone())}
+                                attrs! {At::Src => pl.image.as_ref().map_or("/no_album.png".to_string(),std::clone::Clone::clone)}
                             ]
                         ],
                         span![
@@ -391,7 +390,7 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                             pl.name.clone(),
                             pl.owner_name
                                 .as_ref()
-                                .map_or("".to_string(), |ow| format!(" by {ow}"))
+                                .map_or(String::new(), |ow| format!(" by {ow}"))
                         ],
                     ]
                 ]
@@ -408,7 +407,7 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                         figure![
                             C!["image", "is-square"],
                             img![
-                                attrs! {At::Src => album.images.first().map_or("/no_album.png".to_string(),|i| i.clone())}
+                                attrs! {At::Src => album.images.first().map_or("/no_album.png".to_string(),std::clone::Clone::clone)}
                             ]
                         ],
                         span![

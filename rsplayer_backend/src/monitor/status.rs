@@ -17,8 +17,7 @@ pub async fn monitor(player_svc: MutArcPlayerService, state_changes_tx: Sender<S
     loop {
         tokio::time::sleep(Duration::from_millis(1000)).await;
         // check track info change
-        let mut player = player_svc.lock().unwrap();
-        let player = player.get_current_player();
+        let player = player_svc.get_current_player();
         let new_track_info = player.get_current_song();
         if last_track_info != new_track_info {
             if let Some(new) = new_track_info.as_ref() {

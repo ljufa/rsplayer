@@ -1,4 +1,4 @@
-use seed::{prelude::*, *};
+use seed::{prelude::*, C, div, h1, h2, section};
 
 pub fn view<Ms>() -> Node<Ms> {
     section![

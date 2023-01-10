@@ -508,6 +508,7 @@ dependencies = [
 [[package]]
 name = "cpal"
 version = "0.14.0"
+source = "git+https://github.com/rustaudio/cpal.git?branch=master#90471506b17530cbab8e88022331c893d9ab6161"
 dependencies = [
  "alsa",
  "core-foundation-sys 0.8.3",
@@ -2187,6 +2188,7 @@ dependencies = [
  "env_logger 0.10.0",
  "log",
  "mockall",
+ "rand 0.7.3",
  "random-string",
  "serde_json",
  "sled",
@@ -2206,13 +2208,11 @@ dependencies = [
  "mockall",
  "mockall_double",
  "mpd",
- "rand 0.7.3",
  "random-string",
  "rb",
  "rsplayer_config",
  "rsplayer_metadata",
  "rspotify",
- "sled",
  "symphonia",
 ]
 

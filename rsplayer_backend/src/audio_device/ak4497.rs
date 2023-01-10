@@ -53,6 +53,7 @@ impl VolumeControlDevice for DacAk4497 {
         }
     }
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn set_vol(&self, value: i64) -> Volume {
         self.i2c_helper.write_register(3, value as u8);
         self.i2c_helper.write_register(4, value as u8);
@@ -66,16 +67,16 @@ impl VolumeControlDevice for DacAk4497 {
 }
 
 impl DacAk4497 {
-    pub fn new(dac_state: Volume, settings: &DacSettings) -> Result<Box<Self>> {
+    pub fn new(volume_state: &Volume, settings: &DacSettings) -> Result<Box<Self>> {
         let dac = Self {
             i2c_helper: I2CHelper::new(settings.i2c_address)?,
             volume_step: settings.volume_step,
         };
-        dac.initialize(dac_state, settings)?;
+        dac.initialize(volume_state, settings)?;
         Ok(Box::new(dac))
     }
 
-    fn initialize(&self, volume: Volume, dac_settings: &DacSettings) -> Result<()> {
+    fn initialize(&self, volume: &Volume, dac_settings: &DacSettings) -> Result<()> {
         // reset dac
         press_pdn_button();
         // try talking to dac,
@@ -149,7 +150,7 @@ impl DacAk4497 {
         let mut result = Vec::new();
         for rg in 0..15 {
             let val = self.i2c_helper.read_register(rg)?;
-            result.push(format!("Register {} has value {:#010b} ({})", rg, val, val));
+            result.push(format!("Register {rg} has value {val:#010b} ({val})"));
         }
         Ok(result)
     }

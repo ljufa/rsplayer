@@ -54,14 +54,17 @@ pub struct Song {
 }
 
 impl Song {
+    #[must_use]
     pub fn to_json_string_bytes(&self) -> Vec<u8> {
         serde_json::to_vec(self).expect("Song serialization failed!")
     }
 
-    pub fn bytes_to_song(bytes: Vec<u8>) -> Option<Song> {
-        serde_json::from_slice(&bytes).ok()
+    #[must_use]
+    pub fn bytes_to_song(bytes: &[u8]) -> Option<Self> {
+        serde_json::from_slice(bytes).ok()
     }
 
+    #[must_use]
     pub fn info_string(&self) -> Option<String> {
         let mut result = String::new();
         if let Some(artist) = self.artist.as_ref() {
@@ -84,6 +87,7 @@ impl Song {
             Some(result)
         }
     }
+    #[must_use]
     pub fn get_title(&self) -> String {
         let mut result = String::new();
         if let Some(title) = self.title.as_ref() {
@@ -94,6 +98,7 @@ impl Song {
         }
         result
     }
+    #[must_use]
     pub fn get_identifier(&self) -> String {
         if self.id.is_empty() {
             self.file.clone()
@@ -101,7 +106,7 @@ impl Song {
             self.id.clone()
         }
     }
-
+    #[must_use]
     pub fn all_text(&self) -> String {
         let mut result = String::new();
         if let Some(t) = self.title.as_ref() {

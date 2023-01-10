@@ -20,22 +20,22 @@ pub struct Configuration {
 }
 
 impl Configuration {
-    pub fn new() -> Configuration {
-        if let Ok(db) = PickleDb::load(
+    pub fn new() -> Self {
+        PickleDb::load(
             "configuration.db",
             PickleDbDumpPolicy::AutoDump,
             SerializationMethod::Json,
-        ) {
-            Configuration { db }
-        } else {
-            Configuration {
+        )
+        .map_or_else(
+            |_| Self {
                 db: PickleDb::new(
                     "configuration.db",
                     PickleDbDumpPolicy::AutoDump,
                     SerializationMethod::Json,
                 ),
-            }
-        }
+            },
+            |db| Self { db },
+        )
     }
     pub fn get_static_dir_path() -> String {
         "ui".to_string()

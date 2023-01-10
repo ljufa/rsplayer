@@ -69,7 +69,7 @@ pub enum SystemCommand {
     RestartRSPlayer,
     ChangeAudioOutput,
     // Metadata commands
-    RescanMetadata,
+    RescanMetadata(String),
 }
 
 #[derive(
@@ -114,14 +114,15 @@ pub enum PlayerType {
 impl Display for PlayerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PlayerType::SPF => f.write_str("Spotify"),
-            PlayerType::MPD => f.write_str("Music Player Deamon"),
-            PlayerType::LMS => f.write_str("Logitech Media Server"),
-            PlayerType::RSP => f.write_str("RSPlayer - experimental"),
+            Self::SPF => f.write_str("Spotify"),
+            Self::MPD => f.write_str("Music Player Deamon"),
+            Self::LMS => f.write_str("Logitech Media Server"),
+            Self::RSP => f.write_str("RSPlayer - experimental"),
         }
     }
 }
 
+#[must_use]
 pub fn dur_to_string(duration: &Duration) -> String {
     let mut result = "00:00:00".to_string();
     let secs = duration.as_secs();
@@ -134,6 +135,7 @@ pub fn dur_to_string(duration: &Duration) -> String {
     result
 }
 
+#[must_use]
 pub fn hash_md5(input: &str) -> String {
     format!("{:x}", md5::compute(input))
 }

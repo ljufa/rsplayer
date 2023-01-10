@@ -35,7 +35,7 @@ pub fn lsgpio() {
     let chip_iterator = match chips() {
         Ok(chips) => chips,
         Err(e) => {
-            println!("Failed to get chip iterator: {:?}", e);
+            println!("Failed to get chip iterator: {e}");
             return;
         }
     };
@@ -71,10 +71,10 @@ pub fn lsgpio() {
                         flags.push("open-source");
                     }
 
-                    let usage = if !flags.is_empty() {
-                        format!("[{}]", flags.join(" "))
-                    } else {
+                    let usage = if flags.is_empty() {
                         String::new()
+                    } else {
+                        format!("[{}]", flags.join(" "))
                     };
 
                     println!(
@@ -85,7 +85,7 @@ pub fn lsgpio() {
                         usage = usage,
                     );
                 }
-                Err(e) => println!("\tError getting line info: {:?}", e),
+                Err(e) => println!("\tError getting line info: {e}"),
             }
         }
         println!();

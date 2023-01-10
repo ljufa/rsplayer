@@ -62,7 +62,7 @@ mod cpal {
         pub fn try_open(
             spec: SignalSpec,
             duration: Duration,
-            audio_device: String,
+            audio_device: &str,
         ) -> Result<Box<dyn AudioOutput>> {
             // Get default host.
             let host = cpal::default_host();
@@ -112,7 +112,7 @@ mod cpal {
         }
     }
 
-    struct CpalAudioOutputImpl<T: AudioOutputSample>
+    struct CpalAudioOutputImpl<T>
     where
         T: AudioOutputSample,
     {
@@ -130,6 +130,7 @@ mod cpal {
             let num_channels = spec.channels.count();
 
             // Output audio stream config.
+            #[allow(clippy::cast_possible_truncation)]
             let config = cpal::StreamConfig {
                 channels: num_channels as cpal::ChannelCount,
                 sample_rate: cpal::SampleRate(spec.rate),
@@ -210,7 +211,7 @@ mod cpal {
 pub fn try_open(
     spec: SignalSpec,
     duration: Duration,
-    audio_device: String,
+    audio_device: &str,
 ) -> Result<Box<dyn AudioOutput>> {
     cpal::CpalAudioOutput::try_open(spec, duration, audio_device)
 }

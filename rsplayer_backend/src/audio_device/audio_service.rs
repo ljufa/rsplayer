@@ -27,7 +27,7 @@ impl AudioInterfaceService {
                 && settings.dac_settings.enabled
             {
                 DacAk4497::new(
-                    config.get_streamer_status().volume_state,
+                    &config.get_streamer_status().volume_state,
                     &settings.dac_settings,
                 )?
             } else {
@@ -36,9 +36,10 @@ impl AudioInterfaceService {
         let line_handle = if settings.output_selector_settings.enabled {
             // restore last output state
             let out_sel_pin = gpio::get_output_pin_handle(GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY)?;
-            match config.get_streamer_status().selected_audio_output {
-                AudioOut::SPKR => out_sel_pin.set_value(0)?,
-                AudioOut::HEAD => out_sel_pin.set_value(1)?,
+            if config.get_streamer_status().selected_audio_output == AudioOut::SPKR {
+                out_sel_pin.set_value(0)?;
+            } else {
+                out_sel_pin.set_value(1)?;
             };
             Some(out_sel_pin)
         } else {
@@ -60,17 +61,14 @@ impl AudioInterfaceService {
         self.volume_ctrl_device.vol_down()
     }
     pub fn toggle_output(&self) -> Option<AudioOut> {
-        if let Some(out_sel_pin) = self.output_selector_pin.as_ref() {
-            let out = if out_sel_pin.get_value().unwrap() == 0 {
+        self.output_selector_pin.as_ref().map(|out_sel_pin| {
+            if out_sel_pin.get_value().unwrap() == 0 {
                 let _ = out_sel_pin.set_value(1);
                 AudioOut::HEAD
             } else {
                 let _ = out_sel_pin.set_value(0);
                 AudioOut::SPKR
-            };
-            Some(out)
-        } else {
-            None
-        }
+            }
+        })
     }
 }

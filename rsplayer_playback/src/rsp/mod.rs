@@ -1,13 +1,10 @@
-use std::{
-    sync::{Arc, Mutex},
-    thread::JoinHandle,
-    vec,
-};
+use std::{sync::Arc, thread::JoinHandle, time::Duration, vec};
 
 use anyhow::Result;
 use api_models::{
-    playlist::{Playlist, PlaylistPage, PlaylistType, Playlists},
-    settings::PlaybackQueueSetting,
+    player::Song,
+    playlist::PlaylistPage,
+    settings::{PlaybackQueueSetting, PlaylistSetting},
     state::{PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, SongProgress},
 };
 
@@ -15,42 +12,41 @@ use mockall_double::double;
 
 #[double]
 use rsplayer_metadata::metadata::MetadataService;
+use rsplayer_metadata::{playlist::PlaylistService, queue::PlaybackQueue};
+use rspotify::sync::Mutex;
 
-use crate::Player;
-
-use self::{
-    queue::PlaybackQueue,
-    symphonia::{PlaybackResult, SymphoniaPlayer},
+use crate::{
+    get_dynamic_playlists, get_playlist_categories, Player, BY_ARTIST_PL_PREFIX, BY_DATE_PL_PREFIX,
+    BY_FOLDER_PL_PREFIX, BY_GENRE_PL_PREFIX, SAVED_PL_PREFIX,
 };
+
+use self::symphonia::{PlaybackResult, SymphoniaPlayer};
 mod output;
-pub mod playlist;
-pub mod queue;
 mod symphonia;
 
-pub enum PlayerCmd {}
-pub enum PlayerEvt {}
+const BY_FOLDER_DEPTH: usize = 6;
 pub struct RsPlayer {
-    queue: Arc<Mutex<PlaybackQueue>>,
+    queue: Arc<PlaybackQueue>,
     metadata_service: Arc<MetadataService>,
+    playlist_service: Arc<PlaylistService>,
     symphonia_player: SymphoniaPlayer,
-    play_handle: Vec<JoinHandle<Result<PlaybackResult>>>,
+    play_handle: Arc<Mutex<Vec<JoinHandle<Result<PlaybackResult>>>>>,
 }
 impl RsPlayer {
     pub fn new(metadata_service: Arc<MetadataService>, audio_device: String) -> Self {
-        let queue = Arc::new(Mutex::new(PlaybackQueue::new(
-            &PlaybackQueueSetting::default(),
-        )));
+        let queue = Arc::new(PlaybackQueue::new(&PlaybackQueueSetting::default()));
         RsPlayer {
             queue: queue.clone(),
             metadata_service,
+            playlist_service: Arc::new(PlaylistService::new(&PlaylistSetting::default())),
             symphonia_player: SymphoniaPlayer::new(queue, audio_device),
-            play_handle: vec![],
+            play_handle: Arc::new(Mutex::new(vec![])),
         }
     }
 
-    fn await_playing_song_to_finish(&mut self) -> Vec<Result<PlaybackResult>> {
+    fn await_playing_song_to_finish(&self) -> Vec<Result<PlaybackResult>> {
         let mut results = vec![];
-        self.play_handle.drain(..).for_each(|r| {
+        self.play_handle.lock().unwrap().drain(..).for_each(|r| {
             if let Ok(res) = r.join() {
                 results.push(res);
             }
@@ -60,118 +56,189 @@ impl RsPlayer {
 }
 
 impl Player for RsPlayer {
-    fn play_queue_from_current_song(&mut self) {
+    fn play_queue_from_current_song(&self) {
         self.play_handle
+            .lock()
+            .unwrap()
             .push(self.symphonia_player.play_all_in_queue());
     }
 
-    fn pause_current_song(&mut self) {
+    fn pause_current_song(&self) {
         self.stop_current_song();
     }
 
-    fn play_next_song(&mut self) {
-        if self.queue.lock().unwrap().move_current_to_next_song() {
+    fn play_next_song(&self) {
+        if self.queue.move_current_to_next_song() {
             self.stop_current_song();
             self.play_queue_from_current_song();
         }
     }
 
-    fn play_prev_song(&mut self) {
-        if self.queue.lock().unwrap().move_current_to_previous_song() {
+    fn play_prev_song(&self) {
+        if self.queue.move_current_to_previous_song() {
             self.stop_current_song();
             self.play_queue_from_current_song();
         }
     }
 
-    fn stop_current_song(&mut self) {
+    fn stop_current_song(&self) {
         self.symphonia_player.stop_playing();
         self.await_playing_song_to_finish();
     }
 
-    fn seek_current_song(&mut self, _seconds: i8) {
+    fn seek_current_song(&self, _seconds: i8) {
         // todo!()
     }
 
-    fn play_song(&mut self, song_id: String) {
-        if self.queue.lock().unwrap().move_current_to(song_id) {
+    fn play_song(&self, song_id: &str) {
+        if self.queue.move_current_to(song_id) {
             self.stop_current_song();
             self.play_queue_from_current_song();
         }
     }
 
-    fn get_current_song(&mut self) -> Option<api_models::player::Song> {
-        self.queue.lock().unwrap().get_current_song()
+    fn get_current_song(&self) -> Option<Song> {
+        self.queue.get_current_song()
     }
 
-    fn load_playlist_in_queue(&mut self, playlist_id: String) {
-        if &playlist_id == "RSP::Static::All" {
+    fn load_playlist_in_queue(&self, pl_id: &str) {
+        self.stop_current_song();
+        if pl_id.starts_with(BY_GENRE_PL_PREFIX) {
+            let genre = pl_id.replace(BY_GENRE_PL_PREFIX, "");
+            self.queue.replace_all(
+                self.metadata_service
+                    .get_all_songs_iterator()
+                    .filter(|s| s.genre == Some(genre.clone())),
+            );
+        } else if pl_id.starts_with(BY_DATE_PL_PREFIX) {
+            let date = pl_id.replace(BY_DATE_PL_PREFIX, "");
+            self.queue.replace_all(
+                self.metadata_service
+                    .get_all_songs_iterator()
+                    .filter(|s| s.date == Some(date.clone())),
+            );
+        } else if pl_id.starts_with(BY_ARTIST_PL_PREFIX) {
+            let artist = pl_id.replace(BY_ARTIST_PL_PREFIX, "");
+            self.queue.replace_all(
+                self.metadata_service
+                    .get_all_songs_iterator()
+                    .filter(|s| s.artist == Some(artist.clone())),
+            );
+        } else if pl_id.starts_with(BY_FOLDER_PL_PREFIX) {
+            let folder = pl_id.replace(BY_FOLDER_PL_PREFIX, "");
             self.queue
-                .lock()
-                .unwrap()
-                .replace_all(self.metadata_service.get_all_songs_iterator());
+                .replace_all(self.metadata_service.get_all_songs_iterator().filter(|s| {
+                    s.file
+                        .split('/')
+                        .nth(BY_FOLDER_DEPTH)
+                        .unwrap_or_default()
+                        .eq_ignore_ascii_case(folder.as_str())
+                }));
+        } else {
+            let pl_songs = self
+                .playlist_service
+                .get_playlist_page_by_name(pl_id, 0, 20000)
+                .items;
+            self.queue.replace_all(pl_songs.into_iter());
+        }
+        self.play_queue_from_current_song();
+    }
+
+    fn load_album_in_queue(&self, _album_id: &str) {
+        // todo!()
+    }
+
+    fn load_song_in_queue(&self, song_id: &str) {
+        if let Some(song) = self.metadata_service.get_song(song_id).as_ref() {
+            self.stop_current_song();
+            self.queue.clear();
+            self.queue.add_song(song);
+            self.play_queue_from_current_song();
         }
     }
 
-    fn load_album_in_queue(&mut self, _album_id: String) {
-        // todo!()
+    fn remove_song_from_queue(&self, song_id: &str) {
+        self.queue.remove_song(song_id);
     }
 
-    fn load_song_in_queue(&mut self, _song_id: String) {
-        // todo!()
-    }
-
-    fn remove_song_from_queue(&mut self, _id: String) {
-        // todo!()
-    }
-
-    fn add_song_in_queue(&mut self, song_id: String) {
-        if let Some(song) = self.metadata_service.get_song(&song_id) {
-            self.queue.lock().unwrap().add_song(song)
+    fn add_song_in_queue(&self, song_id: &str) {
+        if let Some(song) = self.metadata_service.get_song(song_id).as_ref() {
+            self.queue.add_song(song);
         }
     }
 
-    fn clear_queue(&mut self) {
-        // todo!()
+    fn clear_queue(&self) {
+        self.stop_current_song();
+        self.queue.clear();
     }
 
-    fn get_playlist_categories(&mut self) -> Vec<api_models::playlist::Category> {
-        // todo!()
-        vec![]
+    fn get_playlist_categories(&self) -> Vec<api_models::playlist::Category> {
+        get_playlist_categories()
     }
 
-    fn get_static_playlists(&mut self) -> api_models::playlist::Playlists {
-        // todo!()
-        Playlists {
-            items: vec![PlaylistType::Saved(Playlist {
-                name: "All songs".to_string(),
-                id: "RSP::Static::All".to_string(),
-                description: None,
-                image: None,
-                owner_name: None,
-            })],
-        }
+    fn get_static_playlists(&self) -> api_models::playlist::Playlists {
+        self.playlist_service.get_playlists()
     }
 
     fn get_dynamic_playlists(
-        &mut self,
-        _category_ids: Vec<String>,
-        _offset: u32,
-        _limit: u32,
+        &self,
+        category_ids: Vec<String>,
+        offset: u32,
+        limit: u32,
     ) -> Vec<api_models::playlist::DynamicPlaylistsPage> {
-        // todo!()
-        vec![]
+        let all_songs: Vec<Song> = self.metadata_service.get_all_songs_iterator().collect();
+        get_dynamic_playlists(category_ids, &all_songs, offset, limit, BY_FOLDER_DEPTH)
     }
 
-    fn get_playlist_items(&mut self, _playlist_id: String) -> Vec<api_models::player::Song> {
-        vec![]
+    fn get_playlist_items(&self, playlist_id: &str) -> Vec<Song> {
+        if playlist_id.starts_with(BY_GENRE_PL_PREFIX) {
+            let pl_name = playlist_id.replace(BY_GENRE_PL_PREFIX, "");
+            self.metadata_service
+                .get_all_songs_iterator()
+                .filter(|s| s.genre.as_ref().map_or(false, |g| *g == pl_name))
+                .take(100)
+                .collect()
+        } else if playlist_id.starts_with(BY_ARTIST_PL_PREFIX) {
+            let pl_name = playlist_id.replace(BY_ARTIST_PL_PREFIX, "");
+            self.metadata_service
+                .get_all_songs_iterator()
+                .filter(|s| s.artist.as_ref().map_or(false, |a| *a == pl_name))
+                .take(100)
+                .collect()
+        } else if playlist_id.starts_with(BY_DATE_PL_PREFIX) {
+            let pl_name = playlist_id.replace(BY_DATE_PL_PREFIX, "");
+            self.metadata_service
+                .get_all_songs_iterator()
+                .filter(|s| s.date.as_ref().map_or(false, |d| *d == pl_name))
+                .take(100)
+                .collect()
+        } else if playlist_id.starts_with(BY_FOLDER_PL_PREFIX) {
+            let pl_name = playlist_id.replace(BY_FOLDER_PL_PREFIX, "");
+            self.metadata_service
+                .get_all_songs_iterator()
+                .filter(|s| {
+                    s.file
+                        .split('/')
+                        .nth(BY_FOLDER_DEPTH)
+                        .map_or(false, |d| *d == pl_name)
+                })
+                .take(100)
+                .collect()
+        } else {
+            let pl_name = playlist_id.replace(SAVED_PL_PREFIX, "");
+            self.playlist_service
+                .get_playlist_page_by_name(&pl_name, 0, 100)
+                .items
+        }
     }
 
-    fn save_queue_as_playlist(&mut self, _playlist_name: String) {
-        // todo!()
+    fn save_queue_as_playlist(&self, playlist_name: &str) {
+        self.playlist_service
+            .save_new_playlist(playlist_name, &self.queue.get_all_songs());
     }
 
-    fn get_player_info(&mut self) -> Option<api_models::state::PlayerInfo> {
-        let random_next = self.queue.lock().unwrap().get_random_next();
+    fn get_player_info(&self) -> Option<api_models::state::PlayerInfo> {
+        let random_next = self.queue.get_random_next();
         if self.symphonia_player.is_playing() {
             Some(PlayerInfo {
                 state: Some(PlayerState::PLAYING),
@@ -188,7 +255,7 @@ impl Player for RsPlayer {
     }
 
     fn get_playing_context(
-        &mut self,
+        &self,
         query: api_models::state::PlayingContextQuery,
     ) -> Option<api_models::state::PlayingContext> {
         let mut pc = PlayingContext {
@@ -203,10 +270,18 @@ impl Player for RsPlayer {
             playlist_page: None,
             image_url: None,
         };
-        let page_size = 50;
+        let page_size = 100;
         match query {
-            PlayingContextQuery::WithSearchTerm(_term, offset) => {
-                let (total, songs) = self.queue.lock().unwrap().get_queue_page(offset, page_size);
+            PlayingContextQuery::WithSearchTerm(term, offset) => {
+                let (total, songs) = self.queue.get_queue_page(offset, page_size, |song| {
+                    if term.len() > 2 {
+                        song.all_text()
+                            .to_lowercase()
+                            .contains(&term.to_lowercase())
+                    } else {
+                        true
+                    }
+                });
                 let page = PlaylistPage {
                     total,
                     offset: offset + page_size,
@@ -215,25 +290,37 @@ impl Player for RsPlayer {
                 };
                 pc.playlist_page = Some(page);
             }
-            PlayingContextQuery::CurrentSongPage => {}
+            PlayingContextQuery::CurrentSongPage => {
+                let songs = self
+                    .queue
+                    .get_queue_page_starting_from_current_song(page_size);
+                let page = PlaylistPage {
+                    total: page_size,
+                    offset: 0,
+                    limit: page_size,
+                    items: songs,
+                };
+                pc.playlist_page = Some(page);
+            }
+
             PlayingContextQuery::IgnoreSongs => {}
         }
         Some(pc)
     }
 
-    fn get_song_progress(&mut self) -> api_models::state::SongProgress {
-        SongProgress::default()
+    fn get_song_progress(&self) -> api_models::state::SongProgress {
+        let time = self.symphonia_player.get_time();
+        SongProgress {
+            total_time: Duration::from_secs(time.0),
+            current_time: Duration::from_secs(time.1),
+        }
     }
 
-    fn toggle_random_play(&mut self) {
-        self.queue.lock().unwrap().toggle_random_next();
+    fn toggle_random_play(&self) {
+        self.queue.toggle_random_next();
     }
 
-    fn shutdown(&mut self) {
-        // todo!()
-    }
-
-    fn rescan_metadata(&mut self) {
+    fn rescan_metadata(&self) {
         // todo!()
     }
 }
@@ -249,9 +336,9 @@ mod test {
 
     #[test]
     fn should_play_all_songs_in_queue() {
-        let mut player = create_player();
-        player.add_song_in_queue("mp3".to_owned());
-        player.add_song_in_queue("flac".to_owned());
+        let player = create_player();
+        player.add_song_in_queue("mp3");
+        player.add_song_in_queue("flac");
         player.play_queue_from_current_song();
         assert!(player.await_playing_song_to_finish()[0].is_ok());
     }
@@ -281,14 +368,15 @@ mod test {
             Some(result)
         });
 
-        let queue = Arc::new(Mutex::new(PlaybackQueue::new(&PlaybackQueueSetting {
+        let queue = Arc::new(PlaybackQueue::new(&PlaybackQueueSetting {
             db_path: ctx.db_dir.clone(),
-        })));
+        }));
         RsPlayer {
             metadata_service: Arc::new(ms),
+            playlist_service: Arc::new(PlaylistService::new(&PlaylistSetting::default())),
             queue: queue.clone(),
             symphonia_player: SymphoniaPlayer::new(queue, "default".to_string()),
-            play_handle: vec![],
+            play_handle: Arc::new(Mutex::new(vec![])),
         }
     }
 

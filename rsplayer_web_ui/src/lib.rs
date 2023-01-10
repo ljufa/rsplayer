@@ -1,6 +1,6 @@
 use api_models::state::StateChangeEvent;
 
-use seed::{prelude::*, *};
+use seed::{prelude::*, C, IF, TryFutureExt, a, article, attrs, div, empty, i, li, log, p, span, struct_urls, ul};
 use strum_macros::IntoStaticStr;
 extern crate api_models;
 mod page;
@@ -249,7 +249,7 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             let msg_text = message.text();
             if msg_text.is_ok() {
                 let msg = message.json::<StateChangeEvent>().unwrap_or_else(|_| {
-                    panic!("Failed to decode WebSocket text message: {:?}", msg_text)
+                    panic!("Failed to decode WebSocket text message: {msg_text:?}")
                 });
                 if let StateChangeEvent::SongTimeEvent(_) = msg {
                     if let Page::Player(_) = &model.page {

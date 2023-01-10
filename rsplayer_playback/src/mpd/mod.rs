@@ -1,8 +1,8 @@
-use std::borrow::BorrowMut;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use api_models::num_traits::ToPrimitive;
@@ -19,18 +19,13 @@ use mpd::{Client, Query, Song as MpdSong};
 
 use anyhow::Result;
 
+use crate::{
+    get_dynamic_playlists, get_playlist_categories, BY_ARTIST_PL_PREFIX, BY_DATE_PL_PREFIX,
+    BY_FOLDER_PL_PREFIX, BY_GENRE_PL_PREFIX, SAVED_PL_PREFIX,
+};
+
 use super::Player;
 
-const SAVED_PL_PREFIX: &str = "mpd_playlist_saved_";
-const BY_GENRE_PL_PREFIX: &str = "mpd_playlist_by_genre_";
-const BY_DATE_PL_PREFIX: &str = "mpd_playlist_by_date_";
-const BY_ARTIST_PL_PREFIX: &str = "mpd_playlist_by_artist_";
-const BY_FOLDER_PL_PREFIX: &str = "mpd_playlist_by_folder_";
-
-const CATEGORY_ID_BY_GENRE: &str = "mpd_category_by_genre";
-const CATEGORY_ID_BY_DATE: &str = "mpd_category_by_date";
-const CATEGORY_ID_BY_ARTIST: &str = "mpd_category_by_artist";
-const CATEGORY_ID_BY_FOLDER: &str = "mpd_category_by_folder";
 const PAGE_SIZE: usize = 80;
 const MPD_CONF_FILE_TEMPLATE: &str = r#"
 playlist_directory        "/var/lib/mpd/playlists"
@@ -62,11 +57,11 @@ audio_output {
 }
 "#;
 
+const BY_FOLDER_DEPTH: usize = 1;
 #[derive(Debug)]
 pub struct MpdPlayerClient {
-    mpd_client: Client,
-    progress: SongProgress,
-    all_songs: Vec<Song>,
+    mpd_client: Arc<Mutex<Client>>,
+    progress: Arc<Mutex<SongProgress>>,
     mpd_settings: MpdSettings,
 }
 
@@ -75,11 +70,9 @@ impl MpdPlayerClient {
         if !mpd_settings.enabled {
             return Err(anyhow::format_err!("MPD player integration is disabled."));
         }
-
         Ok(MpdPlayerClient {
-            mpd_client: create_client(mpd_settings)?,
-            progress: SongProgress::default(),
-            all_songs: vec![],
+            mpd_client: Arc::new(Mutex::new(create_client(mpd_settings)?)),
+            progress: Arc::new(Mutex::new(SongProgress::default())),
             mpd_settings: mpd_settings.clone(),
         })
     }
@@ -101,37 +94,13 @@ impl MpdPlayerClient {
                     .arg("restart")
                     .arg("mpd")
                     .spawn()?;
-                self.mpd_client = create_client(&self.mpd_settings)?;
+                *self.mpd_client.lock().unwrap() = create_client(&self.mpd_settings)?;
             }
         }
         Ok(())
     }
 
-    fn try_with_reconnect_result<F, R>(&mut self, mut command: F) -> Result<R>
-    where
-        F: FnMut(&mut Client) -> mpd::error::Result<R>,
-    {
-        let mut result = command(self.mpd_client.borrow_mut());
-        if result.is_err() {
-            match Client::connect(self.mpd_settings.get_server_url().as_str()) {
-                Ok(cl) => {
-                    self.mpd_client = cl;
-                    result = command(self.mpd_client.borrow_mut());
-                }
-                Err(e) => result = Err(e),
-            }
-        }
-        match result {
-            Ok(r) => Ok(r),
-            Err(e) => Err(anyhow::format_err!("{}", e)),
-        }
-    }
-
-    fn execute_mpd_command<F, R>(
-        &mut self,
-        command: &str,
-        mut transform_response_fn: F,
-    ) -> Option<R>
+    fn execute_mpd_command<F, R>(&self, command: &str, mut transform_response_fn: F) -> Option<R>
     where
         F: FnMut(&mut BufReader<&mut TcpStream>) -> Option<R>,
     {
@@ -147,17 +116,17 @@ impl MpdPlayerClient {
         transform_response_fn(&mut reader)
     }
 
-    fn get_songs_in_queue(&mut self) -> Vec<Song> {
+    fn get_songs_in_queue(&self) -> Vec<Song> {
         self.execute_mpd_command("playlistinfo", |reader| Some(mpd_response_to_songs(reader)))
             .unwrap()
     }
 
-    fn get_all_songs_in_library(&mut self) -> Vec<Song> {
+    fn get_all_songs_in_library(&self) -> Vec<Song> {
         self.execute_mpd_command("listallinfo", |reader| Some(mpd_response_to_songs(reader)))
             .unwrap()
     }
 
-    fn get_songs_in_playlist(&mut self, playlist_name: String) -> Vec<Song> {
+    fn get_songs_in_playlist(&self, playlist_name: &str) -> Vec<Song> {
         self.execute_mpd_command(
             format!("listplaylistinfo \"{playlist_name}\"").as_str(),
             |reader| Some(mpd_response_to_songs(reader)),
@@ -167,123 +136,122 @@ impl MpdPlayerClient {
 }
 
 impl Player for MpdPlayerClient {
-    fn play_queue_from_current_song(&mut self) {
-        _ = self.try_with_reconnect_result(mpd::Client::play);
+    fn play_queue_from_current_song(&self) {
+        _ = self.mpd_client.lock().unwrap().play();
     }
 
-    fn pause_current_song(&mut self) {
-        _ = self.try_with_reconnect_result(|client| client.pause(true));
+    fn pause_current_song(&self) {
+        _ = self.mpd_client.lock().unwrap().pause(true);
     }
 
-    fn play_next_song(&mut self) {
-        _ = self.try_with_reconnect_result(mpd::Client::next);
+    fn play_next_song(&self) {
+        _ = self.mpd_client.lock().unwrap().next();
     }
 
-    fn play_prev_song(&mut self) {
-        _ = self.try_with_reconnect_result(mpd::Client::prev);
+    fn play_prev_song(&self) {
+        _ = self.mpd_client.lock().unwrap().prev();
     }
 
-    fn stop_current_song(&mut self) {
-        _ = self.try_with_reconnect_result(mpd::Client::stop);
+    fn stop_current_song(&self) {
+        _ = self.mpd_client.lock().unwrap().stop();
     }
 
-    fn shutdown(&mut self) {
-        info!("Shutting down MPD player!");
-        self.stop_current_song();
-        _ = self.mpd_client.close();
-        info!("MPD player shutdown finished!");
-    }
-
-    fn seek_current_song(&mut self, seconds: i8) {
-        let result = self.try_with_reconnect_result(mpd::Client::status);
+    fn seek_current_song(&self, seconds: i8) {
+        let result = self.mpd_client.lock().unwrap().status();
         if let Ok(status) = result {
             //todo: implement protection against going of the range
             let position = status.elapsed.unwrap().num_seconds() + i64::from(seconds);
-            _ = self.mpd_client.rewind(position);
+            _ = self.mpd_client.lock().unwrap().rewind(position);
         };
     }
 
-    fn toggle_random_play(&mut self) {
-        let status = self.try_with_reconnect_result(mpd::Client::status);
+    fn toggle_random_play(&self) {
+        let status = self.mpd_client.lock().unwrap().status();
         if let Ok(status) = status {
-            _ = self.mpd_client.random(!status.random);
+            _ = self.mpd_client.lock().unwrap().random(!status.random);
         }
     }
 
-    fn load_playlist_in_queue(&mut self, pl_id: String) {
+    fn load_playlist_in_queue(&self, pl_id: &str) {
         if pl_id.starts_with(SAVED_PL_PREFIX) {
             let pl_id = pl_id.replace(SAVED_PL_PREFIX, "");
-            _ = self.try_with_reconnect_result(|client| {
-                _ = client.clear();
-                client.load(pl_id.clone(), ..)
-            });
+            _ = self.mpd_client.lock().unwrap().clear();
+            _ = self.mpd_client.lock().unwrap().load(pl_id, ..);
         } else if pl_id.starts_with(BY_GENRE_PL_PREFIX) {
             let pl_id = pl_id.replace(BY_GENRE_PL_PREFIX, "");
-            _ = self.mpd_client.clear();
+            _ = self.mpd_client.lock().unwrap().clear();
             _ = self
                 .mpd_client
+                .lock()
+                .unwrap()
                 .findadd(Query::new().and(mpd::Term::Tag("Genre".into()), pl_id));
         } else if pl_id.starts_with(BY_DATE_PL_PREFIX) {
             let pl_id = pl_id.replace(BY_DATE_PL_PREFIX, "");
-            _ = self.mpd_client.clear();
+            _ = self.mpd_client.lock().unwrap().clear();
             _ = self
                 .mpd_client
+                .lock()
+                .unwrap()
                 .findadd(Query::new().and(mpd::Term::Tag("Date".into()), pl_id));
         } else if pl_id.starts_with(BY_ARTIST_PL_PREFIX) {
             let pl_id = pl_id.replace(BY_ARTIST_PL_PREFIX, "");
-            _ = self.mpd_client.clear();
+            _ = self.mpd_client.lock().unwrap().clear();
             _ = self
                 .mpd_client
+                .lock()
+                .unwrap()
                 .findadd(Query::new().and(mpd::Term::Tag("Artist".into()), pl_id));
         } else if pl_id.starts_with(BY_FOLDER_PL_PREFIX) {
             let pl_id = pl_id.replace(BY_FOLDER_PL_PREFIX, "");
-            _ = self.mpd_client.clear();
-            self.all_songs
+            _ = self.mpd_client.lock().unwrap().clear();
+            self.get_all_songs_in_library()
                 .iter()
                 .filter(|s| {
                     s.file
                         .split('/')
-                        .nth(1)
+                        .nth(BY_FOLDER_DEPTH)
                         .unwrap_or_default()
                         .eq_ignore_ascii_case(pl_id.as_str())
                 })
                 .for_each(|s| {
                     _ = self
                         .mpd_client
+                        .lock()
+                        .unwrap()
                         .findadd(Query::new().and(mpd::Term::File, s.file.clone()));
                 });
         }
-        _ = self.mpd_client.play();
+        _ = self.mpd_client.lock().unwrap().play();
     }
 
-    fn load_album_in_queue(&mut self, _album_id: String) {
-        todo!()
+    fn load_album_in_queue(&self, _album_id: &str) {
+        // todo!()
     }
 
-    fn play_song(&mut self, id: String) {
+    fn play_song(&self, id: &str) {
         if let Ok(id) = id.parse::<u32>() {
-            _ = self.try_with_reconnect_result(|client| client.switch(mpd::song::Id(id)));
+            _ = self.mpd_client.lock().unwrap().switch(mpd::song::Id(id));
         }
     }
 
-    fn remove_song_from_queue(&mut self, id: String) {
+    fn remove_song_from_queue(&self, id: &str) {
         if let Ok(id) = id.parse::<u32>() {
-            _ = self.try_with_reconnect_result(|client| client.delete(mpd::song::Id(id)));
+            _ = self.mpd_client.lock().unwrap().delete(mpd::song::Id(id));
         }
     }
 
-    fn get_song_progress(&mut self) -> SongProgress {
-        self.progress.clone()
+    fn get_song_progress(&self) -> SongProgress {
+        self.progress.lock().unwrap().clone()
     }
 
-    fn get_current_song(&mut self) -> Option<Song> {
-        let result = self.try_with_reconnect_result(mpd::Client::currentsong);
+    fn get_current_song(&self) -> Option<Song> {
+        let result = self.mpd_client.lock().unwrap().currentsong();
         let song = result.unwrap_or(None);
         song.map(|s| map_song(&s))
     }
 
-    fn get_player_info(&mut self) -> Option<PlayerInfo> {
-        let status = self.try_with_reconnect_result(mpd::Client::status);
+    fn get_player_info(&self) -> Option<PlayerInfo> {
+        let status = self.mpd_client.lock().unwrap().status();
         trace!("Mpd Status is {:?}", status);
         if let Ok(status) = status {
             let time = status.time.map_or((Duration::ZERO, Duration::ZERO), |t| {
@@ -302,7 +270,7 @@ impl Player for MpdPlayerClient {
                     ),
                 )
             });
-            self.progress = SongProgress {
+            *self.progress.lock().unwrap() = SongProgress {
                 total_time: time.1,
                 current_time: time.0,
             };
@@ -315,11 +283,12 @@ impl Player for MpdPlayerClient {
             })
         } else {
             error!("Error while getting mpd status {:?}", status);
+            *self.mpd_client.lock().unwrap() = create_client(&self.mpd_settings).unwrap();
             None
         }
     }
 
-    fn get_playing_context(&mut self, query: PlayingContextQuery) -> Option<PlayingContext> {
+    fn get_playing_context(&self, query: PlayingContextQuery) -> Option<PlayingContext> {
         let mut pc = PlayingContext {
             id: "1".to_string(),
             name: "Queue".to_string(),
@@ -372,35 +341,17 @@ impl Player for MpdPlayerClient {
         Some(pc)
     }
 
-    fn get_playlist_categories(&mut self) -> Vec<Category> {
-        vec![
-            Category {
-                id: CATEGORY_ID_BY_ARTIST.to_string(),
-                name: "By Artist".to_string(),
-                icon: String::new(),
-            },
-            Category {
-                id: CATEGORY_ID_BY_DATE.to_string(),
-                name: "By Date".to_string(),
-                icon: String::new(),
-            },
-            Category {
-                id: CATEGORY_ID_BY_GENRE.to_string(),
-                name: "By Genre".to_string(),
-                icon: String::new(),
-            },
-            Category {
-                id: CATEGORY_ID_BY_FOLDER.to_string(),
-                name: "By Directory".to_string(),
-                icon: String::new(),
-            },
-        ]
+    fn get_playlist_categories(&self) -> Vec<Category> {
+        get_playlist_categories()
     }
 
-    fn get_static_playlists(&mut self) -> Playlists {
+    fn get_static_playlists(&self) -> Playlists {
         // saved pls
         let pls = self
-            .try_with_reconnect_result(mpd::Client::playlists)
+            .mpd_client
+            .lock()
+            .unwrap()
+            .playlists()
             .unwrap_or_default();
         let items: Vec<PlaylistType> = pls
             .iter()
@@ -418,59 +369,30 @@ impl Player for MpdPlayerClient {
     }
 
     fn get_dynamic_playlists(
-        &mut self,
+        &self,
         category_ids: Vec<String>,
         offset: u32,
         limit: u32,
     ) -> Vec<DynamicPlaylistsPage> {
-        if self.all_songs.is_empty() {
-            self.all_songs = self.get_all_songs_in_library();
-        };
-        let mut result = vec![];
-        for category_id in category_ids {
-            result.push(match category_id.as_str() {
-                CATEGORY_ID_BY_ARTIST => DynamicPlaylistsPage {
-                    category_id: CATEGORY_ID_BY_ARTIST.to_string(),
-                    playlists: get_playlists_by_artist(&self.all_songs, offset, limit),
-                    offset,
-                    limit,
-                },
-                CATEGORY_ID_BY_DATE => DynamicPlaylistsPage {
-                    category_id: CATEGORY_ID_BY_DATE.to_string(),
-                    playlists: get_playlists_by_date(&self.all_songs, offset, limit),
-                    offset,
-                    limit,
-                },
-                CATEGORY_ID_BY_GENRE => DynamicPlaylistsPage {
-                    category_id: CATEGORY_ID_BY_GENRE.to_string(),
-                    playlists: get_playlists_by_genre(&self.all_songs, offset, limit),
-                    offset,
-                    limit,
-                },
-                CATEGORY_ID_BY_FOLDER => DynamicPlaylistsPage {
-                    category_id: CATEGORY_ID_BY_FOLDER.to_string(),
-                    playlists: get_playlists_by_folder(&self.all_songs, offset, limit),
-                    offset,
-                    limit,
-                },
-                &_ => {
-                    todo!()
-                }
-            });
-        }
-        result
+        get_dynamic_playlists(
+            category_ids,
+            &self.get_all_songs_in_library(),
+            offset,
+            limit,
+            2,
+        )
     }
 
-    fn get_playlist_items(&mut self, playlist_id: String) -> Vec<Song> {
+    fn get_playlist_items(&self, playlist_id: &str) -> Vec<Song> {
         if playlist_id.starts_with(SAVED_PL_PREFIX) {
             let pl_name = playlist_id.replace(SAVED_PL_PREFIX, "");
-            self.get_songs_in_playlist(pl_name)
+            self.get_songs_in_playlist(&pl_name)
                 .into_iter()
                 .take(100)
                 .collect()
         } else if playlist_id.starts_with(BY_GENRE_PL_PREFIX) {
             let pl_name = playlist_id.replace(BY_GENRE_PL_PREFIX, "");
-            self.all_songs
+            self.get_all_songs_in_library()
                 .iter()
                 .filter(|s| s.genre.as_ref().map_or(false, |g| *g == pl_name))
                 .take(100)
@@ -478,7 +400,7 @@ impl Player for MpdPlayerClient {
                 .collect()
         } else if playlist_id.starts_with(BY_ARTIST_PL_PREFIX) {
             let pl_name = playlist_id.replace(BY_ARTIST_PL_PREFIX, "");
-            self.all_songs
+            self.get_all_songs_in_library()
                 .iter()
                 .filter(|s| s.artist.as_ref().map_or(false, |a| *a == pl_name))
                 .take(100)
@@ -486,7 +408,7 @@ impl Player for MpdPlayerClient {
                 .collect()
         } else if playlist_id.starts_with(BY_DATE_PL_PREFIX) {
             let pl_name = playlist_id.replace(BY_DATE_PL_PREFIX, "");
-            self.all_songs
+            self.get_all_songs_in_library()
                 .iter()
                 .filter(|s| s.date.as_ref().map_or(false, |d| *d == pl_name))
                 .take(100)
@@ -494,9 +416,14 @@ impl Player for MpdPlayerClient {
                 .collect()
         } else if playlist_id.starts_with(BY_FOLDER_PL_PREFIX) {
             let pl_name = playlist_id.replace(BY_FOLDER_PL_PREFIX, "");
-            self.all_songs
+            self.get_all_songs_in_library()
                 .iter()
-                .filter(|s| s.file.split('/').nth(1).map_or(false, |d| *d == pl_name))
+                .filter(|s| {
+                    s.file
+                        .split('/')
+                        .nth(BY_FOLDER_DEPTH)
+                        .map_or(false, |d| *d == pl_name)
+                })
                 .take(100)
                 .cloned()
                 .collect()
@@ -505,17 +432,17 @@ impl Player for MpdPlayerClient {
         }
     }
 
-    fn load_song_in_queue(&mut self, song_id: String) {
+    fn load_song_in_queue(&self, song_id: &str) {
         self.clear_queue();
         self.add_song_in_queue(song_id);
         self.play_queue_from_current_song();
     }
 
-    fn add_song_in_queue(&mut self, song_id: String) {
+    fn add_song_in_queue(&self, song_id: &str) {
         self.execute_mpd_command(
             format!("add \"{song_id}\"").as_str(),
             |reader| -> Option<String> {
-                let mut out: String = String::new();
+                let mut out = String::new();
                 reader.read_line(&mut out).expect("Failed to read response");
                 debug!("Response line {}", out);
                 None
@@ -523,113 +450,17 @@ impl Player for MpdPlayerClient {
         );
     }
 
-    fn clear_queue(&mut self) {
-        _ = self.mpd_client.clear();
+    fn clear_queue(&self) {
+        _ = self.mpd_client.lock().unwrap().clear();
     }
 
-    fn save_queue_as_playlist(&mut self, playlist_name: String) {
-        _ = self.mpd_client.save(playlist_name);
+    fn save_queue_as_playlist(&self, playlist_name: &str) {
+        _ = self.mpd_client.lock().unwrap().save(playlist_name);
     }
 
-    fn rescan_metadata(&mut self) {
-        _ = self.mpd_client.rescan();
+    fn rescan_metadata(&self) {
+        _ = self.mpd_client.lock().unwrap().rescan();
     }
-}
-
-fn get_playlists_by_genre(all_songs: &[Song], offset: u32, limit: u32) -> Vec<Playlist> {
-    let mut items = vec![];
-    let mut genres: Vec<String> = all_songs
-        .iter()
-        .filter_map(|s| s.genre.clone())
-        .filter(|g| g.starts_with(char::is_alphabetic))
-        .collect();
-    genres.sort();
-    genres.dedup();
-    genres
-        .iter()
-        .skip(offset as usize)
-        .take(limit as usize)
-        .for_each(|g| {
-            items.push(Playlist {
-                name: g.clone(),
-                id: format!("{BY_GENRE_PL_PREFIX}{g}"),
-                description: Some("Songs by genre ".to_string() + g),
-                image: None,
-                owner_name: None,
-            });
-        });
-    items
-}
-
-fn get_playlists_by_date(all_songs: &[Song], offset: u32, limit: u32) -> Vec<Playlist> {
-    // dynamic pls
-    let mut items = vec![];
-    let mut dates: Vec<String> = all_songs.iter().filter_map(|s| s.date.clone()).collect();
-    dates.sort();
-    dates.dedup();
-    dates.reverse();
-    dates
-        .iter()
-        .skip(offset as usize)
-        .take(limit as usize)
-        .for_each(|date| {
-            items.push(Playlist {
-                name: date.clone(),
-                id: format!("{BY_DATE_PL_PREFIX}{date}"),
-                description: Some("Songs by date ".to_string() + date),
-                image: None,
-                owner_name: None,
-            });
-        });
-    items
-}
-
-fn get_playlists_by_artist(all_songs: &[Song], offset: u32, limit: u32) -> Vec<Playlist> {
-    let mut items = vec![];
-    let mut artists: Vec<String> = all_songs
-        .iter()
-        .filter_map(|s| s.artist.clone())
-        .filter(|art| art.starts_with(char::is_alphabetic))
-        .collect();
-    artists.sort();
-    artists.dedup();
-    artists
-        .iter()
-        .skip(offset as usize)
-        .take(limit as usize)
-        .for_each(|art| {
-            items.push(Playlist {
-                name: art.clone(),
-                id: format!("{BY_ARTIST_PL_PREFIX}{art}"),
-                description: Some("Songs by artist ".to_string() + art),
-                image: None,
-                owner_name: None,
-            });
-        });
-    items
-}
-
-fn get_playlists_by_folder(all_songs: &[Song], offset: u32, limit: u32) -> Vec<Playlist> {
-    let mut items = vec![];
-    let second_level_folders: HashSet<String> = all_songs
-        .iter()
-        .map(|s| s.file.clone())
-        .map(|file| file.split('/').nth(1).unwrap_or_default().to_string())
-        .collect();
-    second_level_folders
-        .iter()
-        .skip(offset as usize)
-        .take(limit as usize)
-        .for_each(|folder| {
-            items.push(Playlist {
-                name: folder.clone(),
-                id: format!("{BY_FOLDER_PL_PREFIX}{folder}"),
-                description: Some("Songs by dir ".to_string() + folder),
-                image: None,
-                owner_name: None,
-            });
-        });
-    items
 }
 
 fn map_song(song: &MpdSong) -> Song {
@@ -669,7 +500,10 @@ const fn map_state(mpd_state: mpd::status::State) -> PlayerState {
 
 impl Drop for MpdPlayerClient {
     fn drop(&mut self) {
-        self.shutdown();
+        info!("Shutting down MPD player!");
+        self.stop_current_song();
+        _ = self.mpd_client.lock().unwrap().close();
+        info!("MPD player shutdown finished!");
     }
 }
 
@@ -697,13 +531,15 @@ fn create_client(mpd_settings: &MpdSettings) -> Result<Client> {
             }
         }
     }
-    match connection {
-        Some(c) => Ok(c),
-        None => Err(anyhow::format_err!(
-            "Failed connect to to MPD server! [{}]",
-            last_error.unwrap()
-        )),
-    }
+    connection.map_or_else(
+        || {
+            Err(anyhow::format_err!(
+                "Failed connect to to MPD server! [{}]",
+                last_error.unwrap()
+            ))
+        },
+        Ok,
+    )
 }
 
 fn create_socket_client(mpd_server_url: &str) -> TcpStream {

@@ -36,16 +36,12 @@ impl SpotifyOauth {
 
                 if expired {
                     // Ensure that we actually got a token from the refetch
-                    match self.client.refetch_token()? {
-                        Some(refreshed_token) => {
-                            log::info!("Successfully refreshed expired token from token cache");
-                            *self.client.get_token().lock().unwrap() = Some(refreshed_token);
-                        }
-                        // If not, prompt the user for it
-                        None => {
-                            log::info!("Unable to refresh expired token from token cache");
-                            return Ok(false);
-                        }
+                    if let Some(refreshed_token) = self.client.refetch_token()? {
+                        log::info!("Successfully refreshed expired token from token cache");
+                        *self.client.get_token().lock().unwrap() = Some(refreshed_token);
+                    } else {
+                        log::info!("Unable to refresh expired token from token cache");
+                        return Ok(false);
                     }
                 }
             }

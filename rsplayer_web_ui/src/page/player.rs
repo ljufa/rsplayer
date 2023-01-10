@@ -1,9 +1,9 @@
-use api_models::common::*;
-use api_models::player::*;
+use api_models::common::{PlayerCommand, SystemCommand, Volume};
+use api_models::player::Song;
 use api_models::serde::Deserialize;
-use api_models::state::*;
+use api_models::state::{AudioOut, PlayerInfo, PlayerState, SongProgress, StateChangeEvent, StreamerState};
 
-use seed::{prelude::*, *};
+use seed::{prelude::*, C, IF, a, attrs, button, div, empty, i, input, log, nav, p, progress, span, style};
 
 use std::str::FromStr;
 
@@ -48,7 +48,7 @@ pub struct Image {
 //     Init
 // ------ ------
 
-pub(crate) fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
+pub fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
     orders.send_msg(Msg::SendPlayerCommand(PlayerCommand::QueryCurrentSong));
     orders.send_msg(Msg::SendPlayerCommand(
         PlayerCommand::QueryCurrentPlayerInfo,
@@ -73,7 +73,7 @@ pub(crate) fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
 //    Update
 // ------ ------
 
-pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
+pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
         Msg::AlbumImageUpdated(image) => {
             model.current_song.as_mut().unwrap().image_url = Some(image.text);
@@ -109,7 +109,7 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
         Msg::SendSystemCommand(cmd) => {
             log!("Player {}", cmd);
             if let SystemCommand::SetVol(vol) = cmd {
-                model.streamer_status.volume_state.current = vol as i64
+                model.streamer_status.volume_state.current = i64::from(vol)
             }
             orders.skip();
         }
@@ -134,7 +134,7 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
 // ------ ------
 //     View
 // ------ ------
-pub(crate) fn view(model: &Model) -> Node<Msg> {
+pub fn view(model: &Model) -> Node<Msg> {
     div![
         style! {
             St::BackgroundImage => get_background_image(model),
@@ -376,7 +376,10 @@ fn view_volume_slider(volume_state: &Volume) -> Node<Msg> {
 
 fn get_background_image(model: &Model) -> String {
     if let Some(ps) = model.current_song.as_ref() {
-        format!("url({})", ps.image_url.as_ref().map_or("/no_album.png", |f| f))
+        format!(
+            "url({})",
+            ps.image_url.as_ref().map_or("/no_album.png", |f| f)
+        )
     } else {
         String::new()
     }
@@ -401,7 +404,7 @@ async fn update_album_cover(track: Song) -> Msg {
 }
 
 async fn get_album_image_from_lastfm_api(album: String, artist: String) -> Option<Image> {
-    let response = fetch(format!("http://ws.audioscrobbler.com/2.0/?method=album.getinfo&album={}&artist={}&api_key=3b3df6c5dd3ad07222adc8dd3ccd8cdc&format=json", album, artist)).await;
+    let response = fetch(format!("http://ws.audioscrobbler.com/2.0/?method=album.getinfo&album={album}&artist={artist}&api_key=3b3df6c5dd3ad07222adc8dd3ccd8cdc&format=json")).await;
     if let Ok(response) = response {
         let info = response.json::<AlbumInfo>().await;
         if let Ok(info) = info {

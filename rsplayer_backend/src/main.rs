@@ -18,7 +18,7 @@ use rsplayer_config::Configuration;
 use crate::audio_device::audio_service::AudioInterfaceService;
 use crate::control::command_handler;
 
-use rsplayer_metadata::metadata::*;
+use rsplayer_metadata::metadata::MetadataService;
 
 mod audio_device;
 mod common;
@@ -67,7 +67,7 @@ async fn main() {
         start_degraded(&mut term_signal, e, &config).await;
     }
 
-    let player_service = Arc::new(Mutex::new(player_service.unwrap()));
+    let player_service = Arc::new(player_service.unwrap());
     info!("Player service successfully created.");
 
     let (player_commands_tx, player_commands_rx) = tokio::sync::mpsc::channel(10);

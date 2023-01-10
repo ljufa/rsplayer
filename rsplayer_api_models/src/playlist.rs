@@ -20,7 +20,7 @@ pub struct Album {
     pub release_date: Option<String>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Default)]
 pub struct Playlist {
     pub name: String,
     pub id: String,
@@ -74,18 +74,21 @@ impl Playlists {
     }
 }
 impl PlaylistType {
+    #[must_use]
     pub const fn is_saved(&self) -> bool {
-        matches!(*self, PlaylistType::Saved(_))
+        matches!(*self, Self::Saved(_))
     }
+    #[must_use]
     pub const fn is_featured(&self) -> bool {
-        matches!(*self, PlaylistType::Featured(_))
+        matches!(*self, Self::Featured(_))
     }
-
+    #[must_use]
     pub const fn is_new_release(&self) -> bool {
-        matches!(*self, PlaylistType::NewRelease(_))
+        matches!(*self, Self::NewRelease(_))
     }
 }
 impl Category {
+    #[must_use]
     pub fn sanitized_id(&self) -> String {
         self.id.replace(
             &['(', ' ', '/', ')', '+', '&', ',', '\"', '.', ';', ':', '\''][..],

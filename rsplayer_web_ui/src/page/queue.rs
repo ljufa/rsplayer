@@ -2,7 +2,7 @@ use api_models::player::Song;
 use api_models::state::{PlayingContext, PlayingContextQuery, StateChangeEvent};
 use api_models::{common::PlayerCommand, state::PlayingContextType};
 use seed::prelude::web_sys::KeyboardEvent;
-use seed::{prelude::*, *};
+use seed::{prelude::*, C, FutureExt, IF, a, attrs, b, button, div, empty, footer, header, i, id, input, log, nodes, p, progress, section, span, style};
 
 use crate::scrollToId;
 
@@ -46,7 +46,7 @@ pub enum Msg {
     KeyPressed(web_sys::KeyboardEvent),
 }
 
-pub(crate) fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
+pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     log!("Queue: init");
     orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentSong));
     orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
@@ -72,7 +72,7 @@ pub(crate) fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
 //    Update
 // ------ ------
 
-pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
+pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
         Msg::StatusChangeEventReceived(StateChangeEvent::CurrentPlayingContextEvent(pc)) => {
             model.waiting_response = false;
@@ -116,16 +116,16 @@ pub(crate) fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<M
         }
         Msg::ShowStartingFromCurrentSong => {
             model.waiting_response = true;
-            model.search_input = "".to_string();
+            model.search_input = String::new();
             orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
                 PlayingContextQuery::CurrentSongPage,
             )));
         }
         Msg::ClearSearch => {
             model.waiting_response = true;
-            model.search_input = "".to_string();
+            model.search_input = String::new();
             orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
-                PlayingContextQuery::WithSearchTerm("".to_string(), 0),
+                PlayingContextQuery::WithSearchTerm(String::new(), 0),
             )));
         }
         Msg::LocateCurrentSong => {

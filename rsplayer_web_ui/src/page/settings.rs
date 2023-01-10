@@ -1,10 +1,10 @@
 use api_models::{
     common::{FilterType, GainLevel, PlayerType, SystemCommand, VolumeCrtlType},
-    settings::*,
+    settings::{AlsaDeviceFormat, DacSettings, IRInputControlerSettings, LmsSettings, MetadataStoreSettings, MpdSettings, OLEDSettings, OutputSelectorSettings, Settings, VolumeControlSettings},
     spotify::SpotifyAccountInfo,
     validator::Validate,
 };
-use seed::{prelude::*, *};
+use seed::{prelude::*, C, FutureExt, IF, attrs, button, div, empty, h1, i, input, label, log, option, p, section, select, span, style};
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 
@@ -14,7 +14,8 @@ const API_SPOTIFY_GET_ACCOUNT_INFO_PATH: &str = "/api/spotify/me";
 
 // ------ ------
 //     Model
-#[derive(Debug)]
+
+#[derive(Debug) ]
 pub struct Model {
     settings: Settings,
     waiting_response: bool,
@@ -80,7 +81,7 @@ pub enum Msg {
 // ------ ------
 //     Init
 // ------ ------
-pub(crate) fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
+pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     log!("Settings Init called");
     orders.perform_cmd(async {
         let response = fetch(API_SETTINGS_PATH)
@@ -114,7 +115,7 @@ pub(crate) fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
 //    Update
 // ------ ------
 
-pub(crate) fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
+pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
         Msg::SaveSettingsAndRestart => {
             // todo: show modal wait window while server is restarting. use ws status.
@@ -242,12 +243,21 @@ pub(crate) fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>)
             log!("Saved settings with result {}", saved);
             model.waiting_response = false;
         }
+        Msg::ClickRescanMetadataButton => {
+            let settings = model.settings.clone();
+            orders.perform_cmd(async move {
+                _ = save_settings(settings, "reload=false".to_string()).await;
+            });
+            orders.send_msg(Msg::SendCommand(SystemCommand::RescanMetadata(
+                model.settings.metadata_settings.music_directory.clone(),
+            )));
+        }
         _ => {}
     }
 }
 
 async fn save_settings(settings: Settings, query: String) -> fetch::Result<Settings> {
-    Request::new(format!("{}?{}", API_SETTINGS_PATH, query))
+    Request::new(format!("{API_SETTINGS_PATH}?{query}"))
         .method(Method::Post)
         .json(&settings)?
         .fetch()
@@ -261,7 +271,7 @@ async fn save_settings(settings: Settings, query: String) -> fetch::Result<Setti
 //     View
 // ------ ------
 
-pub(crate) fn view(model: &Model) -> Node<Msg> {
+pub fn view(model: &Model) -> Node<Msg> {
     div![
         // spinner
         div![
@@ -1054,9 +1064,7 @@ fn view_metadata_storage(metadata_settings: &MetadataStoreSettings) -> Node<Msg>
         ],
         button![
             C!["is-primary", "is-large"],
-            ev(Ev::Click, move |_| Msg::SendCommand(
-                SystemCommand::RescanMetadata
-            )),
+            ev(Ev::Click, move |_| Msg::ClickRescanMetadataButton),
             "Rescan"
         ]
     ]

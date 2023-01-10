@@ -21,6 +21,7 @@ pub struct Settings {
     pub active_player: PlayerType,
     pub metadata_settings: MetadataStoreSettings,
     pub playback_queue_settings: PlaybackQueueSetting,
+    // pub playlist_settings: PlaylistSetting
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,6 +109,10 @@ pub struct MetadataStoreSettings {
 pub struct PlaybackQueueSetting {
     pub db_path: String,
 }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+pub struct PlaylistSetting {
+    pub db_path: String,
+}
 
 fn validate_ip(val: &str) -> Result<(), ValidationError> {
     if validate_ip_v4(val) {
@@ -151,11 +156,13 @@ pub struct OLEDSettings {
 }
 
 impl LmsSettings {
+    #[must_use]
     pub fn get_cli_url(&self) -> String {
         format!("{}:{}", self.server_host, self.cli_port)
     }
 }
 impl MpdSettings {
+    #[must_use]
     pub fn get_server_url(&self) -> String {
         format!("{}:{}", self.server_host, self.server_port)
     }
@@ -184,17 +191,24 @@ impl Default for PlaybackQueueSetting {
         }
     }
 }
+impl Default for PlaylistSetting {
+    fn default() -> Self {
+        Self {
+            db_path: "playlist.db".to_string(),
+        }
+    }
+}
 pub const DEFAULT_ALSA_PCM_DEVICE: &str = "hw:1";
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings {
-            active_player: PlayerType::MPD,
+        Self {
+            active_player: PlayerType::RSP,
             output_selector_settings: OutputSelectorSettings { enabled: false },
             volume_ctrl_settings: VolumeControlSettings {
+                rotary_enabled: false,
                 volume_step: 2,
                 ctrl_device: VolumeCrtlType::Dac,
-                rotary_enabled: false,
                 rotary_event_device_path: "/dev/input/by-path/platform-rotary@f-event".to_string(),
             },
             spotify_settings: SpotifySettings {
@@ -227,7 +241,7 @@ impl Default for Settings {
                 available_dac_chips: HashMap::new(),
             },
             mpd_settings: MpdSettings {
-                enabled: true,
+                enabled: false,
                 server_host: String::from("127.0.0.1"),
                 server_port: 6600,
                 override_external_configuration: false,

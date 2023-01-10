@@ -9,12 +9,11 @@ use mockall_double::double;
 use rsplayer_config::MutArcConfiguration;
 #[double]
 use rsplayer_metadata::metadata::MetadataService;
-use rspotify::sync::Mutex;
 
-pub type MutArcPlayerService = Arc<Mutex<PlayerService>>;
+pub type MutArcPlayerService = Arc<PlayerService>;
 
 pub struct PlayerService {
-    player: Box<dyn Player + Send>,
+    player: Box<dyn Player + Send + Sync>,
 }
 
 impl PlayerService {
@@ -27,16 +26,16 @@ impl PlayerService {
             player: Self::create_player(&settings, metadata_service)?,
         })
     }
-
-    pub fn get_current_player(&mut self) -> &mut Box<dyn Player + Send> {
-        &mut self.player
+    #[allow(clippy::borrowed_box)]
+    pub fn get_current_player(&self) -> &Box<dyn Player + Send + Sync> {
+        &self.player
     }
 
     #[allow(unreachable_patterns)]
     fn create_player(
         settings: &Settings,
         metadata_service: Arc<MetadataService>,
-    ) -> Result<Box<dyn Player + Send>> {
+    ) -> Result<Box<dyn Player + Send + Sync>> {
         match &settings.active_player {
             PlayerType::SPF => {
                 let mut sp = SpotifyPlayerClient::new(&settings.spotify_settings)?;
@@ -58,7 +57,7 @@ impl PlayerService {
                     RsPlayer::new(metadata_service, settings.alsa_settings.device_name.clone());
                 Ok(Box::new(rsp))
             }
-            _ => panic!("Unknown type"),
+            PlayerType::LMS => panic!("Unsupported type"),
         }
     }
 }

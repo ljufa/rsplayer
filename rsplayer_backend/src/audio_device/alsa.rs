@@ -154,7 +154,9 @@ impl VolumeControlDevice for AlsaMixer {
         Volume::default()
     }
 }
+
 #[cfg(test)]
+#[allow(clippy::pedantic, clippy::nursery)]
 mod test {
     use std::ffi::CString;
 
@@ -166,14 +168,13 @@ mod test {
     };
 
     #[test]
-
     fn test_set_volume() {
         for t in &["pcm", "ctl", "rawmidi", "timer", "seq", "hwdep"] {
-            println!("{} devices:", t);
+            println!("{t} devices:");
             let i = HintIter::new(None, &CString::new(*t).unwrap()).unwrap();
             for a in i {
                 if a.direction.is_none() {
-                    println!("  {:?}", a)
+                    println!("  {a:?}");
                 }
             }
         }

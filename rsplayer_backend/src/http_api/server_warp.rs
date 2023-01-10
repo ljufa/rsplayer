@@ -133,6 +133,8 @@ pub fn start(
     let http_handle = warp::serve(routes).run(([0, 0, 0, 0], get_port()));
     (http_handle, ws_handle)
 }
+
+#[allow(warnings)]
 mod filters {
     use std::collections::HashMap;
 
@@ -240,6 +242,7 @@ mod filters {
     }
 }
 
+#[allow(warnings, clippy::unused_async)]
 mod handlers {
     use rsplayer_playback::spotify::oauth::SpotifyOauth;
     use std::{collections::HashMap, convert::Infallible};
@@ -294,11 +297,7 @@ mod handlers {
         player_service: MutArcPlayerService,
     ) -> Result<impl warp::Reply, Infallible> {
         Ok(warp::reply::json(
-            &player_service
-                .lock()
-                .unwrap()
-                .get_current_player()
-                .get_static_playlists(),
+            &player_service.get_current_player().get_static_playlists(),
         ))
     }
     pub async fn get_playlist_categories(
@@ -306,8 +305,6 @@ mod handlers {
     ) -> Result<impl warp::Reply, Infallible> {
         Ok(warp::reply::json(
             &player_service
-                .lock()
-                .unwrap()
                 .get_current_player()
                 .get_playlist_categories(),
         ))
@@ -335,6 +332,7 @@ mod handlers {
             )),
         }
     }
+
     pub async fn spotify_authorization_callback(
         url: HashMap<String, String>,
     ) -> Result<impl warp::Reply, Infallible> {
@@ -370,10 +368,8 @@ mod handlers {
     ) -> Result<impl warp::Reply, Infallible> {
         Ok(warp::reply::json(
             &player_service
-                .lock()
-                .unwrap()
                 .get_current_player()
-                .get_playlist_items(playlist_name),
+                .get_playlist_items(&playlist_name),
         ))
     }
 }
@@ -472,7 +468,7 @@ fn get_port() -> u16 {
         }
         error!("Fallback port {} is also unavailable", fallback_port);
     }
-    panic!("Desired port [{}], default port [{}] and fallback port [{}] are unavailable! Please specify another value for RSPLAYER_HTTP_PORT in rsplayer.service file", port, default_port, fallback_port)
+    panic!("Desired port [{port}], default port [{default_port}] and fallback port [{fallback_port}] are unavailable! Please specify another value for RSPLAYER_HTTP_PORT in rsplayer.service file")
 }
 
 fn is_local_port_free(port: u16) -> bool {

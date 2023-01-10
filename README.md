@@ -47,6 +47,27 @@ With additional hardware:
 * Change DAC settings: digital filter, gain, sound profile
  
 ... and many [others planed](https://ljufa.github.io/rsplayer/#/?id=roadmap)
+
+## Build on linux
+* install build tools and deps for local build
+`sudo apt install build-essintials pkg-config libasound2-dev`
+* install cargo make
+    ```
+    cargo install cargo-binstall
+    cargo binstall cargo-make
+    ``` 
+* local build/run (linux amd64)
+`cargo make build_release` or `cargo make run_local`
+
+### build for arm64 rpi
+
+* install podman and pull image
+`podman pull docker.io/ljufa/rsplayer-cross-aarch64:latest`
+* build rsplayer
+`cargo make build_release`
+* build and copy to rpi device 
+`cargo make copy_remote`  
+
 ## Architecture
 ![Diagram](docs/dev/architecture-2022-09-05-1620.png)
 ## My Audio Streamer Implementation

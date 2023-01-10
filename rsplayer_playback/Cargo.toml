@@ -30,7 +30,7 @@ symphonia = { version = "0.5.1", features = [
     "vorbis",
     "pcm",
 ] }
-cpal = { path = "/home/dlj/github/cpal" }
+cpal = { git = "https://github.com/rustaudio/cpal.git", branch = "master"}
 rb = "0.3.2"
 
 #spotify
@@ -39,12 +39,7 @@ rspotify = { git = "https://github.com/ljufa/rspotify.git", branch = "add_user_q
     "ureq-rustls-tls",
 ], default-features = false }
 
-# sled 
-sled = "0.34.7"
-
 mockall_double = "0.3.0"
-
-rand = "0.7.3"
 
 [dev-dependencies]
 mockall = "0.11.0"
