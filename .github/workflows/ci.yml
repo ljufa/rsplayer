@@ -19,7 +19,6 @@ jobs:
       with:
         tool: cross
     - name: Clippy lint
-      run: cross make clippy --target aarch64-unknown-linux-gnu
+      run: cargo make clippy_in_cross
     - name: Run tests
-      run: cross test --target aarch64-unknown-linux-gnu
-  
+      run: cargo make test_in_cross
