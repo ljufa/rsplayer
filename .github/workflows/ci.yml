@@ -15,8 +15,11 @@ jobs:
     - uses: actions/checkout@v2
     - uses: Swatinem/rust-cache@v1
     - uses: davidB/rust-cargo-make@v1
+    - uses: taiki-e/install-action@v1
+      with:
+        tool: cross
     - name: Clippy lint
-      run: cargo make clippy
+      run: cross make clippy --target aarch64-unknown-linux-gnu
     - name: Run tests
-      run: cargo test
+      run: cross test --target aarch64-unknown-linux-gnu
   
