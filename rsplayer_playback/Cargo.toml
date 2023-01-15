@@ -31,7 +31,7 @@ symphonia = { version = "0.5.1", features = [
     "pcm",
 ] }
 cpal = { git = "https://github.com/rustaudio/cpal.git", branch = "master"}
-rb = "0.3.2"
+rb = "0.4.1"
 
 #spotify
 rspotify = { git = "https://github.com/ljufa/rspotify.git", branch = "add_user_queue_ep", features = [
