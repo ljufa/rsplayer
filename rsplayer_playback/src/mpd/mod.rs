@@ -136,7 +136,7 @@ impl MpdPlayerClient {
 }
 
 impl Player for MpdPlayerClient {
-    fn play_queue_from_current_song(&self) {
+    fn play_from_current_queue_song(&self) {
         _ = self.mpd_client.lock().unwrap().play();
     }
 
@@ -275,7 +275,7 @@ impl Player for MpdPlayerClient {
                 current_time: time.0,
             };
             Some(PlayerInfo {
-                audio_format_bit: status.audio.map(|f| f.bits),
+                audio_format_bit: status.audio.map(|f| f.bits.to_u32().unwrap_or_default()),
                 audio_format_rate: status.audio.map(|f| f.rate),
                 audio_format_channels: status.audio.map(|f| u32::from(f.chans)),
                 random: Some(status.random),
@@ -435,7 +435,7 @@ impl Player for MpdPlayerClient {
     fn load_song_in_queue(&self, song_id: &str) {
         self.clear_queue();
         self.add_song_in_queue(song_id);
-        self.play_queue_from_current_song();
+        self.play_from_current_queue_song();
     }
 
     fn add_song_in_queue(&self, song_id: &str) {

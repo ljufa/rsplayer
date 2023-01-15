@@ -11,16 +11,16 @@ pub mod spotify;
 
 pub trait Player {
     // Song
-    fn play_queue_from_current_song(&self);
+    fn play_from_current_queue_song(&self);
     fn pause_current_song(&self);
     fn play_next_song(&self);
     fn play_prev_song(&self);
     fn stop_current_song(&self);
     fn seek_current_song(&self, seconds: i8);
     fn play_song(&self, id: &str);
-    fn get_current_song(&self) -> Option<Song>;
-
+    
     // Queue
+    fn get_current_song(&self) -> Option<Song>;
     fn load_playlist_in_queue(&self, pl_id: &str);
     fn load_album_in_queue(&self, album_id: &str);
     fn load_song_in_queue(&self, song_id: &str);

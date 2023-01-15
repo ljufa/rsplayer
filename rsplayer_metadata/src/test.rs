@@ -14,11 +14,12 @@ mod test_queue {
         }
         let all = queue.get_all_songs();
         assert_eq!(all.len(), 10);
-
+        queue.move_current_to_next_song();
         let mut new_songs = Vec::new();
         for ext in 11..15 {
             new_songs.push(create_song(format!("2ext{ext}").as_str()));
         }
+
         queue.replace_all(new_songs.iter().cloned());
         let all = queue.get_all_songs();
         assert_eq!(all.len(), 4);

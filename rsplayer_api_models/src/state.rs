@@ -69,7 +69,7 @@ pub struct PlayerInfo {
     pub audio_format_rate: Option<u32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub audio_format_bit: Option<u8>,
+    pub audio_format_bit: Option<u32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_format_channels: Option<u32>,

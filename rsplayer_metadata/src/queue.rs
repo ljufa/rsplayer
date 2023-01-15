@@ -125,11 +125,13 @@ impl PlaybackQueue {
 
     pub fn replace_all(&self, iter: impl Iterator<Item = Song>) {
         _ = self.queue_db.clear();
+        _ = self.status_db.remove(CURRENT_SONG_KEY);
         iter.for_each(|song| {
             let key = self.queue_db.generate_id().unwrap().to_be_bytes();
             _ = self.queue_db.insert(key, song.to_json_string_bytes());
         });
     }
+
     pub fn get_queue_page<F>(
         &self,
         offset: usize,

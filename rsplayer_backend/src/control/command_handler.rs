@@ -25,16 +25,15 @@ pub async fn handle_player_commands(
     state_changes_sender: Sender<StateChangeEvent>,
 ) -> ! {
     loop {
-        let cmd = match input_commands_rx.recv().await {
-            Some(it) => it,
-            _ => continue,
+        let Some(cmd ) = input_commands_rx.recv().await else {
+            continue;
         };
         trace!("Received command {:?}", cmd);
         match cmd {
             Play => {
                 player_service
                     .get_current_player()
-                    .play_queue_from_current_song();
+                    .play_from_current_queue_song();
             }
             PlayItem(id) => {
                 player_service.get_current_player().play_song(&id);

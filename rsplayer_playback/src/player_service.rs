@@ -17,6 +17,7 @@ pub struct PlayerService {
 }
 
 impl PlayerService {
+
     pub fn new(
         config: &MutArcConfiguration,
         metadata_service: Arc<MetadataService>,
@@ -26,6 +27,7 @@ impl PlayerService {
             player: Self::create_player(&settings, metadata_service)?,
         })
     }
+
     #[allow(clippy::borrowed_box)]
     pub fn get_current_player(&self) -> &Box<dyn Player + Send + Sync> {
         &self.player
@@ -41,7 +43,7 @@ impl PlayerService {
                 let mut sp = SpotifyPlayerClient::new(&settings.spotify_settings)?;
                 sp.start_device(&settings.alsa_settings.device_name)?;
                 sp.transfer_playback_to_device()?;
-                sp.play_queue_from_current_song();
+                sp.play_from_current_queue_song();
                 Ok(Box::new(sp))
             }
             PlayerType::MPD => {

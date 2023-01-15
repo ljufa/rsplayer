@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use anyhow::{format_err, Result};
 use log::{debug, error, info, warn};
+use symphonia::core::audio::Channels;
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, Track};
@@ -19,10 +20,12 @@ use rsplayer_metadata::queue::PlaybackQueue;
 
 use super::output::try_open;
 
+#[allow(clippy::type_complexity)]
 pub struct SymphoniaPlayer {
     running: Arc<AtomicBool>,
     paused: Arc<AtomicBool>,
     time: Arc<Mutex<(u64, u64)>>,
+    codec_params: Arc<Mutex<(Option<u32>, Option<u32>, Option<usize>)>>,
     queue: Arc<PlaybackQueue>,
     audio_device: String,
 }
@@ -33,6 +36,7 @@ impl SymphoniaPlayer {
             running: Arc::new(AtomicBool::new(false)),
             paused: Arc::new(AtomicBool::new(false)),
             time: Arc::new(Mutex::new((0, 0))),
+            codec_params: Arc::new(Mutex::new((None, None, None))),
             queue,
             audio_device,
         }
@@ -60,6 +64,9 @@ impl SymphoniaPlayer {
     pub fn get_time(&self) -> (u64, u64) {
         *self.time.lock().unwrap()
     }
+    pub fn get_codec_params(&self) -> (Option<u32>, Option<u32>, Option<usize>) {
+        *self.codec_params.lock().unwrap()
+    }
 
     pub fn play_all_in_queue(&self) -> JoinHandle<Result<PlaybackResult>> {
         self.running.store(true, Ordering::SeqCst);
@@ -68,16 +75,26 @@ impl SymphoniaPlayer {
         let queue = self.queue.clone();
         let audio_device = self.audio_device.clone();
         let time = self.time.clone();
+        let codec_params = self.codec_params.clone();
         thread::Builder::new()
             .name("player".to_string())
             .spawn(move || {
                 let mut num_failed = 0;
                 loop {
                     let Some(song) = queue.get_current_song() else {
+                        running.store(false, Ordering::SeqCst);
                         break Ok(PlaybackResult::QueueFinished);
                     };
-                    match play_file(&song.file, &running, &paused, &time, &audio_device) {
+                    match play_file(
+                        &song.file,
+                        &running,
+                        &paused,
+                        &time,
+                        &codec_params,
+                        &audio_device,
+                    ) {
                         Ok(PlaybackResult::PlaybackStopped) => {
+                            running.store(false, Ordering::SeqCst);
                             break Ok(PlaybackResult::PlaybackStopped);
                         }
                         Err(err) => {
@@ -113,11 +130,13 @@ pub enum PlaybackResult {
     PlaybackStopped,
 }
 
+#[allow(clippy::type_complexity)]
 fn play_file(
     path_str: &str,
     running: &Arc<AtomicBool>,
     paused: &Arc<AtomicBool>,
     time: &Arc<Mutex<(u64, u64)>>,
+    codec_params: &Arc<Mutex<(Option<u32>, Option<u32>, Option<usize>)>>,
     audio_device: &str,
 ) -> Result<PlaybackResult> {
     debug!("Playing file {}", path_str);
@@ -149,15 +168,19 @@ fn play_file(
         return Err(format_err!("Invalid track"));
     };
 
-    let tb = track.codec_params.time_base.unwrap();
-    let dur = track
-        .codec_params
+    let codec_parameters = &track.codec_params;
+    let tb = codec_parameters.time_base.unwrap_or_default();
+    let dur = codec_parameters
         .n_frames
-        .map(|frames| track.codec_params.start_ts + frames)
-        .unwrap();
+        .map(|frames| codec_parameters.start_ts + frames)
+        .unwrap_or_default();
     let dur = tb.calc_time(dur);
 
-    let mut decoder = get_codecs().make(&track.codec_params, decode_opts)?;
+    let rate = codec_parameters.sample_rate;
+    let bps = codec_parameters.bits_per_sample;
+    let chan_num = codec_parameters.channels.map(Channels::count);
+    *codec_params.lock().unwrap() = (rate, bps, chan_num);
+    let mut decoder = get_codecs().make(codec_parameters, decode_opts)?;
     let mut audio_output = None;
 
     // Decode and play the packets belonging to the selected track.

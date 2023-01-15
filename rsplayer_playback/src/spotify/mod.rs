@@ -179,7 +179,7 @@ impl Drop for SpotifyPlayerClient {
 }
 
 impl Player for SpotifyPlayerClient {
-    fn play_queue_from_current_song(&self) {
+    fn play_from_current_queue_song(&self) {
         _ = self
             .oauth
             .client

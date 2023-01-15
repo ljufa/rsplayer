@@ -193,9 +193,9 @@ TODO
 * [ ] Browse/search whole music library
 * [ ] Web radio browse/search/play
 * [ ] LMS backend support
-* [ ] implement own player based on Symphonia
+* [x] implement own player based on Symphonia
 * [ ] Support more remote control models - configuration and key mapping
-* [ ] MPD Configuration using RSPlayer UI
+* [x] MPD Configuration using RSPlayer UI (partially implemented for music dir and audio device)
 * [ ] Support more AK DAC models
 * [ ] Mute relay
 * [ ] integrate more online streaming services. Qobuz, Tidal, Soundcloud ...
@@ -217,13 +217,13 @@ TODO
   
 ## Queue page
 * [ ] Pagination
-* [ ] Manage items (batch, on search results): ~~clear~~, ~~delete~~, ~~play~~, playnext
+* [x] Manage items (batch, on search results): ~~clear~~, ~~delete~~, ~~play~~, playnext
 * [ ] Support Spotify podcast
  
 ## Playlist page
 * [ ] Search all playlists by name
-* [ ] ~~Show items of the selected playlist~~
-* [ ] Manage selected playlist:
+* [x] ~~Show items of the selected playlist~~
+* [x] Manage selected playlist:
    * ~~play item~~
    * ~~add item(s) to the queue~~
    * play next
@@ -236,13 +236,13 @@ TODO
 * [ ] Add all settings
 
 ## Code improvements
-* [ ] migrate away from `failure` crate
+* [x] migrate away from `failure` crate
 * [ ] get rid of `.unwrap()` calls
 * [ ] refactor names all over the code
 * [ ] replace `warp` with `axum` or `actix`
 * [ ] better control over alsa device lock
 * [ ] control over network shares
-* [ ] ~~use separate message channel for system commands: volup, voldown, poweroff, restart ...~~
+* [x] use separate message channel for system commands: volup, voldown, poweroff, restart ...
 * [ ] write generic fun and macros to reduce code duplication in UI
 
 -------
@@ -320,5 +320,25 @@ set RPI_HOST to ip address of your device
 cd rsplayer_web_ui
 cargo make copy_remote
 ```
+
+## Build on linux (local dev env)
+* install build tools and deps for local build
+`sudo apt install build-essintials pkg-config libasound2-dev`
+* install cargo make
+    ```
+    cargo install cargo-binstall
+    cargo binstall cargo-make
+    ``` 
+* local build/run (linux amd64)
+`cargo make build_release` or `cargo make run_local`
+
+### build for arm64 rpi
+
+* install podman and pull image
+`podman pull docker.io/ljufa/rsplayer-cross-aarch64:latest`
+* build rsplayer
+`cargo make build_release`
+* build and copy to rpi device 
+`cargo make copy_remote`  
 
 ... TODO ...

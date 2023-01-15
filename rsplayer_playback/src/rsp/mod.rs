@@ -5,7 +5,7 @@ use api_models::{
     player::Song,
     playlist::PlaylistPage,
     settings::{PlaybackQueueSetting, PlaylistSetting},
-    state::{PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, SongProgress},
+    state::{PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, SongProgress}, num_traits::ToPrimitive,
 };
 
 use mockall_double::double;
@@ -58,7 +58,7 @@ impl RsPlayer {
 }
 
 impl Player for RsPlayer {
-    fn play_queue_from_current_song(&self) {
+    fn play_from_current_queue_song(&self) {
         if self.symphonia_player.is_paused() {
             self.symphonia_player.un_pause_playing();
         }
@@ -78,14 +78,14 @@ impl Player for RsPlayer {
     fn play_next_song(&self) {
         if self.queue.move_current_to_next_song() {
             self.stop_current_song();
-            self.play_queue_from_current_song();
+            self.play_from_current_queue_song();
         }
     }
 
     fn play_prev_song(&self) {
         if self.queue.move_current_to_previous_song() {
             self.stop_current_song();
-            self.play_queue_from_current_song();
+            self.play_from_current_queue_song();
         }
     }
 
@@ -101,7 +101,7 @@ impl Player for RsPlayer {
     fn play_song(&self, song_id: &str) {
         if self.queue.move_current_to(song_id) {
             self.stop_current_song();
-            self.play_queue_from_current_song();
+            self.play_from_current_queue_song();
         }
     }
 
@@ -149,7 +149,7 @@ impl Player for RsPlayer {
                 .items;
             self.queue.replace_all(pl_songs.into_iter());
         }
-        self.play_queue_from_current_song();
+        self.play_from_current_queue_song();
     }
 
     fn load_album_in_queue(&self, _album_id: &str) {
@@ -161,7 +161,7 @@ impl Player for RsPlayer {
             self.stop_current_song();
             self.queue.clear();
             self.queue.add_song(song);
-            self.play_queue_from_current_song();
+            self.play_from_current_queue_song();
         }
     }
 
@@ -249,6 +249,8 @@ impl Player for RsPlayer {
         let random_next = self.queue.get_random_next();
         let is_playing = self.symphonia_player.is_playing();
         let is_paused = self.symphonia_player.is_paused();
+        let params = self.symphonia_player.get_codec_params();
+        // currrent_song.
         Some(PlayerInfo {
             state: Some(if !is_playing {
                 PlayerState::STOPPED
@@ -258,7 +260,9 @@ impl Player for RsPlayer {
                 PlayerState::PLAYING
             }),
             random: Some(random_next),
-            ..Default::default()
+            audio_format_rate: params.0,
+            audio_format_bit: params.1,
+            audio_format_channels: params.2.map(|c| c.to_u32().unwrap_or_default())
         })
     }
 
