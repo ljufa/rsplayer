@@ -42,8 +42,10 @@ impl PlayerService {
             PlayerType::SPF => {
                 let mut sp = SpotifyPlayerClient::new(&settings.spotify_settings)?;
                 sp.start_device(&settings.alsa_settings.device_name)?;
-                sp.transfer_playback_to_device()?;
+                let device = sp.transfer_playback_to_device()?;
+                sp.set_device(device);
                 sp.play_from_current_queue_song();
+
                 Ok(Box::new(sp))
             }
             PlayerType::MPD => {

@@ -69,7 +69,7 @@ impl SpotifyPlayerClient {
         Ok(())
     }
 
-    pub fn transfer_playback_to_device(&mut self) -> Result<()> {
+    pub fn transfer_playback_to_device(&self) -> Result<String> {
         let mut dev = String::new();
         let mut tries = 0;
         let device_name = self.oauth.settings.device_name.as_str();
@@ -101,10 +101,12 @@ impl SpotifyPlayerClient {
             ));
         }
         info!("Spotify client created sucessfully!");
-        self.device_id = Some(dev);
-        Ok(())
+        Ok(dev)
     }
 
+    pub fn set_device(&mut self, device: String){
+        self.device_id = Some(device);
+    }
     fn update_playing_context(&self, context: Option<&rspotify::model::Context>) {
         context.map_or_else(
             || {
@@ -180,17 +182,14 @@ impl Drop for SpotifyPlayerClient {
 
 impl Player for SpotifyPlayerClient {
     fn play_from_current_queue_song(&self) {
-        _ = self
+        let play = self
             .oauth
             .client
             .resume_playback(self.device_id.as_deref(), None);
-        // if play.is_err() {
-        //     _ = self.transfer_playback_to_device();
-        //     _ = self
-        //         .oauth
-        //         .client
-        //         .resume_playback(self.device_id.as_deref(), None);
-        // }
+        if play.is_err() {
+            _ = self.transfer_playback_to_device();
+        }
+
     }
 
     fn pause_current_song(&self) {
