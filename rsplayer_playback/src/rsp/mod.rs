@@ -59,6 +59,12 @@ impl RsPlayer {
 
 impl Player for RsPlayer {
     fn play_queue_from_current_song(&self) {
+        if self.symphonia_player.is_paused() {
+            self.symphonia_player.un_pause_playing();
+        }
+        if self.symphonia_player.is_playing() {
+            return;
+        }
         self.play_handle
             .lock()
             .unwrap()
@@ -66,7 +72,7 @@ impl Player for RsPlayer {
     }
 
     fn pause_current_song(&self) {
-        self.stop_current_song();
+        self.symphonia_player.pause_playing();
     }
 
     fn play_next_song(&self) {
@@ -241,19 +247,19 @@ impl Player for RsPlayer {
 
     fn get_player_info(&self) -> Option<api_models::state::PlayerInfo> {
         let random_next = self.queue.get_random_next();
-        if self.symphonia_player.is_playing() {
-            Some(PlayerInfo {
-                state: Some(PlayerState::PLAYING),
-                random: Some(random_next),
-                ..Default::default()
-            })
-        } else {
-            Some(PlayerInfo {
-                state: Some(PlayerState::PAUSED),
-                random: Some(random_next),
-                ..Default::default()
-            })
-        }
+        let is_playing = self.symphonia_player.is_playing();
+        let is_paused = self.symphonia_player.is_paused();
+        Some(PlayerInfo {
+            state: Some(if !is_playing {
+                PlayerState::STOPPED
+            } else if is_paused {
+                PlayerState::PAUSED
+            } else {
+                PlayerState::PLAYING
+            }),
+            random: Some(random_next),
+            ..Default::default()
+        })
     }
 
     fn get_playing_context(

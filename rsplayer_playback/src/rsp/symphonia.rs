@@ -1,11 +1,12 @@
-use anyhow::{format_err, Result};
-use rsplayer_metadata::queue::PlaybackQueue;
 use std::fs::File;
 use std::path::Path;
-
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
+
+use anyhow::{format_err, Result};
+use log::{debug, error, info, warn};
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, Track};
@@ -14,12 +15,13 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::default::{get_codecs, get_probe};
 
-use log::{debug, error, info, warn};
+use rsplayer_metadata::queue::PlaybackQueue;
 
 use super::output::try_open;
 
 pub struct SymphoniaPlayer {
     running: Arc<AtomicBool>,
+    paused: Arc<AtomicBool>,
     time: Arc<Mutex<(u64, u64)>>,
     queue: Arc<PlaybackQueue>,
     audio_device: String,
@@ -29,6 +31,7 @@ impl SymphoniaPlayer {
     pub fn new(queue: Arc<PlaybackQueue>, audio_device: String) -> Self {
         SymphoniaPlayer {
             running: Arc::new(AtomicBool::new(false)),
+            paused: Arc::new(AtomicBool::new(false)),
             time: Arc::new(Mutex::new((0, 0))),
             queue,
             audio_device,
@@ -36,11 +39,22 @@ impl SymphoniaPlayer {
     }
 
     pub fn stop_playing(&self) {
-        self.running.store(false, Ordering::Relaxed);
+        self.running.store(false, Ordering::SeqCst);
+    }
+
+    pub fn pause_playing(&self) {
+        self.paused.store(true, Ordering::SeqCst);
+    }
+    pub fn un_pause_playing(&self) {
+        self.paused.store(false, Ordering::SeqCst);
     }
 
     pub fn is_playing(&self) -> bool {
-        self.running.load(Ordering::Relaxed)
+        self.running.load(Ordering::SeqCst)
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::SeqCst)
     }
 
     pub fn get_time(&self) -> (u64, u64) {
@@ -48,8 +62,9 @@ impl SymphoniaPlayer {
     }
 
     pub fn play_all_in_queue(&self) -> JoinHandle<Result<PlaybackResult>> {
-        self.running.store(true, Ordering::Relaxed);
+        self.running.store(true, Ordering::SeqCst);
         let running = self.running.clone();
+        let paused = self.paused.clone();
         let queue = self.queue.clone();
         let audio_device = self.audio_device.clone();
         let time = self.time.clone();
@@ -61,7 +76,7 @@ impl SymphoniaPlayer {
                     let Some(song) = queue.get_current_song() else {
                         break Ok(PlaybackResult::QueueFinished);
                     };
-                    match play_file(&song.file, &running, &time, &audio_device) {
+                    match play_file(&song.file, &running, &paused, &time, &audio_device) {
                         Ok(PlaybackResult::PlaybackStopped) => {
                             break Ok(PlaybackResult::PlaybackStopped);
                         }
@@ -70,7 +85,7 @@ impl SymphoniaPlayer {
                             num_failed += 1;
                             if num_failed == 10 {
                                 warn!("Number of failed songs is greater than 10. Aborting.");
-                                running.store(false, Ordering::Relaxed);
+                                running.store(false, Ordering::SeqCst);
                                 break Err(anyhow::format_err!(
                                     "Number of failed songs is higher than 10. Aborting!"
                                 ));
@@ -101,11 +116,12 @@ pub enum PlaybackResult {
 fn play_file(
     path_str: &str,
     running: &Arc<AtomicBool>,
+    paused: &Arc<AtomicBool>,
     time: &Arc<Mutex<(u64, u64)>>,
     audio_device: &str,
 ) -> Result<PlaybackResult> {
     debug!("Playing file {}", path_str);
-    running.store(true, Ordering::Relaxed);
+    running.store(true, Ordering::SeqCst);
     let mut hint = Hint::new();
     let source = {
         let path = Path::new(&path_str);
@@ -118,20 +134,20 @@ fn play_file(
     };
     // Probe the media source stream for metadata and get the format reader.
     let Ok(probed) = get_probe().format(
-            &hint,
-            MediaSourceStream::new(source, MediaSourceStreamOptions::default()),
-            &FormatOptions::default(),
-            &MetadataOptions::default(),
-        )else {
-            return Err(format_err!("Media source probe failed"))
-        };
+        &hint,
+        MediaSourceStream::new(source, MediaSourceStreamOptions::default()),
+        &FormatOptions::default(),
+        &MetadataOptions::default(),
+    )else {
+        return Err(format_err!("Media source probe failed"));
+    };
 
     let mut reader: Box<dyn FormatReader> = probed.format;
     let decode_opts = &DecoderOptions::default();
 
     let Some(track) = first_supported_track(reader.tracks()) else {
-            return Err(format_err!("Invalid track"));
-        };
+        return Err(format_err!("Invalid track"));
+    };
 
     let tb = track.codec_params.time_base.unwrap();
     let dur = track
@@ -146,9 +162,14 @@ fn play_file(
 
     // Decode and play the packets belonging to the selected track.
     let loop_result = loop {
-        if !running.load(Ordering::Relaxed) {
+        if !running.load(Ordering::SeqCst) {
             debug!("Exit from play thread due to running flag change");
             break Ok(PlaybackResult::PlaybackStopped);
+        }
+        if paused.load(Ordering::SeqCst) {
+            debug!("Playing paused, going to sleep");
+            thread::sleep(Duration::from_millis(300));
+            continue;
         }
         // Get the next packet from the format reader.
         let packet = match reader.next_packet() {
@@ -176,8 +197,8 @@ fn play_file(
 
                     // Try to open the audio output.
                     let Ok(audio_out) = try_open(spec, duration, audio_device) else {
-                            break Err(format_err!("Failed to open audio output {}", audio_device));
-                        };
+                        break Err(format_err!("Failed to open audio output {}", audio_device));
+                    };
                     audio_output.replace(audio_out);
                 } else {
                     // TODO: Check the audio spec. and duration hasn't changed.
