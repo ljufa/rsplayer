@@ -51,9 +51,13 @@ impl PlaybackQueue {
 
     #[allow(clippy::branches_sharing_code)]
     pub fn move_current_to_next_song(&self) -> bool {
+        let queue_len = self.queue_db.len();
+        if queue_len < 2 {
+            return false;
+        }
         if self.get_random_next() {
             let mut rnd = rand::thread_rng();
-            let rand_position = rnd.gen_range(0, &self.queue_db.len() - 1);
+            let rand_position = rnd.gen_range(0, queue_len - 1);
             let Some(Ok(rand_key)) = self.queue_db.iter().nth(rand_position) else {
                 return false;
             };

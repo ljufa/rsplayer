@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
-use api_models::{common::hash_md5, player::Song, settings::MetadataStoreSettings};
+use api_models::{common::to_database_key, player::Song, settings::MetadataStoreSettings};
 use log::{info, warn};
 use sled::Db;
 use symphonia::core::{
@@ -78,7 +78,7 @@ impl MetadataService {
             match symphonia::default::get_probe().format(&hint, mss, &format_opts, &metadata_opts) {
                 Ok(mut probed) => {
                     let mut song = build_song(&mut probed);
-                    let db_key = hash_md5(file_p);
+                    let db_key = to_database_key(file_p);
                     song.id = db_key.clone();
                     song.file = file_p.to_string();
                     log::trace!("Add/update song in database: {:?}", song);

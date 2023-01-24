@@ -368,7 +368,7 @@ mod handlers {
         Ok(warp::reply::json(
             &player_service
                 .get_current_player()
-                .get_playlist_items(&playlist_name),
+                .get_playlist_items(&playlist_name, 1),
         ))
     }
 }

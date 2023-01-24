@@ -8,7 +8,10 @@ use api_models::{
     player::Song,
     playlist::{Category, PlaylistType, Playlists},
 };
-use seed::{prelude::*, C, FutureExt, IF, a, attrs, button, div, empty, figure, header, i, id, img, log, nodes, p, progress, raw, section, span, style};
+use seed::{
+    a, attrs, button, div, empty, figure, footer, header, i, id, img, log, nodes, p, prelude::*,
+    progress, raw, section, span, style, C, IF,
+};
 
 use crate::{attachCarousel, scrollToId};
 
@@ -23,6 +26,7 @@ pub struct Model {
     pub selected_playlist_items: Vec<Song>,
     pub selected_playlist_id: String,
     pub selected_playlist_name: String,
+    selected_playlist_current_page_no: usize,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -41,6 +45,7 @@ pub enum Msg {
     PlaySongFromPlaylist(String),
     ShowCategoryPlaylists(String),
     LoadMoreCategories,
+    LoadMorePlaylistItems,
 }
 
 pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
@@ -59,6 +64,7 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
         selected_playlist_items: Default::default(),
         selected_playlist_id: Default::default(),
         selected_playlist_name: Default::default(),
+        selected_playlist_current_page_no: 1,
     }
 }
 
@@ -101,6 +107,13 @@ pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.dynamic_playlist_loading = true;
             orders.after_next_render(move |_| scrollToId("dynamic-playlists-section"));
         }
+        Msg::LoadMorePlaylistItems => {
+            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryPlaylistItems(
+                model.selected_playlist_id.clone(),
+                model.selected_playlist_current_page_no + 1,
+            )));
+            orders.after_next_render(move |_| scrollToId("first-list-item"));
+        }
         Msg::StatusChangeEventReceived(StateChangeEvent::DynamicPlaylistsPageEvent(
             dynamic_pls,
         )) => {
@@ -124,14 +137,19 @@ pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
                 }
             }
         }
-        Msg::StatusChangeEventReceived(StateChangeEvent::PlaylistItemsEvent(playlist_items)) => {
+        Msg::StatusChangeEventReceived(StateChangeEvent::PlaylistItemsEvent(
+            playlist_items,
+            page,
+        )) => {
             model.selected_playlist_items = playlist_items;
+            model.selected_playlist_current_page_no = page;
         }
         Msg::ShowPlaylistItemsClicked(_is_dynamic, playlist_id, playlist_name) => {
             model.selected_playlist_id = playlist_id.clone();
             model.selected_playlist_name = playlist_name;
             orders.send_msg(Msg::SendCommand(PlayerCommand::QueryPlaylistItems(
                 playlist_id,
+                1,
             )));
         }
         Msg::CloseSelectedPlaylistItemsModal => {
@@ -194,8 +212,9 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
                 button![C!["delete", "is-large"], attrs!(At::AriaLabel =>"close"), ev(Ev::Click, |_| Msg::CloseSelectedPlaylistItemsModal)],
             ],
             section![
-                C!["modal-card-body"], style!{ St::Overflow => "Hidden", St::Padding => "0px" },
-                div![C!["scroll-list list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
+                C!["modal-card-body"],
+                div![C!["list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
+                div![id!("first-list-item")],
                 model.selected_playlist_items
                     .iter()
                     .map(|song| {
@@ -232,6 +251,10 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
                         ]
                     })
                 ]
+            ],
+            footer![C!["modal-card-foot"],
+                button![C!["button","is-fullwidth", "is-outlined", "is-success"],"Load more", ev(Ev::Click, move |_| Msg::LoadMorePlaylistItems)]
+
             ]
         ],
     ]
@@ -271,7 +294,8 @@ fn view_dynamic_playlists(model: &Model) -> Node<Msg> {
                                             figure![
                                                 C!["image", "is-square"],
                                                 img![
-                                                    attrs! {At::Src => playlist.image.as_ref().map_or("/no_album.png".to_string(),std::clone::Clone::clone)}
+                                                    C!["image-center-half-size"],
+                                                    attrs! {At::Src => playlist.image.as_ref().map_or("/headphones.png".to_string(),std::clone::Clone::clone)}
                                                 ]
                                             ],
                                             span![
@@ -295,7 +319,7 @@ fn view_dynamic_playlists(model: &Model) -> Node<Msg> {
                     ]]}
                 ),
             ],
-            button![C!["button","is-fullwidth", "is-outlined", "is-dark"],"Load more", ev(Ev::Click, move |_| Msg::LoadMoreCategories)]
+            button![C!["button","is-fullwidth", "is-outlined", "is-success"],"Load more", ev(Ev::Click, move |_| Msg::LoadMoreCategories)]
     ]
 }
 
@@ -372,7 +396,8 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                         figure![
                             C!["image", "is-square"],
                             img![
-                                attrs! {At::Src => pl.image.as_ref().map_or("/no_album.png".to_string(),std::clone::Clone::clone)}
+                                C!["image-center-half-size"],
+                                attrs! {At::Src => pl.image.as_ref().map_or("/headphones.png".to_string(),std::clone::Clone::clone)}
                             ]
                         ],
                         span![
@@ -407,7 +432,8 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                         figure![
                             C!["image", "is-square"],
                             img![
-                                attrs! {At::Src => album.images.first().map_or("/no_album.png".to_string(),std::clone::Clone::clone)}
+                                C!["image-center-half-size"],
+                                attrs! {At::Src => album.images.first().map_or("/headphones.png".to_string(),std::clone::Clone::clone)}
                             ]
                         ],
                         span![

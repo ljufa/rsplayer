@@ -91,7 +91,7 @@ pub enum StateChangeEvent {
     SongTimeEvent(SongProgress),
     ErrorEvent(String),
     DynamicPlaylistsPageEvent(Vec<DynamicPlaylistsPage>),
-    PlaylistItemsEvent(Vec<Song>),
+    PlaylistItemsEvent(Vec<Song>, usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

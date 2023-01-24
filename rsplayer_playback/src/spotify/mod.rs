@@ -477,7 +477,7 @@ impl Player for SpotifyPlayerClient {
         result
     }
 
-    fn get_playlist_items(&self, playlist_id: &str) -> Vec<Song> {
+    fn get_playlist_items(&self, playlist_id: &str, _page_no: usize) -> Vec<Song> {
         let items = self.oauth.client.playlist_items_manual(
             PlaylistId::from_id_or_uri(playlist_id).unwrap(),
             None,

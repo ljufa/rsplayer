@@ -1,6 +1,16 @@
-use api_models::state::StateChangeEvent;
+use api_models::{
+    common::{PlayerCommand, SystemCommand, Volume},
+    player::Song,
+    state::{AudioOut, PlayerInfo, PlayerState, SongProgress, StateChangeEvent, StreamerState},
+};
 
-use seed::{prelude::*, C, IF, TryFutureExt, a, article, attrs, div, empty, i, li, log, p, span, struct_urls, ul};
+use seed::{
+    a, article, attrs, div, empty, figure, i, img, input, li, log, nav, p, prelude::*, progress,
+    span, struct_urls, style, ul, C, IF,
+};
+use std::str::FromStr;
+
+use serde::Deserialize;
 use strum_macros::IntoStaticStr;
 extern crate api_models;
 mod page;
@@ -13,6 +23,13 @@ const PLAYER: &str = "player";
 // ------ ------
 //     Model
 // ------ ------
+#[derive(Debug)]
+pub struct PlayerModel {
+    streamer_status: StreamerState,
+    player_info: Option<PlayerInfo>,
+    current_song: Option<Song>,
+    progress: SongProgress,
+}
 
 #[derive(Debug)]
 struct Model {
@@ -21,6 +38,7 @@ struct Model {
     web_socket: WebSocket,
     web_socket_reconnector: Option<StreamHandle>,
     startup_error: Option<String>,
+    player_model: PlayerModel,
 }
 
 pub enum Msg {
@@ -33,35 +51,43 @@ pub enum Msg {
     UrlChanged(subs::UrlChanged),
     StatusChangeEventReceived(StateChangeEvent),
     Settings(page::settings::Msg),
-    Player(page::player::Msg),
     Playlist(page::playlist::Msg),
     StartErrorReceived(String),
     Queue(page::queue::Msg),
     Ignore,
+
+    SendPlayerCommand(PlayerCommand),
+    SendSystemCommand(SystemCommand),
+    AlbumImageUpdated(Image),
 }
 
+#[derive(Debug, Deserialize)]
+pub struct AlbumInfo {
+    pub album: Album,
+}
+#[derive(Debug, Deserialize)]
+pub struct Album {
+    image: Vec<Image>,
+}
+#[derive(Debug, Deserialize)]
+pub struct Image {
+    size: String,
+    #[serde(rename = "#text")]
+    text: String,
+}
 // ------ Page ------
 #[derive(Debug, IntoStaticStr)]
 enum Page {
     Home,
     Settings(page::settings::Model),
-    Player(page::player::Model),
+    Player,
     Playlist(page::playlist::Model),
     Queue(page::queue::Model),
     NotFound,
 }
+
 impl Page {
-    fn init(url: Url, orders: &mut impl Orders<Msg>) -> Self {
-        orders.perform_cmd(async {
-            let response = fetch("/api/start_error")
-                .await
-                .expect("failed to get response");
-            if response.status().is_ok() {
-                Msg::StartErrorReceived(response.text().await.expect(""))
-            } else {
-                Msg::Ignore
-            }
-        });
+    fn new(url: Url, orders: &mut impl Orders<Msg>) -> Self {
         let slice = url.hash().map_or("", |p| {
             if p.contains('#') {
                 p.split_once('#').unwrap().0
@@ -74,12 +100,57 @@ impl Page {
             SETTINGS => Self::Settings(page::settings::init(url, &mut orders.proxy(Msg::Settings))),
             PLAYLIST => Self::Playlist(page::playlist::init(url, &mut orders.proxy(Msg::Playlist))),
             QUEUE => Self::Queue(page::queue::init(url, &mut orders.proxy(Msg::Queue))),
-            PLAYER | "" => Self::Player(page::player::init(url, &mut orders.proxy(Msg::Player))),
+            PLAYER | "" => Self::Player,
             _ => Self::NotFound,
+        }
+    }
+
+    fn has_image_background(&self) -> bool {
+        match self {
+            Page::Settings(_) => false,
+            _ => true,
         }
     }
 }
 
+// ------ ------
+//     Init
+// ------ ------
+
+fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
+    let page = Page::new(url.clone(), orders);
+    orders
+        .subscribe(Msg::UrlChanged)
+        .notify(subs::UrlChanged(url.clone()));
+
+    orders.perform_cmd(async {
+        let response = fetch("/api/start_error")
+            .await
+            .expect("failed to get response");
+        if response.status().is_ok() {
+            Msg::StartErrorReceived(response.text().await.expect(""))
+        } else {
+            Msg::Ignore
+        }
+    });
+
+    Model {
+        base_url: url.to_base_url(),
+        page,
+        web_socket: create_websocket(orders),
+        web_socket_reconnector: None,
+        startup_error: None,
+        player_model: PlayerModel {
+            streamer_status: StreamerState {
+                selected_audio_output: AudioOut::SPKR,
+                volume_state: Volume::default(),
+            },
+            player_info: None,
+            current_song: None,
+            progress: Default::default(),
+        },
+    }
+}
 // ------ ------
 //     Urls
 // ------ ------
@@ -105,23 +176,6 @@ impl<'a> Urls<'a> {
 }
 
 // ------ ------
-//     Init
-// ------ ------
-
-fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
-    orders
-        .subscribe(Msg::UrlChanged)
-        .notify(subs::UrlChanged(url.clone()));
-    Model {
-        base_url: url.to_base_url(),
-        page: Page::init(url, orders),
-        web_socket: create_websocket(orders),
-        web_socket_reconnector: None,
-        startup_error: None,
-    }
-}
-
-// ------ ------
 //    Update
 // ------ ------
 
@@ -130,18 +184,18 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::WebSocketOpened => {
             model.web_socket_reconnector = None;
             log!("WebSocket connection is open now");
+            orders.send_msg(Msg::SendPlayerCommand(PlayerCommand::QueryCurrentSong));
+            orders.send_msg(Msg::SendPlayerCommand(
+                PlayerCommand::QueryCurrentPlayerInfo,
+            ));
+            orders.send_msg(Msg::SendPlayerCommand(
+                PlayerCommand::QueryCurrentStreamerState,
+            ));
             if let Page::Queue(model) = &mut model.page {
                 page::queue::update(
                     page::queue::Msg::WebSocketOpen,
                     model,
                     &mut orders.proxy(Msg::Queue),
-                )
-            }
-            if let Page::Player(model) = &mut model.page {
-                page::player::update(
-                    page::player::Msg::WebSocketOpen,
-                    model,
-                    &mut orders.proxy(Msg::Player),
                 )
             }
         }
@@ -183,16 +237,32 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             log!("Reconnect attempt:", retries);
             model.web_socket = create_websocket(orders);
         }
-        Msg::UrlChanged(subs::UrlChanged(url)) => model.page = Page::init(url, orders),
+
+        Msg::UrlChanged(subs::UrlChanged(url)) => model.page = Page::new(url, orders),
+
+        Msg::AlbumImageUpdated(image) => {
+            model.player_model.current_song.as_mut().unwrap().image_url = Some(image.text);
+        }
 
         Msg::StatusChangeEventReceived(chg_ev) => {
-            if let Page::Player(model) = &mut model.page {
-                page::player::update(
-                    page::player::Msg::StatusChangeEventReceived(chg_ev),
-                    model,
-                    &mut orders.proxy(Msg::Player),
-                );
-            } else if let Page::Queue(model) = &mut model.page {
+            match &chg_ev {
+                StateChangeEvent::CurrentSongEvent(song) => {
+                    let ps = song.clone();
+                    if ps.image_url.is_none() {
+                        orders.perform_cmd(async { update_album_cover(ps).await });
+                    }
+                    model.player_model.current_song = Some(song.clone());
+                }
+                StateChangeEvent::StreamerStateEvent(sst) => {
+                    model.player_model.streamer_status = sst.clone()
+                }
+                StateChangeEvent::PlayerInfoEvent(pi) => {
+                    model.player_model.player_info = Some(pi.clone())
+                }
+                _ => {}
+            }
+
+            if let Page::Queue(model) = &mut model.page {
                 page::queue::update(
                     page::queue::Msg::StatusChangeEventReceived(chg_ev),
                     model,
@@ -213,18 +283,6 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     _ = model.web_socket.send_json(cmd);
                 }
                 page::settings::update(msg, sett_model, &mut orders.proxy(Msg::Settings));
-            }
-        }
-
-        Msg::Player(msg) => {
-            if let Page::Player(player_model) = &mut model.page {
-                if let page::player::Msg::SendPlayerCommand(cmd) = &msg {
-                    _ = model.web_socket.send_json(cmd);
-                }
-                if let page::player::Msg::SendSystemCommand(cmd) = &msg {
-                    _ = model.web_socket.send_json(cmd);
-                }
-                page::player::update(msg, player_model, &mut orders.proxy(Msg::Player));
             }
         }
 
@@ -251,12 +309,8 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 let msg = message.json::<StateChangeEvent>().unwrap_or_else(|_| {
                     panic!("Failed to decode WebSocket text message: {msg_text:?}")
                 });
-                if let StateChangeEvent::SongTimeEvent(_) = msg {
-                    if let Page::Player(_) = &model.page {
-                        orders.send_msg(Msg::StatusChangeEventReceived(msg));
-                    } else {
-                        orders.skip();
-                    }
+                if let StateChangeEvent::SongTimeEvent(st) = msg {
+                    model.player_model.progress = st;
                 } else {
                     orders.send_msg(Msg::StatusChangeEventReceived(msg));
                 }
@@ -264,6 +318,17 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::StartErrorReceived(error_msg) => {
             model.startup_error = Some(error_msg);
+        }
+        Msg::SendPlayerCommand(cmd) => {
+            _ = model.web_socket.send_json(&cmd);
+        }
+        Msg::SendSystemCommand(cmd) => {
+            _ = model.web_socket.send_json(&cmd);
+            log!("lib {}", cmd);
+            if let SystemCommand::SetVol(vol) = cmd {
+                model.player_model.streamer_status.volume_state.current = i64::from(vol)
+            }
+            orders.skip();
         }
         Msg::Ignore => {}
     }
@@ -274,10 +339,185 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 // ------ ------
 fn view(model: &Model) -> impl IntoNodes<Msg> {
     div![
+        IF!(
+            model.page.has_image_background() =>
+            style! {
+                St::BackgroundImage => get_background_image(&model.player_model),
+                St::BackgroundRepeat => "no-repeat",
+                St::BackgroundSize => "cover",
+                St::MinHeight => "95vh"
+            }
+        ),
         C!["container"],
         view_navigation_tabs(&model.page),
         view_startup_error(model.startup_error.as_ref()),
-        view_content(&model.page, &model.base_url),
+        view_content(model, &model.base_url),
+        view_player_footer(&model.page, &model.player_model)
+    ]
+}
+
+fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
+    if let Page::Player = page {
+        return empty!();
+    };
+    let playing = player_model.player_info.as_ref().map_or(false, |f| {
+        f.state
+            .as_ref()
+            .map_or(false, |f| *f == PlayerState::PLAYING)
+    });
+    let shuffle_class = player_model.player_info.as_ref().map_or("fa-shuffle", |r| {
+        if r.random.unwrap_or(false) {
+            "fa-shuffle"
+        } else {
+            "fa-list-ol"
+        }
+    });
+
+    div![
+        C!["page-foot", "container"],
+        nav![
+            style! {
+                St::Width => "100%"
+            },
+            C!["level", "is-mobile"],
+            // image
+            div![
+                C!["level-left", "is-flex-grow-1", "is-hidden-mobile"],
+                div![
+                    C!["level-item"],
+                    figure![
+                        C!["image", "is-64x64"],
+                        img![attrs! {"src" => get_album_image(player_model)}]
+                    ]
+                ],
+            ],
+            // track info
+            div![
+                C!["level-left", "is-flex-grow-3"],
+                div![
+                    C!["level-item", "available-width"],
+                    div![
+                        p![
+                            C!["heading", "has-overflow-ellipsis-text"],
+                            player_model
+                                .current_song
+                                .as_ref()
+                                .map_or("".to_string(), |f| f.get_title())
+                        ],
+                        p![
+                            C!["heading", "has-overflow-ellipsis-text"],
+                            player_model
+                                .current_song
+                                .as_ref()
+                                .map_or("".to_string(), |fa| fa
+                                    .album
+                                    .as_ref()
+                                    .map_or("".to_string(), |a| a.clone()))
+                        ],
+                        p![
+                            C!["heading", "has-overflow-ellipsis-text"],
+                            player_model
+                                .current_song
+                                .as_ref()
+                                .map_or("".to_string(), |fa| fa
+                                    .artist
+                                    .as_ref()
+                                    .map_or("".to_string(), |a| a.clone()))
+                        ],
+                    ]
+                ],
+            ],
+            // track progress
+            div![
+                C!["level-left", "is-flex-grow-5", "is-hidden-mobile"],
+                div![
+                    C!["level-item"],
+                    div![
+                        C!["has-text-centered", "available-width"],
+                        span![
+                            C![
+                                "is-size-6",
+                                "has-text-light",
+                                "has-background-dark-transparent"
+                            ],
+                            player_model.progress.format_time()
+                        ],
+                        progress![
+                            C!["progress", "is-small", "is-success"],
+                            attrs! {"value"=> player_model.progress.current_time.as_secs()},
+                            attrs! {"max"=> player_model.progress.total_time.as_secs()},
+                            player_model.progress.current_time.as_secs()
+                        ],
+                    ]
+                ]
+            ],
+            // player controls
+            div![
+                C!["level-right", "is-flex-grow-3"],
+                div![
+                    C!["level-item"],
+                    div![
+                        div![
+                            i![
+                                C!["fas", "is-clickable", "small-button-footer", shuffle_class],
+                                ev(Ev::Click, |_| Msg::SendPlayerCommand(
+                                    PlayerCommand::RandomToggle
+                                )),
+                            ],
+                            i![
+                                C!["fas", "is-clickable", "fa-backward", "small-button-footer"],
+                                ev(Ev::Click, |_| Msg::SendPlayerCommand(PlayerCommand::Prev)),
+                            ],
+                            i![
+                                C![
+                                    "fa",
+                                    "is-clickable",
+                                    "small-button-footer",
+                                    IF!(playing => "fa-pause" ),
+                                    IF!(!playing => "fa-play" )
+                                ],
+                                ev(Ev::Click, move |_| if playing {
+                                    Msg::SendPlayerCommand(PlayerCommand::Pause)
+                                } else {
+                                    Msg::SendPlayerCommand(PlayerCommand::Play)
+                                })
+                            ],
+                            i![
+                                C!["fas", "is-clickable", "fa-forward", "small-button-footer"],
+                                ev(Ev::Click, |_| Msg::SendPlayerCommand(PlayerCommand::Next)),
+                            ],
+                        ],
+                        div![input![
+                            C!["slider", "is-success"],
+                            attrs! {"value"=> player_model.streamer_status.volume_state.current},
+                            attrs! {"step"=> player_model.streamer_status.volume_state.step},
+                            attrs! {"max"=> player_model.streamer_status.volume_state.max},
+                            attrs! {"min"=> player_model.streamer_status.volume_state.min},
+                            attrs! {"type"=> "range"},
+                            input_ev(Ev::Change, move |selected| Msg::SendSystemCommand(
+                                SystemCommand::SetVol(
+                                    u8::from_str(selected.as_str()).unwrap_or_default()
+                                )
+                            )),
+                        ],],
+                    ]
+                ],
+            ],
+            div![
+                C!["level-right", "is-flex-grow-1"],
+                div![
+                    C!["level-item"],
+                    i![
+                        C![
+                            "fas",
+                            "is-clickable",
+                            "fa-up-right-and-down-left-from-center"
+                        ],
+                        ev(Ev::Click, |_| { Urls::player_abs().go_and_load() })
+                    ],
+                ]
+            ]
+        ]
     ]
 }
 
@@ -301,19 +541,31 @@ fn view_startup_error(error_msg: Option<&String>) -> Node<Msg> {
 }
 // ----- view_content ------
 
-fn view_content(page: &Page, base_url: &Url) -> Node<Msg> {
-    match page {
-        Page::Home => page::home::view(base_url),
-        Page::NotFound => page::not_found::view(),
-        Page::Settings(model) => page::settings::view(model).map_msg(Msg::Settings),
-        Page::Player(model) => page::player::view(model).map_msg(Msg::Player),
-        Page::Playlist(model) => page::playlist::view(model).map_msg(Msg::Playlist),
-        Page::Queue(model) => page::queue::view(model).map_msg(Msg::Queue),
-    }
+fn view_content(main_model: &Model, base_url: &Url) -> Node<Msg> {
+    let page = &main_model.page;
+    div![
+        style! {
+            St::Background => "rgba(86, 92, 86, 0.507)",
+            St::MinHeight => "95vh"
+        },
+        C!["main-content"],
+        match page {
+            Page::Home => page::home::view(base_url),
+            Page::NotFound => page::not_found::view(),
+            Page::Settings(model) => page::settings::view(model).map_msg(Msg::Settings),
+            Page::Player => page::player::view(&main_model.player_model),
+            Page::Playlist(model) => page::playlist::view(model).map_msg(Msg::Playlist),
+            Page::Queue(model) => page::queue::view(model).map_msg(Msg::Queue),
+        }
+    ]
 }
+
 fn view_navigation_tabs(page: &Page) -> Node<Msg> {
     let page_name: &str = page.into();
     div![
+        style! {
+            St::Background => "rgba(86, 92, 86, 0.507)",
+        },
         C!["tabs", "is-toggle", "is-centered", "is-fullwidth"],
         ul![
             li![
@@ -433,5 +685,65 @@ fn create_websocket(orders: &impl Orders<Msg>) -> WebSocket {
             .unwrap()
     } else {
         panic!("No url found");
+    }
+}
+
+async fn update_album_cover(track: Song) -> Msg {
+    if track.album.is_some() && track.artist.is_some() {
+        let ai = get_album_image_from_lastfm_api(track.album.unwrap(), track.artist.unwrap()).await;
+        match ai {
+            Some(ai) => Msg::AlbumImageUpdated(ai),
+            None => Msg::AlbumImageUpdated(Image {
+                size: "mega".to_string(),
+                text: "/no_album.png".to_string(),
+            }),
+        }
+    } else {
+        Msg::AlbumImageUpdated(Image {
+            size: "mega".to_string(),
+            text: "/no_album.png".to_string(),
+        })
+    }
+}
+
+async fn get_album_image_from_lastfm_api(album: String, artist: String) -> Option<Image> {
+    let response = fetch(format!("http://ws.audioscrobbler.com/2.0/?method=album.getinfo&album={album}&artist={artist}&api_key=3b3df6c5dd3ad07222adc8dd3ccd8cdc&format=json")).await;
+    if let Ok(response) = response {
+        let info = response.json::<AlbumInfo>().await;
+        if let Ok(info) = info {
+            info.album
+                .image
+                .into_iter()
+                .find(|i| i.size == "mega" && !i.text.is_empty())
+        } else {
+            log!("Failed to get album info {}", info);
+            None
+        }
+    } else if let Err(e) = response {
+        log!("Error getting album info from last.fm {}", e);
+        None
+    } else {
+        None
+    }
+}
+fn get_background_image(model: &PlayerModel) -> String {
+    if let Some(ps) = model.current_song.as_ref() {
+        format!(
+            "url({})",
+            ps.image_url.as_ref().map_or("/no_album.png", |f| f)
+        )
+    } else {
+        String::new()
+    }
+}
+
+fn get_album_image(model: &PlayerModel) -> String {
+    if let Some(ps) = model.current_song.as_ref() {
+        ps.image_url
+            .as_ref()
+            .map_or("/no_album.png", |f| f)
+            .to_string()
+    } else {
+        String::new()
     }
 }

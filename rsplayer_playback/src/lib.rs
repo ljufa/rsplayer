@@ -37,7 +37,7 @@ pub trait Player {
         offset: u32,
         limit: u32,
     ) -> Vec<DynamicPlaylistsPage>;
-    fn get_playlist_items(&self, playlist_id: &str) -> Vec<Song>;
+    fn get_playlist_items(&self, playlist_id: &str, page_no: usize) -> Vec<Song>;
     fn save_queue_as_playlist(&self, playlist_name: &str);
 
     // Player

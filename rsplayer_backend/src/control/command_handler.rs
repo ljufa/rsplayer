@@ -124,12 +124,12 @@ pub async fn handle_player_commands(
                     .send(StateChangeEvent::DynamicPlaylistsPageEvent(dynamic_pls))
                     .unwrap();
             }
-            QueryPlaylistItems(playlist_id) => {
+            QueryPlaylistItems(playlist_id, page_no) => {
                 let pl_items = player_service
                     .get_current_player()
-                    .get_playlist_items(&playlist_id);
+                    .get_playlist_items(&playlist_id, page_no);
                 state_changes_sender
-                    .send(StateChangeEvent::PlaylistItemsEvent(pl_items))
+                    .send(StateChangeEvent::PlaylistItemsEvent(pl_items, page_no))
                     .unwrap();
             }
         }

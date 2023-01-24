@@ -1,5 +1,5 @@
 use crate::Urls;
-use seed::{prelude::*, C, a, attrs, div, h1, h2, section, strong};
+use seed::{a, attrs, div, h1, h2, prelude::*, section, strong, C};
 
 pub fn view<Ms>(base_url: &Url) -> Node<Ms> {
     section![C!["hero", "is-medium", "ml-6"],

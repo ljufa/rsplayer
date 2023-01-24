@@ -73,8 +73,6 @@ checksum = "2cb2f989d18dd141ab8ae82f64d1a8cdd37e0840f73a406896cf5e99502fab61"
 name = "api_models"
 version = "0.2.0"
 dependencies = [
- "lazy_static",
- "md5",
  "num-derive",
  "num-traits",
  "regex",
@@ -1435,12 +1433,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "md5"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
-
-[[package]]
 name = "memchr"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1843,16 +1835,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "478c572c3d73181ff3c2539045f6eb99e5491218eae919370993b890cdbdd98e"
 
 [[package]]
-name = "pickledb"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c53a5ade47760e8cc4986bdc5e72daeffaaaee64cbc374f9cfe0a00c1cd87b1f"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "pin-project"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2226,7 +2208,8 @@ dependencies = [
  "api_models",
  "env_logger 0.9.3",
  "log",
- "pickledb",
+ "serde",
+ "serde_yaml",
 ]
 
 [[package]]
@@ -2459,6 +2442,19 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "serde_yaml"
+version = "0.9.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92b5b431e8907b50339b51223b97d102db8d987ced36f6e4d03621db9316c834"
+dependencies = [
+ "indexmap",
+ "itoa",
+ "ryu",
+ "serde",
+ "unsafe-libyaml",
 ]
 
 [[package]]
@@ -3280,6 +3276,12 @@ name = "unidecode"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "402bb19d8e03f1d1a7450e2bd613980869438e0666331be3e073089124aa1adc"
+
+[[package]]
+name = "unsafe-libyaml"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc7ed8ba44ca06be78ea1ad2c3682a43349126c8818054231ee6f4748012aed2"
 
 [[package]]
 name = "untrusted"

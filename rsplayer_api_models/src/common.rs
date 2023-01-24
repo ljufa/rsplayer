@@ -56,7 +56,7 @@ pub enum PlayerCommand {
     QueryCurrentStreamerState,
     QueryCurrentPlayingContext(PlayingContextQuery),
     QueryDynamicPlaylists(Vec<String>, u32, u32),
-    QueryPlaylistItems(String),
+    QueryPlaylistItems(String, usize),
 }
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum SystemCommand {
@@ -136,6 +136,6 @@ pub fn dur_to_string(duration: &Duration) -> String {
 }
 
 #[must_use]
-pub fn hash_md5(input: &str) -> String {
-    format!("{:x}", md5::compute(input))
+pub fn to_database_key(input: &str) -> String {
+    input.to_string()
 }

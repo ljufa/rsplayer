@@ -2,7 +2,10 @@ use api_models::player::Song;
 use api_models::state::{PlayingContext, PlayingContextQuery, StateChangeEvent};
 use api_models::{common::PlayerCommand, state::PlayingContextType};
 use seed::prelude::web_sys::KeyboardEvent;
-use seed::{prelude::*, C, FutureExt, IF, a, attrs, b, button, div, empty, footer, header, i, id, input, log, nodes, p, progress, section, span, style};
+use seed::{
+    a, attrs, b, button, div, empty, footer, header, i, id, input, log, nodes, p, prelude::*,
+    progress, section, span, style, C, IF,
+};
 
 use crate::scrollToId;
 
@@ -48,7 +51,6 @@ pub enum Msg {
 
 pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     log!("Queue: init");
-    orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentSong));
     orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
         PlayingContextQuery::WithSearchTerm(Default::default(), 0),
     )));
@@ -96,7 +98,6 @@ pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
             orders.send_msg(Msg::SendCommand(PlayerCommand::RemovePlaylistItem(id)));
         }
         Msg::WebSocketOpen => {
-            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentSong));
             orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
                 PlayingContextQuery::WithSearchTerm(Default::default(), 0),
             )));
@@ -132,10 +133,10 @@ pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
             scrollToId("current");
         }
         Msg::LoadMoreItems(offset) => {
-            scrollToId("listtop");
             orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
                 PlayingContextQuery::WithSearchTerm(model.search_input.clone(), offset),
             )));
+            orders.after_next_render(move |_| scrollToId("top-list-item"));
         }
         Msg::AddUrlButtonClick => {
             model.show_add_url_modal = true;
@@ -433,17 +434,8 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
             IF!(model.waiting_response => progress![C!["progress", "is-small"], attrs!{ At::Max => "100"}, style!{ St::MarginBottom => "50px"}]),
         ],
         div![
-            style! {
-                St::Background => "rgba(86, 92, 86, 0.507)",
-                St::MinHeight => "95vh"
-            },
             div![section![
-                C!["transparent"],
-                div![span![
-                    C!["has-text-light has-background-dark-transparent"],
-                    i!["Player: "],
-                    b![&pctx.player_type.to_string()]
-                ]],
+                C!["transparent", "is-hidden-mobile"],
                 view_context_info(&pctx.context_type, pctx),
             ],],
             if let Some(page) = pctx.playlist_page.as_ref() {
@@ -460,6 +452,9 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                                     At::Name => "search",
                                     At::Type => "text",
                                     At::Placeholder => "Find a song"
+                                },
+                                style!{
+                                    St::Width => "220px"
                                 },
                                 input_ev(Ev::Input, Msg::SearchInputChanged),
                                 ev(Ev::KeyDown, |keyboard_event| {
@@ -486,7 +481,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                         ],
                     ],
                     div![
-                        C!["transparent field has-addons has-background-dark-transparent"],
+                        C!["field has-addons has-background-dark-transparent"],
                         style!{
                             St::BorderStyle => "groove",
 
@@ -494,32 +489,33 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                         div![C!["control"],
                         a![
                             attrs!(At::Title => "Add URL to queue"),
-                            i![C!["material-icons", "is-large-icon", "white-icon"], "queue"],
+                            i![C!["pr-2","pl-2","material-icons", "white-icon"], "queue"],
                             ev(Ev::Click, move |_| Msg::AddUrlButtonClick)
                         ],
                         a![
                             attrs!(At::Title =>"Save queue as playlist"),
-                            i![C!["material-icons", "is-large-icon", "white-icon"], "save"],
+                            i![C!["pr-2","material-icons", "white-icon"], "save"],
                             ev(Ev::Click, move |_| Msg::SaveAsPlaylistButtonClick)
                         ],
                         a![
                             attrs!(At::Title =>"Show queue starting from current song"),
-                            i![C!["material-icons", "is-large-icon", "white-icon"], "filter_center_focus"],
+                            i![C!["pr-2","material-icons", "white-icon"], "filter_center_focus"],
                             ev(Ev::Click, move |_| Msg::ShowStartingFromCurrentSong)
                         ],
                         a![
                             attrs!(At::Title =>"Clear queue"),
-                            i![C!["material-icons", "is-large-icon", "white-icon"], "clear"],
+                            i![C!["pr-2", "material-icons", "white-icon"], "clear"],
                             ev(Ev::Click, move |_| Msg::ClearQueue)
                         ],
                     ]],
 
                     // queue items
-                    div![id!("listtop"), C!["scroll-list list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
+                    div![C!["scroll-list list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
+                        div![id!("top-list-item")],
                         iter.map(|it| { view_queue_item(it, pctx, model)  })
                     ],
                     button![
-                        C!["button","is-fullwidth", "is-outlined", "is-dark"],
+                        C!["button","is-fullwidth", "is-outlined", "is-success"],
                         "Load more", 
                         ev(Ev::Click, move |_| Msg::LoadMoreItems(offset))
                     ]

@@ -2,10 +2,11 @@ use std::{sync::Arc, thread::JoinHandle, time::Duration, vec};
 
 use anyhow::Result;
 use api_models::{
+    num_traits::ToPrimitive,
     player::Song,
     playlist::PlaylistPage,
     settings::{PlaybackQueueSetting, PlaylistSetting},
-    state::{PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, SongProgress}, num_traits::ToPrimitive,
+    state::{PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, SongProgress},
 };
 
 use mockall_double::double;
@@ -198,27 +199,37 @@ impl Player for RsPlayer {
         get_dynamic_playlists(category_ids, &all_songs, offset, limit, BY_FOLDER_DEPTH)
     }
 
-    fn get_playlist_items(&self, playlist_id: &str) -> Vec<Song> {
+    fn get_playlist_items(&self, playlist_id: &str, page_no: usize) -> Vec<Song> {
+        let items_page_size: usize = 100;
+        let offset: usize = if page_no > 1 {
+            page_no * items_page_size
+        } else {
+            0
+        };
+
         if playlist_id.starts_with(BY_GENRE_PL_PREFIX) {
             let pl_name = playlist_id.replace(BY_GENRE_PL_PREFIX, "");
             self.metadata_service
                 .get_all_songs_iterator()
                 .filter(|s| s.genre.as_ref().map_or(false, |g| *g == pl_name))
-                .take(100)
+                .skip(offset)
+                .take(items_page_size)
                 .collect()
         } else if playlist_id.starts_with(BY_ARTIST_PL_PREFIX) {
             let pl_name = playlist_id.replace(BY_ARTIST_PL_PREFIX, "");
             self.metadata_service
                 .get_all_songs_iterator()
                 .filter(|s| s.artist.as_ref().map_or(false, |a| *a == pl_name))
-                .take(100)
+                .skip(offset)
+                .take(items_page_size)
                 .collect()
         } else if playlist_id.starts_with(BY_DATE_PL_PREFIX) {
             let pl_name = playlist_id.replace(BY_DATE_PL_PREFIX, "");
             self.metadata_service
                 .get_all_songs_iterator()
                 .filter(|s| s.date.as_ref().map_or(false, |d| *d == pl_name))
-                .take(100)
+                .skip(offset)
+                .take(items_page_size)
                 .collect()
         } else if playlist_id.starts_with(BY_FOLDER_PL_PREFIX) {
             let pl_name = playlist_id.replace(BY_FOLDER_PL_PREFIX, "");
@@ -230,12 +241,13 @@ impl Player for RsPlayer {
                         .nth(BY_FOLDER_DEPTH)
                         .map_or(false, |d| *d == pl_name)
                 })
-                .take(100)
+                .skip(offset)
+                .take(items_page_size)
                 .collect()
         } else {
             let pl_name = playlist_id.replace(SAVED_PL_PREFIX, "");
             self.playlist_service
-                .get_playlist_page_by_name(&pl_name, 0, 100)
+                .get_playlist_page_by_name(&pl_name, offset, items_page_size)
                 .items
         }
     }
@@ -262,7 +274,7 @@ impl Player for RsPlayer {
             random: Some(random_next),
             audio_format_rate: params.0,
             audio_format_bit: params.1,
-            audio_format_channels: params.2.map(|c| c.to_u32().unwrap_or_default())
+            audio_format_channels: params.2.map(|c| c.to_u32().unwrap_or_default()),
         })
     }
 

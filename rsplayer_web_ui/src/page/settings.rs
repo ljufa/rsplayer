@@ -1,10 +1,17 @@
 use api_models::{
     common::{FilterType, GainLevel, PlayerType, SystemCommand, VolumeCrtlType},
-    settings::{AlsaDeviceFormat, DacSettings, IRInputControlerSettings, LmsSettings, MetadataStoreSettings, MpdSettings, OLEDSettings, OutputSelectorSettings, Settings, VolumeControlSettings},
+    settings::{
+        AlsaDeviceFormat, DacSettings, IRInputControlerSettings, LmsSettings,
+        MetadataStoreSettings, MpdSettings, OLEDSettings, OutputSelectorSettings, Settings,
+        VolumeControlSettings,
+    },
     spotify::SpotifyAccountInfo,
     validator::Validate,
 };
-use seed::{prelude::*, C, FutureExt, IF, attrs, button, div, empty, h1, i, input, label, log, option, p, section, select, span, style};
+use seed::{
+    attrs, button, div, empty, h1, i, input, label, log, option, p, prelude::*, section, select,
+    span, style, C, IF,
+};
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 
@@ -15,7 +22,7 @@ const API_SPOTIFY_GET_ACCOUNT_INFO_PATH: &str = "/api/spotify/me";
 // ------ ------
 //     Model
 
-#[derive(Debug) ]
+#[derive(Debug)]
 pub struct Model {
     settings: Settings,
     waiting_response: bool,
@@ -74,7 +81,7 @@ pub enum Msg {
     SaveSettingsAndRestart,
     SettingsSaved(fetch::Result<Settings>),
 
-    RemoteConfiguration(Settings),
+    SettingsFetched(Settings),
     SendCommand(SystemCommand),
 }
 
@@ -92,7 +99,7 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
             .json::<Settings>()
             .await
             .expect("failed to deserialize to Configuration");
-        Msg::RemoteConfiguration(sett)
+        Msg::SettingsFetched(sett)
     });
     orders.perform_cmd(async {
         Msg::SpotifyAccountInfoFetched(
@@ -236,7 +243,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::SpotifyAccountInfoFetched(info) => {
             model.spotify_account_info = info;
         }
-        Msg::RemoteConfiguration(sett) => {
+        Msg::SettingsFetched(sett) => {
             model.settings = sett;
         }
         Msg::SettingsSaved(saved) => {
@@ -382,17 +389,16 @@ fn view_settings(model: &Model) -> Node<Msg> {
                 label!["Audio device name", C!["label"]],
                 div![
                     C!["select"],
-                    select![model.settings
+                    select![model
+                        .settings
                         .alsa_settings
                         .available_alsa_pcm_devices
                         .iter()
-                        .map(|d|
-                            option![
-                                IF!(model.settings.alsa_settings.device_name == *d.0 => attrs!(At::Selected => "")),
-                                attrs! {At::Value => d.0},
-                                d.1
-                            ])
-                        ],
+                        .map(|d| option![
+                            IF!(model.settings.alsa_settings.device_name == *d.0 => attrs!(At::Selected => "")),
+                            attrs! {At::Value => d.0},
+                            d.1
+                        ])],
                     input_ev(Ev::Change, Msg::InputAlsaDeviceName),
                 ],
             ],
@@ -496,7 +502,7 @@ fn view_settings(model: &Model) -> Node<Msg> {
             IF!(settings.output_selector_settings.enabled => view_output_selector(&settings.output_selector_settings))
         ],
         div![
-            C!["field", "is-grouped"],
+            C!["field"],
             div![
                 C!("control"),
                 button![
@@ -510,7 +516,9 @@ fn view_settings(model: &Model) -> Node<Msg> {
                 button![
                     C!["button", "is-dark"],
                     "Restart player",
-                    ev(Ev::Click, |_| Msg::SendCommand(SystemCommand::RestartRSPlayer))
+                    ev(Ev::Click, |_| Msg::SendCommand(
+                        SystemCommand::RestartRSPlayer
+                    ))
                 ]
             ],
             div![
@@ -518,7 +526,9 @@ fn view_settings(model: &Model) -> Node<Msg> {
                 button![
                     C!["button", "is-dark"],
                     "Restart system",
-                    ev(Ev::Click, |_| Msg::SendCommand(SystemCommand::RestartSystem))
+                    ev(Ev::Click, |_| Msg::SendCommand(
+                        SystemCommand::RestartSystem
+                    ))
                 ]
             ],
             div![
@@ -528,7 +538,7 @@ fn view_settings(model: &Model) -> Node<Msg> {
                     "Shutdown system",
                     ev(Ev::Click, |_| Msg::SendCommand(SystemCommand::PowerOff))
                 ]
-            ]   ,
+            ],
         ]
     ]
 }

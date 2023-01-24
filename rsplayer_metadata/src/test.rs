@@ -1,4 +1,4 @@
-mod test_queue {
+mod queue {
     use api_models::settings::PlaybackQueueSetting;
 
     use crate::{
@@ -196,6 +196,14 @@ mod test_queue {
         queue.move_current_to_next_song();
         assert_ne!(queue.get_current_song().unwrap().file, "assets/music.1");
     }
+    #[test]
+    fn should_not_return_song_when_random_next_and_only_one_song() {
+        let queue = create_queue();
+        queue.toggle_random_next();
+        queue.add_song(&create_song("mp3"));
+        assert!(!queue.move_current_to_next_song());
+        assert!(!queue.move_current_to_previous_song());
+    }
 
     #[test]
     fn should_clear_queue() {
@@ -228,19 +236,20 @@ mod test_queue {
     }
 }
 
-mod test_metadata {
+mod metadata {
 
-    use api_models::{common::hash_md5, settings::MetadataStoreSettings};
+    use api_models::{common::to_database_key, settings::MetadataStoreSettings};
     use std::path::Path;
 
     use crate::{metadata::MetadataService, test::test_shared::Context};
+
 
     #[test]
     fn should_scan_music_dir_first_time() {
         let service = create_metadata_service(&Context::default());
         service.scan_music_dir("assets".to_string(), true);
         assert_eq!(service.get_all_songs_iterator().count(), 5);
-        let result = service.get_song(&hash_md5("assets/music.flac"));
+        let result = service.get_song(&to_database_key("assets/music.flac"));
         if let Some(saved_song) = result {
             assert_eq!(saved_song.artist, Some("Artist".to_owned()));
             assert_eq!(saved_song.title, Some("FlacTitle".to_owned()));
@@ -255,7 +264,7 @@ mod test_metadata {
     fn should_get_song() {
         let service = create_metadata_service(&Context::default());
         service.scan_music_dir("assets".to_string(), true);
-        let song = service.get_song(&hash_md5("assets/music.mp3"));
+        let song = service.get_song(&to_database_key("assets/music.mp3"));
         assert!(song.is_some());
         assert_eq!(song.unwrap().file, "assets/music.mp3");
     }
@@ -329,11 +338,11 @@ mod test_playlist {
 mod test_shared {
     use std::path::Path;
 
-    use api_models::{common::hash_md5, player::Song};
+    use api_models::{common::to_database_key, player::Song};
 
     pub fn create_song(ext: &str) -> Song {
         let file = format!("assets/music.{ext}");
-        let id = hash_md5(&file);
+        let id = to_database_key(&file);
         Song {
             id,
             file,

@@ -383,7 +383,7 @@ impl Player for MpdPlayerClient {
         )
     }
 
-    fn get_playlist_items(&self, playlist_id: &str) -> Vec<Song> {
+    fn get_playlist_items(&self, playlist_id: &str, _page_no: usize) -> Vec<Song> {
         if playlist_id.starts_with(SAVED_PL_PREFIX) {
             let pl_name = playlist_id.replace(SAVED_PL_PREFIX, "");
             self.get_songs_in_playlist(&pl_name)

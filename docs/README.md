@@ -186,7 +186,7 @@ TODO
 # Roadmap
  
 ## General
-* [ ] Move configuration to human readable yaml file and make it backward compatible (migration support)
+
 * [ ] Convert volume units to db
 * [ ] Loudness limitter by BS1770
 * [ ] Allow seamless play from different sources at runtime, i.e. create playlist/queue from spotify song, local library, radio, youtube songs ...
@@ -210,13 +210,13 @@ TODO
  
  ## Player page
 * [ ] Seek to position
-* [ ] Better design, show player control at the bottom of all pages
+* [x] Better design, show player control at the bottom of all pages
 * [ ] Show playing context if exists: player type, playlist, album ...
 * [ ] Show the next playing song
 * [ ] Like playing item button
   
 ## Queue page
-* [ ] Pagination
+* [x] Pagination
 * [x] Manage items (batch, on search results): ~~clear~~, ~~delete~~, ~~play~~, playnext
 * [ ] Support Spotify podcast
  
@@ -229,13 +229,14 @@ TODO
    * play next
    * ~~replace queue with item(s)~~
    * delete playlist
-* [ ] Pagination
+* [x] Pagination
  
 ## Settings page
 * [ ] Show modal wait window while the server is restarting. use ws status
 * [ ] Add all settings
 
 ## Code improvements
+* [x] Move configuration to human readable yaml file and make it backward compatible (migration support)
 * [x] migrate away from `failure` crate
 * [ ] get rid of `.unwrap()` calls
 * [ ] refactor names all over the code

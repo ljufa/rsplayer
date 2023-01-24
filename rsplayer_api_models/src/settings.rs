@@ -174,8 +174,7 @@ impl Default for MetadataStoreSettings {
             music_directory: "/var/lib/mpd/music".into(),
             follow_links: true,
             supported_extensions: vec![
-                "flac", "wav", "ape", "mp3", "m4a", "aac", "aiff", "alac", "ogg", "wv", "wma",
-                "mp4",
+                "flac", "wav", "mp3", "m4a", "aac", "aiff", "alac", "ogg", "wv", "wma", "mp4",
             ]
             .into_iter()
             .map(std::borrow::ToOwned::to_owned)
@@ -262,6 +261,7 @@ impl Default for Settings {
                 display_model: "ST7920 - 128x64".to_string(),
                 spi_device_path: "/dev/spidev0.0".to_string(),
             },
+            // playlist_settings: PlaylistSetting::default()
         }
     }
 }
