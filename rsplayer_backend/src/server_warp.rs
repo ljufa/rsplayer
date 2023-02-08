@@ -4,6 +4,10 @@ use futures::Future;
 use futures::FutureExt;
 use futures::StreamExt;
 
+use log::debug;
+use log::error;
+use log::info;
+use log::warn;
 use rsplayer_config::Configuration;
 
 use api_models::common::PlayerCommand;
@@ -124,7 +128,7 @@ pub fn start(
                     continue;
                 }
                 Ok(ev) => {
-                    trace!("Received state changed event {:?}", ev);
+                    debug!("Received state changed event {:?}", ev);
                     notify_users(&users_notify, ev).await;
                 }
             }
@@ -243,10 +247,11 @@ mod filters {
 
 #[allow(warnings, clippy::unused_async)]
 mod handlers {
+    use log::{debug, error};
     use rsplayer_playback::spotify::oauth::SpotifyOauth;
     use std::{collections::HashMap, convert::Infallible};
 
-    use crate::audio_device::alsa::AlsaPcmCard;
+    use rsplayer_hardware::audio_device::alsa::AlsaPcmCard;
 
     use super::{ArcPlayerService, Config};
     use api_models::settings::Settings;

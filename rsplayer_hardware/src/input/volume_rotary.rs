@@ -2,6 +2,7 @@ use api_models::common::SystemCommand;
 use rsplayer_config::MutArcConfiguration;
 use tokio::sync::mpsc::Sender;
 
+
 // todo implement settings.is_enabled check
 pub async fn listen(system_commands_tx: Sender<SystemCommand>, config: MutArcConfiguration) {
     let volume_settings = config
@@ -18,7 +19,7 @@ pub async fn listen(system_commands_tx: Sender<SystemCommand>, config: MutArcCon
 
 mod hw_volume {
     use api_models::{common::SystemCommand, settings::VolumeControlSettings};
-
+    use log::{error, info, debug};
     use tokio::sync::mpsc::Sender;
 
     use evdev::{Device, InputEventKind};
@@ -31,10 +32,10 @@ mod hw_volume {
             info!("Start Volume Control thread.");
             let mut events = device.into_event_stream().expect("Failed");
             loop {
-                trace!("Loop cycle");
+                debug!("Loop cycle");
                 let ev = events.next_event().await.expect("Error");
                 if let InputEventKind::RelAxis(_) = ev.kind() {
-                    trace!("Event: {:?}", ev);
+                    debug!("Event: {:?}", ev);
                     if ev.value() == 1 {
                         let _ = system_commands_tx.send(SystemCommand::VolDown).await;
                     } else {

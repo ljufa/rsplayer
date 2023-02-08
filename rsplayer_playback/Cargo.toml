@@ -12,26 +12,18 @@ rsplayer_metadata = { path = "../rsplayer_metadata" }
 rsplayer_config = { path = "../rsplayer_config" }
 
 # general
-anyhow = "1.0"
-log = { version = "0.4" }
-env_logger = "0.10.0"
+log.workspace = true
+env_logger.workspace = true
+anyhow.workspace = true
 #mpd
 mpd = { version = "0.0.12" }
 
 # symphonia
-symphonia = { version = "0.5.1", features = [
-    "aac",
-    "alac",
-    "mp3",
-    "isomp4",
-    "flac",
-    "wav",
-    "ogg",
-    "vorbis",
-    "pcm",
-] }
-cpal = { git = "https://github.com/rustaudio/cpal.git", branch = "master"}
+symphonia = { version = "0.5.1", features = ["all"] }
+cpal = "0.15.0"
 rb = "0.4.1"
+rubato = "0.12.0"
+ureq = "2.6.2"
 
 #spotify
 rspotify = { git = "https://github.com/ljufa/rspotify.git", branch = "add_user_queue_ep", features = [

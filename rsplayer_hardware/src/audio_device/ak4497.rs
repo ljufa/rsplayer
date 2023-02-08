@@ -8,6 +8,7 @@ use std::time::Duration;
 use crate::mcu::gpio;
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_DAC_PDN_RST;
 use crate::mcu::i2c::I2CHelper;
+use log::{error, info, debug};
 
 use super::VolumeControlDevice;
 
@@ -93,11 +94,11 @@ impl DacAk4497 {
                     .expect("Dac not available after restart");
             }
         }
-        trace!("Dac registry before init");
+        debug!("Dac registry before init");
         self.get_reg_values()
             .expect("Can not read dac registry")
             .into_iter()
-            .for_each(|r| trace!("{}", r));
+            .for_each(|r| debug!("{}", r));
 
         self.i2c_helper.write_register(0, 0b1000_1111);
         self.i2c_helper.write_register(1, 0b1010_0010);
@@ -106,11 +107,11 @@ impl DacAk4497 {
         self.set_gain(dac_settings.gain);
         self.hi_load(dac_settings.heavy_load);
         self.change_sound_setting(dac_settings.sound_sett)?;
-        trace!("Dac registry After init");
+        debug!("Dac registry After init");
         self.get_reg_values()
             .expect("Can not read dac registry")
             .into_iter()
-            .for_each(|r| trace!("{}", r));
+            .for_each(|r| debug!("{}", r));
         Ok(())
     }
 

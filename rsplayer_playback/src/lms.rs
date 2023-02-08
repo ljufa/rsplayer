@@ -74,13 +74,13 @@ impl LMSPlayerClient {
         full_cmd.push('\n');
         // fixme: izgleda da unwrap uvek vraca 0 u slucaju greske, bolje proveriti na oba
         let bytes_sent = self.client.write(full_cmd.as_bytes()).unwrap_or_else(|_| {
-            trace!("First attempt failed");
+            debug!("First attempt failed");
             if let Ok(s) = TcpStream::connect(self.cli_server_url.as_str()) {
                 self.client = s;
                 match self.client.write(full_cmd.as_bytes()) {
                     Ok(res) => return res,
                     Err(_) => {
-                        trace!("Second attempt failed");
+                        debug!("Second attempt failed");
                         return 0;
                     }
                 };
@@ -105,7 +105,7 @@ impl LMSPlayerClient {
         let decoded: String = url::form_urlencoded::parse(decoded.as_bytes())
             .map(|(key, val)| [key, val].concat())
             .collect();
-        // trace!("Lms server response is {}", &decoded);
+        // debug!("Lms server response is {}", &decoded);
         Ok(decoded)
     }
 }

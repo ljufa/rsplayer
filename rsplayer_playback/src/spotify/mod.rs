@@ -437,7 +437,7 @@ impl Player for SpotifyPlayerClient {
             .lock()
             .unwrap()
             .as_ref()
-            .map_or(Playlists::default(), std::clone::Clone::clone)
+            .map_or_else(Playlists::default, std::clone::Clone::clone)
     }
 
     fn get_dynamic_playlists(

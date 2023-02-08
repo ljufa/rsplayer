@@ -29,17 +29,18 @@ pub enum AudioOutputError {
 pub type Result<T> = result::Result<T, AudioOutputError>;
 
 mod cpal {
+    
     use super::{AudioOutput, AudioOutputError, Result};
 
     use symphonia::core::audio::{AudioBufferRef, RawSample, SampleBuffer, SignalSpec};
     use symphonia::core::conv::ConvertibleSample;
     use symphonia::core::units::Duration;
 
-    use cpal;
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+    
     use rb::{RbConsumer, RbProducer, SpscRb, RB};
 
-    use log::{error, trace};
+    use log::{debug, error};
 
     pub struct CpalAudioOutput;
 
@@ -71,12 +72,12 @@ mod cpal {
                 .unwrap()
                 .find(|d| d.name().unwrap() == audio_device)
                 .unwrap();
-            trace!("Spec: {:?}", spec);
+            debug!("Spec: {:?}", spec);
             device
                 .supported_output_configs()
                 .unwrap()
                 .into_iter()
-                .for_each(|o| trace!("Output config {:?}", o));
+                .for_each(|o| debug!("Output config {:?}", o));
 
             let config = match device.default_output_config() {
                 Ok(config) => config,

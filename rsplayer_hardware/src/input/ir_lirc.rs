@@ -1,6 +1,7 @@
 use std::io;
 use std::str;
 
+use log::{debug, error, info};
 use api_models::common::PlayerCommand;
 
 use api_models::common::SystemCommand;
@@ -19,7 +20,7 @@ pub async fn listen(
     if let Ok(stream) = UnixStream::connect(&ir_settings.input_socket_path).await {
         info!("Start IR Control thread.");
         loop {
-            trace!("Loop cycle");
+            debug!("Loop cycle");
             _ = stream.readable().await;
             let mut bytes = [0; 60];
             match stream.try_read(&mut bytes) {

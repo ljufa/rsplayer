@@ -10,12 +10,13 @@ use api_models::common::SystemCommand::{ChangeAudioOutput, PowerOff, SetVol, Vol
 use api_models::common::{PlayerCommand, SystemCommand};
 use api_models::state::StateChangeEvent;
 
+use log::debug;
 use rsplayer_config::MutArcConfiguration;
 use rsplayer_metadata::metadata::MetadataService;
 use rsplayer_playback::player_service::ArcPlayerService;
 use tokio::sync::broadcast::Sender;
 
-use crate::audio_device::audio_service::ArcAudioInterfaceSvc;
+use rsplayer_hardware::audio_device::audio_service::ArcAudioInterfaceSvc;
 
 #[allow(clippy::too_many_lines)]
 pub async fn handle_player_commands(
@@ -28,7 +29,7 @@ pub async fn handle_player_commands(
         let Some(cmd ) = input_commands_rx.recv().await else {
             continue;
         };
-        trace!("Received command {:?}", cmd);
+        debug!("Received command {:?}", cmd);
         match cmd {
             Play => {
                 player_service
@@ -144,7 +145,7 @@ pub async fn handle_system_commands(
 ) {
     loop {
         if let Some(cmd) = input_commands_rx.recv().await {
-            trace!("Received command {:?}", cmd);
+            debug!("Received command {:?}", cmd);
             match cmd {
                 SetVol(val) => {
                     let nv = ai_service.set_volume(i64::from(val));

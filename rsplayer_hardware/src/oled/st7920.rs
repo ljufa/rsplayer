@@ -18,7 +18,7 @@ pub async fn write(state_changes_rx: Receiver<StateChangeEvent>, config: MutArcC
 
 mod hw_oled {
     use super::{Receiver, StateChangeEvent};
-    use crate::{common, mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST};
+    use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
     use api_models::{common::PlayerType, player::Song, settings::OLEDSettings, state::PlayerInfo};
     use embedded_graphics::{
         mono_font::{ascii::FONT_4X6, ascii::FONT_5X8, ascii::FONT_6X12, MonoTextStyle},
@@ -27,6 +27,7 @@ mod hw_oled {
         text::Text,
     };
     use embedded_hal::blocking::delay::DelayUs;
+    use log::{error, info, debug};
     use st7920::ST7920;
     use unidecode::unidecode;
 
@@ -61,7 +62,7 @@ mod hw_oled {
             disp.clear(&mut delay).expect("could not clear display");
             loop {
                 let cmd_ev = state_changes_rx.recv().await;
-                trace!("Command event received: {:?}", cmd_ev);
+                debug!("Command event received: {:?}", cmd_ev);
                 match cmd_ev {
                     Ok(StateChangeEvent::CurrentSongEvent(stat)) => {
                         draw_track_info(&mut disp, &mut delay, &stat);
@@ -77,7 +78,7 @@ mod hw_oled {
             }
         } else {
             error!("Failed to configure OLED display");
-            common::no_op_future().await;
+            crate::common::no_op_future().await;
         }
     }
 
@@ -125,7 +126,7 @@ mod hw_oled {
                 title.insert((i + 1) * 21, '\n');
             }
         }
-        trace!("Title length: {} / title: {}", title.len(), title);
+        debug!("Title length: {} / title: {}", title.len(), title);
 
         disp.clear_buffer_region(1, 12, 120, 40, delay)
             .expect("Error");

@@ -1,6 +1,6 @@
 use api_models::state::StateChangeEvent;
 use std::time::Duration;
-
+use log::debug;
 use tokio::sync::broadcast::Receiver;
 
 #[allow(dead_code)]
@@ -14,6 +14,6 @@ pub async fn no_op_future() {
 pub async fn logging_receiver_future(mut rx: Receiver<StateChangeEvent>) {
     loop {
         let r = rx.recv().await;
-        trace!("Event received: {:?}", r);
+        debug!("Event received: {:?}", r);
     }
 }

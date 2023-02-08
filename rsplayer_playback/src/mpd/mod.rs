@@ -14,7 +14,7 @@ use api_models::settings::MpdSettings;
 use api_models::state::{
     PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, SongProgress,
 };
-use log::{debug, error, info, trace};
+use log::{debug, error, info};
 use mpd::{Client, Query, Song as MpdSong};
 
 use anyhow::Result;
@@ -252,7 +252,7 @@ impl Player for MpdPlayerClient {
 
     fn get_player_info(&self) -> Option<PlayerInfo> {
         let status = self.mpd_client.lock().unwrap().status();
-        trace!("Mpd Status is {:?}", status);
+        debug!("Mpd Status is {:?}", status);
         if let Ok(status) = status {
             let time = status.time.map_or((Duration::ZERO, Duration::ZERO), |t| {
                 (
@@ -464,7 +464,7 @@ impl Player for MpdPlayerClient {
 }
 
 fn map_song(song: &MpdSong) -> Song {
-    trace!("Song is {:?}", song);
+    debug!("Song is {:?}", song);
     Song {
         file: song.file.clone(),
         title: song.title.clone(),
@@ -616,7 +616,7 @@ fn mpd_response_to_songs(reader: &mut BufReader<&mut TcpStream>) -> Vec<Song> {
                         break 'song;
                     }
                     &_ => {
-                        trace!("Unmatched:|{}|", song_buffer);
+                        debug!("Unmatched:|{}|", song_buffer);
                         song.tags.insert(
                             String::from_str(key).unwrap(),
                             to_opt_string(value).unwrap(),

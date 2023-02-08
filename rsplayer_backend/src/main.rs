@@ -5,8 +5,6 @@ extern crate log;
 use std::panic;
 use std::sync::{Arc, Mutex};
 
-// use std::time::Duration;
-
 use api_models::common::PlayerCommand;
 use rsplayer_playback::player_service::PlayerService;
 use tokio::signal::unix::{Signal, SignalKind};
@@ -15,17 +13,19 @@ use tokio::{select, spawn};
 
 use rsplayer_config::Configuration;
 
-use crate::audio_device::audio_service::AudioInterfaceService;
-use crate::control::command_handler;
+use rsplayer_hardware::audio_device::audio_service::AudioInterfaceService;
+use rsplayer_hardware::oled::st7920;
+use rsplayer_hardware::input::ir_lirc;
+use rsplayer_hardware::input::volume_rotary;
 
 use rsplayer_metadata::metadata::MetadataService;
 
-mod audio_device;
-mod common;
-mod control;
-mod http_api;
-mod mcu;
-mod monitor;
+
+
+mod command_handler;
+mod server_warp;
+
+mod status;
 
 #[allow(clippy::redundant_pub_crate)]
 #[tokio::main]
@@ -76,7 +76,7 @@ async fn main() {
 
     let (state_changes_tx, _) = broadcast::channel(20);
 
-    let (http_server_future, websocket_future) = http_api::server_warp::start(
+    let (http_server_future, websocket_future) = server_warp::start(
         state_changes_tx.subscribe(),
         player_commands_tx.clone(),
         system_commands_tx.clone(),
@@ -88,19 +88,19 @@ async fn main() {
     _ = player_commands_tx.send(PlayerCommand::Play).await;
 
     select! {
-        _ = spawn(control::ir_lirc::listen(player_commands_tx.clone(), system_commands_tx.clone(), config.clone())) => {
+        _ = spawn(ir_lirc::listen(player_commands_tx.clone(), system_commands_tx.clone(), config.clone())) => {
             error!("Exit from IR Command thread.");
         }
 
-        _ = spawn(control::volume_rotary::listen(system_commands_tx.clone(), config.clone())) => {
+        _ = spawn(volume_rotary::listen(system_commands_tx.clone(), config.clone())) => {
             error!("Exit from Volume control thread.");
         }
 
-        _ = spawn(monitor::oled::write(state_changes_tx.subscribe(), config.clone())) => {
+        _ = spawn(st7920::write(state_changes_tx.subscribe(), config.clone())) => {
             error!("Exit from OLED writer thread.");
         }
 
-        _ = spawn(monitor::status::monitor(player_service.clone(), state_changes_tx.clone())) => {
+        _ = spawn(status::monitor(player_service.clone(), state_changes_tx.clone())) => {
             error!("Exit from status monitor thread.");
         }
 
@@ -145,7 +145,7 @@ async fn start_degraded(
     config: &Arc<Mutex<Configuration>>,
 ) {
     warn!("Starting server in degraded mode.");
-    let http_server_future = http_api::server_warp::start_degraded(config, error);
+    let http_server_future = server_warp::start_degraded(config, error);
     select! {
         _ = http_server_future => {}
 

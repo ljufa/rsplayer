@@ -208,7 +208,7 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
                     i![C!("is-large-icon material-icons"), "play_circle_filled"],
                     ev(Ev::Click, move |_| Msg::LoadPlaylistIntoQueue(selected_playlist_id))
                 ],
-                p![C!["modal-card-title"],style!(St::MarginLeft => "20px"), "Playlist - ", model.selected_playlist_name.clone()],
+                p![C!["modal-card-title"],style!(St::MarginLeft => "10px"), model.selected_playlist_name.clone()],
                 button![C!["delete", "is-large"], attrs!(At::AriaLabel =>"close"), ev(Ev::Click, |_| Msg::CloseSelectedPlaylistItemsModal)],
             ],
             section![
@@ -271,7 +271,7 @@ fn view_dynamic_playlists(model: &Model) -> Node<Msg> {
             model.dynamic_playlists.iter().map(|(category, page)|{
                 let category_id2 = category.id.clone();
                 nodes![
-                    a![C!["title is-4"], 
+                    a![C!["title is-4 has-text-light has-background-dark-transparent"], 
                         category.name.clone(), raw!("&nbsp;"),
                         i![C!["material-icons"], "open_in_new"],
                         ev(Ev::Click, move |_| Msg::ShowCategoryPlaylists(category_id2))
@@ -332,7 +332,7 @@ fn view_static_playlists(model: &Model) -> Node<Msg> {
         div![
             C!["container"],
             IF!(model.static_playlists.has_featured() => nodes![
-                span![C!["title is-3"], "Featured"],
+                span![C!["title is-3 has-text-light has-background-dark-transparent"], "Featured"],
                 section![
                     C!["section"],
                     div![
@@ -348,7 +348,7 @@ fn view_static_playlists(model: &Model) -> Node<Msg> {
                 ]]
             ),
             IF!(model.static_playlists.has_saved() => nodes![
-            span![C!["title is-3"], "Saved"],
+            span![C!["title is-3 has-text-light has-background-dark-transparent"], "Saved"],
             section![
                 C!["section"],
                 div![
@@ -363,7 +363,7 @@ fn view_static_playlists(model: &Model) -> Node<Msg> {
                 ],
             ]]),
             IF!(model.static_playlists.has_new_releases() => nodes![
-            span![C!["title is-3"], "New releases"],
+            span![C!["title is-3 has-text-light has-background-dark-transparent"], "New releases"],
             section![
                 C!["section"],
                 div![
@@ -443,7 +443,6 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                     ],
                     div![
                         C!["card-content"],
-                        //C!["card-footer-item"],
                         p![format!("Album: {}", album.album_name.clone())],
                         album
                             .artists

@@ -446,15 +446,12 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                         C!["transparent field has-addons has-background-dark-transparent"],
                         div![C!["control"],
                             input![
-                                C!["input"],
+                                C!["input", "input-size"],
                                 attrs! {
                                     At::Value => model.search_input,
                                     At::Name => "search",
                                     At::Type => "text",
                                     At::Placeholder => "Find a song"
-                                },
-                                style!{
-                                    St::Width => "220px"
                                 },
                                 input_ev(Ev::Input, Msg::SearchInputChanged),
                                 ev(Ev::KeyDown, |keyboard_event| {

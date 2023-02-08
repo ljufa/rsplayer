@@ -7,11 +7,23 @@ use api_models::{player::Song, settings::PlaybackQueueSetting};
 use log::info;
 
 #[test]
+fn should_play_radio_url(){
+    let player = create_player();
+    player.add_song_in_queue("https://fluxmusic.api.radiosphere.io/channels/90s/stream.aac?quality=10");
+    player.add_song_in_queue("https://stream.rcast.net/66036");
+    player.play_from_current_queue_song();
+    std::thread::sleep(Duration::from_secs(10));
+    player.play_next_song();
+    std::thread::sleep(Duration::from_secs(10));
+    player.stop_current_song();
+    player.await_playing_song_to_finish();
+}
+#[test]
 fn should_play_all_songs_in_queue() {
     let player = create_player();
     player.add_song_in_queue("mp3");
     player.add_song_in_queue("flac");
-    player.play_queue_from_current_song();
+    player.play_from_current_queue_song();
     assert!(player.await_playing_song_to_finish()[0].is_ok());
 }
 
@@ -19,25 +31,12 @@ fn create_player() -> RsPlayer {
     let ctx = Context::default();
     let mut ms = MetadataService::default();
     ms.expect_get_song().returning(|song_id| {
-        let result = match song_id {
-            "flac" => Song {
-                file: "assets/music.flac".to_string(),
+        Some(Song {
+                file: if song_id.starts_with("http") {song_id.to_string()} else {format!("../rsplayer_metadata/assets/music.{song_id}")},
                 id: song_id.to_string(),
                 ..Default::default()
-            },
-            "mp3" => Song {
-                file: "assets/music.mp3".to_string(),
-                id: song_id.to_string(),
-                ..Default::default()
-            },
-            "wav" => Song {
-                file: "assets/music.wav".to_string(),
-                id: song_id.to_string(),
-                ..Default::default()
-            },
-            _ => panic!("Unsupported"),
-        };
-        Some(result)
+            })
+        
     });
 
     let queue = Arc::new(PlaybackQueue::new(&PlaybackQueueSetting {
@@ -49,7 +48,7 @@ fn create_player() -> RsPlayer {
             db_path: format!("{}plista", ctx.db_dir),
         })),
         queue: queue.clone(),
-        symphonia_player: SymphoniaPlayer::new(queue, "default".to_string()),
+        symphonia_player: SymphoniaPlayer::new(queue, "plughw:CARD=HDMI,DEV=7".to_string()),
         play_handle: Arc::new(Mutex::new(vec![])),
     }
 }

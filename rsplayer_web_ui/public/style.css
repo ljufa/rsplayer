@@ -441,7 +441,7 @@ input[type=range].slider {
 
 .is-large-icon {
   font-size: 36px;
-  padding-left: 15px;
+  padding-left: 5px;
   transition: transform .2s ease;
 
 }
@@ -493,6 +493,16 @@ p.has-overflow-ellipsis-text {
 @media screen and (max-width: 700px) {
   p.has-overflow-ellipsis-text {
     width: 160px;
+  }
+}
+
+input.input-size {
+  width: 400px;
+}
+
+@media screen and (max-width: 700px) {
+  input.input-size {
+    width: 220px;
   }
 }
 

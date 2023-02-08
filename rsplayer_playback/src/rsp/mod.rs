@@ -24,8 +24,8 @@ use crate::{
 use self::symphonia::{PlaybackResult, SymphoniaPlayer};
 mod output;
 mod symphonia;
-// #[cfg(test)]
-// mod test;
+#[cfg(test)]
+mod test;
 
 const BY_FOLDER_DEPTH: usize = 6;
 pub struct RsPlayer {
@@ -171,9 +171,23 @@ impl Player for RsPlayer {
     }
 
     fn add_song_in_queue(&self, song_id: &str) {
-        if let Some(song) = self.metadata_service.get_song(song_id).as_ref() {
-            self.queue.add_song(song);
-        }
+        self.metadata_service
+            .get_song(song_id)
+            .as_ref()
+            .map_or_else(
+                || {
+                    if song_id.starts_with("http") {
+                        self.queue.add_song(&Song {
+                            id: song_id.to_string(),
+                            file: song_id.to_string(),
+                            ..Default::default()
+                        });
+                    }
+                },
+                |song| {
+                    self.queue.add_song(song);
+                },
+            );
     }
 
     fn clear_queue(&self) {

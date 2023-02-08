@@ -1,6 +1,7 @@
 use rpi_embedded::i2c::I2c;
 
 use anyhow::Result;
+use log::debug;
 
 pub struct I2CHelper {
     i2c: I2c,
@@ -22,7 +23,7 @@ impl I2CHelper {
     }
 
     pub(crate) fn write_register(&self, reg_addr: u8, value: u8) {
-        trace!("I2C write reg_addr:{}, value: {}", reg_addr, value);
+        debug!("I2C write reg_addr:{}, value: {}", reg_addr, value);
         self.i2c
             .cmd_write(reg_addr, value)
             .expect("Can not write to register");
@@ -38,7 +39,7 @@ impl I2CHelper {
         } else {
             reg_val & !mask
         };
-        trace!(
+        debug!(
             "Change bit {}={} in registry {}. From {:#010b} to {:#010b}",
             bit_position,
             bit_value,

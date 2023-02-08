@@ -7,7 +7,7 @@ use alsa::mixer::{Selem, SelemChannelId};
 use alsa::pcm::State;
 use alsa::Mixer;
 use api_models::common::Volume;
-
+use log::debug;
 use anyhow::Result;
 
 use super::VolumeControlDevice;
@@ -34,7 +34,7 @@ impl AlsaPcmCard {
                 alsa::PCM::new(self.device_name.as_str(), alsa::Direction::Playback, false)
             {
                 let status = dev.status().unwrap();
-                trace!(
+                debug!(
                     "Device status {:?} after elapsed time {}",
                     &status.get_state(),
                     &elapsed_time

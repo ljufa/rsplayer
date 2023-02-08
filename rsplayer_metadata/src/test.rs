@@ -283,7 +283,7 @@ mod metadata {
     }
 }
 
-mod test_playlist {
+mod playlist {
     use std::vec;
 
     use api_models::{player::Song, settings::PlaylistSetting};

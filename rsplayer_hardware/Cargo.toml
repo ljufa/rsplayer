@@ -1,0 +1,32 @@
+[package]
+name = "rsplayer_hardware"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+api_models = { path = "../rsplayer_api_models" }
+rsplayer_config = { path = "../rsplayer_config" }
+
+#logging
+log.workspace = true
+env_logger.workspace = true
+cfg-if.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+
+#other
+unidecode = "0.3.0"
+alsa = "0.7.0"
+url = "2.3.1"
+
+#gpio, i2c
+gpio-cdev = { version = "0.5.1" }
+rpi_embedded = { version = "0.1.0" }
+linux-embedded-hal = { version = "0.3.2" }
+embedded-hal = { version = "0.2.7" }
+evdev = { git = "https://github.com/emberian/evdev", features = ["tokio"] }
+
+#oled
+embedded-graphics = { version = "0.7.1" }
+st7920 = { version = "0.3.0" }

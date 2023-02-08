@@ -81,7 +81,7 @@ impl MetadataService {
                     let db_key = to_database_key(file_p);
                     song.id = db_key.clone();
                     song.file = file_p.to_string();
-                    log::trace!("Add/update song in database: {:?}", song);
+                    log::debug!("Add/update song in database: {:?}", song);
                     _ = self.db.insert(&db_key, song.to_json_string_bytes());
                     count += 1;
                 }

@@ -11,9 +11,12 @@ use symphonia::core::audio::Channels;
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, Track};
-use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
+use symphonia::core::io::{
+    MediaSource, MediaSourceStream, MediaSourceStreamOptions, ReadOnlySource,
+};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
+use symphonia::core::units::TimeBase;
 use symphonia::default::{get_codecs, get_probe};
 
 use rsplayer_metadata::queue::PlaybackQueue;
@@ -142,15 +145,7 @@ fn play_file(
     debug!("Playing file {}", path_str);
     running.store(true, Ordering::SeqCst);
     let mut hint = Hint::new();
-    let source = {
-        let path = Path::new(&path_str);
-        if let Some(extension) = path.extension() {
-            if let Some(extension_str) = extension.to_str() {
-                hint.with_extension(extension_str);
-            }
-        }
-        Box::new(File::open(path)?)
-    };
+    let source = get_source(path_str, &mut hint)?;
     // Probe the media source stream for metadata and get the format reader.
     let Ok(probed) = get_probe().format(
         &hint,
@@ -169,11 +164,10 @@ fn play_file(
     };
 
     let codec_parameters = &track.codec_params;
-    let tb = codec_parameters.time_base.unwrap_or_default();
+    let tb = codec_parameters.time_base.unwrap_or_else(|| TimeBase::new(1, 1));
     let dur = codec_parameters
         .n_frames
-        .map(|frames| codec_parameters.start_ts + frames)
-        .unwrap_or_default();
+        .map_or(1, |frames| codec_parameters.start_ts + frames);
     let dur = tb.calc_time(dur);
 
     let rate = codec_parameters.sample_rate;
@@ -249,6 +243,35 @@ fn play_file(
     }
     debug!("Play finished with result {:?}", loop_result);
     loop_result
+}
+
+fn get_source(path_str: &str, hint: &mut Hint) -> Result<Box<dyn MediaSource>, anyhow::Error> {
+    let source = if path_str.starts_with("http") {
+        let agent = ureq::AgentBuilder::new()
+            .timeout_connect(Duration::from_secs(5))
+            .timeout_read(Duration::from_secs(5))
+            .build();
+        let resp = agent.get(path_str).set("accept", "*/*").call()?;
+        let status = resp.status();
+        info!("response status code:{status} / status text:{}", resp.status_text());
+        resp.headers_names()
+            .iter()
+            .for_each(|header| debug!("{header} = {:?}", resp.header(header).unwrap_or("")));
+        if status == 200 {
+            Box::new(ReadOnlySource::new(resp.into_reader())) as Box<dyn MediaSource>
+        } else {
+            return Err(format_err!("Invalid streaming url {path_str}"));
+        }
+    } else {
+        let path = Path::new(&path_str);
+        if let Some(extension) = path.extension() {
+            if let Some(extension_str) = extension.to_str() {
+                hint.with_extension(extension_str);
+            }
+        }
+        Box::new(File::open(path)?)
+    };
+    Ok(source)
 }
 
 fn first_supported_track(tracks: &[Track]) -> Option<&Track> {

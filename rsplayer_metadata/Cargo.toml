@@ -6,14 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+log.workspace = true
+env_logger.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+
 api_models = {path = "../rsplayer_api_models"}
 walkdir = "2"
 symphonia = { version = "0.5.1", features = [ "aac", "alac", "mp3", "isomp4","flac" ] }
-log = { version = "0.4", features = ["release_max_level_info"] }
-env_logger = "0.10.0"
 sled = "0.34.7"
-serde_json = "1"
-anyhow = "1.0"
 mockall = "0.11.2"
 rand = "0.7.3"
 
