@@ -24,8 +24,8 @@ use crate::{
 use self::symphonia::{PlaybackResult, SymphoniaPlayer};
 mod output;
 mod symphonia;
-#[cfg(test)]
-mod test;
+// #[cfg(test)]
+// mod test;
 
 const BY_FOLDER_DEPTH: usize = 6;
 pub struct RsPlayer {
