@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - "main"
+    paths:
+      - '**.rs'
+      - '**.toml'
 env:
   CARGO_TERM_COLOR: always
 
