@@ -8,7 +8,7 @@ After=network-online.target mpd.service lircd.service syslog.service
 # LimitMEMLOCK=655360
 Environment=RUST_BACKTRACE=full
 Environment=RSPLAYER_HTTP_PORT=80
-Environment=RUST_LOG=rsplayer=debug,warp=debug
+Environment=RUST_LOG=info
 ExecStart=/usr/local/bin/rsplayer
 WorkingDirectory=/opt/rsplayer
 ExecStartPre=sleep 5
