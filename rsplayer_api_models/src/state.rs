@@ -73,6 +73,9 @@ pub struct PlayerInfo {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_format_channels: Option<u32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub codec: Option<String>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

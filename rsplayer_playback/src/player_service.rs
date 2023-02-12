@@ -58,7 +58,7 @@ impl PlayerService {
             }
             PlayerType::RSP => {
                 let rsp =
-                    RsPlayer::new(metadata_service, settings.alsa_settings.device_name.clone());
+                    RsPlayer::new(metadata_service, settings);
                 Ok(Box::new(rsp))
             }
             PlayerType::LMS => panic!("Unsupported type"),

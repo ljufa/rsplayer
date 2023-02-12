@@ -4,7 +4,7 @@ use api_models::player::Song;
 use api_models::state::{AudioOut, PlayerInfo, PlayerState, SongProgress};
 
 use seed::{
-    a, attrs, button, div, empty, i, input, nav, p, prelude::*, progress, span, style, C, IF,
+    a, attrs, button, div, empty, i, input, nav, nodes, p, prelude::*, progress, span, style, C, IF,
 };
 
 use std::str::FromStr;
@@ -97,17 +97,27 @@ fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Nod
                     ],
                 ]),
                 if let Some(pi) = player_info {
-                    div![
-                        C!["level-item"],
-                        IF!(pi.audio_format_rate.is_some() =>
-                            div![p![
-                            C!["has-text-light has-background-dark-transparent"],
-                            format!("Freq: {} | Bit: {} | Ch: {}", pi.audio_format_rate.map_or(0, |f|f),
-                            pi.audio_format_bit.map_or(0, |f|f), pi.audio_format_channels.map_or(0,|f|f))
-                        ]]),
+                    nodes![
+                        div![
+                            C!["level-item"],
+                            IF!(pi.audio_format_rate.is_some() =>
+                                div![p![
+                                C!["has-text-light has-background-dark-transparent"],
+                                format!("Freq: {} | Bit: {} | Ch: {}", pi.audio_format_rate.map_or(0, |f|f),
+                                pi.audio_format_bit.map_or(0, |f|f), pi.audio_format_channels.map_or(0,|f|f))
+                            ]]),
+                        ],
+                        pi.codec.as_ref().map(|c|{
+                            div![
+                                C!["level-item"],
+                                div![p![C!["has-text-light has-background-dark-transparent"],
+                                    "Codec: ", c
+                                ]],
+                            ]
+                        })
                     ]
                 } else {
-                    empty!()
+                    nodes!()
                 }
             ],
         ]

@@ -322,6 +322,7 @@ impl Player for SpotifyPlayerClient {
                 audio_format_rate: Option::default(),
                 audio_format_bit: Option::default(),
                 audio_format_channels: Option::default(),
+                codec: None
             })
         } else {
             None

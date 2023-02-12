@@ -5,7 +5,7 @@ use api_models::{
     num_traits::ToPrimitive,
     player::Song,
     playlist::PlaylistPage,
-    settings::{PlaybackQueueSetting, PlaylistSetting},
+    settings::{PlaybackQueueSetting, PlaylistSetting, Settings},
     state::{PlayerInfo, PlayerState, PlayingContext, PlayingContextQuery, SongProgress},
 };
 
@@ -36,13 +36,17 @@ pub struct RsPlayer {
     play_handle: Arc<Mutex<Vec<JoinHandle<Result<PlaybackResult>>>>>,
 }
 impl RsPlayer {
-    pub fn new(metadata_service: Arc<MetadataService>, audio_device: String) -> Self {
+    pub fn new(metadata_service: Arc<MetadataService>, settings: &Settings) -> Self {
         let queue = Arc::new(PlaybackQueue::new(&PlaybackQueueSetting::default()));
         RsPlayer {
             queue: queue.clone(),
             metadata_service,
             playlist_service: Arc::new(PlaylistService::new(&PlaylistSetting::default())),
-            symphonia_player: SymphoniaPlayer::new(queue, audio_device),
+            symphonia_player: SymphoniaPlayer::new(
+                queue,
+                settings.alsa_settings.device_name.clone(),
+                settings.rs_player_settings.buffer_size_mb,
+            ),
             play_handle: Arc::new(Mutex::new(vec![])),
         }
     }
@@ -289,6 +293,7 @@ impl Player for RsPlayer {
             audio_format_rate: params.0,
             audio_format_bit: params.1,
             audio_format_channels: params.2.map(|c| c.to_u32().unwrap_or_default()),
+            codec: params.3,
         })
     }
 

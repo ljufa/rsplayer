@@ -28,20 +28,22 @@ pub struct SymphoniaPlayer {
     running: Arc<AtomicBool>,
     paused: Arc<AtomicBool>,
     time: Arc<Mutex<(u64, u64)>>,
-    codec_params: Arc<Mutex<(Option<u32>, Option<u32>, Option<usize>)>>,
+    codec_params: Arc<Mutex<(Option<u32>, Option<u32>, Option<usize>, Option<String>)>>,
     queue: Arc<PlaybackQueue>,
     audio_device: String,
+    buffer_size_mb: usize,
 }
 
 impl SymphoniaPlayer {
-    pub fn new(queue: Arc<PlaybackQueue>, audio_device: String) -> Self {
+    pub fn new(queue: Arc<PlaybackQueue>, audio_device: String, buffer_size_mb: usize) -> Self {
         SymphoniaPlayer {
             running: Arc::new(AtomicBool::new(false)),
             paused: Arc::new(AtomicBool::new(false)),
             time: Arc::new(Mutex::new((0, 0))),
-            codec_params: Arc::new(Mutex::new((None, None, None))),
+            codec_params: Arc::new(Mutex::new((None, None, None, None))),
             queue,
             audio_device,
+            buffer_size_mb,
         }
     }
 
@@ -67,8 +69,12 @@ impl SymphoniaPlayer {
     pub fn get_time(&self) -> (u64, u64) {
         *self.time.lock().unwrap()
     }
-    pub fn get_codec_params(&self) -> (Option<u32>, Option<u32>, Option<usize>) {
-        *self.codec_params.lock().unwrap()
+    pub fn get_codec_params(&self) -> (Option<u32>, Option<u32>, Option<usize>, Option<String>) {
+        self.codec_params
+            .lock()
+            .as_ref()
+            .map(|t| (t.0, t.1, t.2, t.3.clone()))
+            .unwrap()
     }
 
     pub fn play_all_in_queue(&self) -> JoinHandle<Result<PlaybackResult>> {
@@ -77,6 +83,7 @@ impl SymphoniaPlayer {
         let paused = self.paused.clone();
         let queue = self.queue.clone();
         let audio_device = self.audio_device.clone();
+        let buffer_size = self.buffer_size_mb;
         let time = self.time.clone();
         let codec_params = self.codec_params.clone();
         thread::Builder::new()
@@ -95,6 +102,7 @@ impl SymphoniaPlayer {
                         &time,
                         &codec_params,
                         &audio_device,
+                        buffer_size,
                     ) {
                         Ok(PlaybackResult::PlaybackStopped) => {
                             running.store(false, Ordering::SeqCst);
@@ -139,8 +147,9 @@ fn play_file(
     running: &Arc<AtomicBool>,
     paused: &Arc<AtomicBool>,
     time: &Arc<Mutex<(u64, u64)>>,
-    codec_params: &Arc<Mutex<(Option<u32>, Option<u32>, Option<usize>)>>,
+    codec_params: &Arc<Mutex<(Option<u32>, Option<u32>, Option<usize>, Option<String>)>>,
     audio_device: &str,
+    buffer_size_mb: usize,
 ) -> Result<PlaybackResult> {
     debug!("Playing file {}", path_str);
     running.store(true, Ordering::SeqCst);
@@ -149,7 +158,7 @@ fn play_file(
     // Probe the media source stream for metadata and get the format reader.
     let Ok(probed) = get_probe().format(
         &hint,
-        MediaSourceStream::new(source, MediaSourceStreamOptions::default()),
+        MediaSourceStream::new(source, MediaSourceStreamOptions{buffer_len: (buffer_size_mb * 1024 * 1024).next_power_of_two()}),
         &FormatOptions::default(),
         &MetadataOptions::default(),
     )else {
@@ -164,7 +173,9 @@ fn play_file(
     };
 
     let codec_parameters = &track.codec_params;
-    let tb = codec_parameters.time_base.unwrap_or_else(|| TimeBase::new(1, 1));
+    let tb = codec_parameters
+        .time_base
+        .unwrap_or_else(|| TimeBase::new(1, 1));
     let dur = codec_parameters
         .n_frames
         .map_or(1, |frames| codec_parameters.start_ts + frames);
@@ -173,7 +184,8 @@ fn play_file(
     let rate = codec_parameters.sample_rate;
     let bps = codec_parameters.bits_per_sample;
     let chan_num = codec_parameters.channels.map(Channels::count);
-    *codec_params.lock().unwrap() = (rate, bps, chan_num);
+    let cd = symphonia::default::get_codecs().get_codec(codec_parameters.codec);
+    *codec_params.lock().unwrap() = (rate, bps, chan_num, cd.map(|c| c.long_name.to_string()));
     let mut decoder = get_codecs().make(codec_parameters, decode_opts)?;
     let mut audio_output = None;
 
@@ -253,7 +265,10 @@ fn get_source(path_str: &str, hint: &mut Hint) -> Result<Box<dyn MediaSource>, a
             .build();
         let resp = agent.get(path_str).set("accept", "*/*").call()?;
         let status = resp.status();
-        info!("response status code:{status} / status text:{}", resp.status_text());
+        info!(
+            "response status code:{status} / status text:{}",
+            resp.status_text()
+        );
         resp.headers_names()
             .iter()
             .for_each(|header| debug!("{header} = {:?}", resp.header(header).unwrap_or("")));

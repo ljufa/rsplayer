@@ -2279,8 +2279,9 @@ dependencies = [
 
 [[package]]
 name = "rspotify"
-version = "0.11.5"
-source = "git+https://github.com/ljufa/rspotify.git?branch=add_user_queue_ep#f8a517e3d28b6b1055c13dda8c3f5b88e7c96eba"
+version = "0.11.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a86007448fb9a88a0677fd332addf8e7c1057e67bc385d3477c8d44c1bb0e96f"
 dependencies = [
  "base64",
  "chrono",
@@ -2299,8 +2300,9 @@ dependencies = [
 
 [[package]]
 name = "rspotify-http"
-version = "0.11.5"
-source = "git+https://github.com/ljufa/rspotify.git?branch=add_user_queue_ep#f8a517e3d28b6b1055c13dda8c3f5b88e7c96eba"
+version = "0.11.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa7481b3155d1ee3a0a73f94148d3385487e519b795d418ec0df1588961c1105"
 dependencies = [
  "log",
  "maybe-async",
@@ -2311,13 +2313,15 @@ dependencies = [
 
 [[package]]
 name = "rspotify-macros"
-version = "0.11.5"
-source = "git+https://github.com/ljufa/rspotify.git?branch=add_user_queue_ep#f8a517e3d28b6b1055c13dda8c3f5b88e7c96eba"
+version = "0.11.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c86521fc751c75235937f0014dfb17e67f8abc6461b28ad82c9c2acc33a0c47"
 
 [[package]]
 name = "rspotify-model"
-version = "0.11.5"
-source = "git+https://github.com/ljufa/rspotify.git?branch=add_user_queue_ep#f8a517e3d28b6b1055c13dda8c3f5b88e7c96eba"
+version = "0.11.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b03296b02fc44c9b792635cf8156d13b9d0edf629d74e80c4f551a97a1b83cd"
 dependencies = [
  "chrono",
  "enum_dispatch",

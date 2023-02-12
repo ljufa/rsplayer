@@ -280,6 +280,7 @@ impl Player for MpdPlayerClient {
                 audio_format_channels: status.audio.map(|f| u32::from(f.chans)),
                 random: Some(status.random),
                 state: Some(map_state(status.state)),
+                codec: None
             })
         } else {
             error!("Error while getting mpd status {:?}", status);

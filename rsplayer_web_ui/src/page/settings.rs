@@ -2,8 +2,8 @@ use api_models::{
     common::{FilterType, GainLevel, PlayerType, SystemCommand, VolumeCrtlType},
     settings::{
         AlsaDeviceFormat, DacSettings, IRInputControlerSettings, LmsSettings,
-        MetadataStoreSettings, MpdSettings, OLEDSettings, OutputSelectorSettings, Settings,
-        VolumeControlSettings,
+        MetadataStoreSettings, MpdSettings, OLEDSettings, OutputSelectorSettings, RsPlayerSettings,
+        Settings, VolumeControlSettings,
     },
     spotify::SpotifyAccountInfo,
     validator::Validate,
@@ -34,6 +34,7 @@ pub enum Msg {
     SelectActivePlayer(String),
 
     // ---- on off toggles ----
+    ToggleRspEnabled,
     ToggleDacEnabled,
     ToggleSpotifyEnabled,
     ToggleLmsEnabled,
@@ -63,6 +64,7 @@ pub enum Msg {
     InputRotaryEventDevicePathChanged(String),
     InputVolumeStepChanged(String),
     InputVolumeCtrlDeviceChanged(VolumeCrtlType),
+    InputRspBufferSizeChange(String),
 
     ClickSpotifyAuthorizeButton,
     ClickSpotifyLogoutButton,
@@ -147,6 +149,9 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::ToggleMpdEnabled => {
             model.settings.mpd_settings.enabled = !model.settings.mpd_settings.enabled;
         }
+        Msg::ToggleRspEnabled => {
+            model.settings.rs_player_settings.enabled = !model.settings.rs_player_settings.enabled;
+        }
         Msg::ToggleIrEnabled => {
             model.settings.ir_control_settings.enabled =
                 !model.settings.ir_control_settings.enabled;
@@ -222,6 +227,11 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::InputRotaryEventDevicePathChanged(path) => {
             model.settings.volume_ctrl_settings.rotary_event_device_path = path;
+        }
+        Msg::InputRspBufferSizeChange(value) => {
+            if let Ok(num) = value.parse::<usize>() {
+                model.settings.rs_player_settings.buffer_size_mb = num;
+            };
         }
         Msg::ClickSpotifyAuthorizeButton => {
             let settings = model.settings.clone();
@@ -317,6 +327,26 @@ fn view_settings(model: &Model) -> Node<Msg> {
             h1![C!["title"], "Players"],
             div![
                 C!["field"],
+                ev(Ev::Click, |_| Msg::ToggleRspEnabled),
+                input![
+                    C!["control", "switch"],
+                    attrs! {
+                        At::Name => "rsp_cb"
+                        At::Type => "checkbox"
+                        At::Checked => settings.rs_player_settings.enabled.as_at_value(),
+                    },
+                ],
+                label![
+                    C!("label"),
+                    "Enable RSPlayer?",
+                    attrs! {
+                        At::For => "rsp_cb"
+                    }
+                ]
+            ],
+            IF!(settings.rs_player_settings.enabled => view_rsp(&settings.rs_player_settings)),
+            div![
+                C!["field"],
                 ev(Ev::Click, |_| Msg::ToggleMpdEnabled),
                 input![
                     C!["control", "switch"],
@@ -375,11 +405,12 @@ fn view_settings(model: &Model) -> Node<Msg> {
                             IF!(settings.active_player == PlayerType::MPD => attrs!(At::Selected => "")),
                             "Music player daemon",
                         ]),
+                        IF!(settings.rs_player_settings.enabled =>
                         option![
                             attrs! {At::Value => "RSP"},
                             IF!(settings.active_player == PlayerType::RSP => attrs!(At::Selected => "")),
                             "RSPlayer - experimental",
-                        ],
+                        ]),
                         input_ev(Ev::Change, Msg::SelectActivePlayer),
                     ],
                 ],
@@ -1154,5 +1185,36 @@ fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
                 ],
             ]
         ],
+    ]
+}
+
+fn view_rsp(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
+    div![
+        style! {
+            St::PaddingBottom => "1.2rem"
+        },
+        div![
+            C!["field", "is-horizontal"],
+            div![
+                C!["field-label", "is-small"],
+                label!["Input buffer size coin MB", C!["label"]],
+            ],
+            div![
+                C!["field-body"],
+                div![
+                    C!["field"],
+                    div![
+                        C!["control"],
+                        input![
+                            C!["input"],
+                            attrs! {At::Value => rsp_settings.buffer_size_mb, At::Type => "number"},
+                            input_ev(Ev::Input, move |value| {
+                                Msg::InputRspBufferSizeChange(value)
+                            }),
+                        ],
+                    ]
+                ]
+            ],
+        ]
     ]
 }

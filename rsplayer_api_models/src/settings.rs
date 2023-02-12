@@ -21,7 +21,22 @@ pub struct Settings {
     pub active_player: PlayerType,
     pub metadata_settings: MetadataStoreSettings,
     pub playback_queue_settings: PlaybackQueueSetting,
-    // pub playlist_settings: PlaylistSetting
+    #[serde(default)]
+    pub playlist_settings: PlaylistSetting,
+    #[serde(default)]
+    pub rs_player_settings: RsPlayerSettings
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RsPlayerSettings {
+    pub enabled: bool,
+    pub buffer_size_mb: usize
+}
+
+impl Default for RsPlayerSettings {
+    fn default() -> Self {
+        Self { enabled: true, buffer_size_mb: 10 }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -261,7 +276,8 @@ impl Default for Settings {
                 display_model: "ST7920 - 128x64".to_string(),
                 spi_device_path: "/dev/spidev0.0".to_string(),
             },
-            // playlist_settings: PlaylistSetting::default()
+            playlist_settings: PlaylistSetting::default(),
+            rs_player_settings: RsPlayerSettings::default()
         }
     }
 }
