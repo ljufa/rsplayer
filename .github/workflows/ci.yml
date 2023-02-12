@@ -6,6 +6,7 @@ on:
     paths:
       - '**.rs'
       - '**.toml'
+      - '**/ci.yml'
 env:
   CARGO_TERM_COLOR: always
 
@@ -15,10 +16,10 @@ jobs:
     name: Build and test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: Swatinem/rust-cache@v1
+    - uses: actions/checkout@v3
+    - uses: Swatinem/rust-cache@v2
     - uses: davidB/rust-cargo-make@v1
-    - uses: taiki-e/install-action@v1
+    - uses: taiki-e/install-action@v2
       with:
         tool: cross
     - name: Clippy lint

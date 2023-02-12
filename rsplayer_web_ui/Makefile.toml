@@ -3,7 +3,7 @@ RPI_HOST = "192.168.5.60"
 
 # ---- BUILD UI----
 [tasks.build_release]
-install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V", force = false }
+# install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V", force = false }
 command = "wasm-pack"
 args = [
     "build",
@@ -25,7 +25,7 @@ script = [
 
 [tasks.build_local]
 description = "Build with wasm-pack"
-install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V", force = false }
+# install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V", force = false }
 command = "wasm-pack"
 args = [
     "build",

@@ -7,14 +7,15 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+      
   build_ui:
     name: Build UI
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: Swatinem/rust-cache@v1
+    - uses: actions/checkout@v3
+    - uses: Swatinem/rust-cache@v2
     - uses: davidB/rust-cargo-make@v1
-    - uses: taiki-e/install-action@v1
+    - uses: taiki-e/install-action@v2
       with:
         tool: wasm-pack
     - name: Build release
@@ -33,19 +34,21 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: Swatinem/rust-cache@v1
+    - uses: actions/checkout@v3
+    - uses: Swatinem/rust-cache@v2
     - uses: davidB/rust-cargo-make@v1
-    - uses: taiki-e/install-action@v1
+    - uses: taiki-e/install-action@v2
       with:
-        tool: cross
+        tool: cargo-binstall
+    - name: Install tools
+      run: cargo make install_tools
     - name: Download web_ui
       uses: actions/download-artifact@v3
       with:
         name: web_ui
         path: target/ui
-    - name: Display structure of downloaded files
-      run: ls -R target
+    # - name: Display structure of downloaded files
+    #   run: ls -R target
     - name: Build Backend
       run: cargo make --env TARGET=${{ matrix.target }} build_release
     - name: Create deb package
@@ -62,8 +65,8 @@ jobs:
     steps:
     - name: Download deb packages
       uses: actions/download-artifact@v3
-    - name: Display structure of downloaded files
-      run: ls -R
+    # - name: Display structure of downloaded files
+    #   run: ls -R
     - uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
