@@ -308,7 +308,12 @@ squeezelite -V "Luckit Audio 2.0 Output" -o hw:CARD=L20,DEV=0 -C 1 -v -z
 ```
 
 ## Install build tools
-`cargo install make`
+```bash
+cargo install cargo-binstall
+cargo install make
+cargo make install_tools
+```
+
 
 ## Update Makefile.toml
 set RPI_HOST to ip address of your device
