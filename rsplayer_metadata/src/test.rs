@@ -238,7 +238,8 @@ mod queue {
 
 mod metadata {
 
-    use api_models::settings::MetadataStoreSettings;
+    use api_models::{settings::MetadataStoreSettings, state::StateChangeEvent};
+    use tokio::sync::broadcast::{Sender, Receiver};
     use std::path::Path;
 
     use crate::{metadata::MetadataService, test::test_shared::Context};
@@ -246,8 +247,8 @@ mod metadata {
 
     #[test]
     fn should_scan_music_dir_first_time() {
-        let service = create_metadata_service(&Context::default());
-        service.scan_music_dir("assets".to_string(), true);
+        let (service, sender, _receiver) = create_metadata_service(&Context::default());
+        service.scan_music_dir("assets", true, &sender);
         assert_eq!(service.get_all_songs_iterator().count(), 5);
         let result = service.find_song_by_id("0");
         if let Some(saved_song) = result {
@@ -262,14 +263,14 @@ mod metadata {
 
     #[test]
     fn should_get_song() {
-        let service = create_metadata_service(&Context::default());
-        service.scan_music_dir("assets".to_string(), true);
+        let (service, sender, _receiver) = create_metadata_service(&Context::default());
+        service.scan_music_dir("assets", true, &sender);
         let song = service.find_song_by_id("2");
         assert!(song.is_some());
         assert_eq!(song.unwrap().file, "music.mp3");
     }
 
-    pub fn create_metadata_service(context: &Context) -> MetadataService {
+    pub fn create_metadata_service(context: &Context) -> (MetadataService, Sender<StateChangeEvent>, Receiver<StateChangeEvent>) {
         let path = &context.db_dir;
         if Path::new(path).exists() {
             _ = std::fs::remove_dir_all(path);
@@ -279,7 +280,9 @@ mod metadata {
             music_directory: context.music_dir.clone(),
             ..Default::default()
         };
-        MetadataService::new(&settings).expect("Failed to create service")
+        let sender = tokio::sync::broadcast::channel(20).0;
+        let receiver = sender.subscribe();
+        (MetadataService::new(&settings).expect("Failed to create service"), sender, receiver)
     }
 }
 

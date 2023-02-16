@@ -45,16 +45,16 @@ impl MetadataService {
 
     pub fn scan_music_dir(
         &self,
-        music_dir: String,
+        music_dir: &str,
         full_scan: bool,
-        state_changes_sender: Sender<StateChangeEvent>,
+        state_changes_sender: &Sender<StateChangeEvent>,
     ) {
         if self.scan_running.load(std::sync::atomic::Ordering::SeqCst) {
             return;
-        } else {
-            self.scan_running
-                .store(true, std::sync::atomic::Ordering::SeqCst);
         }
+        self.scan_running
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
         if full_scan {
             _ = self.db.clear();
         }
@@ -64,7 +64,7 @@ impl MetadataService {
             .expect("Status send failed");
         let supported_ext = &self.settings.supported_extensions;
         let mut count = 0;
-        for entry in WalkDir::new(&music_dir)
+        for entry in WalkDir::new(music_dir)
             .follow_links(self.settings.follow_links)
             .sort_by_file_name()
             .into_iter()
@@ -93,7 +93,7 @@ impl MetadataService {
             // Use the default options for metadata readers.
             let metadata_opts = MetadataOptions::default();
             let file_p = file_path
-                .strip_prefix(&music_dir)
+                .strip_prefix(music_dir)
                 .unwrap()
                 .to_str()
                 .unwrap();

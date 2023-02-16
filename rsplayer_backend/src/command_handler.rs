@@ -199,7 +199,7 @@ pub async fn handle_system_commands(
                     let state_changes_sender = state_changes_sender.clone();
                     std::thread::Builder::new()
                         .name("metadata_scanner".to_string())
-                        .spawn(move || mtds.scan_music_dir(music_dir, true, state_changes_sender))
+                        .spawn(move || mtds.scan_music_dir(&music_dir, true, &state_changes_sender))
                         .expect("Failed to start metadata scanner thread");
                 }
             }
