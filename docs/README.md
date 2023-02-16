@@ -1,66 +1,49 @@
-# Installing
-* ### Install RPI OS
-If you are going to install RPI os from scratch it is important to enable ssh, and wifi and specify the hostname.
+# Install
+## Supported hardware and OS
+RSPlayer can be installed on Linux-based systems with the following CPU architectures:
+* Linux amd64(x86_64-unknown-linux-gnu) - x86 intel and amd cpus
+* Linux aarch64(aarch64-unknown-linux-gnu) - arm 64bit cpus: RPI4 and other arm8 cpu based boards ...
+* Linux armv7(armv7-unknown-linux-gnueabihf) - arm 32bit cpus: RP4(32bit), RPI3, RPI2, RPI zero ...
 
-  * For os image select _Raspberry PI OS Lite 64-bit_
-  * Click on the gear icon and enable the following options
+## Basic installation
+### Install program
+RSPlayer can be installed using one of two methods:
+* Using installation script(it will detect your architecture)
+```bash
+bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)
+```
+* Manually download and install deb package
+The latest package can be downloaded from [this page](https://github.com/ljufa/rsplayer/releases/latest).
 
-    ![](_assets/pi_imager_options.png ':size=450')
+### Verify installation
+* Run systemd service by `sudo systemctl start rsplayer`
+* Check service status by `sudo systemctl status rsplayer` and if it shows active go to the next step
+* Open browser at http://you-machine-ip-address i.e. http://raspberrypi.local. 
+
+?>TIP: If port 80 is not available it will automatically fall back to port 8000 so in this case UI will be available at http://raspberrypi.local:8000. Custom port can be specified by editing `/etc/systemd/system/rsplayer.service` file
+* If the page can not load or there is an error message at top of the page please see the [Troubleshooting](?id=troubleshooting) section.
 
 
-
-
-- ### Raspberry PI configuration  
-  ?>This step is optional and it is only needed if you want to connect hardware devices to the GPIO header
-  
-  After installation is done ssh login to RPI `ssh pi@rsplayer.local` and make the following changes:
-  - Enable SPI and I2C options using `raspi-config` tool
-  - Make sure you have the following entries in `/boot/config.txt`:
-     ```json
-     dtoverlay=gpio-ir,gpio_pin=17
-     dtoverlay=rotary-encoder,pin_a=15,pin_b=18,relative_axis=1,steps-per-period=1
-     gpio=18,15,19=pu
-     gpio=22,23=op,dh
-     ```
- 
-- ### Install dependencies
-  ?> Both MPD and LIRCare optional, don't install if you don't want to use MPD backend and LIRC based remote control
-  - Install MPD and LIRC:
-      ```bash
-      sudo apt install -y mpd lirc
-      sudo systemctl enable mpd
-      sudo systemctl enable lircd
-      ```
-  - [Librespot](https://github.com/librespot-org/librespot) is provided in the installation package
- 
-- ### Install RSPlayer
-  ```bash
-  bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)
-  ```
-- ### Verify installation
-  - Reboot RPI with `sudo reboot`
-  - After the reboot is done, open the browser and navigate to [http://rsplayer.local/](http://rsplayer.local/)
-  - If you can't access to http://rsplayer.local from your android phone use RPI ip address or PC browser. At the time mDns/zeroconf is not supported by Android.
-  - If the page can not load or there is an error message at top of the page please see the [Troubleshooting](?id=troubleshooting) section.
- 
--------
-# Configuring
+# Basic configuration
 ## Players
-To make any use of RSPlayer you need to enable and configure at least one player in the Players section.
+By default, RSPlayer is configured to use its own media player.
+Optionally you can enable and use Music Player Daemon as a backend player.
 To make configuration changes navigate to [http://rsplayer.local/#settings](http://rsplayer.local/#settings).
+
+### RSP
+RSPlayer playback implementation based on rust Symphonia crate.
+
 ### MPD
 * _Music Player Daemon server host_ - Default value assumes that you have MPD server running on the same host, change only if not true
 * _Client port_ - MPD port, default value 6600
+* _Override existing MPD configuration_ - By enabling this existing `/etc/mpd.conf` file will be replaced with the one below using the selected audio device name and music directory.
 
-
-At this moment configuration of MPD through RSPlayer UI is not possible and has to be done manually by editing `/etc/mpd.conf` file. 
-Here is an example:
 ```json
 playlist_directory        "/var/lib/mpd/playlists"
 db_file                   "/var/lib/mpd/tag_cache"
 state_file                "/var/lib/mpd/state"
 sticker_file              "/var/lib/mpd/sticker.sql"
-music_directory           "/var/lib/mpd/music"
+music_directory           "{music_directory}"
 
 bind_to_address           "0.0.0.0"
 port                      "6600"
@@ -78,25 +61,24 @@ input {
 
 audio_output {
   type                    "alsa"
-  name                    "usb audio device"
-  device                  "hw:1"
+  name                    "audio device"
+  device                  "{audio_device}"
   mixer_type              "none"
   replay_gain_handler     "none"
 }
-
 ```
 ### Spotify
 ?>Spotify integration is possible for Spotify premium accounts only. 
 
-?>First time Spotify setup should be done from desktop computer because Andorid does not support accessing RPI using host name i.e `rsplayer.local`
+?>First time Spotify setup should be done from a desktop computer because Android does not support accessing RPI using hostname i.e `rsplayer.local`
 
 !>_All credentials entered here, and generated Spotify access token will be stored in plain text format on your RPI device so please make sure it is properly secured!_
 
 * _Spotify connect device name_ - you can provide your own name, it will be shown in the device list in official Spotify applications.
 * _Spotify username_ - your Spotify account username
 * _Spotify password_ - password for your Spotify account
-* _Developer client id_ - If you don't own a Spotify developer account and you want to use mine please reach me in the private email message.
-* _Developer secret_ - If you don't own a Spotify developer account and you want to use mine please reach me in the private email message.
+* _Developer client id_ - If you don't own a Spotify developer account and you want to use mine please reach me in a private email message.
+* _Developer secret_ - If you don't own a Spotify developer account and you want to use mine please reach me in a private email message.
 * _Auth callback url_ - Change if your RPI hostname is different from `rsplayer.local`. Allowed values are:
   * http://raspberrypi.local/api/spotify/callback
   * http://raspberrypi.lan/api/spotify/callback
@@ -112,12 +94,35 @@ audio_output {
 Once you enter all values click _Authorize_ button which will show a permission popup from Spotify.
 After giving permission you should see `Success` message and the close button.
 
-### Audio device name 
-This is an audio device that will be used by Librespot and MPD
+## Audio device name 
+This is an audio device that will be used by active players
+## Music directory path
+Full path to music root music directory, will be used by RSP and MPD(if override existing config flag is enabled).
+Please keep in mind that after this value is changed or set for the first time `Full scan` button should be clicked and the music database created.
 
-### Active player
-Here you should choose which (enabled and configured) player you want to use.
+# Advanced configuration for additional hardware support (RPI only)
 
+## Install RPI OS
+If you are going to install RPI os from scratch it is important to enable ssh, and wifi and specify the hostname.
+
+  * For os image select _Raspberry PI OS Lite 64-bit_
+  * Click on the gear icon and enable the following options
+
+    ![](_assets/pi_imager_options.png ':size=450')
+
+## Configure Raspberry PI
+After installation is done ssh login to RPI `ssh pi@rsplayer.local` and make the following changes:
+* Enable SPI and I2C options using `raspi-config` tool
+* Make sure you have the following entries in `/boot/config.txt`:
+    ```json
+    dtoverlay=gpio-ir,gpio_pin=17
+    dtoverlay=rotary-encoder,pin_a=15,pin_b=18,relative_axis=1,steps-per-period=1
+    gpio=18,15,19=pu
+    gpio=22,23=op,dh
+    ```
+
+ 
+-------
 ## External hardware devices
 If you are using GPIO-connected hardware enable and configure it here
 ### Dac
@@ -155,6 +160,9 @@ TODO
 -------
 
 # Troubleshooting
+?>If you can't access http://rsplayer.local from your android phone use RPI ip address or PC browser. At the time mDns/zeroconf is not supported by Android.
+
+
 ## Useful commands
 * get logs 
 ```bash
@@ -189,9 +197,9 @@ TODO
 
 * [ ] Convert volume units to db
 * [ ] Loudness limitter by BS1770
-* [ ] Allow seamless play from different sources at runtime, i.e. create playlist/queue from spotify song, local library, radio, youtube songs ...
-* [ ] Browse/search whole music library
-* [ ] Web radio browse/search/play
+* [ ] Allow seamless play from different sources at runtime, i.e. create playlist/queue from Spotify songs, local library, radio, youtube songs ...
+* [ ] Browse/search the whole music library
+* [ ] Web radio browse/search/~~play~~
 * [ ] LMS backend support
 * [x] implement own player based on Symphonia
 * [ ] Support more remote control models - configuration and key mapping
@@ -203,7 +211,7 @@ TODO
 * [ ] own media management with advanced search
 * [ ] use more information about the song based on last.fm response, update id tags on local files?
 * [ ] lyrics
-* [ ] analyze audio files for song matching and similarity (bliss-rs), create playlists from song
+* [ ] analyze audio files for song matching and similarity (bliss-rs), create playlists from a song
 * [ ] streaming to local device (i.e. phone) for i.e. preview
 * [ ] convert PCM to DSD on the fly
 <!-- * [ ] UPNP -->
@@ -232,7 +240,7 @@ TODO
 * [x] Pagination
  
 ## Settings page
-* [ ] Show modal wait window while the server is restarting. use ws status
+* [x] Show modal wait window while the server is restarting. use ws status
 * [ ] Add all settings
 
 ## Code improvements
@@ -243,7 +251,7 @@ TODO
 * [ ] replace `warp` with `axum` or `actix`
 * [ ] better control over alsa device lock
 * [ ] control over network shares
-* [x] use separate message channel for system commands: volup, voldown, poweroff, restart ...
+* [x] use separate message channels for system commands: volup, voldown, poweroff, restart ...
 * [ ] write generic fun and macros to reduce code duplication in UI
 
 -------

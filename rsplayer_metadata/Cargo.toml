@@ -10,6 +10,7 @@ log.workspace = true
 env_logger.workspace = true
 anyhow.workspace = true
 serde_json.workspace = true
+tokio.workspace = true
 
 api_models = {path = "../rsplayer_api_models"}
 walkdir = "2"

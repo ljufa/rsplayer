@@ -32,10 +32,11 @@ pub struct SymphoniaPlayer {
     queue: Arc<PlaybackQueue>,
     audio_device: String,
     buffer_size_mb: usize,
+    music_dir: String
 }
 
 impl SymphoniaPlayer {
-    pub fn new(queue: Arc<PlaybackQueue>, audio_device: String, buffer_size_mb: usize) -> Self {
+    pub fn new(queue: Arc<PlaybackQueue>, audio_device: String, buffer_size_mb: usize, music_dir: String ) -> Self {
         SymphoniaPlayer {
             running: Arc::new(AtomicBool::new(false)),
             paused: Arc::new(AtomicBool::new(false)),
@@ -44,6 +45,7 @@ impl SymphoniaPlayer {
             queue,
             audio_device,
             buffer_size_mb,
+            music_dir
         }
     }
 
@@ -86,6 +88,7 @@ impl SymphoniaPlayer {
         let buffer_size = self.buffer_size_mb;
         let time = self.time.clone();
         let codec_params = self.codec_params.clone();
+        let music_dir = self.music_dir.clone();
         thread::Builder::new()
             .name("player".to_string())
             .spawn(move || {
@@ -103,6 +106,7 @@ impl SymphoniaPlayer {
                         &codec_params,
                         &audio_device,
                         buffer_size,
+                        &music_dir
                     ) {
                         Ok(PlaybackResult::PlaybackStopped) => {
                             running.store(false, Ordering::SeqCst);
@@ -141,7 +145,7 @@ pub enum PlaybackResult {
     PlaybackStopped,
 }
 
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn play_file(
     path_str: &str,
     running: &Arc<AtomicBool>,
@@ -150,11 +154,12 @@ fn play_file(
     codec_params: &Arc<Mutex<(Option<u32>, Option<u32>, Option<usize>, Option<String>)>>,
     audio_device: &str,
     buffer_size_mb: usize,
+    music_dir: &str
 ) -> Result<PlaybackResult> {
     debug!("Playing file {}", path_str);
     running.store(true, Ordering::SeqCst);
     let mut hint = Hint::new();
-    let source = get_source(path_str, &mut hint)?;
+    let source = get_source(music_dir, path_str, &mut hint)?;
     // Probe the media source stream for metadata and get the format reader.
     let Ok(probed) = get_probe().format(
         &hint,
@@ -257,7 +262,7 @@ fn play_file(
     loop_result
 }
 
-fn get_source(path_str: &str, hint: &mut Hint) -> Result<Box<dyn MediaSource>, anyhow::Error> {
+fn get_source(music_dir: &str, path_str: &str, hint: &mut Hint) -> Result<Box<dyn MediaSource>, anyhow::Error> {
     let source = if path_str.starts_with("http") {
         let agent = ureq::AgentBuilder::new()
             .timeout_connect(Duration::from_secs(5))
@@ -278,7 +283,7 @@ fn get_source(path_str: &str, hint: &mut Hint) -> Result<Box<dyn MediaSource>, a
             return Err(format_err!("Invalid streaming url {path_str}"));
         }
     } else {
-        let path = Path::new(&path_str);
+        let path = Path::new(music_dir).join(path_str);
         if let Some(extension) = path.extension() {
             if let Some(extension_str) = extension.to_str() {
                 hint.with_extension(extension_str);

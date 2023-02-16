@@ -211,7 +211,9 @@ fn get_playlists_by_folder(
     let second_level_folders: HashSet<String> = all_songs
         .iter()
         .map(|s| s.file.clone())
-        .map(|file| file.split('/').nth(depth).unwrap_or_default().to_string())
+        .map(|file| file.split('/')
+        .nth(depth)
+        .unwrap_or_default().to_string())
         .collect();
     second_level_folders
         .iter()

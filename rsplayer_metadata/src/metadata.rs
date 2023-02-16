@@ -1,10 +1,13 @@
 use std::{
     fs::File,
+    sync::atomic::AtomicBool,
     time::{self, Duration},
 };
 
 use anyhow::Result;
-use api_models::{common::to_database_key, player::Song, settings::MetadataStoreSettings};
+use api_models::{
+    common::to_database_key, player::Song, settings::MetadataStoreSettings, state::StateChangeEvent,
+};
 use log::{info, warn};
 use sled::Db;
 use symphonia::core::{
@@ -16,10 +19,12 @@ use symphonia::core::{
 use walkdir::WalkDir;
 
 use mockall::automock;
+use tokio::sync::broadcast::Sender;
 
 pub struct MetadataService {
     db: Db,
     settings: MetadataStoreSettings,
+    scan_running: AtomicBool,
 }
 
 #[automock]
@@ -27,25 +32,39 @@ impl MetadataService {
     pub fn new(settings: &MetadataStoreSettings) -> Result<Self> {
         let settings = settings.clone();
         let db = sled::open(settings.db_path.as_str())?;
-        Ok(Self { db, settings })
+        Ok(Self {
+            db,
+            settings,
+            scan_running: AtomicBool::new(false),
+        })
     }
 
-    pub fn get_song(&self, song_id: &str) -> Option<Song> {
-        if let Ok(Some(song)) = self.db.get(song_id) {
-            Song::bytes_to_song(&song)
+    pub fn find_song_by_id(&self, song_id: &str) -> Option<Song> {
+        self.get_all_songs_iterator().find(|s| s.id == song_id)
+    }
+
+    pub fn scan_music_dir(
+        &self,
+        music_dir: String,
+        full_scan: bool,
+        state_changes_sender: Sender<StateChangeEvent>,
+    ) {
+        if self.scan_running.load(std::sync::atomic::Ordering::SeqCst) {
+            return;
         } else {
-            None
+            self.scan_running
+                .store(true, std::sync::atomic::Ordering::SeqCst);
         }
-    }
-
-    pub fn scan_music_dir(&self, music_dir: String, full_scan: bool) {
         if full_scan {
             _ = self.db.clear();
         }
         let start_time = time::Instant::now();
+        state_changes_sender
+            .send(StateChangeEvent::MetadataSongScanStarted)
+            .expect("Status send failed");
         let supported_ext = &self.settings.supported_extensions;
         let mut count = 0;
-        for entry in WalkDir::new(music_dir)
+        for entry in WalkDir::new(&music_dir)
             .follow_links(self.settings.follow_links)
             .sort_by_file_name()
             .into_iter()
@@ -73,27 +92,51 @@ impl MetadataService {
             };
             // Use the default options for metadata readers.
             let metadata_opts = MetadataOptions::default();
-            let file_p = file_path.to_str().unwrap();
+            let file_p = file_path
+                .strip_prefix(&music_dir)
+                .unwrap()
+                .to_str()
+                .unwrap();
+            state_changes_sender
+                .send(StateChangeEvent::MetadataSongScanned(format!(
+                    "Scanning: {count}. {file_p}"
+                )))
+                .expect("Status send failed");
             info!("Scanning file:\t{}", file_p);
             match symphonia::default::get_probe().format(&hint, mss, &format_opts, &metadata_opts) {
                 Ok(mut probed) => {
                     let mut song = build_song(&mut probed);
                     let db_key = to_database_key(file_p);
-                    song.id = db_key.clone();
+                    song.id = self
+                        .db
+                        .generate_id()
+                        .expect("failed to generate id")
+                        .to_string();
                     song.file = file_p.to_string();
                     log::debug!("Add/update song in database: {:?}", song);
                     _ = self.db.insert(&db_key, song.to_json_string_bytes());
+                    if count % 100 == 0 {
+                        _ = self.db.flush();
+                    }
                     count += 1;
                 }
                 Err(err) => warn!("Error:{} {}", file_p, err),
             }
         }
         _ = self.db.flush();
+        state_changes_sender
+            .send(StateChangeEvent::MetadataSongScanFinished(format!(
+                "Music directory scan finished: {count} files scanned in {} seconds",
+                start_time.elapsed().as_secs()
+            )))
+            .expect("Status send failed");
         info!(
             "Scanning of {} files finished in {}s",
             count,
             start_time.elapsed().as_secs()
         );
+        self.scan_running
+            .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn get_all_songs_iterator(&self) -> impl Iterator<Item = Song> {

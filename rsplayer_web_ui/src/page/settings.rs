@@ -533,43 +533,36 @@ fn view_settings(model: &Model) -> Node<Msg> {
             IF!(settings.output_selector_settings.enabled => view_output_selector(&settings.output_selector_settings))
         ],
         div![
-            C!["field"],
-            div![
-                C!("control"),
+            C!["buttons"],
+            
                 button![
                     C!["button", "is-dark"],
                     "Save & restart player",
                     ev(Ev::Click, |_| Msg::SaveSettingsAndRestart)
-                ]
-            ],
-            div![
-                C!("control"),
+                ],
+            
+            
                 button![
                     C!["button", "is-dark"],
                     "Restart player",
                     ev(Ev::Click, |_| Msg::SendCommand(
                         SystemCommand::RestartRSPlayer
                     ))
-                ]
-            ],
-            div![
-                C!("control"),
+                ],
                 button![
                     C!["button", "is-dark"],
                     "Restart system",
                     ev(Ev::Click, |_| Msg::SendCommand(
                         SystemCommand::RestartSystem
                     ))
-                ]
-            ],
-            div![
-                C!("control"),
+                ],
+            
                 button![
                     C!["button", "is-dark"],
                     "Shutdown system",
                     ev(Ev::Click, |_| Msg::SendCommand(SystemCommand::PowerOff))
                 ]
-            ],
+            
         ]
     ]
 }
@@ -1106,7 +1099,7 @@ fn view_metadata_storage(metadata_settings: &MetadataStoreSettings) -> Node<Msg>
         button![
             C!["is-primary", "is-large"],
             ev(Ev::Click, move |_| Msg::ClickRescanMetadataButton),
-            "Rescan"
+            "Full scan"
         ]
     ]
 }
@@ -1190,14 +1183,11 @@ fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
 
 fn view_rsp(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
     div![
-        style! {
-            St::PaddingBottom => "1.2rem"
-        },
         div![
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Input buffer size coin MB", C!["label"]],
+                label!["Input buffer size in MB", C!["label"]],
             ],
             div![
                 C!["field-body"],

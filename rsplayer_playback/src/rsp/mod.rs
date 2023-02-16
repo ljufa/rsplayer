@@ -27,13 +27,15 @@ mod symphonia;
 // #[cfg(test)]
 // mod test;
 
-const BY_FOLDER_DEPTH: usize = 6;
+
 pub struct RsPlayer {
     queue: Arc<PlaybackQueue>,
     metadata_service: Arc<MetadataService>,
     playlist_service: Arc<PlaylistService>,
     symphonia_player: SymphoniaPlayer,
     play_handle: Arc<Mutex<Vec<JoinHandle<Result<PlaybackResult>>>>>,
+    music_dir_depth: usize,
+    
 }
 impl RsPlayer {
     pub fn new(metadata_service: Arc<MetadataService>, settings: &Settings) -> Self {
@@ -46,8 +48,10 @@ impl RsPlayer {
                 queue,
                 settings.alsa_settings.device_name.clone(),
                 settings.rs_player_settings.buffer_size_mb,
+                settings.metadata_settings.music_directory.clone()
             ),
             play_handle: Arc::new(Mutex::new(vec![])),
+            music_dir_depth: 0,
         }
     }
 
@@ -143,7 +147,7 @@ impl Player for RsPlayer {
                 .replace_all(self.metadata_service.get_all_songs_iterator().filter(|s| {
                     s.file
                         .split('/')
-                        .nth(BY_FOLDER_DEPTH)
+                        .nth(self.music_dir_depth)
                         .unwrap_or_default()
                         .eq_ignore_ascii_case(folder.as_str())
                 }));
@@ -162,7 +166,7 @@ impl Player for RsPlayer {
     }
 
     fn load_song_in_queue(&self, song_id: &str) {
-        if let Some(song) = self.metadata_service.get_song(song_id).as_ref() {
+        if let Some(song) = self.metadata_service.find_song_by_id(song_id).as_ref() {
             self.stop_current_song();
             self.queue.clear();
             self.queue.add_song(song);
@@ -176,7 +180,7 @@ impl Player for RsPlayer {
 
     fn add_song_in_queue(&self, song_id: &str) {
         self.metadata_service
-            .get_song(song_id)
+            .find_song_by_id(song_id)
             .as_ref()
             .map_or_else(
                 || {
@@ -214,7 +218,7 @@ impl Player for RsPlayer {
         limit: u32,
     ) -> Vec<api_models::playlist::DynamicPlaylistsPage> {
         let all_songs: Vec<Song> = self.metadata_service.get_all_songs_iterator().collect();
-        get_dynamic_playlists(category_ids, &all_songs, offset, limit, BY_FOLDER_DEPTH)
+        get_dynamic_playlists(category_ids, &all_songs, offset, limit, self.music_dir_depth)
     }
 
     fn get_playlist_items(&self, playlist_id: &str, page_no: usize) -> Vec<Song> {
@@ -256,7 +260,7 @@ impl Player for RsPlayer {
                 .filter(|s| {
                     s.file
                         .split('/')
-                        .nth(BY_FOLDER_DEPTH)
+                        .nth(self.music_dir_depth)
                         .map_or(false, |d| *d == pl_name)
                 })
                 .skip(offset)

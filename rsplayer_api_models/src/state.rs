@@ -95,6 +95,10 @@ pub enum StateChangeEvent {
     ErrorEvent(String),
     DynamicPlaylistsPageEvent(Vec<DynamicPlaylistsPage>),
     PlaylistItemsEvent(Vec<Song>, usize),
+    MetadataSongScanStarted,
+    MetadataSongScanned(String),
+    MetadataSongScanFinished(String),
+
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

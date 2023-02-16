@@ -6,7 +6,7 @@ use api_models::{
 
 use seed::{
     a, article, attrs, div, empty, figure, i, img, input, li, log, nav, p, prelude::*, progress,
-    span, struct_urls, style, ul, C, IF,
+    span, struct_urls, style, ul, C, IF, id, button,
 };
 use std::str::FromStr;
 
@@ -39,15 +39,15 @@ struct Model {
     web_socket_reconnector: Option<StreamHandle>,
     startup_error: Option<String>,
     player_model: PlayerModel,
+    metadata_scan_info: Option<String>
 }
 
 pub enum Msg {
     WebSocketOpened,
-    CloseWebSocket,
     WebSocketMessgeReceived(WebSocketMessage),
     WebSocketClosed(CloseEvent),
     WebSocketFailed,
-    ReconnectWebSocket(usize),
+    ReconnectWebSocket,
     UrlChanged(subs::UrlChanged),
     StatusChangeEventReceived(StateChangeEvent),
     Settings(page::settings::Msg),
@@ -59,6 +59,7 @@ pub enum Msg {
     SendPlayerCommand(PlayerCommand),
     SendSystemCommand(SystemCommand),
     AlbumImageUpdated(Image),
+    HideMetadataScanInfo
 }
 
 #[derive(Debug, Deserialize)]
@@ -77,6 +78,7 @@ pub struct Image {
 }
 // ------ Page ------
 #[derive(Debug, IntoStaticStr)]
+#[allow(clippy::large_enum_variant)]
 enum Page {
     Home,
     Settings(page::settings::Model),
@@ -106,10 +108,7 @@ impl Page {
     }
 
     fn has_image_background(&self) -> bool {
-        match self {
-            Page::Settings(_) => false,
-            _ => true,
-        }
+        !matches!(self, Page::Settings(_))
     }
 }
 
@@ -133,7 +132,6 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
             Msg::Ignore
         }
     });
-
     Model {
         base_url: url.to_base_url(),
         page,
@@ -149,6 +147,7 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
             current_song: None,
             progress: Default::default(),
         },
+        metadata_scan_info: None
     }
 }
 // ------ ------
@@ -200,14 +199,6 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             }
         }
 
-        Msg::CloseWebSocket => {
-            model.web_socket_reconnector = None;
-            model
-                .web_socket
-                .close(None, Some("user clicked Close button"))
-                .unwrap();
-        }
-
         Msg::WebSocketClosed(close_event) => {
             log!("==================");
             log!("WebSocket connection was closed:");
@@ -218,8 +209,9 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 
             // Chrome doesn't invoke `on_error` when the connection is lost.
             if !close_event.was_clean() && model.web_socket_reconnector.is_none() {
+                orders.after_next_render(|_| scrollToId("reconnectinfo"));
                 model.web_socket_reconnector = Some(
-                    orders.stream_with_handle(streams::backoff(None, Msg::ReconnectWebSocket)),
+                    orders.stream_with_handle(streams::interval(1000, || Msg::ReconnectWebSocket)),
                 );
             }
         }
@@ -227,14 +219,14 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::WebSocketFailed => {
             log!("WebSocket failed");
             if model.web_socket_reconnector.is_none() {
+                orders.after_next_render(|_| scrollToId("reconnectinfo"));
                 model.web_socket_reconnector = Some(
-                    orders.stream_with_handle(streams::backoff(None, Msg::ReconnectWebSocket)),
+                    orders.stream_with_handle(streams::interval(1000, || Msg::ReconnectWebSocket)),
                 );
             }
         }
 
-        Msg::ReconnectWebSocket(retries) => {
-            log!("Reconnect attempt:", retries);
+        Msg::ReconnectWebSocket => {
             model.web_socket = create_websocket(orders);
         }
 
@@ -243,7 +235,9 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::AlbumImageUpdated(image) => {
             model.player_model.current_song.as_mut().unwrap().image_url = Some(image.text);
         }
-
+        Msg::HideMetadataScanInfo => {
+            model.metadata_scan_info = None;
+        }
         Msg::StatusChangeEventReceived(chg_ev) => {
             match &chg_ev {
                 StateChangeEvent::CurrentSongEvent(song) => {
@@ -259,8 +253,21 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 StateChangeEvent::PlayerInfoEvent(pi) => {
                     model.player_model.player_info = Some(pi.clone())
                 }
+                StateChangeEvent::MetadataSongScanStarted => {
+                    model.metadata_scan_info = Some("Music directory scanning started.".to_string());
+                    orders.after_next_render(|_| scrollToId("scaninfo"));
+                }
+                StateChangeEvent::MetadataSongScanned(info) => {
+                    model.metadata_scan_info = Some(info.clone());
+                }
+                StateChangeEvent::MetadataSongScanFinished(info) => {
+                    model.metadata_scan_info = Some(info.clone());
+                    orders.stream(streams::interval(5000, || Msg::HideMetadataScanInfo));
+                    orders.after_next_render(|_| scrollToId("scaninfo"));
+                }
                 _ => {}
             }
+    
 
             if let Page::Queue(model) = &mut model.page {
                 page::queue::update(
@@ -351,10 +358,35 @@ fn view(model: &Model) -> impl IntoNodes<Msg> {
         C!["container"],
         view_navigation_tabs(&model.page),
         view_startup_error(model.startup_error.as_ref()),
+        view_reconnect_notification(model),
+        view_metadata_scan_notification(model),
         view_content(model, &model.base_url),
         view_player_footer(&model.page, &model.player_model)
     ]
 }
+fn view_reconnect_notification(model: &Model) -> Node<Msg> {
+    if model.web_socket_reconnector.is_some() {
+        div![id!("reconnectinfo"),
+            C!["notification", "is-danger"],
+            "Connection to sever failed. Reconnecting. Please wait..."
+        ]
+    } else {
+        empty!()
+    }
+}
+fn view_metadata_scan_notification(model: &Model) -> Node<Msg> {
+    if let Some(info) = model.metadata_scan_info.as_ref() {
+        div![id!("scaninfo"),
+            C!["notification", "is-info", "is-light"],
+            button![C!("delete")],
+            p!["Music directory scan is running..."],
+            p!(info)
+        ]
+    } else {
+        empty!()
+    }
+}
+
 
 fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
     if let Page::Player = page {
@@ -619,6 +651,7 @@ fn view_navigation_tabs(page: &Page) -> Node<Msg> {
         ]
     ]
 }
+
 pub fn view_spinner_modal<Ms>(active: bool) -> Node<Ms> {
     // spinner
     div![
@@ -676,13 +709,14 @@ fn create_websocket(orders: &impl Orders<Msg>) -> WebSocket {
         } else {
             ws_url.push_str("/api/ws");
         }
-        WebSocket::builder(ws_url, orders)
+        let ws = WebSocket::builder(ws_url, orders)
             .on_open(|| Msg::WebSocketOpened)
             .on_message(Msg::WebSocketMessgeReceived)
             .on_close(Msg::WebSocketClosed)
             .on_error(|| Msg::WebSocketFailed)
             .build_and_open()
-            .unwrap()
+            .unwrap();
+        ws
     } else {
         panic!("No url found");
     }

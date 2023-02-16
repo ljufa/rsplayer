@@ -238,7 +238,7 @@ mod queue {
 
 mod metadata {
 
-    use api_models::{common::to_database_key, settings::MetadataStoreSettings};
+    use api_models::settings::MetadataStoreSettings;
     use std::path::Path;
 
     use crate::{metadata::MetadataService, test::test_shared::Context};
@@ -249,7 +249,7 @@ mod metadata {
         let service = create_metadata_service(&Context::default());
         service.scan_music_dir("assets".to_string(), true);
         assert_eq!(service.get_all_songs_iterator().count(), 5);
-        let result = service.get_song(&to_database_key("assets/music.flac"));
+        let result = service.find_song_by_id("0");
         if let Some(saved_song) = result {
             assert_eq!(saved_song.artist, Some("Artist".to_owned()));
             assert_eq!(saved_song.title, Some("FlacTitle".to_owned()));
@@ -264,9 +264,9 @@ mod metadata {
     fn should_get_song() {
         let service = create_metadata_service(&Context::default());
         service.scan_music_dir("assets".to_string(), true);
-        let song = service.get_song(&to_database_key("assets/music.mp3"));
+        let song = service.find_song_by_id("2");
         assert!(song.is_some());
-        assert_eq!(song.unwrap().file, "assets/music.mp3");
+        assert_eq!(song.unwrap().file, "music.mp3");
     }
 
     pub fn create_metadata_service(context: &Context) -> MetadataService {

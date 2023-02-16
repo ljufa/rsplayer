@@ -113,7 +113,7 @@ fn write_to_file(config: &mut Configuration, is_new: bool) {
     _ = serde_yaml::to_string(config).map(|config_string|{
         info!("Save configuration to file:\n{config_string}");
         _ = config_file.write_all(config_string.as_bytes());
-        _ = config_file.flush();
+        _ = config_file.sync_all();
         info!("Configuration file saved!");
     });  
 

@@ -1,4 +1,3 @@
-
 use std::{env, path::Path};
 
 use super::*;
@@ -7,9 +6,11 @@ use api_models::{player::Song, settings::PlaybackQueueSetting};
 use log::info;
 
 #[test]
-fn should_play_radio_url(){
+fn should_play_radio_url() {
     let player = create_player();
-    player.add_song_in_queue("https://fluxmusic.api.radiosphere.io/channels/90s/stream.aac?quality=10");
+    player.add_song_in_queue(
+        "https://fluxmusic.api.radiosphere.io/channels/90s/stream.aac?quality=10",
+    );
     player.add_song_in_queue("https://stream.rcast.net/66036");
     player.play_from_current_queue_song();
     std::thread::sleep(Duration::from_secs(10));
@@ -30,13 +31,16 @@ fn should_play_all_songs_in_queue() {
 fn create_player() -> RsPlayer {
     let ctx = Context::default();
     let mut ms = MetadataService::default();
-    ms.expect_get_song().returning(|song_id| {
+    ms.expect_find_song_by_id().returning(|song_id| {
         Some(Song {
-                file: if song_id.starts_with("http") {song_id.to_string()} else {format!("../rsplayer_metadata/assets/music.{song_id}")},
-                id: song_id.to_string(),
-                ..Default::default()
-            })
-        
+            file: if song_id.starts_with("http") {
+                song_id.to_string()
+            } else {
+                format!("music.{song_id}")
+            },
+            id: song_id.to_string(),
+            ..Default::default()
+        })
     });
 
     let queue = Arc::new(PlaybackQueue::new(&PlaybackQueueSetting {
@@ -48,8 +52,14 @@ fn create_player() -> RsPlayer {
             db_path: format!("{}plista", ctx.db_dir),
         })),
         queue: queue.clone(),
-        symphonia_player: SymphoniaPlayer::new(queue, "plughw:CARD=HDMI,DEV=7".to_string()),
+        symphonia_player: SymphoniaPlayer::new(
+            queue,
+            "plughw:CARD=PCH,DEV=0".to_string(),
+            1,
+            "../rsplayer_metadata/assets".to_string(),
+        ),
         play_handle: Arc::new(Mutex::new(vec![])),
+        music_dir_depth: 0,
     }
 }
 
