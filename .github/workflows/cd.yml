@@ -32,7 +32,8 @@ jobs:
       matrix:
         target: ["armv7-unknown-linux-gnueabihf","aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
     name: Release
-    runs-on: ubuntu-latest
+    # make it use older libc version
+    runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v3
     - uses: Swatinem/rust-cache@v2

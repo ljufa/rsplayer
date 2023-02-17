@@ -1,7 +1,7 @@
 # Install
 ## Supported hardware and OS
-RSPlayer can be installed on Linux-based systems with the following CPU architectures:
-* Linux amd64(x86_64-unknown-linux-gnu) - x86 intel and amd cpus
+RSPlayer can be installed on Debian Linux-based systems with the following CPU architectures:
+* Linux amd64(x86_64-unknown-linux-gnu) - x86 intel and amd cpus 
 * Linux aarch64(aarch64-unknown-linux-gnu) - arm 64bit cpus: RPI4 and other arm8 cpu based boards ...
 * Linux armv7(armv7-unknown-linux-gnueabihf) - arm 32bit cpus: RP4(32bit), RPI3, RPI2, RPI zero ...
 
@@ -318,7 +318,7 @@ squeezelite -V "Luckit Audio 2.0 Output" -o hw:CARD=L20,DEV=0 -C 1 -v -z
 ## Install build tools
 ```bash
 cargo install cargo-binstall
-cargo install make
+cargo binstall cargo-make
 cargo make install_tools
 ```
 
