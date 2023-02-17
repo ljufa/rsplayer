@@ -279,7 +279,7 @@ sudo mv micro /usr/bin
  
 * install zsh (optional)  https://github.com/ohmyzsh/ohmyzsh
 ```bash
-sudo apt install -y zsh git fzf
+sudo apt install -y zsh git fzf micro
 sh -c "$(wget https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh -O -)"
 git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
 edit `~/.zshrc` 

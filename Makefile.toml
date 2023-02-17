@@ -1,15 +1,13 @@
 [env]
 RPI_HOST = "192.168.5.60"
 TARGET = "aarch64-unknown-linux-gnu"
-RELEASE_VERSION = "0.5.3"
+RELEASE_VERSION = "0.5.4"
 
 [config]
 default_to_workspace = false
 
 
 # ---- BUILD Backend----
-[tasks.install_tools]
-script = ["cargo binstall -y --force cargo-deb","cargo binstall -y --force cross", "cargo binstall -y --force wasm-pack"]
 
 [tasks.build_release]
 command = "cross"
