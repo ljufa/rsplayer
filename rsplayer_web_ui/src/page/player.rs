@@ -107,11 +107,13 @@ fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Nod
                                 pi.audio_format_bit.map_or(0, |f|f), pi.audio_format_channels.map_or(0,|f|f))
                             ]]),
                         ],
-                        pi.codec.as_ref().map(|c|{
+                        pi.codec.as_ref().map(|c| {
                             div![
                                 C!["level-item"],
-                                div![p![C!["has-text-light has-background-dark-transparent"],
-                                    "Codec: ", c
+                                div![p![
+                                    C!["has-text-light has-background-dark-transparent"],
+                                    "Codec: ",
+                                    c
                                 ]],
                             ]
                         })

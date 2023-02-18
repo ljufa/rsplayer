@@ -5,8 +5,8 @@ use api_models::{
 };
 
 use seed::{
-    a, article, attrs, div, empty, figure, i, img, input, li, log, nav, p, prelude::*, progress,
-    span, struct_urls, style, ul, C, IF, id, button,
+    a, article, attrs, button, div, empty, figure, i, id, img, input, li, log, nav, p, prelude::*,
+    progress, span, struct_urls, style, ul, C, IF,
 };
 use std::str::FromStr;
 
@@ -39,7 +39,7 @@ struct Model {
     web_socket_reconnector: Option<StreamHandle>,
     startup_error: Option<String>,
     player_model: PlayerModel,
-    metadata_scan_info: Option<String>
+    metadata_scan_info: Option<String>,
 }
 
 pub enum Msg {
@@ -59,7 +59,7 @@ pub enum Msg {
     SendPlayerCommand(PlayerCommand),
     SendSystemCommand(SystemCommand),
     AlbumImageUpdated(Image),
-    HideMetadataScanInfo
+    HideMetadataScanInfo,
 }
 
 #[derive(Debug, Deserialize)]
@@ -147,7 +147,7 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
             current_song: None,
             progress: Default::default(),
         },
-        metadata_scan_info: None
+        metadata_scan_info: None,
     }
 }
 // ------ ------
@@ -211,7 +211,7 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             if !close_event.was_clean() && model.web_socket_reconnector.is_none() {
                 orders.after_next_render(|_| scrollToId("reconnectinfo"));
                 model.web_socket_reconnector = Some(
-                    orders.stream_with_handle(streams::interval(1000, || Msg::ReconnectWebSocket)),
+                    orders.stream_with_handle(streams::interval(2000, || Msg::ReconnectWebSocket)),
                 );
             }
         }
@@ -254,7 +254,8 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     model.player_model.player_info = Some(pi.clone())
                 }
                 StateChangeEvent::MetadataSongScanStarted => {
-                    model.metadata_scan_info = Some("Music directory scanning started.".to_string());
+                    model.metadata_scan_info =
+                        Some("Music directory scanning started.".to_string());
                     orders.after_next_render(|_| scrollToId("scaninfo"));
                 }
                 StateChangeEvent::MetadataSongScanned(info) => {
@@ -267,7 +268,6 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 }
                 _ => {}
             }
-    
 
             if let Page::Queue(model) = &mut model.page {
                 page::queue::update(
@@ -366,7 +366,8 @@ fn view(model: &Model) -> impl IntoNodes<Msg> {
 }
 fn view_reconnect_notification(model: &Model) -> Node<Msg> {
     if model.web_socket_reconnector.is_some() {
-        div![id!("reconnectinfo"),
+        div![
+            id!("reconnectinfo"),
             C!["notification", "is-danger"],
             "Connection to sever failed. Reconnecting. Please wait..."
         ]
@@ -376,7 +377,8 @@ fn view_reconnect_notification(model: &Model) -> Node<Msg> {
 }
 fn view_metadata_scan_notification(model: &Model) -> Node<Msg> {
     if let Some(info) = model.metadata_scan_info.as_ref() {
-        div![id!("scaninfo"),
+        div![
+            id!("scaninfo"),
             C!["notification", "is-info", "is-light"],
             button![C!("delete")],
             p!["Music directory scan is running..."],
@@ -386,7 +388,6 @@ fn view_metadata_scan_notification(model: &Model) -> Node<Msg> {
         empty!()
     }
 }
-
 
 fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
     if let Page::Player = page {
@@ -713,7 +714,7 @@ fn create_websocket(orders: &impl Orders<Msg>) -> WebSocket {
             .on_open(|| Msg::WebSocketOpened)
             .on_message(Msg::WebSocketMessgeReceived)
             .on_close(Msg::WebSocketClosed)
-            .on_error(|| Msg::WebSocketFailed)
+            // .on_error(|| Msg::WebSocketFailed)
             .build_and_open()
             .unwrap();
         ws

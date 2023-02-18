@@ -10,7 +10,7 @@ use api_models::{
 };
 use seed::{
     attrs, button, div, empty, h1, i, input, label, log, option, p, prelude::*, section, select,
-    span, style, C, IF,
+    span, C, IF,
 };
 use std::str::FromStr;
 use strum::IntoEnumIterator;
@@ -289,283 +289,251 @@ async fn save_settings(settings: Settings, query: String) -> fetch::Result<Setti
 // ------ ------
 
 pub fn view(model: &Model) -> Node<Msg> {
+    let model = model;
+    let settings = &model.settings;
     div![
-        // spinner
-        div![
-            C!["modal", IF!(model.waiting_response => "is-active")],
-            div![C!["modal-background"]],
-            div![
-                C!["modal-content"],
+            section![
+                C!["section"],
+                h1![C!["title"], "Players"],
                 div![
-                    C!("sk-fading-circle"),
-                    div![C!["sk-circle1 sk-circle"]],
-                    div![C!["sk-circle2 sk-circle"]],
-                    div![C!["sk-circle3 sk-circle"]],
-                    div![C!["sk-circle4 sk-circle"]],
-                    div![C!["sk-circle5 sk-circle"]],
-                    div![C!["sk-circle6 sk-circle"]],
-                    div![C!["sk-circle7 sk-circle"]],
-                    div![C!["sk-circle8 sk-circle"]],
-                    div![C!["sk-circle9 sk-circle"]],
-                    div![C!["sk-circle10 sk-circle"]],
-                    div![C!["sk-circle11 sk-circle"]],
-                    div![C!["sk-circle12 sk-circle"]],
-                ]
+                    C!["field"],
+                    ev(Ev::Click, |_| Msg::ToggleRspEnabled),
+                    input![
+                        C!["control", "switch"],
+                        attrs! {
+                            At::Name => "rsp_cb"
+                            At::Type => "checkbox"
+                            At::Checked => settings.rs_player_settings.enabled.as_at_value(),
+                        },
+                    ],
+                    label![
+                        C!("label"),
+                        "RSPlayer",
+                        attrs! {
+                            At::For => "rsp_cb"
+                        }
+                    ]
+                ],
+                IF!(settings.rs_player_settings.enabled => view_rsp(&settings.rs_player_settings)),
+                div![
+                    C!["field"],
+                    ev(Ev::Click, |_| Msg::ToggleMpdEnabled),
+                    input![
+                        C!["control", "switch"],
+                        attrs! {
+                            At::Name => "mpd_cb"
+                            At::Type => "checkbox"
+                            At::Checked => settings.mpd_settings.enabled.as_at_value(),
+                        },
+                    ],
+                    label![
+                        C!("label"),
+                        "Music Player Demon",
+                        attrs! {
+                            At::For => "mpd_cb"
+                        }
+                    ]
+                ],
+                IF!(settings.mpd_settings.enabled => view_mpd(&settings.mpd_settings)),
+                div![
+                    C!["field"],
+                    ev(Ev::Click, |_| Msg::ToggleSpotifyEnabled),
+                    input![
+                        C!["switch"],
+                        attrs! {
+                            At::Name => "spotify_cb"
+                            At::Type => "checkbox"
+                            At::Checked => settings.spotify_settings.enabled.as_at_value(),
+                        },
+                    ],
+                    label![
+                        C!["label"],
+                        "Spotify (premium account required)",
+                        attrs! {
+                            At::For => "spotify_cb"
+                        }
+                    ]
+                ],
+                IF!(settings.spotify_settings.enabled => view_spotify(model)),
+                div![
+                    C!["field"],
+                    label!["Active player:", C!["label"]],
+                    div![
+                        C!["select"],
+                        select![
+                            IF!(settings.spotify_settings.enabled =>
+                            option![
+                                attrs! {
+                                    At::Value => "SPF"
+                                },
+                                IF!(settings.active_player == PlayerType::SPF => attrs!(At::Selected => "")),
+                                "Spotify"
+                            ]),
+                            IF!(settings.mpd_settings.enabled =>
+                            option![
+                                attrs! {At::Value => "MPD"},
+                                IF!(settings.active_player == PlayerType::MPD => attrs!(At::Selected => "")),
+                                "Music player daemon",
+                            ]),
+                            IF!(settings.rs_player_settings.enabled =>
+                            option![
+                                attrs! {At::Value => "RSP"},
+                                IF!(settings.active_player == PlayerType::RSP => attrs!(At::Selected => "")),
+                                "RSPlayer",
+                            ]),
+                            input_ev(Ev::Change, Msg::SelectActivePlayer),
+                        ],
+                    ],
+                ],
+                div![
+                    C!["field"],
+                    label!["Audio device name", C!["label"]],
+                    div![
+                        C!["select"],
+                        select![model
+                            .settings
+                            .alsa_settings
+                            .available_alsa_pcm_devices
+                            .iter()
+                            .map(|d| option![
+                                IF!(model.settings.alsa_settings.device_name == *d.0 => attrs!(At::Selected => "")),
+                                attrs! {At::Value => d.0},
+                                d.1
+                            ])],
+                        input_ev(Ev::Change, Msg::InputAlsaDeviceName),
+                    ],
+                ],
+                view_metadata_storage(&model.settings.metadata_settings),
+            ],
+            section![
+                C!["section"],
+                h1![C!["title"], "Dac"],
+                div![
+                    C!["field"],
+                    ev(Ev::Click, |_| Msg::ToggleDacEnabled),
+                    input![
+                        C!["switch"],
+                        attrs! {
+                            At::Name => "dac_cb"
+                            At::Type => "checkbox"
+                            At::Checked => settings.dac_settings.enabled.as_at_value(),
+                        },
+                    ],
+                    label![
+                        "Enable DAC chip control?",
+                        attrs! {
+                            At::For => "dac_cb"
+                        }
+                    ]
+                ],
+                IF!(settings.dac_settings.enabled => view_dac(&settings.dac_settings))
+            ],
+            section![
+                C!["section"],
+                h1![C!["title"], "IR Control (Lirc)"],
+                div![
+                    C!["field"],
+                    ev(Ev::Click, |_| Msg::ToggleIrEnabled),
+                    input![
+                        C!["switch"],
+                        attrs! {
+                            At::Name => "ir_cb"
+                            At::Type => "checkbox"
+                            At::Checked => settings.ir_control_settings.enabled.as_at_value(),
+                        },
+                    ],
+                    label![
+                        "Enable Infra Red control with LIRC?",
+                        attrs! {
+                            At::For => "ir_cb"
+                        }
+                    ]
+                ],
+                IF!(settings.ir_control_settings.enabled => view_ir_control(&settings.ir_control_settings))
+            ],
+            section![
+                C!["section"],
+                h1![C!["title"], "Volume control"],
+                view_volume_control(&settings.volume_ctrl_settings)
+            ],
+            section![
+                C!["section"],
+                h1![C!["title"], "OLED Display"],
+                div![
+                    C!["field"],
+                    ev(Ev::Click, |_| Msg::ToggleOledEnabled),
+                    input![
+                        C!["switch"],
+                        attrs! {
+                            At::Name => "oled_cb"
+                            At::Type => "checkbox"
+                            At::Checked => settings.oled_settings.enabled.as_at_value(),
+                        },
+                    ],
+                    label![
+                        "Enable Oled Display?",
+                        attrs! {
+                            At::For => "oled_cb"
+                        }
+                    ]
+                ],
+                IF!(settings.oled_settings.enabled => view_oled_display(&settings.oled_settings))
+            ],
+            section![
+                C!["section"],
+                h1![C!["title"], "Audio output selector"],
+                div![
+                    C!["field"],
+                    ev(Ev::Click, |_| Msg::ToggleOutputSelectorEnabled),
+                    input![
+                        C!["switch"],
+                        attrs! {
+                            At::Name => "outsel_cb"
+                            At::Type => "checkbox"
+                            At::Checked => settings.output_selector_settings.enabled.as_at_value(),
+                        },
+                    ],
+                    label![
+                        "Enable audio output selector (Headphone/Speakers)?",
+                        attrs! {
+                            At::For => "outsel_cb"
+                        }
+                    ]
+                ],
+                IF!(settings.output_selector_settings.enabled => view_output_selector(&settings.output_selector_settings))
+            ],
+            div![
+                C!["buttons"],
+                    button![
+                        C!["button", "is-dark"],
+                        "Save & restart player",
+                        ev(Ev::Click, |_| Msg::SaveSettingsAndRestart)
+                    ],
+                    button![
+                        C!["button", "is-dark"],
+                        "Restart player",
+                        ev(Ev::Click, |_| Msg::SendCommand(
+                            SystemCommand::RestartRSPlayer
+                        ))
+                    ],
+                    button![
+                        C!["button", "is-dark"],
+                        "Restart system",
+                        ev(Ev::Click, |_| Msg::SendCommand(
+                            SystemCommand::RestartSystem
+                        ))
+                    ],
+                    button![
+                        C!["button", "is-dark"],
+                        "Shutdown system",
+                        ev(Ev::Click, |_| Msg::SendCommand(SystemCommand::PowerOff))
+                    ]
             ]
-        ],
-        view_settings(model)
-    ]
+        ]
 }
 
 // ------ configuration ------
 
-fn view_settings(model: &Model) -> Node<Msg> {
-    let settings = &model.settings;
-    div![
-        section![
-            C!["section"],
-            h1![C!["title"], "Players"],
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleRspEnabled),
-                input![
-                    C!["control", "switch"],
-                    attrs! {
-                        At::Name => "rsp_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.rs_player_settings.enabled.as_at_value(),
-                    },
-                ],
-                label![
-                    C!("label"),
-                    "Enable RSPlayer?",
-                    attrs! {
-                        At::For => "rsp_cb"
-                    }
-                ]
-            ],
-            IF!(settings.rs_player_settings.enabled => view_rsp(&settings.rs_player_settings)),
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleMpdEnabled),
-                input![
-                    C!["control", "switch"],
-                    attrs! {
-                        At::Name => "mpd_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.mpd_settings.enabled.as_at_value(),
-                    },
-                ],
-                label![
-                    C!("label"),
-                    "Enable Music Player Demon integration?",
-                    attrs! {
-                        At::For => "mpd_cb"
-                    }
-                ]
-            ],
-            IF!(settings.mpd_settings.enabled => view_mpd(&settings.mpd_settings)),
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleSpotifyEnabled),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "spotify_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.spotify_settings.enabled.as_at_value(),
-                    },
-                ],
-                label![
-                    C!["label"],
-                    "Enable spotify integration (for premium Spotify accounts only)?",
-                    attrs! {
-                        At::For => "spotify_cb"
-                    }
-                ]
-            ],
-            IF!(settings.spotify_settings.enabled => view_spotify(model)),
-            div![
-                C!["field"],
-                label!["Active player:", C!["label"]],
-                div![
-                    C!["select"],
-                    select![
-                        IF!(settings.spotify_settings.enabled =>
-                        option![
-                            attrs! {
-                                At::Value => "SPF"
-                            },
-                            IF!(settings.active_player == PlayerType::SPF => attrs!(At::Selected => "")),
-                            "Spotify"
-                        ]),
-                        IF!(settings.mpd_settings.enabled =>
-                        option![
-                            attrs! {At::Value => "MPD"},
-                            IF!(settings.active_player == PlayerType::MPD => attrs!(At::Selected => "")),
-                            "Music player daemon",
-                        ]),
-                        IF!(settings.rs_player_settings.enabled =>
-                        option![
-                            attrs! {At::Value => "RSP"},
-                            IF!(settings.active_player == PlayerType::RSP => attrs!(At::Selected => "")),
-                            "RSPlayer - experimental",
-                        ]),
-                        input_ev(Ev::Change, Msg::SelectActivePlayer),
-                    ],
-                ],
-            ],
-            div![
-                C!["field"],
-                label!["Audio device name", C!["label"]],
-                div![
-                    C!["select"],
-                    select![model
-                        .settings
-                        .alsa_settings
-                        .available_alsa_pcm_devices
-                        .iter()
-                        .map(|d| option![
-                            IF!(model.settings.alsa_settings.device_name == *d.0 => attrs!(At::Selected => "")),
-                            attrs! {At::Value => d.0},
-                            d.1
-                        ])],
-                    input_ev(Ev::Change, Msg::InputAlsaDeviceName),
-                ],
-            ],
-            view_metadata_storage(&model.settings.metadata_settings),
-        ],
-        section![
-            C!["section"],
-            h1![C!["title"], "Dac"],
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleDacEnabled),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "dac_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.dac_settings.enabled.as_at_value(),
-                    },
-                ],
-                label![
-                    "Enable DAC chip control?",
-                    attrs! {
-                        At::For => "dac_cb"
-                    }
-                ]
-            ],
-            IF!(settings.dac_settings.enabled => view_dac(&settings.dac_settings))
-        ],
-        section![
-            C!["section"],
-            h1![C!["title"], "IR Control (Lirc)"],
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleIrEnabled),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "ir_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.ir_control_settings.enabled.as_at_value(),
-                    },
-                ],
-                label![
-                    "Enable Infra Red control with LIRC?",
-                    attrs! {
-                        At::For => "ir_cb"
-                    }
-                ]
-            ],
-            IF!(settings.ir_control_settings.enabled => view_ir_control(&settings.ir_control_settings))
-        ],
-        section![
-            C!["section"],
-            h1![C!["title"], "Volume control"],
-            view_volume_control(&settings.volume_ctrl_settings)
-        ],
-        section![
-            C!["section"],
-            h1![C!["title"], "OLED Display"],
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleOledEnabled),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "oled_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.oled_settings.enabled.as_at_value(),
-                    },
-                ],
-                label![
-                    "Enable Oled Display?",
-                    attrs! {
-                        At::For => "oled_cb"
-                    }
-                ]
-            ],
-            IF!(settings.oled_settings.enabled => view_oled_display(&settings.oled_settings))
-        ],
-        section![
-            C!["section"],
-            h1![C!["title"], "Audio output selector"],
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleOutputSelectorEnabled),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "outsel_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.output_selector_settings.enabled.as_at_value(),
-                    },
-                ],
-                label![
-                    "Enable audio output selector (Headphone/Speakers)?",
-                    attrs! {
-                        At::For => "outsel_cb"
-                    }
-                ]
-            ],
-            IF!(settings.output_selector_settings.enabled => view_output_selector(&settings.output_selector_settings))
-        ],
-        div![
-            C!["buttons"],
-            
-                button![
-                    C!["button", "is-dark"],
-                    "Save & restart player",
-                    ev(Ev::Click, |_| Msg::SaveSettingsAndRestart)
-                ],
-            
-            
-                button![
-                    C!["button", "is-dark"],
-                    "Restart player",
-                    ev(Ev::Click, |_| Msg::SendCommand(
-                        SystemCommand::RestartRSPlayer
-                    ))
-                ],
-                button![
-                    C!["button", "is-dark"],
-                    "Restart system",
-                    ev(Ev::Click, |_| Msg::SendCommand(
-                        SystemCommand::RestartSystem
-                    ))
-                ],
-            
-                button![
-                    C!["button", "is-dark"],
-                    "Shutdown system",
-                    ev(Ev::Click, |_| Msg::SendCommand(SystemCommand::PowerOff))
-                ]
-            
-        ]
-    ]
-}
 fn view_ir_control(ir_settings: &IRInputControlerSettings) -> Node<Msg> {
     div![
         div![
@@ -841,10 +809,7 @@ fn view_validation_icon<Ms>(val: &impl api_models::validator::Validate, key: &st
 
 fn view_spotify(model: &Model) -> Node<Msg> {
     let spot_settings = &model.settings.spotify_settings;
-    div![
-        style! {
-            St::PaddingBottom => "1.2rem"
-        },
+    div![C!["pb-4"],
         div![
             C!["field", "is-horizontal"],
             div![
@@ -985,13 +950,13 @@ fn view_spotify(model: &Model) -> Node<Msg> {
                 div![
                     C!["field"],
                     IF!(spot_settings.validate().is_ok() && model.spotify_account_info.is_none() =>
-                        button![C!["is-primary", "is-large"], ev(Ev::Click, move |_| Msg::ClickSpotifyAuthorizeButton), "Authorize"]
+                        button![C!["is-primary", "button", "is-small"], ev(Ev::Click, move |_| Msg::ClickSpotifyAuthorizeButton), "Authorize"]
                     ),
                     if let Some(me) = &model.spotify_account_info {
                         p![
-                            span![me.display_name.clone()],
+                            span![C!["is-size-5", "has-text-weight-semibold", "is-italic"],me.display_name.clone()],
                             span![me.email.clone()],
-                            button![C!["is-primary", "is-large"], ev(Ev::Click, move |_| Msg::ClickSpotifyLogoutButton), "Logout"]
+                            button![C!["is-primary", "button", "is-small", "ml-1"], ev(Ev::Click, move |_| Msg::ClickSpotifyLogoutButton), "Logout"]
                         ]
                     } else {
                         empty!()
@@ -1036,9 +1001,7 @@ fn view_spotify(model: &Model) -> Node<Msg> {
 #[allow(dead_code)]
 fn view_lms(lms_settings: &LmsSettings) -> Node<Msg> {
     div![
-        style! {
-            St::PaddingBottom => "1.2rem"
-        },
+        C!["pb-4"],
         div![
             C!["field", "is-horizontal"],
             div![
@@ -1085,29 +1048,35 @@ fn view_lms(lms_settings: &LmsSettings) -> Node<Msg> {
 }
 fn view_metadata_storage(metadata_settings: &MetadataStoreSettings) -> Node<Msg> {
     div![
-        C!["field"],
         label!["Music directory path", C!["label"]],
-        input![
-            C!["input"],
-            attrs! {
-                At::Value => metadata_settings.music_directory
-            },
-            input_ev(Ev::Input, move |value| {
-                Msg::InputMetadataMusicDirectoryChanged(value)
-            }),
-        ],
-        button![
-            C!["is-primary", "is-large"],
-            ev(Ev::Click, move |_| Msg::ClickRescanMetadataButton),
-            "Full scan"
+        div![
+            C!["field", "is-grouped"],
+            div![
+                C!["control", "is-expanded"],
+                input![
+                    C!["input"],
+                    attrs! {
+                        At::Value => metadata_settings.music_directory
+                    },
+                    input_ev(Ev::Input, move |value| {
+                        Msg::InputMetadataMusicDirectoryChanged(value)
+                    }),
+                ],
+            ],
+            div![
+                C!["control"],
+                button![
+                    C!["button", "is-primary"],
+                    ev(Ev::Click, move |_| Msg::ClickRescanMetadataButton),
+                    "Full scan"
+                ]
+            ],
         ]
     ]
 }
 fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
     div![
-        style! {
-            St::PaddingBottom => "1.2rem"
-        },
+        C!["pb-4"],
         div![
             C!["field", "is-horizontal"],
             div![
@@ -1155,7 +1124,7 @@ fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
             ],
         ],
         div![
-            C!["field", "is-horizontal"],
+            C!["field", "is-horizontal", "ml-2"],
             ev(Ev::Click, |_| Msg::ToggleMpdOverrideConfig),
             div![
                 C!["field-body"],
@@ -1170,7 +1139,7 @@ fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
                         },
                     ],
                     label![
-                        "Override existing mpd configuration (Music directory and Audio device)",
+                        "Override /etc/mpd.conf",
                         attrs! {
                             At::For => "mpd_external_conf_cb"
                         }
@@ -1183,11 +1152,12 @@ fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
 
 fn view_rsp(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
     div![
+        C!["pb-4"],
         div![
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Input buffer size in MB", C!["label"]],
+                label!["Input buffer size (in MB)", C!["label"]],
             ],
             div![
                 C!["field-body"],
