@@ -195,11 +195,14 @@ TODO
  
 ## General
 
+* [ ] Automatic library after music directory change, or first time install
+* [ ] Use fixed unique port instead 80 and fallback 8000
+* [ ] Make alsa volume control work with any selected device
 * [ ] Convert volume units to db
-* [ ] Loudness limitter by BS1770
-* [ ] Allow seamless play from different sources at runtime, i.e. create playlist/queue from Spotify songs, local library, radio, youtube songs ...
 * [ ] Browse/search the whole music library
 * [ ] Web radio browse/search/~~play~~
+* [ ] Loudness limitter by BS1770
+* [ ] Allow seamless play from different sources at runtime, i.e. create playlist/queue from Spotify songs, local library, radio, youtube songs ...
 * [ ] LMS backend support
 * [x] implement own player based on Symphonia
 * [ ] Support more remote control models - configuration and key mapping
