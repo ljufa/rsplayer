@@ -5,6 +5,30 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct PcmOutputDevice {
+    pub name: String,
+    pub description: String,
+    pub card_index: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct CardMixer {
+    pub index: u32,
+    pub name: String,
+    pub card_index: i32
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct AudioCard {
+    pub index: i32,
+    pub name: String,
+    pub description: String,
+    pub pcm_devices: Vec<PcmOutputDevice>,
+    pub mixers: Vec<CardMixer>
+}
+
 #[derive(
     Debug,
     Hash,

@@ -5,7 +5,6 @@ extern crate log;
 use std::panic;
 use std::sync::{Arc, Mutex};
 
-use api_models::common::PlayerCommand;
 use rsplayer_playback::player_service::PlayerService;
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio::sync::broadcast;
@@ -83,9 +82,11 @@ async fn main() {
         &config,
         player_service.clone(),
     );
+    if config.lock().expect("Failed to get config").get_settings().auto_resume_playback {
+        player_service.get_current_player().play_from_current_queue_song();
+    }
 
-    // start/resume playing after start
-    _ = player_commands_tx.send(PlayerCommand::Play).await;
+
 
     select! {
         _ = spawn(ir_lirc::listen(player_commands_tx.clone(), system_commands_tx.clone(), config.clone())) => {

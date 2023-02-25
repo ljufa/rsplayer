@@ -209,6 +209,7 @@ mod cpal {
         }
     }
 }
+
 pub fn try_open(
     spec: SignalSpec,
     duration: Duration,

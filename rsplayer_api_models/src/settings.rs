@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 use validator::{validate_ip_v4, Validate, ValidationError};
 
-use crate::common::{FilterType, GainLevel, PlayerType, VolumeCrtlType};
+use crate::common::{
+    AudioCard, CardMixer, FilterType, GainLevel, PcmOutputDevice, PlayerType, VolumeCrtlType,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -19,23 +21,28 @@ pub struct Settings {
     pub ir_control_settings: IRInputControlerSettings,
     pub oled_settings: OLEDSettings,
     pub active_player: PlayerType,
+    #[serde(default)]
+    pub auto_resume_playback: bool,
     pub metadata_settings: MetadataStoreSettings,
     pub playback_queue_settings: PlaybackQueueSetting,
     #[serde(default)]
     pub playlist_settings: PlaylistSetting,
     #[serde(default)]
-    pub rs_player_settings: RsPlayerSettings
+    pub rs_player_settings: RsPlayerSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RsPlayerSettings {
     pub enabled: bool,
-    pub buffer_size_mb: usize
+    pub buffer_size_mb: usize,
 }
 
 impl Default for RsPlayerSettings {
     fn default() -> Self {
-        Self { enabled: true, buffer_size_mb: 10 }
+        Self {
+            enabled: true,
+            buffer_size_mb: 10,
+        }
     }
 }
 
@@ -48,6 +55,7 @@ pub struct OutputSelectorSettings {
 pub struct VolumeControlSettings {
     pub volume_step: u8,
     pub ctrl_device: VolumeCrtlType,
+    pub alsa_mixer: Option<CardMixer>,
     pub rotary_enabled: bool,
     pub rotary_event_device_path: String,
 }
@@ -139,10 +147,38 @@ fn validate_ip(val: &str) -> Result<(), ValidationError> {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AlsaSettings {
-    pub device_name: String,
-    pub available_alsa_pcm_devices: HashMap<String, String>,
+    #[serde(default)]
+    pub output_device: PcmOutputDevice,
+    #[serde(default)]
+    pub available_audio_cards: Vec<AudioCard>,
 }
+impl AlsaSettings {
+    pub fn find_pcms_by_card_index(&self, card_index: i32) -> Vec<PcmOutputDevice> {
+        self.available_audio_cards
+            .iter()
+            .find(|card| card.index == card_index)
+            .map(|c| c.pcm_devices.clone())
+            .unwrap_or_default()
+    }
 
+    pub fn set_output_device(&mut self, card_index: i32, pcm_name: &str) {
+        if let Some(pcm) = self
+            .find_pcms_by_card_index(card_index)
+            .iter()
+            .find(|pcm| pcm.name == pcm_name)
+        {
+            self.output_device = pcm.clone();
+        }
+    }
+
+    pub fn find_mixers_by_card_index(&self, card_index: i32) -> Vec<CardMixer> {
+        self.available_audio_cards
+            .iter()
+            .find(|card| card.index == card_index)
+            .map(|mix| mix.mixers.clone())
+            .unwrap_or_default()
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DacSettings {
     pub enabled: bool,
@@ -212,17 +248,20 @@ impl Default for PlaylistSetting {
         }
     }
 }
-pub const DEFAULT_ALSA_PCM_DEVICE: &str = "hw:1";
+pub const DEFAULT_ALSA_PCM_DEVICE: &str = "hw:0";
+pub const DEFAULT_ALSA_MIXER: &str = "0,Master";
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             active_player: PlayerType::RSP,
+            auto_resume_playback: false,
             output_selector_settings: OutputSelectorSettings { enabled: false },
             volume_ctrl_settings: VolumeControlSettings {
                 rotary_enabled: false,
+                alsa_mixer: None,
                 volume_step: 2,
-                ctrl_device: VolumeCrtlType::Dac,
+                ctrl_device: VolumeCrtlType::Alsa,
                 rotary_event_device_path: "/dev/input/by-path/platform-rotary@f-event".to_string(),
             },
             spotify_settings: SpotifySettings {
@@ -241,7 +280,7 @@ impl Default for Settings {
                 server_host: String::from("localhost"),
                 cli_port: 9090,
                 server_port: 9000,
-                alsa_pcm_device_name: String::from(DEFAULT_ALSA_PCM_DEVICE),
+                alsa_pcm_device_name: DEFAULT_ALSA_PCM_DEVICE.to_string(),
             },
             dac_settings: DacSettings {
                 enabled: false,
@@ -263,8 +302,8 @@ impl Default for Settings {
             metadata_settings: MetadataStoreSettings::default(),
             playback_queue_settings: PlaybackQueueSetting::default(),
             alsa_settings: AlsaSettings {
-                device_name: String::from(DEFAULT_ALSA_PCM_DEVICE),
-                available_alsa_pcm_devices: HashMap::new(),
+                output_device: PcmOutputDevice::default(),
+                available_audio_cards: vec![],
             },
             ir_control_settings: IRInputControlerSettings {
                 enabled: false,
@@ -277,7 +316,7 @@ impl Default for Settings {
                 spi_device_path: "/dev/spidev0.0".to_string(),
             },
             playlist_settings: PlaylistSetting::default(),
-            rs_player_settings: RsPlayerSettings::default()
+            rs_player_settings: RsPlayerSettings::default(),
         }
     }
 }

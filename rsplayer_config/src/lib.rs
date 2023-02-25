@@ -91,7 +91,7 @@ impl Configuration {
 
 impl Drop for Configuration {
     fn drop(&mut self) {
-        self.settings.alsa_settings.available_alsa_pcm_devices.clear();
+        self.settings.alsa_settings.available_audio_cards.clear();
         write_to_file(self, false);
     }
 }

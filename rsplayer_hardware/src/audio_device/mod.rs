@@ -3,6 +3,7 @@ use api_models::common::Volume;
 pub mod ak4497;
 pub mod alsa;
 pub mod audio_service;
+pub mod test;
 
 pub trait VolumeControlDevice {
     fn vol_up(&self) -> Volume;

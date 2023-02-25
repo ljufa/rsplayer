@@ -200,21 +200,24 @@ mod filters {
             .and(with_player_svc(player_service))
             .and_then(handlers::get_playlist_items)
     }
-    pub fn get_spotify_authorization_url(config: Config
+    pub fn get_spotify_authorization_url(
+        config: Config,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "spotify" / "get-url"))
             .and(with_config(config))
             .and_then(handlers::get_spotify_authorization_url)
     }
-    pub fn is_spotify_authorization_completed(config: Config
+    pub fn is_spotify_authorization_completed(
+        config: Config,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "spotify" / "is-authorized"))
             .and(with_config(config))
             .and_then(handlers::is_spotify_authorization_completed)
     }
-    pub fn spotify_authorization_callback(config: Config
+    pub fn spotify_authorization_callback(
+        config: Config,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "spotify" / "callback"))
@@ -222,7 +225,8 @@ mod filters {
             .and(warp::query::<HashMap<String, String>>())
             .and_then(handlers::spotify_authorization_callback)
     }
-    pub fn get_spotify_account_info(config: Config
+    pub fn get_spotify_account_info(
+        config: Config,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "spotify" / "me"))
@@ -255,7 +259,7 @@ mod handlers {
     use rsplayer_playback::spotify::oauth::SpotifyOauth;
     use std::{collections::HashMap, convert::Infallible};
 
-    use rsplayer_hardware::audio_device::alsa::AlsaPcmCard;
+    use rsplayer_hardware::audio_device::alsa::{self, AlsaPcmCard};
 
     use super::{ArcPlayerService, Config};
     use api_models::settings::Settings;
@@ -297,7 +301,10 @@ mod handlers {
 
     pub async fn get_settings(config: Config) -> Result<impl warp::Reply, Infallible> {
         let settings = &mut config.lock().unwrap().get_settings();
-        settings.alsa_settings.available_alsa_pcm_devices = AlsaPcmCard::get_all_cards();
+        let cards = alsa::get_all_cards();
+       
+        settings.alsa_settings.available_audio_cards = cards;
+       
         Ok(warp::reply::json(settings))
     }
 
@@ -318,7 +325,9 @@ mod handlers {
         ))
     }
 
-    pub async fn get_spotify_authorization_url(config: Config) -> Result<impl warp::Reply, Infallible> {
+    pub async fn get_spotify_authorization_url(
+        config: Config,
+    ) -> Result<impl warp::Reply, Infallible> {
         let mut spotify_oauth =
             SpotifyOauth::new(&config.lock().unwrap().get_settings().spotify_settings);
         match &spotify_oauth.get_authorization_url() {
@@ -329,7 +338,9 @@ mod handlers {
             )),
         }
     }
-    pub async fn is_spotify_authorization_completed(config: Config) -> Result<impl warp::Reply, Infallible> {
+    pub async fn is_spotify_authorization_completed(
+        config: Config,
+    ) -> Result<impl warp::Reply, Infallible> {
         let mut spotify_oauth =
             SpotifyOauth::new(&config.lock().unwrap().get_settings().spotify_settings);
         match &spotify_oauth.is_token_present() {
@@ -341,7 +352,8 @@ mod handlers {
         }
     }
 
-    pub async fn spotify_authorization_callback(config: Config,
+    pub async fn spotify_authorization_callback(
+        config: Config,
         url: HashMap<String, String>,
     ) -> Result<impl warp::Reply, Infallible> {
         let mut spotify_oauth =

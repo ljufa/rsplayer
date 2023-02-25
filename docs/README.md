@@ -195,7 +195,7 @@ TODO
  
 ## General
 
-* [ ] Automatic library after music directory change, or first time install
+* [ ] Automatic library scan after music directory change, or first time setup
 * [ ] Use fixed unique port instead 80 and fallback 8000
 * [ ] Make alsa volume control work with any selected device
 * [ ] Convert volume units to db

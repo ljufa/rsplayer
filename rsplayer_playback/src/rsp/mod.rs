@@ -46,7 +46,7 @@ impl RsPlayer {
             playlist_service: Arc::new(PlaylistService::new(&PlaylistSetting::default())),
             symphonia_player: SymphoniaPlayer::new(
                 queue,
-                settings.alsa_settings.device_name.clone(),
+                settings.alsa_settings.output_device.name.clone(),
                 settings.rs_player_settings.buffer_size_mb,
                 settings.metadata_settings.music_directory.clone()
             ),

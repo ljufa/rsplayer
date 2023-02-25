@@ -6,7 +6,7 @@ use api_models::{
 
 use seed::{
     a, article, attrs, button, div, empty, figure, i, id, img, input, li, log, nav, p, prelude::*,
-    progress, span, struct_urls, style, ul, C, IF,
+    progress, span, struct_urls, style, ul, C, IF, window,
 };
 use std::str::FromStr;
 
@@ -20,6 +20,7 @@ const PLAYLIST: &str = "playlist";
 const QUEUE: &str = "queue";
 const FIRST_SETUP: &str = "setup";
 const PLAYER: &str = "player";
+const MUSIC_LIBRARY: &str = "library";
 // ------ ------
 //     Model
 // ------ ------
@@ -54,12 +55,14 @@ pub enum Msg {
     Playlist(page::playlist::Msg),
     StartErrorReceived(String),
     Queue(page::queue::Msg),
+    MusicLibrary(page::music_library::Msg),
     Ignore,
 
     SendPlayerCommand(PlayerCommand),
     SendSystemCommand(SystemCommand),
     AlbumImageUpdated(Image),
     HideMetadataScanInfo,
+    ReloadApp,
 }
 
 #[derive(Debug, Deserialize)]
@@ -85,6 +88,7 @@ enum Page {
     Player,
     Playlist(page::playlist::Model),
     Queue(page::queue::Model),
+    MusicLibrary(page::music_library::Model),
     NotFound,
 }
 
@@ -102,6 +106,10 @@ impl Page {
             SETTINGS => Self::Settings(page::settings::init(url, &mut orders.proxy(Msg::Settings))),
             PLAYLIST => Self::Playlist(page::playlist::init(url, &mut orders.proxy(Msg::Playlist))),
             QUEUE => Self::Queue(page::queue::init(url, &mut orders.proxy(Msg::Queue))),
+            MUSIC_LIBRARY => Self::MusicLibrary(page::music_library::init(
+                url,
+                &mut orders.proxy(Msg::MusicLibrary),
+            )),
             PLAYER | "" => Self::Player,
             _ => Self::NotFound,
         }
@@ -171,6 +179,9 @@ impl<'a> Urls<'a> {
 
     fn player_abs() -> Url {
         Url::new().add_hash_path_part(PLAYER)
+    }
+    fn library_abs() -> Url {
+        Url::new().add_hash_path_part(MUSIC_LIBRARY)
     }
 }
 
@@ -301,12 +312,19 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 page::playlist::update(msg, player_model, &mut orders.proxy(Msg::Playlist));
             }
         }
+
         Msg::Queue(msg) => {
             if let Page::Queue(player_model) = &mut model.page {
                 if let page::queue::Msg::SendCommand(cmd) = &msg {
                     _ = model.web_socket.send_json(cmd);
                 }
                 page::queue::update(msg, player_model, &mut orders.proxy(Msg::Queue));
+            }
+        }
+
+        Msg::MusicLibrary(msg) => {
+            if let Page::MusicLibrary(model) = &mut model.page {
+                page::music_library::update(msg, model, &mut orders.proxy(Msg::MusicLibrary));
             }
         }
 
@@ -336,6 +354,9 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 model.player_model.streamer_status.volume_state.current = i64::from(vol)
             }
             orders.skip();
+        }
+        Msg::ReloadApp => {
+            _ = window().location().reload();
         }
         Msg::Ignore => {}
     }
@@ -369,7 +390,11 @@ fn view_reconnect_notification(model: &Model) -> Node<Msg> {
         div![
             id!("reconnectinfo"),
             C!["notification", "is-danger"],
-            "Connection to sever failed. Reconnecting. Please wait..."
+            p!["Connection to sever failed. Reconnecting..."],
+            p!["Please wait or refresh page if problem persists."],
+            // button![C!["button", "is-info", "ml-6", "is-outlined"], "Reload",
+            //     ev(Ev::Click, |_| Msg::ReloadApp)
+            //  ]
         ]
     } else {
         empty!()
@@ -589,6 +614,8 @@ fn view_content(main_model: &Model, base_url: &Url) -> Node<Msg> {
             Page::Player => page::player::view(&main_model.player_model),
             Page::Playlist(model) => page::playlist::view(model).map_msg(Msg::Playlist),
             Page::Queue(model) => page::queue::view(model).map_msg(Msg::Queue),
+            Page::MusicLibrary(model) =>
+                page::music_library::view(model).map_msg(Msg::MusicLibrary),
         }
     ]
 }
@@ -637,6 +664,18 @@ fn view_navigation_tabs(page: &Page) -> Node<Msg> {
                 ],],
                 ev(Ev::Click, |_| { Urls::playlist_abs().go_and_load() }),
             ],
+            // li![
+            //     IF!(page_name == "Library" => C!["is-active"]),
+            //     a![span![
+            //         C!["icon", "is-small"],
+            //         i![
+            //             C!["material-icons"],
+            //             attrs!("aria-hidden" => "true"),
+            //             "folder_open"
+            //         ],
+            //     ],],
+            //     ev(Ev::Click, |_| { Urls::library_abs().go_and_load() }),
+            // ],
             li![
                 IF!(page_name == "Settings" => C!["is-active"]),
                 a![span![
