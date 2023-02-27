@@ -19,14 +19,16 @@ else
 fi
 
 echo "Detected architecture suffix is:"${arch_expr}
+sudo systemctl stop rsplayer
 URL=`curl -s https://api.github.com/repos/ljufa/rsplayer/releases/latest | grep browser_download_url | grep ${arch_expr} | cut -d '"' -f 4`
 echo Downloading installation package from $URL ...
 curl -L -o rsplayer${arch_expr}.deb  $URL
 sudo dpkg -i --force-overwrite rsplayer${arch_expr}.deb
+sudo systemctl daemon-reload
 sudo systemctl enable rsplayer
 rm rsplayer${arch_expr}.deb
 sleep 2
 sudo systemctl start rsplayer
-sleep 3
-sudo journalctl -u rsplayer -n 100
+# sleep 3
+# sudo journalctl -u rsplayer -n 100
 echo Done!

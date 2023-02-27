@@ -1,12 +1,16 @@
 # Install
 ## Supported hardware and OS
 RSPlayer can be installed on Debian Linux-based systems with the following CPU architectures:
-* Linux amd64(x86_64-unknown-linux-gnu) - x86 intel and amd cpus 
-* Linux aarch64(aarch64-unknown-linux-gnu) - arm 64bit cpus: RPI4 and other arm8 cpu based boards ...
-* Linux armv7(armv7-unknown-linux-gnueabihf) - arm 32bit cpus: RP4(32bit), RPI3, RPI2, RPI zero ...
+* [x] Linux amd64(x86_64-unknown-linux-gnu) - x86 intel and amd cpus 
+* [x] Linux aarch64(aarch64-unknown-linux-gnu) - arm 64bit cpus: RPI4 and other arm8 cpu based boards ...
+* [x] Linux armv7(armv7-unknown-linux-gnueabihf) - arm 32bit cpus: RP4(32bit), RPI3, RPI2, RPI zero ...
+* [ ] Windows x84_64
+* [ ] Windows aarch64
+* [ ] MacOS
+* [ ] FreeBSD
 
 ## Basic installation
-### Install program
+### Install or upgrade
 RSPlayer can be installed using one of two methods:
 * Using installation script(it will detect your architecture)
 ```bash
@@ -32,6 +36,7 @@ To make configuration changes navigate to [http://rsplayer.local/#settings](http
 
 ### RSP
 RSPlayer playback implementation based on rust Symphonia crate.
+* _Input buffer size_ - Size of input audio buffer
 
 ### MPD
 * _Music Player Daemon server host_ - Default value assumes that you have MPD server running on the same host, change only if not true
@@ -94,11 +99,20 @@ audio_output {
 Once you enter all values click _Authorize_ button which will show a permission popup from Spotify.
 After giving permission you should see `Success` message and the close button.
 
-## Audio device name 
-This is an audio device that will be used by active players
+## Audio interface
+This is an alsa audio interface that will be used by active player
+## PCM Device
+Alsa PCM output device of selected audio interface
+
 ## Music directory path
 Full path to music root music directory, will be used by RSP and MPD(if override existing config flag is enabled).
 Please keep in mind that after this value is changed or set for the first time `Full scan` button should be clicked and the music database created.
+
+## Volume control
+* _Volume control device_ - Select volume control device: Dac or Alsa
+* _Alsa mixer_ - If Alsa is volume control device then alsa mixer should be selected here
+* _Volume step_ - How many units to send to the control device for a single button press or encoder step
+* _Enable rotary encoder_ - Enable if you use a rotary encoder
 
 # Advanced configuration for additional hardware support (RPI only)
 
@@ -136,10 +150,6 @@ If you are using GPIO-connected hardware enable and configure it here
 * _Remote maker_ - Chose the remote Model you want to use (atm only one remote is supported)
 * _LIRC socket path_ - The default value should work in most cases.
 
-### Volume control
-* _Volume control device_ - Select volume control device: Dac or Alsa
-* _Volume step_ - How many units to send to the control device for a single button press or encoder step
-* _Enable rotary encoder_ - Enable if you use a rotary encoder
 
 ### OLED
 * _Display model_ - Select OLED model (currently one supported)
@@ -162,7 +172,6 @@ TODO
 # Troubleshooting
 ?>If you can't access http://rsplayer.local from your android phone use RPI ip address or PC browser. At the time mDns/zeroconf is not supported by Android.
 
-
 ## Useful commands
 * get logs 
 ```bash
@@ -172,6 +181,7 @@ journalctl -u rsplayer.service -f -n 300
 ```bash
 sudo systemctl restart rsplayer
 ```
+For configuration related troubleshooting you can find configuration file at `/opt/rsplayer/configuration.yaml`
 
 ## RSPlayer server can't start
 TODO
@@ -197,7 +207,7 @@ TODO
 
 * [ ] Automatic library scan after music directory change, or first time setup
 * [ ] Use fixed unique port instead 80 and fallback 8000
-* [ ] Make alsa volume control work with any selected device
+* [x] Make alsa volume control work with any selected device
 * [ ] Convert volume units to db
 * [ ] Browse/search the whole music library
 * [ ] Web radio browse/search/~~play~~
@@ -259,7 +269,7 @@ TODO
 
 -------
  
-# Developing
+# Development
  
 ## Setup development platform device - Raspberry PI 4 with RPI OS Lite 64-bit
  
