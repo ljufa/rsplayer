@@ -13,6 +13,7 @@ use rsplayer_config::Configuration;
 use api_models::common::PlayerCommand;
 use api_models::state::StateChangeEvent;
 
+use rsplayer_config::get_static_dir_path;
 use rsplayer_playback::player_service::ArcPlayerService;
 use std::env;
 use std::net::Ipv4Addr;
@@ -23,7 +24,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 use std::{
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::Duration,
 };
 use tokio::{
@@ -45,7 +46,7 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 /// - Key is their id
 /// - Value is a sender of `warp::ws::Message`
 type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
-type Config = Arc<Mutex<Configuration>>;
+type Config = Arc<Configuration>;
 
 type PlayerCommandSender = tokio::sync::mpsc::Sender<PlayerCommand>;
 type SystemCommandSender = tokio::sync::mpsc::Sender<SystemCommand>;
@@ -55,7 +56,7 @@ pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Out
         .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
         .allow_any_origin();
 
-    let ui_static_content = warp::get().and(warp::fs::dir(Configuration::get_static_dir_path()));
+    let ui_static_content = warp::get().and(warp::fs::dir(get_static_dir_path()));
 
     let routes = filters::settings_save(config.clone())
         .or(filters::settings_save(config.clone()))
@@ -104,7 +105,7 @@ pub fn start(
             },
         );
     let ui_static_content = warp::get()
-        .and(warp::fs::dir(Configuration::get_static_dir_path()))
+        .and(warp::fs::dir(get_static_dir_path()))
         .with(warp::compression::gzip());
 
     let routes = player_ws_path
@@ -273,7 +274,7 @@ mod handlers {
         query: HashMap<String, String>,
     ) -> Result<impl warp::Reply, Infallible> {
         debug!("Settings to save {:?} and reload {:?}", settings, query);
-        config.lock().unwrap().save_settings(&settings);
+        config.save_settings(&settings);
         // todo: find better way to trigger service restart by systemd
         let param = query.get("reload").unwrap();
 
@@ -300,7 +301,7 @@ mod handlers {
     }
 
     pub async fn get_settings(config: Config) -> Result<impl warp::Reply, Infallible> {
-        let settings = &mut config.lock().unwrap().get_settings();
+        let settings = &mut config.get_settings();
         let cards = alsa::get_all_cards();
        
         settings.alsa_settings.available_audio_cards = cards;
@@ -329,7 +330,7 @@ mod handlers {
         config: Config,
     ) -> Result<impl warp::Reply, Infallible> {
         let mut spotify_oauth =
-            SpotifyOauth::new(&config.lock().unwrap().get_settings().spotify_settings);
+            SpotifyOauth::new(&config.get_settings().spotify_settings);
         match &spotify_oauth.get_authorization_url() {
             Ok(url) => Ok(warp::reply::with_status(url.clone(), StatusCode::OK)),
             Err(e) => Ok(warp::reply::with_status(
@@ -342,7 +343,7 @@ mod handlers {
         config: Config,
     ) -> Result<impl warp::Reply, Infallible> {
         let mut spotify_oauth =
-            SpotifyOauth::new(&config.lock().unwrap().get_settings().spotify_settings);
+            SpotifyOauth::new(&config.get_settings().spotify_settings);
         match &spotify_oauth.is_token_present() {
             Ok(auth) => Ok(warp::reply::with_status(auth.to_string(), StatusCode::OK)),
             Err(e) => Ok(warp::reply::with_status(
@@ -357,7 +358,7 @@ mod handlers {
         url: HashMap<String, String>,
     ) -> Result<impl warp::Reply, Infallible> {
         let mut spotify_oauth =
-            SpotifyOauth::new(&config.lock().unwrap().get_settings().spotify_settings);
+            SpotifyOauth::new(&config.get_settings().spotify_settings);
         match &spotify_oauth.authorize_callback(url.get("code").unwrap()) {
             Ok(_) => Ok(warp::reply::html(
                 r#"<html>
@@ -378,7 +379,7 @@ mod handlers {
 
     pub async fn get_spotify_account_info(config: Config) -> Result<impl warp::Reply, Infallible> {
         let mut spotify_oauth =
-            SpotifyOauth::new(&config.lock().unwrap().get_settings().spotify_settings);
+            SpotifyOauth::new(&config.get_settings().spotify_settings);
         Ok(warp::reply::json(&spotify_oauth.get_account_info()))
     }
 

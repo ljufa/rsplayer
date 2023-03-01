@@ -1,59 +1,49 @@
-
-use std::fs::{File, OpenOptions};
-
-use std::io::Write;
-use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use api_models::common::Volume;
 
 use api_models::settings::Settings;
 use api_models::state::{AudioOut, StreamerState};
-use log::info;
-use serde::{Deserialize, Serialize};
+use sled::{Db, IVec};
 
 #[cfg(debug_assertions)]
 const EXEC_DIR_PATH: &str = "./";
 #[cfg(not(debug_assertions))]
 const EXEC_DIR_PATH: &str = "/usr/local/bin/";
 
-const CONFIG_FILE_NAME: &str = "configuration.yaml";
+const SETTINGS_KEY: &str = "settings";
+const STATE_KEY: &str = "state";
 
-pub type MutArcConfiguration = Arc<Mutex<Configuration>>;
+pub type ArcConfiguration = Arc<Configuration>;
 
-#[derive(Deserialize, Serialize, Default)]
 pub struct Configuration {
-    settings: Settings,
-    streamer_state: StreamerState,
+    db: Db,
 }
 
 impl Configuration {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        create_default_config_file_if_not_exist();
-        serde_yaml::from_reader(File::open(CONFIG_FILE_NAME).expect("")).unwrap_or_else(|e| {
-            panic!("Failed to deserilize configuration file: {e}");
-        })
-    }
-
-    pub fn get_static_dir_path() -> String {
-        "ui".to_string()
-    }
-
-    #[allow(dead_code)]
-    pub fn get_squeezelite_player_path() -> String {
-        format!("{EXEC_DIR_PATH}squeezelite")
-    }
-
-    pub fn get_librespot_path() -> String {
-        format!("{EXEC_DIR_PATH}librespot")
-    }
-
-    pub fn get_streamer_status(&self) -> StreamerState {
-        self.streamer_state.clone()
+        let db = sled::open("configuration.db").expect("Failed to open configuration db");
+        _ = db.compare_and_swap(
+            SETTINGS_KEY,
+            None as Option<IVec>,
+            Some(IVec::from(
+                serde_json::to_vec(&Settings::default()).unwrap(),
+            )),
+        );
+        _ = db.compare_and_swap(
+            STATE_KEY,
+            None as Option<IVec>,
+            Some(IVec::from(
+                serde_json::to_vec(&StreamerState::default()).unwrap(),
+            )),
+        );
+        Self { db }
     }
 
     pub fn get_settings(&self) -> Settings {
-        let mut result = self.settings.clone();
+        let sett = self.db.get(SETTINGS_KEY).unwrap().unwrap();
+        let mut result: Settings = serde_json::from_slice(&sett).unwrap();
         result
             .dac_settings
             .available_dac_chips
@@ -65,56 +55,48 @@ impl Configuration {
         result
     }
 
-    pub fn save_settings(&mut self, settings: &Settings) {
-        self.settings = settings.clone();
+    pub fn save_settings(&self, settings: &Settings) {
+        _ = self
+            .db
+            .insert(SETTINGS_KEY, serde_json::to_vec(&settings).unwrap());
+        _ = self.db.flush();
     }
 
-    pub fn save_audio_output(&mut self, selected_output: AudioOut) -> StreamerState {
-        let mut sstate = self.get_streamer_status();
+    fn save_streamer_state(&self, streamer_status: &StreamerState) {
+        _ = self
+            .db
+            .insert(STATE_KEY, serde_json::to_vec(streamer_status).unwrap());
+    }
+
+    pub fn get_streamer_state(&self) -> StreamerState {
+        let state = self.db.get(STATE_KEY).unwrap().unwrap();
+        serde_json::from_slice(&state).unwrap()
+    }
+
+    pub fn save_audio_output(&self, selected_output: AudioOut) -> StreamerState {
+        let mut sstate = self.get_streamer_state();
         sstate.selected_audio_output = selected_output;
         self.save_streamer_state(&sstate);
-        sstate.clone()
+        sstate
     }
 
-    pub fn save_volume_state(&mut self, volume: Volume) -> StreamerState {
-        let mut ss = self.get_streamer_status();
+    pub fn save_volume_state(&self, volume: Volume) -> StreamerState {
+        let mut ss = self.get_streamer_state();
         ss.volume_state = volume;
         self.save_streamer_state(&ss);
         ss
     }
-
-    fn save_streamer_state(&mut self, streamer_status: &StreamerState) {
-        self.streamer_state = streamer_status.clone();
-    }
 }
 
-
-impl Drop for Configuration {
-    fn drop(&mut self) {
-        self.settings.alsa_settings.available_audio_cards.clear();
-        write_to_file(self, false);
-    }
+#[allow(dead_code)]
+pub fn get_squeezelite_player_path() -> String {
+    format!("{EXEC_DIR_PATH}squeezelite")
 }
 
-fn create_default_config_file_if_not_exist() {
-    let fpath = Path::new(CONFIG_FILE_NAME);
-    if !fpath.exists() {
-        write_to_file(&mut Configuration::default(), true);
-    }
+pub fn get_librespot_path() -> String {
+    format!("{EXEC_DIR_PATH}librespot")
 }
 
-fn write_to_file(config: &mut Configuration, is_new: bool) {
-    let mut config_file = OpenOptions::new()
-        .write(true)
-        .append(false)
-        .create(is_new)
-        .open(CONFIG_FILE_NAME)
-        .expect("Faied to open configuration file");
-    _ = serde_yaml::to_string(config).map(|config_string|{
-        info!("Save configuration to file:\n{config_string}");
-        _ = config_file.write_all(config_string.as_bytes());
-        _ = config_file.sync_all();
-        info!("Configuration file saved!");
-    });  
-
+pub fn get_static_dir_path() -> String {
+    "ui".to_string()
 }

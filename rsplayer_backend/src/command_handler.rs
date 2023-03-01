@@ -1,3 +1,4 @@
+use std::process::exit;
 use std::sync::Arc;
 
 use api_models::common::PlayerCommand::{
@@ -11,7 +12,7 @@ use api_models::common::{PlayerCommand, SystemCommand};
 use api_models::state::StateChangeEvent;
 
 use log::debug;
-use rsplayer_config::MutArcConfiguration;
+use rsplayer_config::ArcConfiguration;
 use rsplayer_metadata::metadata::MetadataService;
 use rsplayer_playback::player_service::ArcPlayerService;
 use tokio::sync::broadcast::Sender;
@@ -21,7 +22,7 @@ use rsplayer_hardware::audio_device::audio_service::ArcAudioInterfaceSvc;
 #[allow(clippy::too_many_lines)]
 pub async fn handle_player_commands(
     player_service: ArcPlayerService,
-    config_store: MutArcConfiguration,
+    config_store: ArcConfiguration,
     mut input_commands_rx: tokio::sync::mpsc::Receiver<PlayerCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) -> ! {
@@ -110,7 +111,7 @@ pub async fn handle_player_commands(
                 }
             }
             QueryCurrentStreamerState => {
-                let ss = config_store.lock().unwrap().get_streamer_status();
+                let ss = config_store.get_streamer_state();
                 state_changes_sender
                     .send(StateChangeEvent::StreamerStateEvent(ss))
                     .unwrap();
@@ -139,7 +140,7 @@ pub async fn handle_player_commands(
 pub async fn handle_system_commands(
     ai_service: ArcAudioInterfaceSvc,
     metadata_service: Arc<MetadataService>,
-    config_store: MutArcConfiguration,
+    config_store: ArcConfiguration,
     mut input_commands_rx: tokio::sync::mpsc::Receiver<SystemCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) {
@@ -149,43 +150,46 @@ pub async fn handle_system_commands(
             match cmd {
                 SetVol(val) => {
                     let nv = ai_service.set_volume(i64::from(val));
-                    let new_state = config_store.lock().unwrap().save_volume_state(nv);
+                    let new_state = config_store.save_volume_state(nv);
                     state_changes_sender
                         .send(StateChangeEvent::StreamerStateEvent(new_state))
                         .expect("Send event failed.");
                 }
                 VolUp => {
                     let nv = ai_service.volume_up();
-                    let new_state = config_store.lock().unwrap().save_volume_state(nv);
+                    let new_state = config_store.save_volume_state(nv);
                     state_changes_sender
                         .send(StateChangeEvent::StreamerStateEvent(new_state))
                         .expect("Send event failed.");
                 }
                 VolDown => {
                     let nv = ai_service.volume_down();
-                    let new_state = config_store.lock().unwrap().save_volume_state(nv);
+                    let new_state = config_store.save_volume_state(nv);
                     state_changes_sender
                         .send(StateChangeEvent::StreamerStateEvent(new_state))
                         .expect("Send event failed.");
                 }
                 ChangeAudioOutput => {
                     if let Some(out) = ai_service.toggle_output() {
-                        let new_state = config_store.lock().unwrap().save_audio_output(out);
+                        let new_state = config_store.save_audio_output(out);
                         state_changes_sender
                             .send(StateChangeEvent::StreamerStateEvent(new_state))
                             .unwrap();
                     };
                 }
                 PowerOff => {
-                    std::process::Command::new("/sbin/poweroff")
+                    std::process::Command::new("systemctl")
+                        .arg("poweroff")
                         .spawn()
                         .expect("halt command failed");
+                    exit(0);
                 }
                 SystemCommand::RestartSystem => {
-                    std::process::Command::new("/sbin/poweroff")
-                        .arg("--reboot")
+                    std::process::Command::new("systemctl")
+                        .arg("reboot")
                         .spawn()
                         .expect("halt command failed");
+                    exit(0);
                 }
                 SystemCommand::RestartRSPlayer => {
                     std::process::Command::new("systemctl")

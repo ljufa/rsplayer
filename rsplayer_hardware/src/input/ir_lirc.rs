@@ -5,16 +5,16 @@ use log::{debug, error, info};
 use api_models::common::PlayerCommand;
 
 use api_models::common::SystemCommand;
-use rsplayer_config::MutArcConfiguration;
+use rsplayer_config::ArcConfiguration;
 use tokio::net::UnixStream;
 use tokio::sync::mpsc::Sender;
 
 pub async fn listen(
     player_commands_tx: Sender<PlayerCommand>,
     system_commands_tx: Sender<SystemCommand>,
-    config: MutArcConfiguration,
+    config: ArcConfiguration,
 ) {
-    let ir_settings = config.lock().unwrap().get_settings().ir_control_settings;
+    let ir_settings = config.get_settings().ir_control_settings;
     let maker = &ir_settings.remote_maker;
 
     if let Ok(stream) = UnixStream::connect(&ir_settings.input_socket_path).await {
@@ -69,13 +69,13 @@ pub async fn listen(
                                 .await
                                 .expect("Error");
                         }
-                        "06 KEY_PLAY" => {
+                        "02 KEY_PLAY" => {
                             player_commands_tx
                                 .send(PlayerCommand::Pause)
                                 .await
                                 .expect("Error");
                         }
-                        "06 KEY_MENU" => {
+                        "02 KEY_MENU" => {
                             system_commands_tx
                                 .send(SystemCommand::PowerOff)
                                 .await

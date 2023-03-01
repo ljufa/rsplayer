@@ -3,7 +3,7 @@ extern crate env_logger;
 extern crate log;
 
 use std::panic;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use rsplayer_playback::player_service::PlayerService;
 use tokio::signal::unix::{Signal, SignalKind};
@@ -33,13 +33,13 @@ async fn main() {
 
     info!("Starting RSPlayer!");
 
-    let config = Arc::new(Mutex::new(Configuration::new()));
+    let config = Arc::new(Configuration::new());
 
     let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate())
         .expect("failed to create signal future");
 
     let metadata_service =
-        MetadataService::new(&config.lock().unwrap().get_settings().metadata_settings);
+        MetadataService::new(&config.get_settings().metadata_settings);
     if let Err(e) = &metadata_service {
         error!("Metadata service can't be created. error: {}", e);
         start_degraded(
@@ -82,11 +82,9 @@ async fn main() {
         &config,
         player_service.clone(),
     );
-    if config.lock().expect("Failed to get config").get_settings().auto_resume_playback {
+    if config.get_settings().auto_resume_playback {
         player_service.get_current_player().play_from_current_queue_song();
     }
-
-
 
     select! {
         _ = spawn(ir_lirc::listen(player_commands_tx.clone(), system_commands_tx.clone(), config.clone())) => {
@@ -143,7 +141,7 @@ async fn main() {
 async fn start_degraded(
     term_signal: &mut Signal,
     error: &anyhow::Error,
-    config: &Arc<Mutex<Configuration>>,
+    config: &Arc<Configuration>,
 ) {
     warn!("Starting server in degraded mode.");
     let http_server_future = server_warp::start_degraded(config, error);

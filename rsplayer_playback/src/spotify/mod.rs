@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use log::info;
 
-use rsplayer_config::Configuration;
+use rsplayer_config::get_librespot_path;
 use rspotify::clients::{BaseClient, OAuthClient};
 use rspotify::model::{
     AlbumId, CurrentUserQueue, Id, Market, Offset, PlayableId, PlayableItem, PlaylistId,
@@ -602,7 +602,7 @@ fn playable_item_to_song(track: Option<&PlayableItem>) -> Option<Song> {
 fn start_librespot(settings: &SpotifySettings, alsa_device_name: &str) -> Result<Child> {
     info!("Starting librespot process");
     let format: &'static str = settings.alsa_device_format.into();
-    let child = std::process::Command::new(Configuration::get_librespot_path())
+    let child = std::process::Command::new(get_librespot_path())
         .arg("--disable-audio-cache")
         .arg("--bitrate")
         .arg(settings.bitrate.to_string())

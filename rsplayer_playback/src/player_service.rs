@@ -6,7 +6,7 @@ use api_models::settings::Settings;
 
 use crate::{mpd::MpdPlayerClient, rsp::RsPlayer, spotify::SpotifyPlayerClient, Player};
 use mockall_double::double;
-use rsplayer_config::MutArcConfiguration;
+use rsplayer_config::ArcConfiguration;
 #[double]
 use rsplayer_metadata::metadata::MetadataService;
 
@@ -19,10 +19,10 @@ pub struct PlayerService {
 impl PlayerService {
 
     pub fn new(
-        config: &MutArcConfiguration,
+        config: &ArcConfiguration,
         metadata_service: Arc<MetadataService>,
     ) -> Result<Self> {
-        let settings = config.lock().unwrap().get_settings();
+        let settings = config.get_settings();
         Ok(PlayerService {
             player: Self::create_player(&settings, metadata_service)?,
         })

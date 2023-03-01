@@ -55,6 +55,7 @@ pub struct OutputSelectorSettings {
 pub struct VolumeControlSettings {
     pub volume_step: u8,
     pub ctrl_device: VolumeCrtlType,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub alsa_mixer: Option<CardMixer>,
     pub rotary_enabled: bool,
     pub rotary_event_device_path: String,

@@ -5,7 +5,7 @@ use anyhow::Result;
 use api_models::common::{Volume, VolumeCrtlType};
 use api_models::state::AudioOut;
 use gpio_cdev::LineHandle;
-use rsplayer_config::MutArcConfiguration;
+use rsplayer_config::ArcConfiguration;
 
 use super::ak4497::DacAk4497;
 use super::alsa::AlsaMixer;
@@ -19,15 +19,14 @@ pub struct AudioInterfaceService {
 }
 
 impl AudioInterfaceService {
-    pub fn new(config: &MutArcConfiguration) -> Result<Self> {
-        let config = config.lock().expect("Unable to lock config");
+    pub fn new(config: &ArcConfiguration) -> Result<Self> {
         let settings = config.get_settings();
         let volume_ctrl_device: Box<dyn VolumeControlDevice + Send + Sync> =
             if settings.volume_ctrl_settings.ctrl_device == VolumeCrtlType::Dac
                 && settings.dac_settings.enabled
             {
                 DacAk4497::new(
-                    &config.get_streamer_status().volume_state,
+                    &config.get_streamer_state().volume_state,
                     &settings.dac_settings,
                 )?
             } else {
@@ -36,7 +35,7 @@ impl AudioInterfaceService {
         let line_handle = if settings.output_selector_settings.enabled {
             // restore last output state
             let out_sel_pin = gpio::get_output_pin_handle(GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY)?;
-            if config.get_streamer_status().selected_audio_output == AudioOut::SPKR {
+            if config.get_streamer_state().selected_audio_output == AudioOut::SPKR {
                 out_sel_pin.set_value(0)?;
             } else {
                 out_sel_pin.set_value(1)?;

@@ -1,13 +1,11 @@
 use api_models::common::SystemCommand;
-use rsplayer_config::MutArcConfiguration;
+use rsplayer_config::ArcConfiguration;
 use tokio::sync::mpsc::Sender;
 
 
 // todo implement settings.is_enabled check
-pub async fn listen(system_commands_tx: Sender<SystemCommand>, config: MutArcConfiguration) {
+pub async fn listen(system_commands_tx: Sender<SystemCommand>, config: ArcConfiguration) {
     let volume_settings = config
-        .lock()
-        .expect("Unable to lock config")
         .get_settings()
         .volume_ctrl_settings;
     if volume_settings.rotary_enabled {

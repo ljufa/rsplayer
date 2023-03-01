@@ -12,6 +12,7 @@ ExecStart=/usr/local/bin/rsplayer
 WorkingDirectory=/opt/rsplayer
 Restart=always
 RestartSec=3
+TimeoutStopSec=5
 
 [Install]
 WantedBy=multi-user.target

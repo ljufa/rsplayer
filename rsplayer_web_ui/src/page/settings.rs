@@ -666,6 +666,7 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
                     div![
                         C!["select"],
                             select![
+                                option!["-- Select mixer --"],
                                 alsa_settings.find_mixers_by_card_index(model.selected_audio_card_index)
                                 .iter()
                                 .map(|pcmd|
