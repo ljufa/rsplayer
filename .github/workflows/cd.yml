@@ -24,7 +24,7 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: web_ui
-        path: target/ui
+        path: public/pkg
     
   build_backend:
     needs: build_ui
@@ -46,9 +46,9 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: web_ui
-        path: target/ui
-    # - name: Display structure of downloaded files
-    #   run: ls -R target
+        path: rsplayer_web_ui/public/pkg
+    - name: Display structure of downloaded files
+      run: ls -R rsplayer_web_ui/public/
     - name: Build Backend
       run: cargo make --env TARGET=${{ matrix.target }} build_release
     - name: Create deb package
@@ -58,6 +58,11 @@ jobs:
       with:
         name: deb-${{ matrix.target }}
         path: target/${{ matrix.target }}/debian/*.deb
+    - name: Upload binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: rsplayer-${{ matrix.target }}
+        path: target/${{ matrix.target }}/release/rsplayer
   publish:
     needs: build_backend
     name: Release deb packages
@@ -65,8 +70,8 @@ jobs:
     steps:
     - name: Download deb packages
       uses: actions/download-artifact@v3
-    # - name: Display structure of downloaded files
-    #   run: ls -R
+    - name: Display structure of downloaded files
+      run: ls -R
     - uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
@@ -76,4 +81,4 @@ jobs:
         fail_on_unmatched_files: true
         files: |
           **/*.deb
-          
+          **/rsplayer

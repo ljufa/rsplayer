@@ -13,8 +13,8 @@ use rsplayer_config::Configuration;
 use api_models::common::PlayerCommand;
 use api_models::state::StateChangeEvent;
 
-use rsplayer_config::get_static_dir_path;
 use rsplayer_playback::player_service::ArcPlayerService;
+use rust_embed::RustEmbed;
 use std::env;
 use std::net::Ipv4Addr;
 use std::net::SocketAddrV4;
@@ -51,12 +51,16 @@ type Config = Arc<Configuration>;
 type PlayerCommandSender = tokio::sync::mpsc::Sender<PlayerCommand>;
 type SystemCommandSender = tokio::sync::mpsc::Sender<SystemCommand>;
 
+#[derive(RustEmbed)]
+#[folder ="../rsplayer_web_ui/public"]
+struct StaticContentDir;
+
 pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Output = ()> {
     let cors = warp::cors()
         .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
         .allow_any_origin();
 
-    let ui_static_content = warp::get().and(warp::fs::dir(get_static_dir_path()));
+    let ui_static_content = warp::get().and(warp_embed::embed(&StaticContentDir));
 
     let routes = filters::settings_save(config.clone())
         .or(filters::settings_save(config.clone()))
@@ -105,7 +109,7 @@ pub fn start(
             },
         );
     let ui_static_content = warp::get()
-        .and(warp::fs::dir(get_static_dir_path()))
+        .and(warp_embed::embed(&StaticContentDir))
         .with(warp::compression::gzip());
 
     let routes = player_ws_path

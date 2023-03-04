@@ -34,16 +34,6 @@ assets = [
         "etc/systemd/system/rsplayer.service",
         "644",
     ],
-    [
-        "../target/ui/pkg/*",
-        "opt/rsplayer/ui/pkg",
-        "644",
-    ],
-    [
-        "../rsplayer_web_ui/public/**/*",
-        "opt/rsplayer/ui",
-        "644",
-    ],
 ]
 
 [package.metadata.deb.variants.aarch64-unknown-linux-gnu]
@@ -71,16 +61,6 @@ assets = [
     [
         "../PKGS/debian/etc/lirc/lircd.conf.d/*",
         "etc/lirc/lircd.conf.d",
-        "644",
-    ],
-    [
-        "../target/ui/pkg/*",
-        "opt/rsplayer/ui/pkg",
-        "644",
-    ],
-    [
-        "../rsplayer_web_ui/public/**/*",
-        "opt/rsplayer/ui",
         "644",
     ],
 ]
@@ -112,16 +92,6 @@ assets = [
         "etc/lirc/lircd.conf.d",
         "644",
     ],
-    [
-        "../target/ui/pkg/*",
-        "opt/rsplayer/ui/pkg",
-        "644",
-    ],
-    [
-        "../rsplayer_web_ui/public/**/*",
-        "opt/rsplayer/ui",
-        "644",
-    ],
 ]
 
 [dependencies]
@@ -142,6 +112,9 @@ anyhow.workspace = true
 
 #warp
 warp = { version = "0.3.3", features = ["compression"] }
+rust-embed = { version = "6.4.2", features = ["warp-ex", "compression"] }
+warp-embed = "0.4.0"
+
 # async debug tokio-console
 console-subscriber = "0.1.8"
 tracing = "0.1"
