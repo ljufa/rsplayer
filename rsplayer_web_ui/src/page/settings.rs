@@ -15,6 +15,8 @@ use seed::{
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 
+use crate::view_spinner_modal;
+
 const API_SETTINGS_PATH: &str = "/api/settings";
 const API_SPOTIFY_GET_AUTH_URL_PATH: &str = "/api/spotify/get-url";
 const API_SPOTIFY_GET_ACCOUNT_INFO_PATH: &str = "/api/spotify/me";
@@ -117,8 +119,8 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     });
     Model {
         settings: Settings::default(),
-        selected_audio_card_index: 0,
-        waiting_response: false,
+        selected_audio_card_index: -1,
+        waiting_response: true,
         spotify_account_info: None,
     }
 }
@@ -276,6 +278,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.spotify_account_info = info;
         }
         Msg::SettingsFetched(sett) => {
+            model.waiting_response = false;
             model.settings = sett;
             model.selected_audio_card_index = model.settings.alsa_settings.output_device.card_index;
         }
@@ -304,6 +307,7 @@ pub fn view(model: &Model) -> Node<Msg> {
     let model = model;
     let settings = &model.settings;
     div![
+        view_spinner_modal(model.waiting_response),
         // players
         section![
             C!["section"],
@@ -423,7 +427,9 @@ pub fn view(model: &Model) -> Node<Msg> {
                     label!["Audio interface", C!["label"]],
                     div![
                         C!["select"],
-                        select![model
+                        select![
+                            option!["-- Select audio interface --"],
+                            model
                             .settings
                             .alsa_settings
                             .available_audio_cards
@@ -445,6 +451,7 @@ pub fn view(model: &Model) -> Node<Msg> {
                     div![
                         C!["select"],
                         select![
+                            option!["-- Select pcm device --"],
                             model.settings.alsa_settings.find_pcms_by_card_index(model.selected_audio_card_index)
                             .iter()
                             .map(|pcmd|

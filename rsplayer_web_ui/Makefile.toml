@@ -1,5 +1,5 @@
 [env]
-RPI_HOST = "192.168.5.60"
+RPI_HOST = "192.168.5.124"
 
 # ---- BUILD UI----
 [tasks.build_release]
