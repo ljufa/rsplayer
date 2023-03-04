@@ -1,7 +1,8 @@
 [env]
 RPI_HOST = "192.168.5.124"
 TARGET = "aarch64-unknown-linux-gnu"
-RELEASE_VERSION = "0.6.1"
+RELEASE_VERSION = "0.6.2"
+RELEASE_BRANCH = "embed-static-files"
 
 [config]
 default_to_workspace = false
@@ -155,7 +156,7 @@ script = [
 
 [tasks.tag]
 script = [
-    "git tag ${RELEASE_VERSION} main",
+    "git tag ${RELEASE_VERSION} ${RELEASE_BRANCH}",
     "git push origin ${RELEASE_VERSION}",
 ]
 [tasks.push_docker_cross]
