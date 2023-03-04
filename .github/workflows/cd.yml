@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: Swatinem/rust-cache@v2
     - uses: davidB/rust-cargo-make@v1
     - uses: taiki-e/install-action@v2
       with:
@@ -24,7 +23,7 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: web_ui
-        path: public/pkg
+        path: rsplayer_web_ui/public/pkg
     
   build_backend:
     needs: build_ui
@@ -38,6 +37,7 @@ jobs:
     - uses: actions/checkout@v3
     - uses: Swatinem/rust-cache@v2
     - uses: davidB/rust-cargo-make@v1
+    # !!! Do not use binstall because it does not work well for cross compilation and libc dependency
     - name: Install tools
       run: |
         cargo install cross
