@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: Swatinem/rust-cache@v2
     - uses: davidB/rust-cargo-make@v1
     - uses: taiki-e/install-action@v2
       with:
@@ -24,7 +23,7 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: web_ui
-        path: target/ui
+        path: rsplayer_web_ui/public/pkg
     
   build_backend:
     needs: build_ui
@@ -38,17 +37,18 @@ jobs:
     - uses: actions/checkout@v3
     - uses: Swatinem/rust-cache@v2
     - uses: davidB/rust-cargo-make@v1
-    - name: Install tools
-      run: |
-        cargo install cross
-        cargo install cargo-deb
     - name: Download web_ui
       uses: actions/download-artifact@v3
       with:
         name: web_ui
-        path: target/ui
-    # - name: Display structure of downloaded files
-    #   run: ls -R target
+        path: rsplayer_web_ui/public/pkg
+    - name: Display structure of downloaded files
+      run: ls -R rsplayer_web_ui/public/
+    # !!! Do not use binstall because it does not work well for cross compilation and libc dependency
+    - name: Install tools
+      run: |
+        cargo install cross
+        cargo install cargo-deb
     - name: Build Backend
       run: cargo make --env TARGET=${{ matrix.target }} build_release
     - name: Create deb package
@@ -58,15 +58,28 @@ jobs:
       with:
         name: deb-${{ matrix.target }}
         path: target/${{ matrix.target }}/debian/*.deb
+    - name: Upload binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: rsplayer-${{ matrix.target }}
+        path: target/${{ matrix.target }}/release/rsplayer
   publish:
     needs: build_backend
-    name: Release deb packages
+    name: Create release
     runs-on: ubuntu-latest
     steps:
-    - name: Download deb packages
+    - name: Download files
       uses: actions/download-artifact@v3
-    # - name: Display structure of downloaded files
-    #   run: ls -R
+    - name: Display structure of downloaded files
+      run: ls -R
+    # todo: make rename as generic script
+    - name: Rename binary files
+      run: |
+        mv rsplayer-aarch64-unknown-linux-gnu/rsplayer rsplayer_arm64
+        mv rsplayer-armv7-unknown-linux-gnueabihf/rsplayer rsplayer_armhf
+        mv rsplayer-x86_64-unknown-linux-gnu/rsplayer rsplayer_amd64
+    - name: Display new structure of downloaded files
+      run: ls -R
     - uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
@@ -76,4 +89,4 @@ jobs:
         fail_on_unmatched_files: true
         files: |
           **/*.deb
-          
+          rsplayer_*

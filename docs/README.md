@@ -1,6 +1,6 @@
 # Install
 ## Supported hardware and OS
-RSPlayer can be installed on Debian Linux-based systems with the following CPU architectures:
+RSPlayer can be installed on Linux systems with the following CPU architectures:
 * [x] Linux amd64(x86_64-unknown-linux-gnu) - x86 intel and amd cpus 
 * [x] Linux aarch64(aarch64-unknown-linux-gnu) - arm 64bit cpus: RPI4 and other arm8 cpu based boards ...
 * [x] Linux armv7(armv7-unknown-linux-gnueabihf) - arm 32bit cpus: RP4(32bit), RPI3, RPI2, RPI zero ...
@@ -18,6 +18,13 @@ bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.s
 ```
 * Manually download and install deb package
 The latest package can be downloaded from [this page](https://github.com/ljufa/rsplayer/releases/latest).
+
+* Download and manually install binary file (for non debian based linux)
+  - Under latest release page find `rsplayer_*` file for your system amd download
+  - rename file to `rsplayer`
+  - make it executable using `chmod +x rsplayer`
+  - run using command `./rsplayer`
+  - optionally if you need to run rsplayer automatically as as a service use [this systemd service file](../PKGS/debian/etc/systemd/system/rsplayer.service)
 
 ### Verify installation
 * Run systemd service by `sudo systemctl start rsplayer`

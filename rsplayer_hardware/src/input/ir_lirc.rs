@@ -1,6 +1,7 @@
 use std::io;
 use std::str;
 
+use log::warn;
 use log::{debug, error, info};
 use api_models::common::PlayerCommand;
 
@@ -94,7 +95,7 @@ pub async fn listen(
             }
         }
     } else {
-        error!("Failed to open provided lirc socket");
+        warn!("Failed to open provided lirc socket");
         crate::common::no_op_future().await;
     }
 }

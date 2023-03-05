@@ -5,6 +5,7 @@ extern crate log;
 use std::panic;
 use std::sync::Arc;
 
+use env_logger::Env;
 use rsplayer_playback::player_service::PlayerService;
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio::sync::broadcast;
@@ -29,9 +30,21 @@ mod status;
 #[allow(clippy::redundant_pub_crate)]
 #[tokio::main]
 async fn main() {
-    env_logger::init();
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    info!(r#"
+        -------------------------------------------------------------------------
 
-    info!("Starting RSPlayer!");
+            ██████╗ ███████╗██████╗ ██╗      █████╗ ██╗   ██╗███████╗██████╗ 
+            ██╔══██╗██╔════╝██╔══██╗██║     ██╔══██╗╚██╗ ██╔╝██╔════╝██╔══██╗
+            ██████╔╝███████╗██████╔╝██║     ███████║ ╚████╔╝ █████╗  ██████╔╝
+            ██╔══██╗╚════██║██╔═══╝ ██║     ██╔══██║  ╚██╔╝  ██╔══╝  ██╔══██╗
+            ██║  ██║███████║██║     ███████╗██║  ██║   ██║   ███████╗██║  ██║
+            ╚═╝  ╚═╝╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
+            /     /       
+            by https://github.com/ljufa/rsplayer
+        
+        -------------------------------------------------------------------------
+    "#);
 
     let config = Arc::new(Configuration::new());
 
