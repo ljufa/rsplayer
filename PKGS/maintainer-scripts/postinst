@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 systemctl daemon-reload
+systemctl enable rsplayer
 systemctl start rsplayer
