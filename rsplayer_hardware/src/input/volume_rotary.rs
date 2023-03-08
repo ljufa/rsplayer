@@ -2,12 +2,9 @@ use api_models::common::SystemCommand;
 use rsplayer_config::ArcConfiguration;
 use tokio::sync::mpsc::Sender;
 
-
 // todo implement settings.is_enabled check
 pub async fn listen(system_commands_tx: Sender<SystemCommand>, config: ArcConfiguration) {
-    let volume_settings = config
-        .get_settings()
-        .volume_ctrl_settings;
+    let volume_settings = config.get_settings().volume_ctrl_settings;
     if volume_settings.rotary_enabled {
         hw_volume::listen(system_commands_tx, volume_settings).await;
     } else {
@@ -17,7 +14,7 @@ pub async fn listen(system_commands_tx: Sender<SystemCommand>, config: ArcConfig
 
 mod hw_volume {
     use api_models::{common::SystemCommand, settings::VolumeControlSettings};
-    use log::{error, info, debug};
+    use log::{debug, error, info};
     use tokio::sync::mpsc::Sender;
 
     use evdev::{Device, InputEventKind};

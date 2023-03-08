@@ -14,13 +14,11 @@ use tokio::{select, spawn};
 use rsplayer_config::Configuration;
 
 use rsplayer_hardware::audio_device::audio_service::AudioInterfaceService;
-use rsplayer_hardware::oled::st7920;
 use rsplayer_hardware::input::ir_lirc;
 use rsplayer_hardware::input::volume_rotary;
+use rsplayer_hardware::oled::st7920;
 
 use rsplayer_metadata::metadata::MetadataService;
-
-
 
 mod command_handler;
 mod server_warp;
@@ -31,7 +29,8 @@ mod status;
 #[tokio::main]
 async fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
-    info!(r#"
+    info!(
+        r#"
         -------------------------------------------------------------------------
 
             ██████╗ ███████╗██████╗ ██╗      █████╗ ██╗   ██╗███████╗██████╗ 
@@ -44,15 +43,15 @@ async fn main() {
             by https://github.com/ljufa/rsplayer
         
         -------------------------------------------------------------------------
-    "#);
+    "#
+    );
 
     let config = Arc::new(Configuration::new());
 
     let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate())
         .expect("failed to create signal future");
 
-    let metadata_service =
-        MetadataService::new(&config.get_settings().metadata_settings);
+    let metadata_service = MetadataService::new(&config.get_settings().metadata_settings);
     if let Err(e) = &metadata_service {
         error!("Metadata service can't be created. error: {}", e);
         start_degraded(
@@ -96,7 +95,9 @@ async fn main() {
         player_service.clone(),
     );
     if config.get_settings().auto_resume_playback {
-        player_service.get_current_player().play_from_current_queue_song();
+        player_service
+            .get_current_player()
+            .play_from_current_queue_song();
     }
 
     select! {

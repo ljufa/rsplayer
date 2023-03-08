@@ -1,9 +1,9 @@
 use std::io;
 use std::str;
 
+use api_models::common::PlayerCommand;
 use log::warn;
 use log::{debug, error, info};
-use api_models::common::PlayerCommand;
 
 use api_models::common::SystemCommand;
 use rsplayer_config::ArcConfiguration;

@@ -75,7 +75,7 @@ pub struct PlayerInfo {
     pub audio_format_channels: Option<u32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub codec: Option<String>
+    pub codec: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -98,7 +98,6 @@ pub enum StateChangeEvent {
     MetadataSongScanStarted,
     MetadataSongScanned(String),
     MetadataSongScanFinished(String),
-
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

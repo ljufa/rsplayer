@@ -239,11 +239,10 @@ mod queue {
 mod metadata {
 
     use api_models::{settings::MetadataStoreSettings, state::StateChangeEvent};
-    use tokio::sync::broadcast::{Sender, Receiver};
     use std::path::Path;
+    use tokio::sync::broadcast::{Receiver, Sender};
 
     use crate::{metadata::MetadataService, test::test_shared::Context};
-
 
     #[test]
     fn should_scan_music_dir_first_time() {
@@ -270,7 +269,13 @@ mod metadata {
         assert_eq!(song.unwrap().file, "music.mp3");
     }
 
-    pub fn create_metadata_service(context: &Context) -> (MetadataService, Sender<StateChangeEvent>, Receiver<StateChangeEvent>) {
+    pub fn create_metadata_service(
+        context: &Context,
+    ) -> (
+        MetadataService,
+        Sender<StateChangeEvent>,
+        Receiver<StateChangeEvent>,
+    ) {
         let path = &context.db_dir;
         if Path::new(path).exists() {
             _ = std::fs::remove_dir_all(path);
@@ -282,7 +287,11 @@ mod metadata {
         };
         let sender = tokio::sync::broadcast::channel(20).0;
         let receiver = sender.subscribe();
-        (MetadataService::new(&settings).expect("Failed to create service"), sender, receiver)
+        (
+            MetadataService::new(&settings).expect("Failed to create service"),
+            sender,
+            receiver,
+        )
     }
 }
 

@@ -17,11 +17,7 @@ pub struct PlayerService {
 }
 
 impl PlayerService {
-
-    pub fn new(
-        config: &ArcConfiguration,
-        metadata_service: Arc<MetadataService>,
-    ) -> Result<Self> {
+    pub fn new(config: &ArcConfiguration, metadata_service: Arc<MetadataService>) -> Result<Self> {
         let settings = config.get_settings();
         Ok(PlayerService {
             player: Self::create_player(&settings, metadata_service)?,
@@ -55,8 +51,7 @@ impl PlayerService {
                 Ok(Box::new(mpd))
             }
             PlayerType::RSP => {
-                let rsp =
-                    RsPlayer::new(metadata_service, settings);
+                let rsp = RsPlayer::new(metadata_service, settings);
                 Ok(Box::new(rsp))
             }
             PlayerType::LMS => panic!("Unsupported type"),

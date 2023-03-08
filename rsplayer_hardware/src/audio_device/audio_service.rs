@@ -30,7 +30,10 @@ impl AudioInterfaceService {
                     &settings.dac_settings,
                 )?
             } else {
-                AlsaMixer::new(settings.alsa_settings.output_device.card_index, settings.volume_ctrl_settings.alsa_mixer)
+                AlsaMixer::new(
+                    settings.alsa_settings.output_device.card_index,
+                    settings.volume_ctrl_settings.alsa_mixer,
+                )
             };
         let line_handle = if settings.output_selector_settings.enabled {
             // restore last output state

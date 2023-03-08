@@ -29,7 +29,7 @@ pub enum AudioOutputError {
 pub type Result<T> = result::Result<T, AudioOutputError>;
 
 mod cpal {
-    
+
     use super::{AudioOutput, AudioOutputError, Result};
 
     use symphonia::core::audio::{AudioBufferRef, RawSample, SampleBuffer, SignalSpec};
@@ -37,7 +37,7 @@ mod cpal {
     use symphonia::core::units::Duration;
 
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-    
+
     use rb::{RbConsumer, RbProducer, SpscRb, RB};
 
     use log::{debug, error};

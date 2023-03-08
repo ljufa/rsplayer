@@ -8,7 +8,7 @@ Wants=network.target sound.target
 Environment=RUST_BACKTRACE=full
 Environment=RSPLAYER_HTTP_PORT=80
 Environment=RUST_LOG=rsplayer=info,warp=info
-ExecStart=/usr/local/bin/rsplayer
+ExecStart=/usr/bin/rsplayer
 WorkingDirectory=/opt/rsplayer
 Restart=always
 RestartSec=3

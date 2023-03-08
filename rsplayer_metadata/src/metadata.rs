@@ -92,11 +92,7 @@ impl MetadataService {
             };
             // Use the default options for metadata readers.
             let metadata_opts = MetadataOptions::default();
-            let file_p = file_path
-                .strip_prefix(music_dir)
-                .unwrap()
-                .to_str()
-                .unwrap();
+            let file_p = file_path.strip_prefix(music_dir).unwrap().to_str().unwrap();
             state_changes_sender
                 .send(StateChangeEvent::MetadataSongScanned(format!(
                     "Scanning: {count}. {file_p}"

@@ -41,11 +41,7 @@ impl I2CHelper {
         };
         debug!(
             "Change bit {}={} in registry {}. From {:#010b} to {:#010b}",
-            bit_position,
-            bit_value,
-            reg_addr,
-            reg_val,
-            new_val
+            bit_position, bit_value, reg_addr, reg_val, new_val
         );
         self.write_register(reg_addr, new_val);
     }

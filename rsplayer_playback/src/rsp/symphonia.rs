@@ -32,11 +32,16 @@ pub struct SymphoniaPlayer {
     queue: Arc<PlaybackQueue>,
     audio_device: String,
     buffer_size_mb: usize,
-    music_dir: String
+    music_dir: String,
 }
 
 impl SymphoniaPlayer {
-    pub fn new(queue: Arc<PlaybackQueue>, audio_device: String, buffer_size_mb: usize, music_dir: String ) -> Self {
+    pub fn new(
+        queue: Arc<PlaybackQueue>,
+        audio_device: String,
+        buffer_size_mb: usize,
+        music_dir: String,
+    ) -> Self {
         SymphoniaPlayer {
             running: Arc::new(AtomicBool::new(false)),
             paused: Arc::new(AtomicBool::new(false)),
@@ -45,7 +50,7 @@ impl SymphoniaPlayer {
             queue,
             audio_device,
             buffer_size_mb,
-            music_dir
+            music_dir,
         }
     }
 
@@ -106,7 +111,7 @@ impl SymphoniaPlayer {
                         &codec_params,
                         &audio_device,
                         buffer_size,
-                        &music_dir
+                        &music_dir,
                     ) {
                         Ok(PlaybackResult::PlaybackStopped) => {
                             running.store(false, Ordering::SeqCst);
@@ -154,7 +159,7 @@ fn play_file(
     codec_params: &Arc<Mutex<(Option<u32>, Option<u32>, Option<usize>, Option<String>)>>,
     audio_device: &str,
     buffer_size_mb: usize,
-    music_dir: &str
+    music_dir: &str,
 ) -> Result<PlaybackResult> {
     debug!("Playing file {}", path_str);
     running.store(true, Ordering::SeqCst);
@@ -262,7 +267,11 @@ fn play_file(
     loop_result
 }
 
-fn get_source(music_dir: &str, path_str: &str, hint: &mut Hint) -> Result<Box<dyn MediaSource>, anyhow::Error> {
+fn get_source(
+    music_dir: &str,
+    path_str: &str,
+    hint: &mut Hint,
+) -> Result<Box<dyn MediaSource>, anyhow::Error> {
     let source = if path_str.starts_with("http") {
         let agent = ureq::AgentBuilder::new()
             .timeout_connect(Duration::from_secs(5))

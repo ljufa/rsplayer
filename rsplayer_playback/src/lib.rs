@@ -18,7 +18,7 @@ pub trait Player {
     fn stop_current_song(&self);
     fn seek_current_song(&self, seconds: i8);
     fn play_song(&self, id: &str);
-    
+
     // Queue
     fn get_current_song(&self) -> Option<Song>;
     fn load_playlist_in_queue(&self, pl_id: &str);
@@ -211,9 +211,7 @@ fn get_playlists_by_folder(
     let second_level_folders: HashSet<String> = all_songs
         .iter()
         .map(|s| s.file.clone())
-        .map(|file| file.split('/')
-        .nth(depth)
-        .unwrap_or_default().to_string())
+        .map(|file| file.split('/').nth(depth).unwrap_or_default().to_string())
         .collect();
     second_level_folders
         .iter()

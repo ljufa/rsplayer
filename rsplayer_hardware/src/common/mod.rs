@@ -1,6 +1,6 @@
 use api_models::state::StateChangeEvent;
-use std::time::Duration;
 use log::debug;
+use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 
 #[allow(dead_code)]

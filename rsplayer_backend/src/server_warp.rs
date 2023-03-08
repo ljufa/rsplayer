@@ -23,10 +23,7 @@ use std::{
     collections::HashMap,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 use tokio::{
     sync::{broadcast::Receiver, mpsc, RwLock},
     time::sleep,
@@ -52,7 +49,7 @@ type PlayerCommandSender = tokio::sync::mpsc::Sender<PlayerCommand>;
 type SystemCommandSender = tokio::sync::mpsc::Sender<SystemCommand>;
 
 #[derive(RustEmbed)]
-#[folder ="../rsplayer_web_ui/public"]
+#[folder = "../rsplayer_web_ui/public"]
 struct StaticContentDir;
 
 pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Output = ()> {
@@ -307,9 +304,9 @@ mod handlers {
     pub async fn get_settings(config: Config) -> Result<impl warp::Reply, Infallible> {
         let settings = &mut config.get_settings();
         let cards = alsa::get_all_cards();
-       
+
         settings.alsa_settings.available_audio_cards = cards;
-       
+
         Ok(warp::reply::json(settings))
     }
 
@@ -333,8 +330,7 @@ mod handlers {
     pub async fn get_spotify_authorization_url(
         config: Config,
     ) -> Result<impl warp::Reply, Infallible> {
-        let mut spotify_oauth =
-            SpotifyOauth::new(&config.get_settings().spotify_settings);
+        let mut spotify_oauth = SpotifyOauth::new(&config.get_settings().spotify_settings);
         match &spotify_oauth.get_authorization_url() {
             Ok(url) => Ok(warp::reply::with_status(url.clone(), StatusCode::OK)),
             Err(e) => Ok(warp::reply::with_status(
@@ -346,8 +342,7 @@ mod handlers {
     pub async fn is_spotify_authorization_completed(
         config: Config,
     ) -> Result<impl warp::Reply, Infallible> {
-        let mut spotify_oauth =
-            SpotifyOauth::new(&config.get_settings().spotify_settings);
+        let mut spotify_oauth = SpotifyOauth::new(&config.get_settings().spotify_settings);
         match &spotify_oauth.is_token_present() {
             Ok(auth) => Ok(warp::reply::with_status(auth.to_string(), StatusCode::OK)),
             Err(e) => Ok(warp::reply::with_status(
@@ -361,8 +356,7 @@ mod handlers {
         config: Config,
         url: HashMap<String, String>,
     ) -> Result<impl warp::Reply, Infallible> {
-        let mut spotify_oauth =
-            SpotifyOauth::new(&config.get_settings().spotify_settings);
+        let mut spotify_oauth = SpotifyOauth::new(&config.get_settings().spotify_settings);
         match &spotify_oauth.authorize_callback(url.get("code").unwrap()) {
             Ok(_) => Ok(warp::reply::html(
                 r#"<html>
@@ -382,8 +376,7 @@ mod handlers {
     }
 
     pub async fn get_spotify_account_info(config: Config) -> Result<impl warp::Reply, Infallible> {
-        let mut spotify_oauth =
-            SpotifyOauth::new(&config.get_settings().spotify_settings);
+        let mut spotify_oauth = SpotifyOauth::new(&config.get_settings().spotify_settings);
         Ok(warp::reply::json(&spotify_oauth.get_account_info()))
     }
 

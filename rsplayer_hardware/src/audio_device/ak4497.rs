@@ -8,7 +8,7 @@ use std::time::Duration;
 use crate::mcu::gpio;
 use crate::mcu::gpio::GPIO_PIN_OUTPUT_DAC_PDN_RST;
 use crate::mcu::i2c::I2CHelper;
-use log::{error, info, debug};
+use log::{debug, error, info};
 
 use super::VolumeControlDevice;
 

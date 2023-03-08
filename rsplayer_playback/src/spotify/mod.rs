@@ -104,7 +104,7 @@ impl SpotifyPlayerClient {
         Ok(dev)
     }
 
-    pub fn set_device(&mut self, device: String){
+    pub fn set_device(&mut self, device: String) {
         self.device_id = Some(device);
     }
     fn update_playing_context(&self, context: Option<&rspotify::model::Context>) {
@@ -189,7 +189,6 @@ impl Player for SpotifyPlayerClient {
         if play.is_err() {
             _ = self.transfer_playback_to_device();
         }
-
     }
 
     fn pause_current_song(&self) {
@@ -322,7 +321,7 @@ impl Player for SpotifyPlayerClient {
                 audio_format_rate: Option::default(),
                 audio_format_bit: Option::default(),
                 audio_format_channels: Option::default(),
-                codec: None
+                codec: None,
             })
         } else {
             None

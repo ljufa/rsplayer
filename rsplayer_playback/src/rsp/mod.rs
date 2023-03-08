@@ -27,7 +27,6 @@ mod symphonia;
 // #[cfg(test)]
 // mod test;
 
-
 pub struct RsPlayer {
     queue: Arc<PlaybackQueue>,
     metadata_service: Arc<MetadataService>,
@@ -35,7 +34,6 @@ pub struct RsPlayer {
     symphonia_player: SymphoniaPlayer,
     play_handle: Arc<Mutex<Vec<JoinHandle<Result<PlaybackResult>>>>>,
     music_dir_depth: usize,
-    
 }
 impl RsPlayer {
     pub fn new(metadata_service: Arc<MetadataService>, settings: &Settings) -> Self {
@@ -48,7 +46,7 @@ impl RsPlayer {
                 queue,
                 settings.alsa_settings.output_device.name.clone(),
                 settings.rs_player_settings.buffer_size_mb,
-                settings.metadata_settings.music_directory.clone()
+                settings.metadata_settings.music_directory.clone(),
             ),
             play_handle: Arc::new(Mutex::new(vec![])),
             music_dir_depth: 0,
@@ -218,7 +216,13 @@ impl Player for RsPlayer {
         limit: u32,
     ) -> Vec<api_models::playlist::DynamicPlaylistsPage> {
         let all_songs: Vec<Song> = self.metadata_service.get_all_songs_iterator().collect();
-        get_dynamic_playlists(category_ids, &all_songs, offset, limit, self.music_dir_depth)
+        get_dynamic_playlists(
+            category_ids,
+            &all_songs,
+            offset,
+            limit,
+            self.music_dir_depth,
+        )
     }
 
     fn get_playlist_items(&self, playlist_id: &str, page_no: usize) -> Vec<Song> {

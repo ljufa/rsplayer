@@ -27,7 +27,7 @@ mod hw_oled {
         text::Text,
     };
     use embedded_hal::blocking::delay::DelayUs;
-    use log::{error, info, debug};
+    use log::{debug, error, info};
     use st7920::ST7920;
     use unidecode::unidecode;
 
