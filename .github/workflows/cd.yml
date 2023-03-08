@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v3
-    - uses: Swatinem/rust-cache@v2
+    # - uses: Swatinem/rust-cache@v2
     - uses: davidB/rust-cargo-make@v1
     - name: Download web_ui
       uses: actions/download-artifact@v3
