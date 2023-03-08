@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-systemctl stop rsplayer
+systemctl stop rsplayer || true
