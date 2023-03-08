@@ -1,7 +1,7 @@
 [env]
 RPI_HOST = "192.168.5.124"
 TARGET = "aarch64-unknown-linux-gnu"
-RELEASE_VERSION = "0.6.2"
+RELEASE_VERSION = "0.6.3"
 RELEASE_BRANCH = "main"
 
 [config]
@@ -49,7 +49,7 @@ script = [
     "git checkout master",
     "cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/Cross.toml .",
     "cross build --target ${TARGET} --release --no-default-features --features alsa-backend",
-    "cp -f target/${TARGET}/release/librespot ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/PKGS/${TARGET}/usr/local/bin",
+    "cp -f target/${TARGET}/release/librespot ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/PKGS/${TARGET}/usr/bin",
 ]
 
 # ---- LINT ----
@@ -135,7 +135,7 @@ args = ["run"]
 [tasks.copy_remote]
 dependencies = ["build_release"]
 script = [
-    "rsync -avvP --rsync-path=\"sudo rsync\" target/${TARGET}/release/rsplayer pi@${RPI_HOST}:/usr/local/bin",
+    "rsync -avvP --rsync-path=\"sudo rsync\" target/${TARGET}/release/rsplayer pi@${RPI_HOST}:/usr/bin",
 ]
 
 [tasks.package_deb_local]
@@ -158,13 +158,4 @@ script = [
 script = [
     "git tag ${RELEASE_VERSION} ${RELEASE_BRANCH}",
     "git push origin ${RELEASE_VERSION}",
-]
-[tasks.push_docker_cross]
-script = [
-    "docker build -f Dockerfile.aarch64 . -t ljufa/rsplayer-cross-aarch64:latest",
-    "docker push ljufa/rsplayer-cross-aarch64:latest",
-    "docker build -f Dockerfile.armv7 . -t ljufa/rsplayer-cross-armv7:latest",
-    "docker push ljufa/rsplayer-cross-armv7:latest",
-    "docker build -f Dockerfile.x86_64 . -t ljufa/rsplayer-cross-x86_64:latest",
-    "docker push ljufa/rsplayer-cross-x86_64:latest",
 ]
