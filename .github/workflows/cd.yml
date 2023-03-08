@@ -35,15 +35,16 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v3
-    # - uses: Swatinem/rust-cache@v2
+    # remove cache if you get random libc errors, target based key should help
+    - uses: Swatinem/rust-cache@v2
+      with:
+        key: ${{ matrix.target }}
     - uses: davidB/rust-cargo-make@v1
     - name: Download web_ui
       uses: actions/download-artifact@v3
       with:
         name: web_ui
         path: rsplayer_web_ui/public/pkg
-    - name: Display structure of downloaded files
-      run: ls -R rsplayer_web_ui/public/
     # !!! Do not use binstall because it does not work well for cross compilation and libc dependency
     - name: Install tools
       run: |
@@ -70,8 +71,6 @@ jobs:
     steps:
     - name: Download files
       uses: actions/download-artifact@v3
-    - name: Display structure of downloaded files
-      run: ls -R
     # todo: make rename as generic script
     - name: Rename binary files
       run: |
