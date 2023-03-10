@@ -6,7 +6,7 @@ use api_models::{
 
 use seed::{
     a, article, attrs, button, div, empty, figure, i, id, img, input, li, log, nav, p, prelude::*,
-    progress, span, struct_urls, style, ul, C, IF, window,
+    progress, span, struct_urls, style, ul, window, C, IF,
 };
 use std::str::FromStr;
 
@@ -365,17 +365,15 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 // ------ ------
 //     View
 // ------ ------
+
 fn view(model: &Model) -> impl IntoNodes<Msg> {
     div![
-        IF!(
-            model.page.has_image_background() =>
-            style! {
-                St::BackgroundImage => get_background_image(&model.player_model),
-                St::BackgroundRepeat => "no-repeat",
-                St::BackgroundSize => "cover",
-                St::MinHeight => "95vh"
-            }
-        ),
+        style! {
+            St::BackgroundImage => get_background_image(&model.player_model,model.page.has_image_background()),
+            St::BackgroundRepeat => "no-repeat",
+            St::BackgroundSize => "cover",
+            St::MinHeight => "95vh",
+        },
         C!["container"],
         view_navigation_tabs(&model.page),
         view_startup_error(model.startup_error.as_ref()),
@@ -767,16 +765,10 @@ async fn update_album_cover(track: Song) -> Msg {
         let ai = get_album_image_from_lastfm_api(track.album.unwrap(), track.artist.unwrap()).await;
         match ai {
             Some(ai) => Msg::AlbumImageUpdated(ai),
-            None => Msg::AlbumImageUpdated(Image {
-                size: "mega".to_string(),
-                text: "/no_album.png".to_string(),
-            }),
+            None => Msg::Ignore,
         }
     } else {
-        Msg::AlbumImageUpdated(Image {
-            size: "mega".to_string(),
-            text: "/no_album.png".to_string(),
-        })
+        Msg::Ignore
     }
 }
 
@@ -800,14 +792,18 @@ async fn get_album_image_from_lastfm_api(album: String, artist: String) -> Optio
         None
     }
 }
-fn get_background_image(model: &PlayerModel) -> String {
+fn get_background_image(model: &PlayerModel, has_image: bool) -> String {
+    let default_bg =
+        "radial-gradient(circle, rgb(49, 144, 228) 0%, rgb(29, 84, 166) 100%);".to_string();
+    if !has_image {
+        return default_bg;
+    }
     if let Some(ps) = model.current_song.as_ref() {
-        format!(
-            "url({})",
-            ps.image_url.as_ref().map_or("/no_album.png", |f| f)
-        )
+        ps.image_url
+            .as_ref()
+            .map_or(default_bg, |f| format!("url({f})"))
     } else {
-        String::new()
+        default_bg
     }
 }
 

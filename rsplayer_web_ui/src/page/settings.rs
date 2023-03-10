@@ -311,7 +311,7 @@ pub fn view(model: &Model) -> Node<Msg> {
         // players
         section![
             C!["section"],
-            h1![C!["title"], "Players"],
+            h1![C!["title","has-text-white"], "Players"],
             div![
                 C!["field"],
                 ev(Ev::Click, |_| Msg::ToggleRspEnabled),
@@ -324,7 +324,7 @@ pub fn view(model: &Model) -> Node<Msg> {
                     },
                 ],
                 label![
-                    C!("label"),
+                    C!["label","has-text-white"],
                     "RSPlayer",
                     attrs! {
                         At::For => "rsp_cb"
@@ -344,7 +344,7 @@ pub fn view(model: &Model) -> Node<Msg> {
                     },
                 ],
                 label![
-                    C!("label"),
+                    C!["label","has-text-white"],
                     "Music Player Demon",
                     attrs! {
                         At::For => "mpd_cb"
@@ -364,7 +364,7 @@ pub fn view(model: &Model) -> Node<Msg> {
                     },
                 ],
                 label![
-                    C!["label"],
+                    C!["label","has-text-white"],
                     "Spotify (premium account required)",
                     attrs! {
                         At::For => "spotify_cb"
@@ -384,7 +384,7 @@ pub fn view(model: &Model) -> Node<Msg> {
                     },
                 ],
                 label![
-                    C!["label"],
+                    C!["label","has-text-white"],
                     "Auto resume playback on start",
                     attrs! {
                         At::For => "resume_playback_cb"
@@ -393,7 +393,7 @@ pub fn view(model: &Model) -> Node<Msg> {
             ],
             div![
                 C!["field"],
-                label!["Active player:", C!["label"]],
+                label!["Active player:", C!["label","has-text-white"]],
                 div![
                     C!["select"],
                     select![
@@ -424,7 +424,7 @@ pub fn view(model: &Model) -> Node<Msg> {
             div![
                 C!["field", "is-grouped","is-grouped-multiline"],
                 div![C!["control"],
-                    label!["Audio interface", C!["label"]],
+                    label!["Audio interface", C!["label","has-text-white"]],
                     div![
                         C!["select"],
                         select![
@@ -447,7 +447,7 @@ pub fn view(model: &Model) -> Node<Msg> {
                 ],
                 p![C!["control"],"->"],
                 div![C!["control"],
-                    label!["PCM Device", C!["label"]],
+                    label!["PCM Device", C!["label","has-text-white"]],
                     div![
                         C!["select"],
                         select![
@@ -472,13 +472,13 @@ pub fn view(model: &Model) -> Node<Msg> {
         // volume control
         section![
             C!["section"],
-            h1![C!["title"], "Volume control"],
+            h1![C!["title","has-text-white"], "Volume control"],
             view_volume_control(model)
         ],
         // dac
         section![
             C!["section"],
-            h1![C!["title"], "Dac"],
+            h1![C!["title","has-text-white"], "Dac"],
             div![
                 C!["field"],
                 ev(Ev::Click, |_| Msg::ToggleDacEnabled),
@@ -491,6 +491,7 @@ pub fn view(model: &Model) -> Node<Msg> {
                     },
                 ],
                 label![
+                    C!["label","has-text-white"],
                     "Enable DAC chip control?",
                     attrs! {
                         At::For => "dac_cb"
@@ -502,7 +503,7 @@ pub fn view(model: &Model) -> Node<Msg> {
         // IR control
         section![
             C!["section"],
-            h1![C!["title"], "IR Control (Lirc)"],
+            h1![C!["title","has-text-white"], "IR Control (Lirc)"],
             div![
                 C!["field"],
                 ev(Ev::Click, |_| Msg::ToggleIrEnabled),
@@ -515,6 +516,7 @@ pub fn view(model: &Model) -> Node<Msg> {
                     },
                 ],
                 label![
+                    C!["label","has-text-white"],
                     "Enable Infra Red control with LIRC?",
                     attrs! {
                         At::For => "ir_cb"
@@ -526,7 +528,7 @@ pub fn view(model: &Model) -> Node<Msg> {
         // oled display
         section![
             C!["section"],
-            h1![C!["title"], "OLED Display"],
+            h1![C!["title","has-text-white"], "OLED Display"],
             div![
                 C!["field"],
                 ev(Ev::Click, |_| Msg::ToggleOledEnabled),
@@ -538,7 +540,7 @@ pub fn view(model: &Model) -> Node<Msg> {
                         At::Checked => settings.oled_settings.enabled.as_at_value(),
                     },
                 ],
-                label![
+                label![C!["label","has-text-white"],
                     "Enable Oled Display?",
                     attrs! {
                         At::For => "oled_cb"
@@ -550,7 +552,7 @@ pub fn view(model: &Model) -> Node<Msg> {
         // audio selector
         section![
             C!["section"],
-            h1![C!["title"], "Audio output selector"],
+            h1![C!["title","has-text-white"], "Audio output selector"],
             div![
                 C!["field"],
                 ev(Ev::Click, |_| Msg::ToggleOutputSelectorEnabled),
@@ -562,7 +564,7 @@ pub fn view(model: &Model) -> Node<Msg> {
                         At::Checked => settings.output_selector_settings.enabled.as_at_value(),
                     },
                 ],
-                label![
+                label![C!["label","has-text-white"],
                     "Enable audio output selector (Headphone/Speakers)?",
                     attrs! {
                         At::For => "outsel_cb"
@@ -607,7 +609,7 @@ fn view_ir_control(ir_settings: &IRInputControlerSettings) -> Node<Msg> {
     div![
         div![
             C!["field"],
-            label!["Remote maker", C!["label"]],
+            label!["Remote maker", C!["label","has-text-white"]],
             div![
                 C!["control"],
                 div![
@@ -621,7 +623,7 @@ fn view_ir_control(ir_settings: &IRInputControlerSettings) -> Node<Msg> {
         ],
         div![
             C!["field"],
-            label!["LIRC socket path", C!["label"]],
+            label!["LIRC socket path", C!["label","has-text-white"]],
             div![
                 C!["control"],
                 input![
@@ -643,7 +645,7 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
     div![
         div![
             C!["field"],
-            label!["Volume control device:", C!["label"]],
+            label!["Volume control device:", C!["label","has-text-white"]],
             div![
                 C!["control"],
                 div![
@@ -667,7 +669,7 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
         IF!(volume_settings.ctrl_device == VolumeCrtlType::Alsa =>
             div![
                 C!["field"],
-                label!["Alsa mixer:", C!["label"]],
+                label!["Alsa mixer:", C!["label","has-text-white"]],
                 div![
                     C!["control"],
                     div![
@@ -692,7 +694,7 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
          ),
         div![
             C!["field"],
-            label!["Volume step", C!["label"]],
+            label!["Volume step", C!["label","has-text-white"]],
             div![
                 C!["control"],
                 input![
@@ -719,7 +721,7 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
                     At::Checked => volume_settings.rotary_enabled.as_at_value(),
                 },
             ],
-            label![
+            label![C!["label","has-text-white"],
                 "Enable rotary encoder volume control",
                 attrs! {
                     At::For => "rotary_cb"
@@ -730,7 +732,7 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
             div![
                 div![
                     C!["field"],
-                    label!["Rotary encoder event device path", C!["label"]],
+                    label!["Rotary encoder event device path", C!["label","has-text-white"]],
                     div![
                         C!["control"],
                         input![
@@ -753,7 +755,7 @@ fn view_oled_display(oled_settings: &OLEDSettings) -> Node<Msg> {
     div![
         div![
             C!["field"],
-            label!["Display Model:", C!["label"]],
+            label!["Display Model:", C!["label","has-text-white"]],
             div![
                 C!["control"],
                 div![
@@ -764,7 +766,7 @@ fn view_oled_display(oled_settings: &OLEDSettings) -> Node<Msg> {
         ],
         div![
             C!["field"],
-            label!["SPI Device path:", C!["label"]],
+            label!["SPI Device path:", C!["label","has-text-white"]],
             div![
                 C!["control"],
                 input![
@@ -782,7 +784,7 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
     div![
         div![
             C!["field"],
-            label!["DAC Chip:", C!["label"]],
+            label!["DAC Chip:", C!["label","has-text-white"]],
             div![
                 C!["control"],
                 div![
@@ -793,7 +795,7 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
         ],
         div![
             C!["field"],
-            label!["DAC I2C address:", C!["label"]],
+            label!["DAC I2C address:", C!["label","has-text-white"]],
             div![
                 C!["control"],
                 input![
@@ -804,7 +806,7 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
         ],
         div![
             C!["field"],
-            label!["Digital filter:", C!["label"]],
+            label!["Digital filter:", C!["label","has-text-white"]],
             div![
                 C!["control"],
                 div![
@@ -828,7 +830,7 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
         // gain level
         div![
             C!["field"],
-            label!["Gain Level:", C!["label"]],
+            label!["Gain Level:", C!["label","has-text-white"]],
             div![
                 C!["control"],
                 div![
@@ -852,7 +854,7 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
         // sound settings
         div![
             C!["field"],
-            label!["Sound settings:", C!["label"]],
+            label!["Sound settings:", C!["label","has-text-white"]],
             div![
                 C!["control"],
                 div![
@@ -910,7 +912,7 @@ fn view_spotify(model: &Model) -> Node<Msg> {
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Spotify connect device name", C!["label"]],
+                label!["Spotify connect device name", C!["label","has-text-white"]],
             ],
             div![
                 C!["field-body"],
@@ -930,7 +932,7 @@ fn view_spotify(model: &Model) -> Node<Msg> {
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Spotify username", C!["label"]],
+                label!["Spotify username", C!["label","has-text-white"]],
             ],
             div![
                 C!["field-body"],
@@ -950,7 +952,7 @@ fn view_spotify(model: &Model) -> Node<Msg> {
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Spotify password", C!["label"]],
+                label!["Spotify password", C!["label","has-text-white"]],
             ],
             div![
                 C!["field-body"],
@@ -970,7 +972,7 @@ fn view_spotify(model: &Model) -> Node<Msg> {
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Developer client id", C!["label"]],
+                label!["Developer client id", C!["label","has-text-white"]],
             ],
             div![
                 C!["field-body"],
@@ -993,7 +995,7 @@ fn view_spotify(model: &Model) -> Node<Msg> {
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Developer secret", C!["label"]],
+                label!["Developer secret", C!["label","has-text-white"]],
             ],
             div![
                 C!["field-body"],
@@ -1016,7 +1018,7 @@ fn view_spotify(model: &Model) -> Node<Msg> {
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Auth callback url", C!["label"]],
+                label!["Auth callback url", C!["label","has-text-white"]],
             ],
             div![
                 C!["field-body"],
@@ -1039,7 +1041,7 @@ fn view_spotify(model: &Model) -> Node<Msg> {
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Connected Spotify account", C!["label"]],
+                label!["Connected Spotify account", C!["label","has-text-white"]],
             ],
             div![
                 C!["field-body"],
@@ -1064,7 +1066,7 @@ fn view_spotify(model: &Model) -> Node<Msg> {
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Audio device format (for librespot)", C!["label"]],
+                label!["Audio device format (for librespot)", C!["label","has-text-white"]],
             ],
             div![
                 C!["field-body"],
@@ -1102,7 +1104,7 @@ fn view_lms(lms_settings: &LmsSettings) -> Node<Msg> {
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Logitech media server host", C!["label"]],
+                label!["Logitech media server host", C!["label","has-text-white"]],
             ],
             div![
                 C!["field-body"],
@@ -1116,7 +1118,7 @@ fn view_lms(lms_settings: &LmsSettings) -> Node<Msg> {
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Player port", C!["label"]],
+                label!["Player port", C!["label","has-text-white"]],
             ],
             div![
                 C!["field-body"],
@@ -1130,7 +1132,7 @@ fn view_lms(lms_settings: &LmsSettings) -> Node<Msg> {
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["CLI port", C!["label"]],
+                label!["CLI port", C!["label","has-text-white"]],
             ],
             div![
                 C!["field-body"],
@@ -1144,7 +1146,7 @@ fn view_lms(lms_settings: &LmsSettings) -> Node<Msg> {
 }
 fn view_metadata_storage(metadata_settings: &MetadataStoreSettings) -> Node<Msg> {
     div![
-        label!["Music directory path", C!["label"]],
+        label!["Music directory path", C!["label","has-text-white"]],
         div![
             C!["field", "is-grouped"],
             div![
@@ -1177,7 +1179,7 @@ fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Music Player Daemon server host", C!["label"]],
+                label!["Music Player Daemon server host", C!["label","has-text-white"]],
             ],
             div![
                 C!["field-body"],
@@ -1199,7 +1201,7 @@ fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Client port", C!["label"]],
+                label!["Client port", C!["label","has-text-white"]],
             ],
             div![
                 C!["field-body"],
@@ -1234,7 +1236,7 @@ fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
                             At::Checked => mpd_settings.override_external_configuration.as_at_value(),
                         },
                     ],
-                    label![
+                    label![C!["label","has-text-white"],
                         "Override /etc/mpd.conf",
                         attrs! {
                             At::For => "mpd_external_conf_cb"
@@ -1252,7 +1254,7 @@ fn view_rsp(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
             C!["field", "is-horizontal"],
             div![
                 C!["field-label", "is-small"],
-                label!["Input buffer size (in MB)", C!["label"]],
+                label!["Input buffer size (in MB)", C!["label","has-text-white"]],
             ],
             div![
                 C!["field-body"],
