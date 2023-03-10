@@ -73,12 +73,6 @@ mod cpal {
                 .find(|d| d.name().unwrap() == audio_device)
                 .unwrap();
             debug!("Spec: {:?}", spec);
-            device
-                .supported_output_configs()
-                .unwrap()
-                .into_iter()
-                .for_each(|o| debug!("Output config {:?}", o));
-
             let config = match device.default_output_config() {
                 Ok(config) => config,
                 Err(err) => {
