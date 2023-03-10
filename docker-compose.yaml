@@ -1,0 +1,16 @@
+version: "3"
+services:
+  rsplayer:
+    image: ljufa/rsplayer:docker-test_push
+    devices:
+      - /dev/snd
+    ports:
+      - 8000:80
+    volumes:
+      - ${MUSIC_DIR}:/music:ro
+      - 'rsplayer_volume:/opt/rsplayer'
+    restart: unless-stopped
+
+volumes:
+  rsplayer_volume:
+    driver: local

@@ -1,2 +1,4 @@
 *
 .*
+# !./target/release/rsplayer
+!rsplayer_amd64

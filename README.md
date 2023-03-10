@@ -18,6 +18,29 @@ To start the RSPlayer service again, run the following command:
 ```bash
 sudo systemctl start rsplayer
 ```
+## Run as docker container
+```bash
+docker run -p 8000:80 -v /media/samsung/MUSIC:/music -v rsplayer_data:/opt/rsplayer --device /dev/snd -it --rm ljufa/rsplayer:latest       
+```
+or [docker compose](docker-compose.yaml)
+```yaml
+version: "3"
+services:
+  rsplayer:
+    image: ljufa/rsplayer:latest
+    devices:
+      - /dev/snd
+    ports:
+      - 8000:80
+    volumes:
+      - ${MUSIC_DIR}:/music:ro
+      - 'rsplayer_volume:/opt/rsplayer'
+    restart: unless-stopped
+volumes:
+  rsplayer_volume:
+    driver: local
+
+```
 
 ## Usage
 Once RSPlayer is installed, you can access the web user interface by navigating to http://localhost or the IP address of the machine on which it is installed. From the web user interface, you can finish configuration following steps described [here](https://ljufa.github.io/rsplayer/#/?id=basic-configuration).
