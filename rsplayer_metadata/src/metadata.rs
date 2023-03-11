@@ -132,7 +132,7 @@ impl MetadataService {
             start_time.elapsed().as_secs()
         );
         self.scan_running
-            .store(true, std::sync::atomic::Ordering::SeqCst);
+            .store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn get_all_songs_iterator(&self) -> impl Iterator<Item = Song> {

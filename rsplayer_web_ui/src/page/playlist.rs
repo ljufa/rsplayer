@@ -127,13 +127,11 @@ pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
                     .iter()
                     .find(|c| c.id == dpl.category_id)
                 {
-                    if dpl.playlists.len() >= 10 {
-                        model.dynamic_playlists.insert(cat.clone(), dpl.clone());
-                        let cid = cat.sanitized_id();
-                        orders.after_next_render(move |_| {
-                            attachCarousel(&format!("#cat-{cid}"));
-                        });
-                    }
+                    model.dynamic_playlists.insert(cat.clone(), dpl.clone());
+                    let cid = cat.sanitized_id();
+                    orders.after_next_render(move |_| {
+                        attachCarousel(&format!("#cat-{cid}"));
+                    });
                 }
             }
         }

@@ -192,11 +192,13 @@ pub async fn handle_system_commands(
                     exit(0);
                 }
                 SystemCommand::RestartRSPlayer => {
-                    std::process::Command::new("systemctl")
+                    let rs = std::process::Command::new("systemctl")
                         .arg("restart")
                         .arg("rsplayer")
-                        .spawn()
-                        .expect("Failed to restart rsplayer service");
+                        .spawn();
+                    if rs.is_err() {
+                        exit(1)
+                    }
                 }
                 SystemCommand::RescanMetadata(music_dir) => {
                     let mtds = metadata_service.clone();

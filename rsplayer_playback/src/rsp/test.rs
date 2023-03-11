@@ -1,9 +1,17 @@
 use std::{env, path::Path};
 
 use super::*;
-use crate::Player;
+use crate::{Player, CATEGORY_ID_BY_FOLDER};
 use api_models::{player::Song, settings::PlaybackQueueSetting};
 use log::info;
+
+
+#[test]
+fn test_get_dynamic_pl(){
+    let player = create_player();
+    let dpl = player.get_dynamic_playlists(vec![CATEGORY_ID_BY_FOLDER.to_owned()], 0, 10);
+    assert_eq!(dpl[0].category_id, CATEGORY_ID_BY_FOLDER);
+}
 
 #[test]
 fn should_play_radio_url() {
@@ -41,6 +49,9 @@ fn create_player() -> RsPlayer {
             id: song_id.to_string(),
             ..Default::default()
         })
+    });
+    ms.expect_get_all_songs_iterator().returning(|| {
+        Box::new(vec![Song::default(), Song::default()].into_iter())
     });
 
     let queue = Arc::new(PlaybackQueue::new(&PlaybackQueueSetting {

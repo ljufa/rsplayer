@@ -259,7 +259,7 @@ mod filters {
 mod handlers {
     use log::{debug, error};
     use rsplayer_playback::spotify::oauth::SpotifyOauth;
-    use std::{collections::HashMap, convert::Infallible};
+    use std::{collections::HashMap, convert::Infallible, process::{exit, ExitCode}};
 
     use rsplayer_hardware::audio_device::alsa::{self, AlsaPcmCard};
 
@@ -292,6 +292,7 @@ mod handlers {
                     Ok(StatusCode::CREATED)
                 }
                 Err(e) => {
+                    exit(1);
                     error!("Restart command failed with error:{e}");
                     Ok(StatusCode::INTERNAL_SERVER_ERROR)
                 }
