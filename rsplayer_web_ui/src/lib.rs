@@ -663,7 +663,7 @@ fn view_navigation_tabs(page: &Page) -> Node<Msg> {
                 ev(Ev::Click, |_| { Urls::playlist_abs().go_and_load() }),
             ],
             // li![
-            //     IF!(page_name == "Library" => C!["is-active"]),
+            //     IF!(page_name == "MusicLibrary" => C!["is-active"]),
             //     a![span![
             //         C!["icon", "is-small"],
             //         i![
@@ -736,28 +736,25 @@ extern "C" {
 }
 
 fn create_websocket(orders: &impl Orders<Msg>) -> WebSocket {
-    if let Ok(current) = seed::browser::util::window().location().href() {
-        let start = current.find("//").unwrap_or(0) + 2;
-        let end = current.find("/#").unwrap_or(current.len());
-        let url = &current[start..end];
-        let mut ws_url = String::from("ws://");
-        ws_url.push_str(url);
-        if url.ends_with('/') {
-            ws_url.push_str("api/ws");
-        } else {
-            ws_url.push_str("/api/ws");
-        }
-        let ws = WebSocket::builder(ws_url, orders)
-            .on_open(|| Msg::WebSocketOpened)
-            .on_message(Msg::WebSocketMessgeReceived)
-            .on_close(Msg::WebSocketClosed)
-            // .on_error(|| Msg::WebSocketFailed)
-            .build_and_open()
-            .unwrap();
-        ws
-    } else {
-        panic!("No url found");
-    }
+    let current = seed::browser::util::window().location();
+    let protocol = current.protocol().expect("Can't get protocol");
+    let host = current.host().expect("Cant get host");
+    let ws_url = format!(
+        "{}//{}/{}",
+        (if protocol == "https:" { "wss:" } else { "ws:" }),
+        host,
+        "api/ws"
+    );
+    log!("Websocket url:", ws_url);
+
+    let ws = WebSocket::builder(ws_url, orders)
+        .on_open(|| Msg::WebSocketOpened)
+        .on_message(Msg::WebSocketMessgeReceived)
+        .on_close(Msg::WebSocketClosed)
+        // .on_error(|| Msg::WebSocketFailed)
+        .build_and_open()
+        .unwrap();
+    ws
 }
 
 async fn update_album_cover(track: Song) -> Msg {
@@ -773,7 +770,9 @@ async fn update_album_cover(track: Song) -> Msg {
 }
 
 async fn get_album_image_from_lastfm_api(album: String, artist: String) -> Option<Image> {
-    let response = fetch(format!("http://ws.audioscrobbler.com/2.0/?method=album.getinfo&album={album}&artist={artist}&api_key=3b3df6c5dd3ad07222adc8dd3ccd8cdc&format=json")).await;
+    let current = seed::browser::util::window().location();
+    let protocol = current.protocol().unwrap_or("http:".to_owned());
+    let response = fetch(format!("{protocol}//ws.audioscrobbler.com/2.0/?method=album.getinfo&album={album}&artist={artist}&api_key=3b3df6c5dd3ad07222adc8dd3ccd8cdc&format=json")).await;
     if let Ok(response) = response {
         let info = response.json::<AlbumInfo>().await;
         if let Ok(info) = info {

@@ -20,7 +20,7 @@ pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
 pub fn view(model: &Model) -> Node<Msg> {
     nav![
         C!["panel"],
-        p![C!["panel-heading"], "Music Library"],
+        // p![C!["panel-heading"], "Music Library"],
         div![
             C!["panel-block"],
             p![
