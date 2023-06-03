@@ -176,7 +176,7 @@ impl Drop for SpotifyPlayerClient {
         if self.device_id.is_some() {
             self.stop_current_song();
         }
-        _ = self.librespot_process.as_mut().unwrap().kill();
+        self.librespot_process.as_mut().and_then(|f| f.kill().ok());
     }
 }
 

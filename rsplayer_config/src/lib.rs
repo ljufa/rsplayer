@@ -9,7 +9,7 @@ use sled::{Db, IVec};
 #[cfg(debug_assertions)]
 const EXEC_DIR_PATH: &str = "./";
 #[cfg(not(debug_assertions))]
-const EXEC_DIR_PATH: &str = "/usr/local/bin/";
+const EXEC_DIR_PATH: &str = "/usr/bin/";
 
 const SETTINGS_KEY: &str = "settings";
 const STATE_KEY: &str = "state";
