@@ -1,26 +1,11 @@
 #!/usr/bin/env bash
 set -e
-device_arch=`arch`
-# device_arch="armv7l"
-# device_arch="armv7l"
-# device_arch="x86_64"
+device_arch=$(arch)
+echo "Device architecture is:${device_arch}"
 
-echo "Device architecture is:"${device_arch}
-arch_expr="unknown"
-
-if [ "$device_arch" = "aarch64" ]; then
-    arch_expr="_arm64"
-elif [ "$device_arch" = "x86_64" ]; then
-    arch_expr="_amd64"
-elif [ "$device_arch" = "armv7l" ]; then
-    arch_expr="_armhf"
-else
-    arch_expr="unknown_architecture"
-fi
-
-echo "Detected architecture suffix is:"${arch_expr}
-URL=`curl -s https://api.github.com/repos/ljufa/rsplayer/releases/latest | grep browser_download_url | grep ${arch_expr}.deb | cut -d '"' -f 4`
-echo Downloading installation package from $URL ...
-curl -L -o rsplayer${arch_expr}.deb  $URL
-sudo dpkg -i --force-overwrite rsplayer${arch_expr}.deb
-rm rsplayer${arch_expr}.deb
+deb_file_name="rsplayer_${device_arch}"
+URL=$(curl -s https://api.github.com/repos/ljufa/rsplayer/releases/latest | grep browser_download_url | grep ${deb_file_name} | grep .deb | cut -d '"' -f 4)
+echo Downloading installation package from "$URL" ...
+curl -L -o ${deb_file_name}.deb  "$URL"
+sudo dpkg -i --force-overwrite ${deb_file_name}.deb
+rm ${deb_file_name}.deb
