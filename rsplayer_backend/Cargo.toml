@@ -93,6 +93,24 @@ assets = [
         "644",
     ],
 ]
+[package.metadata.deb.variants.arm-unknown-linux-gnueabihf]
+assets = [
+    [
+        "../target/arm-unknown-linux-gnueabihf/release/rsplayer",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "../PKGS/debian/etc/systemd/system/rsplayer.service",
+        "etc/systemd/system/rsplayer.service",
+        "644",
+    ],
+    [
+        "../PKGS/debian/etc/lirc/lircd.conf.d/*",
+        "etc/lirc/lircd.conf.d",
+        "644",
+    ],
+]
 
 [dependencies]
 api_models = { path = "../rsplayer_api_models" }

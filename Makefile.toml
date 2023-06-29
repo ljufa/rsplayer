@@ -83,6 +83,8 @@ args = [
     "clippy::missing_errors_doc",
     "--allow",
     "clippy::use_self",
+    "--allow",
+    "clippy::significant-drop-tightening"
 
 ]
 [tasks.clippy_in_cross]
@@ -113,6 +115,9 @@ args = [
     "clippy::missing_errors_doc",
     "--allow",
     "clippy::use_self",
+    "--allow",
+    "clippy::significant-drop-tightening"
+
 ]
 [tasks.test_in_cross]
 command = "cross"

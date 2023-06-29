@@ -29,7 +29,7 @@ jobs:
     needs: build_ui
     strategy:
       matrix:
-        target: ["armv7-unknown-linux-gnueabihf","aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
+        target: ["arm-unknown-linux-gnueabihf", "armv7-unknown-linux-gnueabihf","aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
     name: Release
     # make it use older libc version
     runs-on: ubuntu-20.04
@@ -75,7 +75,8 @@ jobs:
     - name: Rename binary files
       run: |
         mv rsplayer-aarch64-unknown-linux-gnu/rsplayer rsplayer_arm64
-        mv rsplayer-armv7-unknown-linux-gnueabihf/rsplayer rsplayer_armhf
+        mv rsplayer-armv7-unknown-linux-gnueabihf/rsplayer rsplayer_armhfv7
+        mv rsplayer-arm-unknown-linux-gnueabihf/rsplayer rsplayer_armhfv6
         mv rsplayer-x86_64-unknown-linux-gnu/rsplayer rsplayer_amd64
     - name: Display new structure of downloaded files
       run: ls -R
