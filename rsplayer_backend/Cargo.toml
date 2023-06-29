@@ -18,6 +18,7 @@ priority = "optional"
 maintainer-scripts = "../PKGS/maintainer-scripts"
 
 [package.metadata.deb.variants.x86_64-unknown-linux-gnu]
+name = "rsplayer_x86_64"
 assets = [
     [
         "../target/x86_64-unknown-linux-gnu/release/rsplayer",
@@ -37,6 +38,7 @@ assets = [
 ]
 
 [package.metadata.deb.variants.aarch64-unknown-linux-gnu]
+name = "rsplayer_aarch64"
 assets = [
     [
         "../target/aarch64-unknown-linux-gnu/release/rsplayer",
@@ -66,6 +68,7 @@ assets = [
 ]
 
 [package.metadata.deb.variants.armv7-unknown-linux-gnueabihf]
+name = "rsplayer_armv7l"
 assets = [
     [
         "../target/armv7-unknown-linux-gnueabihf/release/rsplayer",
@@ -94,6 +97,7 @@ assets = [
     ],
 ]
 [package.metadata.deb.variants.arm-unknown-linux-gnueabihf]
+name = "rsplayer_armv6l"
 assets = [
     [
         "../target/arm-unknown-linux-gnueabihf/release/rsplayer",
