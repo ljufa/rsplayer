@@ -781,7 +781,7 @@ fn view_navigation_tabs(page: &Page) -> Node<Msg> {
                 ev(Ev::Click, |_| { Urls::queue_abs().go_and_load() }),
             ],
             li![
-                IF!(page_name == "MusicLibraryFiles" || page_name ==  "MusicLibrarySavedPlaylist" || page_name == "MusicLibraryDynamicPlaylist" => C!["is-active"]),
+                IF!(page_name == "MusicLibraryFiles" || page_name ==  "MusicLibraryStaticPlaylist" || page_name == "MusicLibraryDynamicPlaylist" => C!["is-active"]),
                 a![span![
                     C!["icon", "is-small"],
                     i![
