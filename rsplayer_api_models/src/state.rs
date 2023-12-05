@@ -1,6 +1,6 @@
 use core::default::Default;
 use core::option::Option;
-use core::option::Option::None;
+
 use core::time::Duration;
 
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use strum_macros::EnumProperty;
 
 use crate::{
-    common::{PlayerType, Volume},
+    common::{MetadataLibraryResult,  Volume},
     player::Song,
     playlist::{DynamicPlaylistsPage, PlaylistPage},
 };
@@ -41,7 +41,6 @@ pub enum PlayingContextType {
 pub struct PlayingContext {
     pub id: String,
     pub name: String,
-    pub player_type: PlayerType,
     pub context_type: PlayingContextType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub playlist_page: Option<PlaylistPage>,
@@ -98,6 +97,9 @@ pub enum StateChangeEvent {
     MetadataSongScanStarted,
     MetadataSongScanned(String),
     MetadataSongScanFinished(String),
+    MetadataLocalItems(MetadataLibraryResult),
+    NotificationSuccess(String),
+    NotificationError(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

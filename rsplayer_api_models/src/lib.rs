@@ -2,7 +2,6 @@ pub mod common;
 pub mod player;
 pub mod playlist;
 pub mod settings;
-pub mod spotify;
 pub mod state;
 
 pub use num_derive;

@@ -3,6 +3,21 @@
 mod test_alsa {
     use crate::audio_device::{alsa::AlsaMixer, VolumeControlDevice};
     use api_models::common::CardMixer;
+    use crate::audio_device::alsa::get_all_cards;
+
+    #[test]
+    fn test_get_all_cards(){
+        let cards = get_all_cards();
+        cards.iter().for_each(|card| {
+            println!("Card: {} - {}", card.name, card.description);
+            card.pcm_devices.iter().for_each(|pcm| {
+                println!("\tPCM: {}", pcm.name);
+            });
+            card.mixers.iter().for_each(|mixer| {
+                println!("\tMixer: {}", mixer.name);
+            });
+        });
+    }
 
     #[test]
     #[allow(unused)]

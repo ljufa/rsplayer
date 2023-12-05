@@ -1,5 +1,5 @@
 # RSPlayer
-RSPlayer is an open-source music player software that allows you to play audio files from you local storage, internet radio streams or Spotify. It executes as a service and provides a web user interface on port 80.
+RSPlayer is an open-source music player software that allows you to play audio files from you local storage, internet radio streams. It executes as a service and provides a web user interface on port 80.
 
 ### Detailed documentation -> https://ljufa.github.io/rsplayer/
 ### Online demo -> https://rsplayer.dlj.freemyip.com/
@@ -50,7 +50,7 @@ For minimal working configuration it is required to select *Audio interface*, *P
 
 ## Features
 * Basic player features: play, next, prev, volume control
-* RSP, MPD or Spotify player controls: play, pause, next, prev, toggle shuffle
+* Player controls: play, pause, next, prev, toggle shuffle
 * View, manage, search playback queue
 * Browse static and dynamic playlists
 * Software volume control by Alsa

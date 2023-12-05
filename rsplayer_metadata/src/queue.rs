@@ -1,17 +1,35 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
-use api_models::{player::Song, settings::PlaybackQueueSetting};
+use api_models::{
+    common::{BY_ARTIST_PL_PREFIX, BY_DATE_PL_PREFIX, BY_FOLDER_PL_PREFIX, BY_GENRE_PL_PREFIX},
+    player::Song,
+    playlist::PlaylistPage,
+    settings::PlaybackQueueSetting,
+    state::{PlayingContext, PlayingContextQuery},
+};
 use rand::Rng;
 use sled::{Db, IVec, Tree};
 
-pub struct PlaybackQueue {
+use crate::{metadata::MetadataService, playlist::PlaylistService};
+
+pub struct QueueService {
     queue_db: Db,
     status_db: Tree,
     random_flag: AtomicBool,
+    metadata_service: Arc<MetadataService>,
+    playlist_service: Arc<PlaylistService>,
 }
 const CURRENT_SONG_KEY: &str = "current_song_key";
-impl PlaybackQueue {
-    pub fn new(settings: &PlaybackQueueSetting) -> Self {
+impl QueueService {
+    #[must_use]
+    pub fn new(
+        settings: &PlaybackQueueSetting,
+        metadata_service: Arc<MetadataService>,
+        playlist_service: Arc<PlaylistService>,
+    ) -> Self {
         let db = sled::open(&settings.db_path).expect("Failed to open queue db");
         let status_db = db.open_tree("status").expect("Failed to open status tree");
         let random_flag = status_db.contains_key("random_next").unwrap_or(false);
@@ -19,6 +37,8 @@ impl PlaybackQueue {
             queue_db: db,
             status_db,
             random_flag: AtomicBool::new(random_flag),
+            metadata_service,
+            playlist_service,
         }
     }
 
@@ -57,7 +77,7 @@ impl PlaybackQueue {
         }
         if self.get_random_next() {
             let mut rnd = rand::thread_rng();
-            let rand_position = rnd.gen_range(0, queue_len - 1);
+            let rand_position = rnd.gen_range(0..queue_len - 1);
             let Some(Ok(rand_key)) = self.queue_db.iter().nth(rand_position) else {
                 return false;
             };
@@ -80,7 +100,7 @@ impl PlaybackQueue {
         let Some(current_key) = self.get_current_or_first_song_key() else {
             return false;
         };
-        let Ok(Some(prev_entry)) = self.queue_db.get_lt(current_key) else{
+        let Ok(Some(prev_entry)) = self.queue_db.get_lt(current_key) else {
             return false;
         };
         _ = self.status_db.insert(CURRENT_SONG_KEY, prev_entry.0);
@@ -114,6 +134,25 @@ impl PlaybackQueue {
         self.queue_db
             .insert(key, song.to_json_string_bytes())
             .expect("Failed to add song to the queue database");
+    }
+    pub fn add_song_by_id(&self, song_id: &str) {
+        self.metadata_service
+            .find_song_by_id(song_id)
+            .as_ref()
+            .map_or_else(
+                || {
+                    if song_id.starts_with("http") {
+                        self.add_song(&Song {
+                            id: song_id.to_string(),
+                            file: song_id.to_string(),
+                            ..Default::default()
+                        });
+                    }
+                },
+                |song| {
+                    self.add_song(song);
+                },
+            );
     }
 
     fn get_current_or_first_song_key(&self) -> Option<IVec> {
@@ -194,5 +233,110 @@ impl PlaybackQueue {
     pub fn clear(&self) {
         _ = self.queue_db.clear();
         _ = self.status_db.remove(CURRENT_SONG_KEY);
+    }
+    pub fn get_current_playing_context(
+        &self,
+        query: PlayingContextQuery,
+    ) -> Option<PlayingContext> {
+        let mut pc = PlayingContext {
+            id: "1".to_string(),
+            name: "Queue".to_string(),
+            context_type: api_models::state::PlayingContextType::Playlist {
+                description: None,
+                public: None,
+                snapshot_id: "1".to_string(),
+            },
+            playlist_page: None,
+            image_url: None,
+        };
+        let page_size = 100;
+        match query {
+            PlayingContextQuery::WithSearchTerm(term, offset) => {
+                let (total, songs) = self.get_queue_page(offset, page_size, |song| {
+                    if term.len() > 2 {
+                        song.all_text()
+                            .to_lowercase()
+                            .contains(&term.to_lowercase())
+                    } else {
+                        true
+                    }
+                });
+                let page = PlaylistPage {
+                    total,
+                    offset: offset + page_size,
+                    limit: page_size,
+                    items: songs,
+                };
+                pc.playlist_page = Some(page);
+            }
+            PlayingContextQuery::CurrentSongPage => {
+                let songs = self.get_queue_page_starting_from_current_song(page_size);
+                let page = PlaylistPage {
+                    total: page_size,
+                    offset: 0,
+                    limit: page_size,
+                    items: songs,
+                };
+                pc.playlist_page = Some(page);
+            }
+
+            PlayingContextQuery::IgnoreSongs => {}
+        }
+        Some(pc)
+    }
+    pub fn load_playlist_in_queue(&self, pl_id: &str) {
+        if pl_id.starts_with(BY_GENRE_PL_PREFIX) {
+            let genre = pl_id.replace(BY_GENRE_PL_PREFIX, "");
+            self.replace_all(
+                self.metadata_service
+                    .get_all_songs_iterator()
+                    .filter(|s| s.genre == Some(genre.clone())),
+            );
+        } else if pl_id.starts_with(BY_DATE_PL_PREFIX) {
+            let date = pl_id.replace(BY_DATE_PL_PREFIX, "");
+            self.replace_all(
+                self.metadata_service
+                    .get_all_songs_iterator()
+                    .filter(|s| s.date == Some(date.clone())),
+            );
+        } else if pl_id.starts_with(BY_ARTIST_PL_PREFIX) {
+            let artist = pl_id.replace(BY_ARTIST_PL_PREFIX, "");
+            self.replace_all(
+                self.metadata_service
+                    .get_all_songs_iterator()
+                    .filter(|s| s.artist == Some(artist.clone())),
+            );
+        } else if pl_id.starts_with(BY_FOLDER_PL_PREFIX) {
+            let folder = pl_id.replace(BY_FOLDER_PL_PREFIX, "");
+            self.replace_all(self.metadata_service.get_all_songs_iterator().filter(|s| {
+                s.file
+                    .split('/')
+                    .next()
+                    .unwrap_or_default()
+                    .eq_ignore_ascii_case(folder.as_str())
+            }));
+        } else {
+            let pl_songs = self
+                .playlist_service
+                .get_playlist_page_by_name(pl_id, 0, 20000)
+                .items;
+            self.replace_all(pl_songs.into_iter());
+        }
+    }
+
+    pub fn add_songs_from_dir(&self, dir: &str) {
+        self.metadata_service
+            .get_all_songs_iterator()
+            .filter(|item| item.file.starts_with(dir))
+            .for_each(|song| {
+                self.add_song(&song);
+            });
+    }
+    pub fn load_songs_from_dir(&self, dir: &str) {
+        self.replace_all(
+            self.metadata_service
+                .get_all_songs_iterator()
+                .filter(|item| item.file.starts_with(dir)),
+        );
     }
 }

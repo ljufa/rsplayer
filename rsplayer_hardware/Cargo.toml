@@ -17,15 +17,15 @@ anyhow.workspace = true
 
 #other
 unidecode = "0.3.0"
-alsa = "0.7.0"
+alsa = "0.8.0"
 url = "2.3.1"
 
 #gpio, i2c
-gpio-cdev = { version = "0.5.1" }
+gpio-cdev = { version = "0.6.0" }
 rpi_embedded = { version = "0.1.0" }
 linux-embedded-hal = { version = "0.3.2" }
 embedded-hal = { version = "0.2.7" }
-evdev = { git = "https://github.com/emberian/evdev", features = ["tokio"] }
+evdev = { version = "0.12.1", features = ["tokio"] }
 
 #oled
 embedded-graphics = { version = "0.7.1" }

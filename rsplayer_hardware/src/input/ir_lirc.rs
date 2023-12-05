@@ -1,7 +1,9 @@
 use std::io;
 use std::str;
 
-use api_models::common::PlayerCommand;
+use api_models::common::PlayerCommand::{Next, Pause, Play, Prev};
+use api_models::common::UserCommand;
+use api_models::common::UserCommand::Player;
 use log::warn;
 use log::{debug, error, info};
 
@@ -11,7 +13,7 @@ use tokio::net::UnixStream;
 use tokio::sync::mpsc::Sender;
 
 pub async fn listen(
-    player_commands_tx: Sender<PlayerCommand>,
+    player_commands_tx: Sender<UserCommand>,
     system_commands_tx: Sender<SystemCommand>,
     config: ArcConfiguration,
 ) {
@@ -53,28 +55,16 @@ pub async fn listen(
                                 .expect("Error");
                         }
                         "00 KEY_FASTFORWARD" => {
-                            player_commands_tx
-                                .send(PlayerCommand::Next)
-                                .await
-                                .expect("Error");
+                            player_commands_tx.send(Player(Next)).await.expect("Error");
                         }
                         "00 KEY_REWIND" => {
-                            player_commands_tx
-                                .send(PlayerCommand::Prev)
-                                .await
-                                .expect("Error");
+                            player_commands_tx.send(Player(Prev)).await.expect("Error");
                         }
                         "00 KEY_PLAY" => {
-                            player_commands_tx
-                                .send(PlayerCommand::Play)
-                                .await
-                                .expect("Error");
+                            player_commands_tx.send(Player(Play)).await.expect("Error");
                         }
                         "02 KEY_PLAY" => {
-                            player_commands_tx
-                                .send(PlayerCommand::Pause)
-                                .await
-                                .expect("Error");
+                            player_commands_tx.send(Player(Pause)).await.expect("Error");
                         }
                         "02 KEY_MENU" => {
                             system_commands_tx

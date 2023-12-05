@@ -3,14 +3,10 @@ name = "rsplayer_config"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 log.workspace = true
 env_logger.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sled.workspace = true
-
-serde_yaml = "0.9"
 api_models = { path = "../rsplayer_api_models"}

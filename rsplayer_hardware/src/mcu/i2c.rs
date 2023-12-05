@@ -17,7 +17,7 @@ impl I2CHelper {
     pub(crate) fn read_register(&self, reg_addr: u8) -> Result<u8> {
         let mut out = [0u8];
         match self.i2c.cmd_read(reg_addr, &mut out) {
-            Ok(_) => Ok(out[0]),
+            Ok(()) => Ok(out[0]),
             Err(_err) => Err(anyhow::format_err!("error")),
         }
     }

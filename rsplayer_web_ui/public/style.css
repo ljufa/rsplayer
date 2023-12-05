@@ -540,3 +540,6 @@ input.input-size {
   width: -moz-available;
   width: -webkit-fill-available;
 }
+.breadcrumb a {
+  color: white;
+}

@@ -8,7 +8,6 @@ pub async fn write(state_changes_rx: Receiver<StateChangeEvent>, config: ArcConf
         hw_oled::write(
             state_changes_rx,
             settings.oled_settings,
-            settings.active_player,
         )
         .await;
     } else {
@@ -19,7 +18,7 @@ pub async fn write(state_changes_rx: Receiver<StateChangeEvent>, config: ArcConf
 mod hw_oled {
     use super::{Receiver, StateChangeEvent};
     use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
-    use api_models::{common::PlayerType, player::Song, settings::OLEDSettings, state::PlayerInfo};
+    use api_models::{ player::Song, settings::OLEDSettings, state::PlayerInfo};
     use embedded_graphics::{
         mono_font::{ascii::FONT_4X6, ascii::FONT_5X8, ascii::FONT_6X12, MonoTextStyle},
         pixelcolor::BinaryColor,
@@ -41,7 +40,6 @@ mod hw_oled {
     pub async fn write(
         mut state_changes_rx: Receiver<StateChangeEvent>,
         oled_settings: OLEDSettings,
-        active_player: PlayerType,
     ) {
         let mut delay = Delay;
         if let Ok(mut spi) = Spidev::open(oled_settings.spi_device_path) {
@@ -68,7 +66,7 @@ mod hw_oled {
                         draw_track_info(&mut disp, &mut delay, &stat);
                     }
                     Ok(StateChangeEvent::StreamerStateEvent(sstatus)) => {
-                        draw_streamer_info(&mut disp, &mut delay, &sstatus, active_player);
+                        draw_streamer_info(&mut disp, &mut delay, &sstatus);
                     }
                     Ok(StateChangeEvent::PlayerInfoEvent(pinfo)) => {
                         draw_player_info(&mut disp, &mut delay, pinfo);
@@ -86,14 +84,13 @@ mod hw_oled {
         disp: &mut ST7920<Spidev, Pin, Pin>,
         delay: &mut dyn DelayUs<u32>,
         status: &StreamerState,
-        active_player: PlayerType,
     ) {
         _ = disp.clear_buffer_region(1, 1, 120, 12, delay);
         //1. player name
         Text::new(
             format!(
                 "P:{:?}|O:{:?}|V:{:?}",
-                active_player, status.selected_audio_output, status.volume_state.current
+                "RSP", status.selected_audio_output, status.volume_state.current
             )
             .as_str(),
             Point::new(1, 10),
@@ -145,7 +142,7 @@ mod hw_oled {
         delay: &mut dyn DelayUs<u32>,
         player_info: PlayerInfo,
     ) {
-        let _ = disp.clear_buffer_region(1, 50, 120, 12, delay);
+        _ = disp.clear_buffer_region(1, 50, 120, 12, delay);
         //1. player name
         Text::new(
             format!(

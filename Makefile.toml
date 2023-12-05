@@ -1,7 +1,11 @@
 [env]
-RPI_HOST = "192.168.5.124"
-TARGET = "aarch64-unknown-linux-gnu"
-RELEASE_VERSION = "0.6.7"
+RPI_HOST = "192.168.5.80"
+TARGET = "arm-unknown-linux-gnueabihf"
+
+# RPI_HOST = "192.168.5.122"
+# TARGET = "aarch64-unknown-linux-gnu"
+
+RELEASE_VERSION = "0.6.8"
 RELEASE_BRANCH = "main"
 
 [config]
@@ -61,6 +65,7 @@ args = [
     "clippy",
     "--fix",
     "--allow-dirty",
+    "--allow-staged",
     "--all-features",
     "--",
     "--deny",
@@ -131,7 +136,7 @@ args = ["fmt"]
 
 # ---- Local DEV ----
 [tasks.run_local]
-env = { "RUST_LOG" = "rsplayer=debug,warp=debug", "RUST_BACKTRACE" = "full", "RSPLAYER_HTTP_PORT" = "8000" }
+env = { "RUST_LOG" = "rsplayer=info,rsplayer_playback=info,warp=info", "RUST_BACKTRACE" = "full", "RSPLAYER_HTTP_PORT" = "8000" }
 cwd = ".run"
 command = "cargo"
 args = ["run"]

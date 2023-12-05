@@ -3,24 +3,20 @@ use std::collections::HashMap;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
-use validator::{validate_ip_v4, Validate, ValidationError};
+use validator::Validate;
 
 use crate::common::{
-    AudioCard, CardMixer, FilterType, GainLevel, PcmOutputDevice, PlayerType, VolumeCrtlType,
+    AudioCard, CardMixer, FilterType, GainLevel, PcmOutputDevice, VolumeCrtlType,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     pub volume_ctrl_settings: VolumeControlSettings,
     pub output_selector_settings: OutputSelectorSettings,
-    pub spotify_settings: SpotifySettings,
-    pub lms_settings: LmsSettings,
-    pub mpd_settings: MpdSettings,
     pub dac_settings: DacSettings,
     pub alsa_settings: AlsaSettings,
     pub ir_control_settings: IRInputControlerSettings,
     pub oled_settings: OLEDSettings,
-    pub active_player: PlayerType,
     #[serde(default)]
     pub auto_resume_playback: bool,
     pub metadata_settings: MetadataStoreSettings,
@@ -61,24 +57,6 @@ pub struct VolumeControlSettings {
     pub rotary_event_device_path: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
-pub struct SpotifySettings {
-    pub enabled: bool,
-    #[validate(length(min = 3))]
-    pub device_name: String,
-    #[validate(email)]
-    pub username: String,
-    #[validate(length(min = 3))]
-    pub password: String,
-    #[validate(length(min = 3))]
-    pub developer_client_id: String,
-    #[validate(length(min = 3))]
-    pub developer_secret: String,
-    #[validate(url)]
-    pub auth_callback_url: String,
-    pub bitrate: u16,
-    pub alsa_device_format: AlsaDeviceFormat,
-}
 
 #[derive(
     Debug,
@@ -103,24 +81,6 @@ pub enum AlsaDeviceFormat {
     S16,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LmsSettings {
-    pub enabled: bool,
-    pub cli_port: u32,
-    pub server_host: String,
-    pub server_port: u32,
-    pub alsa_pcm_device_name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
-pub struct MpdSettings {
-    pub enabled: bool,
-    #[validate(custom(function = "validate_ip"))]
-    pub server_host: String,
-    #[validate(range(min = 1024, max = 65535))]
-    pub server_port: u32,
-    pub override_external_configuration: bool,
-}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
 pub struct MetadataStoreSettings {
     pub music_directory: String,
@@ -136,14 +96,6 @@ pub struct PlaybackQueueSetting {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
 pub struct PlaylistSetting {
     pub db_path: String,
-}
-
-fn validate_ip(val: &str) -> Result<(), ValidationError> {
-    if validate_ip_v4(val) {
-        Ok(())
-    } else {
-        Err(ValidationError::new("server_host"))
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -207,18 +159,6 @@ pub struct OLEDSettings {
     pub spi_device_path: String,
 }
 
-impl LmsSettings {
-    #[must_use]
-    pub fn get_cli_url(&self) -> String {
-        format!("{}:{}", self.server_host, self.cli_port)
-    }
-}
-impl MpdSettings {
-    #[must_use]
-    pub fn get_server_url(&self) -> String {
-        format!("{}:{}", self.server_host, self.server_port)
-    }
-}
 
 impl Default for MetadataStoreSettings {
     fn default() -> Self {
@@ -255,7 +195,6 @@ pub const DEFAULT_ALSA_MIXER: &str = "0,Master";
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            active_player: PlayerType::RSP,
             auto_resume_playback: false,
             output_selector_settings: OutputSelectorSettings { enabled: false },
             volume_ctrl_settings: VolumeControlSettings {
@@ -264,24 +203,6 @@ impl Default for Settings {
                 volume_step: 2,
                 ctrl_device: VolumeCrtlType::Alsa,
                 rotary_event_device_path: "/dev/input/by-path/platform-rotary@f-event".to_string(),
-            },
-            spotify_settings: SpotifySettings {
-                enabled: false,
-                device_name: String::from("rsplayer@rpi"),
-                auth_callback_url: String::from("http://rsplayer.local/api/spotify/callback"),
-                developer_client_id: String::default(),
-                developer_secret: String::default(),
-                username: String::default(),
-                password: String::default(),
-                alsa_device_format: AlsaDeviceFormat::S16,
-                bitrate: 320,
-            },
-            lms_settings: LmsSettings {
-                enabled: false,
-                server_host: String::from("localhost"),
-                cli_port: 9090,
-                server_port: 9000,
-                alsa_pcm_device_name: DEFAULT_ALSA_PCM_DEVICE.to_string(),
             },
             dac_settings: DacSettings {
                 enabled: false,
@@ -293,12 +214,6 @@ impl Default for Settings {
                 heavy_load: false,
                 sound_sett: 5,
                 available_dac_chips: HashMap::new(),
-            },
-            mpd_settings: MpdSettings {
-                enabled: false,
-                server_host: String::from("127.0.0.1"),
-                server_port: 6600,
-                override_external_configuration: false,
             },
             metadata_settings: MetadataStoreSettings::default(),
             playback_queue_settings: PlaybackQueueSetting::default(),

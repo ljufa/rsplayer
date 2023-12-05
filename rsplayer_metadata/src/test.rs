@@ -1,8 +1,12 @@
 mod queue {
-    use api_models::settings::PlaybackQueueSetting;
+    use std::sync::Arc;
+
+    use api_models::settings::{MetadataStoreSettings, PlaybackQueueSetting, PlaylistSetting};
 
     use crate::{
-        queue::PlaybackQueue,
+        metadata::MetadataService,
+        playlist::PlaylistService,
+        queue::QueueService,
         test::test_shared::{create_song, create_song_with_title, Context},
     };
 
@@ -153,6 +157,7 @@ mod queue {
         assert_eq!(total, 5);
         assert_eq!(songs.len(), 3);
     }
+
     #[test]
     fn should_return_page_starting_from_current_page() {
         let queue = create_queue();
@@ -196,6 +201,7 @@ mod queue {
         queue.move_current_to_next_song();
         assert_ne!(queue.get_current_song().unwrap().file, "assets/music.1");
     }
+
     #[test]
     fn should_not_return_song_when_random_next_and_only_one_song() {
         let queue = create_queue();
@@ -222,33 +228,98 @@ mod queue {
         assert_eq!(queue.get_current_song(), None);
     }
 
-    fn create_queue() -> PlaybackQueue {
+    fn create_queue() -> QueueService {
         let ctx = Context::default();
-        PlaybackQueue::new(&PlaybackQueueSetting {
-            db_path: ctx.db_dir.clone(),
-        })
+        create_queue_with_ctx(&ctx)
     }
 
-    fn create_queue_with_ctx(ctx: &Context) -> PlaybackQueue {
-        PlaybackQueue::new(&PlaybackQueueSetting {
-            db_path: ctx.db_dir.clone(),
-        })
+    fn create_queue_with_ctx(ctx: &Context) -> QueueService {
+        let metadata_settings = MetadataStoreSettings {
+            db_path: format!("{}_ms", ctx.db_dir.clone()),
+            ..Default::default()
+        };
+        let ms = Arc::new(MetadataService::new(&metadata_settings).unwrap());
+        let playlist_settings = PlaylistSetting {
+            db_path: format!("{}_pls", ctx.db_dir.clone()),
+        };
+        let ps = Arc::new(PlaylistService::new(&playlist_settings, ms.clone()));
+        QueueService::new(
+            &PlaybackQueueSetting {
+                db_path: format!("{}_queue", ctx.db_dir.clone()),
+            },
+            ms,
+            ps,
+        )
     }
 }
 
+#[cfg(test)]
 mod metadata {
+    use std::{fs, path::Path, process::Command, vec};
 
-    use api_models::{settings::MetadataStoreSettings, state::StateChangeEvent};
-    use std::path::Path;
     use tokio::sync::broadcast::{Receiver, Sender};
 
+    use api_models::{
+        common::MetadataLibraryItem, settings::MetadataStoreSettings, state::StateChangeEvent,
+    };
+
     use crate::{metadata::MetadataService, test::test_shared::Context};
+    /*
+        #[test]
+        fn test_get_diff_without_previous_state() {
+            let (service, _sender, _rec) = create_metadata_service(&Context::default());
+            let (new_f, deleted_f) = service.get_diff();
+            assert_eq!(new_f.len(), 6);
+            assert_eq!(deleted_f.len(), 0);
+        }
+        #[test]
+        fn test_get_diff_with_previous_state_same_as_new() {
+            let ctx = Context::default();
+            let (service, sender, _rec) = create_metadata_service(&ctx);
+            service.scan_music_dir(true, &sender);
+            let (new_f, deleted_f) = service.get_diff();
+            assert_eq!(new_f.len(), 0);
+            assert_eq!(deleted_f.len(), 0);
+        }
+
+        #[test]
+        fn test_get_diff_should_add_2_new_files_and_delete_1() {
+            let mut context = Context::default();
+            std::fs::create_dir_all(&context.db_dir).expect("failed to create dir");
+            context.music_dir = context.db_dir.clone();
+            std::fs::create_dir_all(&context.music_dir).expect("failed to create dir");
+            let (service, sender, _rec) = create_metadata_service(&context);
+
+            // copy content of assets into /tmp
+            Command::new("cp")
+                // for debug purposes only
+                //.current_dir("/home/dlj/myworkspace/rsplayer/rsplayer_metadata")
+                .arg("-r")
+                .arg("assets")
+                .arg(&context.music_dir)
+                .spawn()
+                .expect("failed to execute process")
+                .wait()
+                .expect("failed to wait");
+            service.scan_music_dir( true, &sender);
+            fs::remove_file(Path::new(&context.music_dir).join("assets").join("music.wav")).expect("failed to remove file");
+            fs::File::create(Path::new(&context.music_dir).join("assets").join("music_new1.wav")).expect("failed to create file");
+            fs::File::create(Path::new(&context.music_dir).join("assets").join("aa").join("music_new2.wav")).expect("failed to create file");
+
+            let (new_f, deleted_f) = service.get_diff();
+            assert_eq!(new_f.len(), 2);
+            assert!(new_f.iter().any(|f| f.ends_with("music_new1.wav")));
+            assert!(new_f.iter().any(|f| f.ends_with("music_new2.wav")));
+            assert_eq!(deleted_f.len(), 1);
+            assert!(deleted_f.iter().any(|f| f.ends_with("music.wav")));
+        }
+    */
 
     #[test]
     fn should_scan_music_dir_first_time() {
         let (service, sender, _receiver) = create_metadata_service(&Context::default());
-        service.scan_music_dir("assets", true, &sender);
-        assert_eq!(service.get_all_songs_iterator().count(), 5);
+        service.scan_music_dir(true, &sender);
+        assert_eq!(service.get_all_songs_iterator().count(), 6);
         let result = service.find_song_by_id("0");
         if let Some(saved_song) = result {
             assert_eq!(saved_song.artist, Some("Artist".to_owned()));
@@ -261,12 +332,104 @@ mod metadata {
     }
 
     #[test]
+    fn should_incrementally_scan_music_dir_add_2_new_files() {
+        let mut context = Context::default();
+        std::fs::create_dir_all(&context.db_dir).expect("failed to create dir");
+        context.music_dir = context.db_dir.clone();
+        std::fs::create_dir_all(&context.music_dir).expect("failed to create dir");
+        let (service, sender, mut reciever) = create_metadata_service(&context);
+
+        // copy content of assets into /tmp
+        Command::new("cp")
+            // for debug purposes only
+            // .current_dir("/home/dlj/myworkspace/rsplayer/rsplayer_metadata")
+            .arg("-r")
+            .arg("assets")
+            .arg(&context.music_dir)
+            .spawn()
+            .expect("failed to execute process")
+            .wait()
+            .expect("failed to wait");
+        service.scan_music_dir(true, &sender);
+        assert_eq!(service.get_all_songs_iterator().count(), 6);
+
+        fs::copy(
+            format!("{}/assets/music.wav", &context.music_dir),
+            format!("{}/assets/aa/music_new.wav", &context.music_dir),
+        )
+        .expect("Failed to copy file");
+        fs::copy(
+            format!("{}/assets/aa/music.flac", &context.music_dir),
+            format!("{}/assets/ab/music_new.flac", &context.music_dir),
+        )
+        .expect("Failed to copy file");
+        fs::remove_file(format!("{}/assets/aa/aaa/music.flac", &context.music_dir))
+            .expect("Failed to delete file");
+        service.scan_music_dir(false, &sender);
+        assert_eq!(service.get_all_songs_iterator().count(), 7);
+
+        let mut events = vec![];
+        while let Ok(ev) = reciever.try_recv() {
+            events.push(ev);
+        }
+        assert_eq!(events.len(), 13);
+        assert!(events.iter().any(|ev| match ev {
+            StateChangeEvent::MetadataSongScanned(msg) => {
+                msg.contains("music_new.wav") || msg.contains("music_new.flac") || msg.contains("deleted from database")
+            }
+            _ => false,
+        }));
+    }
+
+    #[test]
+    fn test_get_items_by_dir() {
+        let (service, sender, _ee) = create_metadata_service(&Context::default());
+        service.scan_music_dir(true, &sender);
+        let result = service.get_items_by_dir("aa/");
+        assert_eq!(result.root_path, "aa/");
+        assert_eq!(result.items.len(), 3);
+        assert_eq!(
+            result.items[0],
+            MetadataLibraryItem::Directory {
+                name: "aaa".to_owned()
+            }
+        );
+        match &result.items[1] {
+            MetadataLibraryItem::SongItem(s) => assert_eq!(s.file, "aa/music.flac"),
+            _ => panic!("Should be a song"),
+        }
+        let items = service.get_items_by_dir("").items;
+        assert_eq!(
+            items[0],
+            MetadataLibraryItem::Directory {
+                name: "aa".to_owned()
+            }
+        );
+        assert_eq!(
+            items[1],
+            MetadataLibraryItem::Directory {
+                name: "ab".to_owned()
+            }
+        );
+        assert_eq!(
+            items[2],
+            MetadataLibraryItem::Directory {
+                name: "ac".to_owned()
+            }
+        );
+        match &items[3] {
+            MetadataLibraryItem::SongItem(s) => assert_eq!(s.file, "music.wav"),
+            _ => panic!("Should be a song"),
+        }
+    }
+
+    #[test]
     fn should_get_song() {
         let (service, sender, _receiver) = create_metadata_service(&Context::default());
-        service.scan_music_dir("assets", true, &sender);
+        service.scan_music_dir(true, &sender);
         let song = service.find_song_by_id("2");
         assert!(song.is_some());
-        assert_eq!(song.unwrap().file, "music.mp3");
+        assert_eq!(song.unwrap().file, "aa/music.m4a");
     }
 
     pub fn create_metadata_service(
@@ -276,7 +439,7 @@ mod metadata {
         Sender<StateChangeEvent>,
         Receiver<StateChangeEvent>,
     ) {
-        let path = &context.db_dir;
+        let path = &format!("{}_ams", context.db_dir.clone());
         if Path::new(path).exists() {
             _ = std::fs::remove_dir_all(path);
         }
@@ -296,11 +459,14 @@ mod metadata {
 }
 
 mod playlist {
-    use std::vec;
+    use std::{sync::Arc, vec};
 
-    use api_models::{player::Song, settings::PlaylistSetting};
+    use api_models::{
+        player::Song,
+        settings::{MetadataStoreSettings, PlaylistSetting},
+    };
 
-    use crate::playlist::PlaylistService;
+    use crate::{metadata::MetadataService, playlist::PlaylistService};
 
     use super::test_shared::{create_song, Context};
 
@@ -339,11 +505,22 @@ mod playlist {
         }
         songs
     }
+
     fn create_pl_service() -> PlaylistService {
         let ctx = Context::default();
-        PlaylistService::new(&PlaylistSetting {
-            db_path: ctx.db_dir.to_string(),
-        })
+        let ms = Arc::new(
+            MetadataService::new(&MetadataStoreSettings {
+                db_path: format!("{}_ppl", ctx.db_dir.clone()),
+                ..Default::default()
+            })
+            .unwrap(),
+        );
+        PlaylistService::new(
+            &PlaylistSetting {
+                db_path: ctx.db_dir.to_string(),
+            },
+            ms,
+        )
     }
 }
 
@@ -361,6 +538,7 @@ mod test_shared {
             ..Default::default()
         }
     }
+
     pub fn create_song_with_title(title: &str) -> Song {
         let mut song = create_song(random_string::generate(3, "asdlkjhpoiuwergglmjh").as_str());
         song.title = Some(title.to_string());
@@ -371,12 +549,13 @@ mod test_shared {
         pub db_dir: String,
         pub music_dir: String,
     }
+
     impl Default for Context {
         fn default() -> Self {
-            let rnd = random_string::generate(6, "utf8");
+            let rnd = random_string::generate(12, "utf8");
 
             Self {
-                db_dir: format!("/tmp/rsptest{rnd}"),
+                db_dir: format!("/tmp/rsptest_{rnd}"),
                 music_dir: "assets".to_owned(),
             }
         }

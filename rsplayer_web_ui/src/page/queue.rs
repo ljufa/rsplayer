@@ -1,10 +1,14 @@
+use api_models::common::QueueCommand::RemoveItem;
+use api_models::common::UserCommand;
 use api_models::player::Song;
 use api_models::state::{PlayingContext, PlayingContextQuery, StateChangeEvent};
 use api_models::{common::PlayerCommand, state::PlayingContextType};
+use gloo_console::log;
+use gloo_net::Error;
 use seed::prelude::web_sys::KeyboardEvent;
 use seed::{
-    a, attrs, b, button, div, empty, footer, header, i, id, input, log, nodes, p, prelude::*,
-    progress, section, span, style, C, IF,
+    a, attrs, b, button, div, empty, footer, header, i, id, input, nodes, p, prelude::*, progress,
+    section, span, style, textarea, C, IF,
 };
 
 use crate::scrollToId;
@@ -24,8 +28,8 @@ pub struct Model {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum Msg {
-    PlayingContextFetched(fetch::Result<Option<PlayingContext>>),
-    SendCommand(PlayerCommand),
+    PlayingContextFetched(Result<Option<PlayingContext>, Error>),
+    SendUserCommand(UserCommand),
     PlaylistItemSelected(String),
     PlaylistItemRemove(String),
     PlaylistItemShowMore,
@@ -49,10 +53,13 @@ pub enum Msg {
     KeyPressed(web_sys::KeyboardEvent),
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     log!("Queue: init");
-    orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
-        PlayingContextQuery::WithSearchTerm(Default::default(), 0),
+    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+        api_models::common::QueueCommand::QueryCurrentPlayingContext(
+            PlayingContextQuery::WithSearchTerm(String::default(), 0),
+        ),
     )));
     orders.stream(streams::window_event(Ev::KeyDown, |event| {
         Msg::KeyPressed(event.unchecked_into())
@@ -62,11 +69,11 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
         playing_context: None,
         current_song_id: None,
         waiting_response: true,
-        search_input: Default::default(),
+        search_input: String::default(),
         show_add_url_modal: false,
-        add_url_input: Default::default(),
+        add_url_input: String::default(),
         show_save_playlist_modal: false,
-        save_playlist_input: Default::default(),
+        save_playlist_input: String::default(),
     }
 }
 
@@ -74,7 +81,8 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
 //    Update
 // ------ ------
 
-pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
+#[allow(clippy::too_many_lines)]
+pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
         Msg::StatusChangeEventReceived(StateChangeEvent::CurrentPlayingContextEvent(pc)) => {
             model.waiting_response = false;
@@ -87,7 +95,9 @@ pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::PlaylistItemSelected(id) => {
             model.current_song_id = Some(id.clone());
-            orders.send_msg(Msg::SendCommand(PlayerCommand::PlayItem(id)));
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Player(
+                PlayerCommand::PlayItem(id),
+            )));
         }
         Msg::PlaylistItemRemove(id) => {
             model.playing_context.as_mut().map(|ctx| {
@@ -95,11 +105,13 @@ pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
                     page.remove_item(&id);
                 })
             });
-            orders.send_msg(Msg::SendCommand(PlayerCommand::RemovePlaylistItem(id)));
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(RemoveItem(id))));
         }
         Msg::WebSocketOpen => {
-            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
-                PlayingContextQuery::WithSearchTerm(Default::default(), 0),
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::QueryCurrentPlayingContext(
+                    PlayingContextQuery::WithSearchTerm(String::default(), 0),
+                ),
             )));
             // orders.after_next_render(|_| scrollToId("current"));
             orders.skip();
@@ -107,50 +119,57 @@ pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::SearchInputChanged(term) => {
             model.search_input = term;
             orders.skip();
-            log!("UpdateInputChanged", model.search_input);
         }
         Msg::DoSearch => {
             model.waiting_response = true;
-            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
-                PlayingContextQuery::WithSearchTerm(model.search_input.clone(), 0),
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::QueryCurrentPlayingContext(
+                    PlayingContextQuery::WithSearchTerm(model.search_input.clone(), 0),
+                ),
             )));
         }
         Msg::ShowStartingFromCurrentSong => {
             model.waiting_response = true;
             model.search_input = String::new();
-            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
-                PlayingContextQuery::CurrentSongPage,
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::QueryCurrentPlayingContext(
+                    PlayingContextQuery::CurrentSongPage,
+                ),
             )));
         }
         Msg::ClearSearch => {
             model.waiting_response = true;
             model.search_input = String::new();
-            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
-                PlayingContextQuery::WithSearchTerm(String::new(), 0),
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::QueryCurrentPlayingContext(
+                    PlayingContextQuery::WithSearchTerm(String::new(), 0),
+                ),
             )));
         }
         Msg::LocateCurrentSong => {
             scrollToId("current");
         }
         Msg::LoadMoreItems(offset) => {
-            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
-                PlayingContextQuery::WithSearchTerm(model.search_input.clone(), offset),
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::QueryCurrentPlayingContext(
+                    PlayingContextQuery::WithSearchTerm(model.search_input.clone(), offset),
+                ),
             )));
             orders.after_next_render(move |_| scrollToId("top-list-item"));
         }
         Msg::AddUrlButtonClick => {
             model.show_add_url_modal = true;
+            model.add_url_input.clear();
         }
         Msg::CloseAddUrlModal => {
             model.show_add_url_modal = false;
-            model.add_url_input = Default::default();
         }
         Msg::KeyPressed(event) => {
             if event.key() == "Escape" {
                 model.show_add_url_modal = false;
-                model.add_url_input = Default::default();
+                model.add_url_input = String::default();
                 model.show_save_playlist_modal = false;
-                model.save_playlist_input = Default::default();
+                model.save_playlist_input = String::default();
             }
         }
         Msg::AddUrlInputChanged(value) => {
@@ -158,14 +177,27 @@ pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::AddUrlToQueue => {
             if model.show_add_url_modal && model.add_url_input.len() > 3 {
-                orders.send_msg(Msg::SendCommand(PlayerCommand::AddSongToQueue(
-                    model.add_url_input.clone(),
-                )));
+                if model.add_url_input.lines().count() > 1 {
+                    model.add_url_input.lines().for_each(|l| {
+                        if l.len() > 5 {
+                            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                                api_models::common::QueueCommand::AddSongToQueue(l.to_string()),
+                            )));
+                        }
+                    });
+                } else {
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                        api_models::common::QueueCommand::AddSongToQueue(
+                            model.add_url_input.clone(),
+                        ),
+                    )));
+                }
                 model.show_add_url_modal = false;
-                model.add_url_input = Default::default();
             }
-            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
-                PlayingContextQuery::WithSearchTerm(Default::default(), 0),
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::QueryCurrentPlayingContext(
+                    PlayingContextQuery::WithSearchTerm(String::default(), 0),
+                ),
             )));
         }
         Msg::SaveAsPlaylistButtonClick => {
@@ -175,22 +207,28 @@ pub fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.save_playlist_input = value;
         }
         Msg::CloseSaveAsPlaylistModal => {
-            model.save_playlist_input = Default::default();
+            model.save_playlist_input = String::default();
             model.show_save_playlist_modal = false;
         }
         Msg::SaveAsPlaylist => {
             if model.show_save_playlist_modal && model.save_playlist_input.len() > 3 {
-                orders.send_msg(Msg::SendCommand(PlayerCommand::SaveQueueAsPlaylist(
-                    model.save_playlist_input.clone(),
+                orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
+                    api_models::common::PlaylistCommand::SaveQueueAsPlaylist(
+                        model.save_playlist_input.clone(),
+                    ),
                 )));
                 model.show_save_playlist_modal = false;
-                model.save_playlist_input = Default::default();
+                model.save_playlist_input = String::default();
             }
         }
         Msg::ClearQueue => {
-            orders.send_msg(Msg::SendCommand(PlayerCommand::ClearQueue));
-            orders.send_msg(Msg::SendCommand(PlayerCommand::QueryCurrentPlayingContext(
-                PlayingContextQuery::WithSearchTerm(Default::default(), 0),
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::ClearQueue,
+            )));
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::QueryCurrentPlayingContext(
+                    PlayingContextQuery::WithSearchTerm(String::default(), 0),
+                ),
             )));
         }
 
@@ -259,54 +297,61 @@ fn view_save_playlist_modal(model: &Model) -> Node<Msg> {
 }
 
 fn view_add_url_modal(model: &Model) -> Node<Msg> {
-    div![
-        C!["modal", IF!(model.show_add_url_modal => "is-active")],
+    if model.show_add_url_modal {
         div![
-            C!["modal-background"],
-            ev(Ev::Click, |_| Msg::CloseAddUrlModal),
-        ],
-        div![
-            id!("add-url-items-modal"),
-            C!["modal-card"],
-            header![
-                C!["modal-card-head"],
-                p![C!["modal-card-title"], "Add streaming URL"],
-                button![
-                    C!["delete", "is-medium"],
-                    attrs!(At::AriaLabel =>"close"),
-                    ev(Ev::Click, |_| Msg::CloseAddUrlModal)
-                ],
+            C!["modal", "is-active"],
+            div![
+                C!["modal-background"],
+                ev(Ev::Click, |_| Msg::CloseAddUrlModal),
             ],
-            section![
-                C!["modal-card-body"],
-                input![
-                    C!["input"],
-                    input_ev(Ev::Input, Msg::AddUrlInputChanged),
-                    ev(Ev::KeyDown, |keyboard_event| {
-                        if keyboard_event.value_of().to_string() == "[object KeyboardEvent]" {
-                            let kev: KeyboardEvent = keyboard_event.unchecked_into();
-                            IF!(kev.key_code() == 13 => Msg::AddUrlToQueue)
-                        } else {
-                            None
-                        }
-                    }),
+            div![
+                id!("add-url-items-modal"),
+                C!["modal-card"],
+                header![
+                    C!["modal-card-head"],
+                    p![C!["modal-card-title"], "Add streaming URL(s)"],
+                    button![
+                        C!["delete", "is-medium"],
+                        attrs!(At::AriaLabel =>"close"),
+                        ev(Ev::Click, |_| Msg::CloseAddUrlModal)
+                    ],
                 ],
-            ],
-            footer![
-                C!["modal-card-foot"],
-                button![
-                    C!["button", "is-dark"],
-                    "Add",
-                    ev(Ev::Click, move |_| Msg::AddUrlToQueue)
+                section![
+                    C!["modal-card-body"],
+                    textarea![
+                        C!["textarea"],
+                        attrs! {
+                            At::AutoFocus => true.as_at_value();
+                        },
+                        input_ev(Ev::Input, Msg::AddUrlInputChanged),
+                        ev(Ev::KeyDown, |keyboard_event| {
+                            if keyboard_event.value_of().to_string() == "[object KeyboardEvent]" {
+                                let kev: KeyboardEvent = keyboard_event.unchecked_into();
+                                IF!(kev.key_code() == 13 => Msg::AddUrlToQueue)
+                            } else {
+                                None
+                            }
+                        }),
+                    ],
                 ],
-                button![
-                    C!["button"],
-                    "Cancel",
-                    ev(Ev::Click, move |_| Msg::CloseAddUrlModal)
-                ],
+                footer![
+                    C!["modal-card-foot"],
+                    button![
+                        C!["button", "is-dark"],
+                        "Add",
+                        ev(Ev::Click, move |_| Msg::AddUrlToQueue)
+                    ],
+                    button![
+                        C!["button"],
+                        "Cancel",
+                        ev(Ev::Click, move |_| Msg::CloseAddUrlModal)
+                    ],
+                ]
             ]
         ]
-    ]
+    } else {
+        empty!()
+    }
 }
 fn view_context_info(
     context_type: &PlayingContextType,
@@ -333,7 +378,6 @@ fn view_context_info(
                 IF!(p => i!("Public playlist")),
             ]),
         ],
-
         PlayingContextType::Album {
             artists,
             release_date,
@@ -345,14 +389,14 @@ fn view_context_info(
                 i!("Artists: "),
                 b!(artists.join(", "))
             ],
-            if !genres.is_empty() {
+            if genres.is_empty() {
+                empty!()
+            } else {
                 p![
                     C!["has-text-light has-background-dark-transparent"],
                     i!("Genres: "),
                     b!(genres.join(", "))
                 ]
-            } else {
-                empty!()
             },
             p![
                 C!["has-text-light has-background-dark-transparent"],
@@ -364,14 +408,14 @@ fn view_context_info(
                 i!("Label: "),
                 b!(l)
             ]),
-            if !release_date.is_empty() {
+            if release_date.is_empty() {
+                empty!()
+            } else {
                 p![
                     C!["has-text-light has-background-dark-transparent"],
                     i!("Release date: "),
                     b!(release_date)
                 ]
-            } else {
-                empty!()
             },
         ],
 
@@ -386,7 +430,7 @@ fn view_context_info(
                 i!("Artist: "),
                 b!(playing_context.name.clone())
             ],
-            if !genres.is_empty() {
+            if genres.is_empty() {
                 p![
                     C!["has-text-light has-background-dark-transparent"],
                     i!("Genres: "),
@@ -415,6 +459,7 @@ fn view_context_info(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn view_queue_items(model: &Model) -> Node<Msg> {
     if model.playing_context.is_none() {
         return empty!();
@@ -438,7 +483,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                 C!["transparent", "is-hidden-mobile"],
                 view_context_info(&pctx.context_type, pctx),
             ],],
-            if let Some(page) = pctx.playlist_page.as_ref() {
+            pctx.playlist_page.as_ref().map_or_else(|| empty!(), |page| {
                 let offset = page.offset;
                 let iter = page.items.iter();
                 div![
@@ -517,9 +562,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                         ev(Ev::Click, move |_| Msg::LoadMoreItems(offset))
                     ]
                 ]
-            } else {
-                empty!()
-            }
+            })
         ]
     ]
 }
@@ -562,17 +605,16 @@ fn view_queue_item(song: &Song, playing_context: &PlayingContext, model: &Model)
         div![
             C!["list-item-controls"],
             div![
-                C!["buttons"],
                 a![
+                    C!["white-icon"],
                     C!["is-hidden-mobile"],
                     attrs!(At::Title =>"Play song"),
-                    C!["white-icon"],
                     i![C!("material-icons"), "play_arrow"],
                     ev(Ev::Click, move |_| Msg::PlaylistItemSelected(id2))
                 ],
                 a![
-                    attrs!(At::Title =>"Remove song from queue"),
                     C!["white-icon"],
+                    attrs!(At::Title =>"Remove song from queue"),
                     i![C!("material-icons"), "delete"],
                     ev(Ev::Click, move |_| Msg::PlaylistItemRemove(id1))
                 ],

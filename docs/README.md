@@ -38,73 +38,11 @@ The latest package can be downloaded from [this page](https://github.com/ljufa/r
 # Basic configuration
 ## Players
 By default, RSPlayer is configured to use its own media player.
-Optionally you can enable and use Music Player Daemon as a backend player.
 To make configuration changes navigate to [http://rsplayer.local/#settings](http://rsplayer.local/#settings).
 
 ### RSP
 RSPlayer playback implementation based on rust Symphonia crate.
 * _Input buffer size_ - Size of input audio buffer
-
-### MPD
-* _Music Player Daemon server host_ - Default value assumes that you have MPD server running on the same host, change only if not true
-* _Client port_ - MPD port, default value 6600
-* _Override existing MPD configuration_ - By enabling this existing `/etc/mpd.conf` file will be replaced with the one below using the selected audio device name and music directory.
-
-```json
-playlist_directory        "/var/lib/mpd/playlists"
-db_file                   "/var/lib/mpd/tag_cache"
-state_file                "/var/lib/mpd/state"
-sticker_file              "/var/lib/mpd/sticker.sql"
-music_directory           "{music_directory}"
-
-bind_to_address           "0.0.0.0"
-port                      "6600"
-log_level                 "default"
-restore_paused            "yes"
-auto_update               "yes"
-follow_outside_symlinks   "yes"
-follow_inside_symlinks    "yes"
-zeroconf_enabled          "no"
-filesystem_charset        "UTF-8"
-
-input {
-  plugin "curl"
-}
-
-audio_output {
-  type                    "alsa"
-  name                    "audio device"
-  device                  "{audio_device}"
-  mixer_type              "none"
-  replay_gain_handler     "none"
-}
-```
-### Spotify
-?>Spotify integration is possible for Spotify premium accounts only. 
-
-?>First time Spotify setup should be done from a desktop computer because Android does not support accessing RPI using hostname i.e `rsplayer.local`
-
-!>_All credentials entered here, and generated Spotify access token will be stored in plain text format on your RPI device so please make sure it is properly secured!_
-
-* _Spotify connect device name_ - you can provide your own name, it will be shown in the device list in official Spotify applications.
-* _Spotify username_ - your Spotify account username
-* _Spotify password_ - password for your Spotify account
-* _Developer client id_ - If you don't own a Spotify developer account and you want to use mine please reach me in a private email message.
-* _Developer secret_ - If you don't own a Spotify developer account and you want to use mine please reach me in a private email message.
-* _Auth callback url_ - Change if your RPI hostname is different from `rsplayer.local`. Allowed values are:
-  * http://raspberrypi.local/api/spotify/callback
-  * http://raspberrypi.lan/api/spotify/callback
-  * http://raspberrypi/api/spotify/callback
-  * http://rsplayer.local/api/spotify/callback
-  * http://rsplayer.lan/api/spotify/callback
-  * http://rsplayer/api/spotify/callback
-  * http://pi.local/api/spotify/callback
-  * http://pi.lan/api/spotify/callback
-  * http://pi/api/spotify/callback
-  * http://localhost:8000/api/spotify/callback
-
-Once you enter all values click _Authorize_ button which will show a permission popup from Spotify.
-After giving permission you should see `Success` message and the close button.
 
 ## Audio interface
 This is an alsa audio interface that will be used by active player
@@ -112,8 +50,8 @@ This is an alsa audio interface that will be used by active player
 Alsa PCM output device of selected audio interface
 
 ## Music directory path
-Full path to music root music directory, will be used by RSP and MPD(if override existing config flag is enabled).
-Please keep in mind that after this value is changed or set for the first time `Full scan` button should be clicked and the music database created.
+Full path to music root music directory, will be used by RSP.
+Please keep in mind that after this value is changed or set for the first time `Update library` button should be clicked and the music database created.
 
 ## Volume control
 * _Volume control device_ - Select volume control device: Dac or Alsa
@@ -193,16 +131,8 @@ For configuration related troubleshooting you can find configuration file at `/o
 ## RSPlayer server can't start
 TODO
 
-## Can't connect to MPD error
-TODO
-
 ## Playlist page is empty
 TODO
-
-## Spotify configuration
-### Callback url not valid
-
-### Developer client id not valid
 
 ### TODO...
 
@@ -219,14 +149,10 @@ TODO
 * [ ] Browse/search the whole music library
 * [ ] Web radio browse/search/~~play~~
 * [ ] Loudness limitter by BS1770
-* [ ] Allow seamless play from different sources at runtime, i.e. create playlist/queue from Spotify songs, local library, radio, youtube songs ...
-* [ ] LMS backend support
 * [x] implement own player based on Symphonia
 * [ ] Support more remote control models - configuration and key mapping
-* [x] MPD Configuration using RSPlayer UI (partially implemented for music dir and audio device)
 * [ ] Support more AK DAC models
 * [ ] Mute relay
-* [ ] integrate more online streaming services. Qobuz, Tidal, Soundcloud ...
 * [ ] DSP support (i.e. camillaDSP?)
 * [ ] own media management with advanced search
 * [ ] use more information about the song based on last.fm response, update id tags on local files?
@@ -238,6 +164,7 @@ TODO
  
  ## Player page
 * [ ] Seek to position
+* [ ] Keep last N songs in *history* when random mode is enabled
 * [x] Better design, show player control at the bottom of all pages
 * [ ] Show playing context if exists: player type, playlist, album ...
 * [ ] Show the next playing song
@@ -246,7 +173,6 @@ TODO
 ## Queue page
 * [x] Pagination
 * [x] Manage items (batch, on search results): ~~clear~~, ~~delete~~, ~~play~~, playnext
-* [ ] Support Spotify podcast
  
 ## Playlist page
 * [ ] Search all playlists by name
@@ -322,17 +248,6 @@ irdb-get download apple/A1156.lircd.conf
 sudo cp A1156.lircd.conf /etc/lirc/lircd.conf.d
 irrecord -d /dev/lirc0 dplayd.lircd.conf
 sudo cp dplayd.lircd.conf /etc/lirc/lircd.conf.d
-```
- 
-## Install LMS
-```bash
-wget http://downloads.slimdevices.com/nightly/8.2/lms/6e12028145512cef7d240c5d24c3b17e89ed8a6d/logitechmediaserver_8.2.0\~1609139175_arm.deb
-sudo dpkg -i logitechmediaserver_8.2.0\~1609139175_arm.deb
-sudo apt --fix-broken install
-wget wget https://sourceforge.net/projects/lmsclients/files/squeezelite/linux/squeezelite-1.9.9.1372-aarch64.tar.gz/download
-tar zxvf download
-sudo cp squeezelite /home/ubuntu
-squeezelite -V "Luckit Audio 2.0 Output" -o hw:CARD=L20,DEV=0 -C 1 -v -z
 ```
 
 ## Install build tools

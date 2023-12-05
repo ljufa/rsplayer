@@ -1,10 +1,53 @@
-use std::{fmt::Display, time::Duration};
+use std::time::Duration;
 
-use crate::state::PlayingContextQuery;
+use crate::{player::Song, state::PlayingContextQuery};
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
+pub const BY_GENRE_PL_PREFIX: &str = "playlist_by_genre_";
+pub const BY_DATE_PL_PREFIX: &str = "playlist_by_date_";
+pub const BY_ARTIST_PL_PREFIX: &str = "playlist_by_artist_";
+pub const BY_FOLDER_PL_PREFIX: &str = "playlist_by_folder_";
+pub const SAVED_PL_PREFIX: &str = "playlist_saved_";
+
+pub const CATEGORY_ID_BY_GENRE: &str = "category_by_genre";
+pub const CATEGORY_ID_BY_DATE: &str = "category_by_date";
+pub const CATEGORY_ID_BY_ARTIST: &str = "category_by_artist";
+pub const CATEGORY_ID_BY_FOLDER: &str = "category_by_folder";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
+pub enum MetadataLibraryItem {
+    SongItem(Song),
+    Directory { name: String },
+    Empty,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MetadataLibraryResult {
+    pub items: Vec<MetadataLibraryItem>,
+    pub root_path: String,
+}
+
+impl MetadataLibraryItem {
+    pub fn get_title(&self) -> String {
+        match self {
+            MetadataLibraryItem::SongItem(song) => song.get_title(),
+            MetadataLibraryItem::Directory { name } => name.to_string(),
+            MetadataLibraryItem::Empty => String::new(),
+        }
+    }
+    pub fn get_id(&self) -> String {
+        match self {
+            MetadataLibraryItem::Directory { name } => name.to_string(),
+            MetadataLibraryItem::SongItem(song) => song.id.to_string(),
+            MetadataLibraryItem::Empty => String::new(),
+        }
+    }
+    pub const fn is_dir(&self) -> bool {
+        matches!(self, MetadataLibraryItem::Directory { name: _ })
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct PcmOutputDevice {
     pub name: String,
@@ -56,6 +99,14 @@ pub struct Volume {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub enum UserCommand {
+    Player(PlayerCommand),
+    Queue(QueueCommand),
+    Playlist(PlaylistCommand),
+    Metadata(MetadataCommand),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum PlayerCommand {
     // Player commands
     Next,
@@ -63,24 +114,39 @@ pub enum PlayerCommand {
     Pause,
     Play,
     PlayItem(String),
-    RemovePlaylistItem(String),
     RandomToggle,
     Rewind(i8),
-    LoadPlaylist(String),
-    LoadAlbum(String),
-    LoadSong(String),
-    AddSongToQueue(String),
-    ClearQueue,
-    SaveQueueAsPlaylist(String),
-
-    // Query commands
-    QueryCurrentSong,
     QueryCurrentPlayerInfo,
-    QueryCurrentStreamerState,
-    QueryCurrentPlayingContext(PlayingContextQuery),
-    QueryDynamicPlaylists(Vec<String>, u32, u32),
-    QueryPlaylistItems(String, usize),
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub enum MetadataCommand {
+    QueryLocalFiles(String, u32),
+    RescanMetadata(String, bool),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub enum PlaylistCommand {
+    QueryDynamicPlaylists(Vec<String>, u32, u32),
+    SaveQueueAsPlaylist(String),
+    QueryPlaylistItems(String, usize),
+    QuerySavedPlaylist,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub enum QueueCommand {
+    LoadPlaylistInQueue(String),
+    LoadAlbumInQueue(String),
+    LoadSongToQueue(String),
+    AddSongToQueue(String),
+    AddLocalLibDirectory(String),
+    LoadLocalLibDirectory(String),
+    ClearQueue,
+    QueryCurrentSong,
+    QueryCurrentPlayingContext(PlayingContextQuery),
+    RemoveItem(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum SystemCommand {
     // System commands
@@ -91,8 +157,7 @@ pub enum SystemCommand {
     RestartSystem,
     RestartRSPlayer,
     ChangeAudioOutput,
-    // Metadata commands
-    RescanMetadata(String),
+    QueryCurrentStreamerState,
 }
 
 #[derive(
@@ -127,23 +192,15 @@ pub enum GainLevel {
     V375,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, Hash, Copy, EnumIter, EnumString, Serialize, Deserialize)]
-pub enum PlayerType {
-    SPF,
-    MPD,
-    LMS,
-    RSP,
+pub enum MetadataProvider {
+    LocalFiles,
+    RadioBrowser,
 }
-impl Display for PlayerType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::SPF => f.write_str("Spotify"),
-            Self::MPD => f.write_str("Music Player Deamon"),
-            Self::LMS => f.write_str("Logitech Media Server"),
-            Self::RSP => f.write_str("RSPlayer - experimental"),
-        }
-    }
+pub struct ProtocolHandler {
+    _prefix: String,
+    _metadata_type: MetadataProvider,
 }
+
 
 #[must_use]
 pub fn dur_to_string(duration: &Duration) -> String {

@@ -32,9 +32,9 @@ mod hw_volume {
                 if let InputEventKind::RelAxis(_) = ev.kind() {
                     debug!("Event: {:?}", ev);
                     if ev.value() == 1 {
-                        let _ = system_commands_tx.send(SystemCommand::VolDown).await;
+                        _ = system_commands_tx.send(SystemCommand::VolDown).await;
                     } else {
-                        let _ = system_commands_tx.send(SystemCommand::VolUp).await;
+                        _ = system_commands_tx.send(SystemCommand::VolUp).await;
                     }
                 }
             }

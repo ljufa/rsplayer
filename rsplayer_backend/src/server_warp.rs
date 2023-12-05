@@ -1,4 +1,5 @@
 use api_models::common::SystemCommand;
+use api_models::common::UserCommand;
 use api_models::serde_json;
 use futures::Future;
 use futures::FutureExt;
@@ -10,10 +11,9 @@ use log::info;
 use log::warn;
 use rsplayer_config::Configuration;
 
-use api_models::common::PlayerCommand;
 use api_models::state::StateChangeEvent;
 
-use rsplayer_playback::player_service::ArcPlayerService;
+use rsplayer_metadata::playlist::PlaylistService;
 use rust_embed::RustEmbed;
 use std::env;
 use std::net::Ipv4Addr;
@@ -45,7 +45,7 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
 type Config = Arc<Configuration>;
 
-type PlayerCommandSender = tokio::sync::mpsc::Sender<PlayerCommand>;
+type UserCommandSender = tokio::sync::mpsc::Sender<UserCommand>;
 type SystemCommandSender = tokio::sync::mpsc::Sender<SystemCommand>;
 
 #[derive(RustEmbed)]
@@ -62,10 +62,6 @@ pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Out
     let routes = filters::settings_save(config.clone())
         .or(filters::settings_save(config.clone()))
         .or(filters::get_settings(config.clone()))
-        .or(filters::get_spotify_authorization_url(config.clone()))
-        .or(filters::is_spotify_authorization_completed(config.clone()))
-        .or(filters::spotify_authorization_callback(config.clone()))
-        .or(filters::get_spotify_account_info(config.clone()))
         .or(ui_static_content)
         .or(filters::get_startup_error(error))
         .with(cors);
@@ -75,10 +71,10 @@ pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Out
 
 pub fn start(
     mut state_changes_rx: Receiver<StateChangeEvent>,
-    player_commands_tx: PlayerCommandSender,
+    player_commands_tx: UserCommandSender,
     system_commands_tx: SystemCommandSender,
     config: &Config,
-    player_service: ArcPlayerService,
+    playlist_service: Arc<PlaylistService>,
 ) -> (impl Future<Output = ()>, impl Future<Output = ()>) {
     // Keep track of all connected users, key is usize, value
     // is a websocket sender.
@@ -112,13 +108,9 @@ pub fn start(
     let routes = player_ws_path
         .or(filters::settings_save(config.clone()))
         .or(filters::get_settings(config.clone()))
-        .or(filters::get_static_playlists(player_service.clone()))
-        .or(filters::get_playlist_items(player_service.clone()))
-        .or(filters::get_playlist_categories(player_service))
-        .or(filters::get_spotify_authorization_url(config.clone()))
-        .or(filters::is_spotify_authorization_completed(config.clone()))
-        .or(filters::spotify_authorization_callback(config.clone()))
-        .or(filters::get_spotify_account_info(config.clone()))
+        .or(filters::get_static_playlists(playlist_service.clone()))
+        .or(filters::get_playlist_items(playlist_service.clone()))
+        .or(filters::get_playlist_categories(playlist_service))
         .or(ui_static_content)
         .with(cors);
 
@@ -142,10 +134,12 @@ pub fn start(
 
 #[allow(warnings)]
 mod filters {
-    use std::collections::HashMap;
+    use std::{collections::HashMap, sync::Arc};
 
     use api_models::settings::Settings;
-    use rsplayer_playback::player_service::ArcPlayerService;
+
+    use rsplayer_metadata::playlist::PlaylistService;
+    use rsplayer_playback::rsp::PlayerService;
     use warp::Filter;
 
     use super::{handlers, Config};
@@ -177,63 +171,30 @@ mod filters {
             .map(move || error_msg.to_string())
     }
     pub fn get_static_playlists(
-        player_service: ArcPlayerService,
+        player_service: Arc<PlaylistService>,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "playlist"))
-            .and(with_player_svc(player_service))
+            .and(with_playlist_svc(player_service))
             .and_then(handlers::get_static_playlists)
     }
 
     pub fn get_playlist_categories(
-        player_service: ArcPlayerService,
+        player_service: Arc<PlaylistService>,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "categories"))
-            .and(with_player_svc(player_service))
+            .and(with_playlist_svc(player_service))
             .and_then(handlers::get_playlist_categories)
     }
 
     pub fn get_playlist_items(
-        player_service: ArcPlayerService,
+        player_service: Arc<PlaylistService>,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "playlist" / String))
-            .and(with_player_svc(player_service))
+            .and(with_playlist_svc(player_service))
             .and_then(handlers::get_playlist_items)
-    }
-    pub fn get_spotify_authorization_url(
-        config: Config,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::get()
-            .and(warp::path!("api" / "spotify" / "get-url"))
-            .and(with_config(config))
-            .and_then(handlers::get_spotify_authorization_url)
-    }
-    pub fn is_spotify_authorization_completed(
-        config: Config,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::get()
-            .and(warp::path!("api" / "spotify" / "is-authorized"))
-            .and(with_config(config))
-            .and_then(handlers::is_spotify_authorization_completed)
-    }
-    pub fn spotify_authorization_callback(
-        config: Config,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::get()
-            .and(warp::path!("api" / "spotify" / "callback"))
-            .and(with_config(config))
-            .and(warp::query::<HashMap<String, String>>())
-            .and_then(handlers::spotify_authorization_callback)
-    }
-    pub fn get_spotify_account_info(
-        config: Config,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::get()
-            .and(warp::path!("api" / "spotify" / "me"))
-            .and(with_config(config))
-            .and_then(handlers::get_spotify_account_info)
     }
 
     fn with_config(
@@ -242,9 +203,10 @@ mod filters {
         warp::any().map(move || config.clone())
     }
 
-    fn with_player_svc(
-        player_svc: ArcPlayerService,
-    ) -> impl Filter<Extract = (ArcPlayerService,), Error = std::convert::Infallible> + Clone {
+    fn with_playlist_svc(
+        player_svc: Arc<PlaylistService>,
+    ) -> impl Filter<Extract = (Arc<PlaylistService>,), Error = std::convert::Infallible> + Clone
+    {
         warp::any().map(move || player_svc.clone())
     }
 
@@ -258,12 +220,17 @@ mod filters {
 #[allow(warnings, clippy::unused_async)]
 mod handlers {
     use log::{debug, error};
-    use rsplayer_playback::spotify::oauth::SpotifyOauth;
-    use std::{collections::HashMap, convert::Infallible, process::{exit, ExitCode}};
+    use rsplayer_metadata::playlist::PlaylistService;
+    use std::{
+        collections::HashMap,
+        convert::Infallible,
+        process::{exit, ExitCode},
+        sync::Arc,
+    };
 
     use rsplayer_hardware::audio_device::alsa::{self, AlsaPcmCard};
 
-    use super::{ArcPlayerService, Config};
+    use super::Config;
     use api_models::settings::Settings;
 
     use rsplayer_config::Configuration;
@@ -312,83 +279,25 @@ mod handlers {
     }
 
     pub async fn get_static_playlists(
-        player_service: ArcPlayerService,
+        player_service: Arc<PlaylistService>,
     ) -> Result<impl warp::Reply, Infallible> {
-        Ok(warp::reply::json(
-            &player_service.get_current_player().get_static_playlists(),
-        ))
+        Ok(warp::reply::json(&player_service.get_playlists()))
     }
     pub async fn get_playlist_categories(
-        player_service: ArcPlayerService,
+        player_service: Arc<PlaylistService>,
     ) -> Result<impl warp::Reply, Infallible> {
         Ok(warp::reply::json(
-            &player_service
-                .get_current_player()
-                .get_playlist_categories(),
+            &PlaylistService::get_playlist_categories(),
         ))
     }
 
-    pub async fn get_spotify_authorization_url(
-        config: Config,
-    ) -> Result<impl warp::Reply, Infallible> {
-        let mut spotify_oauth = SpotifyOauth::new(&config.get_settings().spotify_settings);
-        match &spotify_oauth.get_authorization_url() {
-            Ok(url) => Ok(warp::reply::with_status(url.clone(), StatusCode::OK)),
-            Err(e) => Ok(warp::reply::with_status(
-                e.to_string(),
-                StatusCode::BAD_GATEWAY,
-            )),
-        }
-    }
-    pub async fn is_spotify_authorization_completed(
-        config: Config,
-    ) -> Result<impl warp::Reply, Infallible> {
-        let mut spotify_oauth = SpotifyOauth::new(&config.get_settings().spotify_settings);
-        match &spotify_oauth.is_token_present() {
-            Ok(auth) => Ok(warp::reply::with_status(auth.to_string(), StatusCode::OK)),
-            Err(e) => Ok(warp::reply::with_status(
-                e.to_string(),
-                StatusCode::BAD_GATEWAY,
-            )),
-        }
-    }
-
-    pub async fn spotify_authorization_callback(
-        config: Config,
-        url: HashMap<String, String>,
-    ) -> Result<impl warp::Reply, Infallible> {
-        let mut spotify_oauth = SpotifyOauth::new(&config.get_settings().spotify_settings);
-        match &spotify_oauth.authorize_callback(url.get("code").unwrap()) {
-            Ok(_) => Ok(warp::reply::html(
-                r#"<html>
-                            <body>
-                            <div>
-                                <p>Success!</p>
-                                <button onclick='self.close()'>Close</button>
-                            </div>
-                            </body>
-                        </html>"#,
-            )),
-            Err(e) => {
-                error!("Authorization callback error:{}", e);
-                Ok(warp::reply::html(r#"<p>Error</p>"#))
-            }
-        }
-    }
-
-    pub async fn get_spotify_account_info(config: Config) -> Result<impl warp::Reply, Infallible> {
-        let mut spotify_oauth = SpotifyOauth::new(&config.get_settings().spotify_settings);
-        Ok(warp::reply::json(&spotify_oauth.get_account_info()))
-    }
 
     pub async fn get_playlist_items(
         playlist_name: String,
-        player_service: ArcPlayerService,
+        player_service: Arc<PlaylistService>,
     ) -> Result<impl warp::Reply, Infallible> {
         Ok(warp::reply::json(
-            &player_service
-                .get_current_player()
-                .get_playlist_items(&playlist_name, 1),
+            &player_service.get_dynamic_playlist_items(&playlist_name, 1),
         ))
     }
 }
@@ -397,9 +306,10 @@ async fn notify_users(users_to_notify: &Users, status_change_event: StateChangeE
     if !users_to_notify.read().await.is_empty() {
         let json_msg = serde_json::to_string(&status_change_event).unwrap();
         if !json_msg.is_empty() {
-            for (&_uid, tx) in users_to_notify.read().await.iter() {
-                _ = tx.send(Ok(Message::text(json_msg.clone())));
-            }
+            let users = users_to_notify.read().await;
+            users
+                .iter()
+                .for_each(|tx| _ = tx.1.send(Ok(Message::text(json_msg.clone()))));
         }
     }
 }
@@ -407,7 +317,7 @@ async fn notify_users(users_to_notify: &Users, status_change_event: StateChangeE
 async fn user_connected(
     ws: WebSocket,
     users: Users,
-    player_commands_tx: PlayerCommandSender,
+    user_commands_tx: UserCommandSender,
     system_commands_tx: SystemCommandSender,
 ) {
     // Use a counter to assign a new unique ID for this user.
@@ -442,9 +352,9 @@ async fn user_connected(
         };
         info!("Got command from user {:?}", msg);
         if let Ok(cmd) = msg.to_str() {
-            let player_command: Option<PlayerCommand> = serde_json::from_str(cmd).ok();
-            if let Some(pc) = player_command {
-                _ = player_commands_tx.send(pc).await;
+            let user_command: Option<UserCommand> = serde_json::from_str(cmd).ok();
+            if let Some(pc) = user_command {
+                _ = user_commands_tx.send(pc).await;
             } else {
                 let system_command: Option<SystemCommand> = serde_json::from_str(cmd).ok();
                 if let Some(sc) = system_command {
@@ -485,6 +395,7 @@ fn get_port() -> u16 {
         if is_local_port_free(fallback_port) {
             return fallback_port;
         }
+
         error!("Fallback port {} is also unavailable", fallback_port);
     }
     panic!("Desired port [{port}], default port [{default_port}] and fallback port [{fallback_port}] are unavailable! Please specify another value for RSPLAYER_HTTP_PORT in rsplayer.service file")

@@ -147,7 +147,7 @@ impl VolumeControlDevice for AlsaMixer {
             if let Some(selem) = mixer.find_selem(&SelemId::new(&self.mixer_name, self.mixer_idx)) {
                 let (rmin, rmax) = selem.get_playback_volume_range();
                 let mut channel = SelemChannelId::mono();
-                for c in SelemChannelId::all().iter() {
+                for c in SelemChannelId::all() {
                     if selem.has_playback_channel(*c) {
                         channel = *c;
                         break;
@@ -169,7 +169,7 @@ impl VolumeControlDevice for AlsaMixer {
         if let Ok(mixer) = Mixer::new(self.card_name.as_str(), false) {
             if let Some(selem) = mixer.find_selem(&SelemId::new(&self.mixer_name, self.mixer_idx)) {
                 let (rmin, rmax) = selem.get_playback_volume_range();
-                for c in SelemChannelId::all().iter() {
+                for c in SelemChannelId::all() {
                     if selem.has_playback_channel(*c) {
                         selem.set_playback_volume(*c, level).unwrap();
                     }

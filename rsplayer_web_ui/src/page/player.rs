@@ -1,6 +1,6 @@
+use api_models::common::UserCommand::Player;
 use api_models::common::{PlayerCommand, SystemCommand, Volume};
 use api_models::player::Song;
-
 use api_models::state::{AudioOut, PlayerInfo, PlayerState, SongProgress};
 
 use seed::{
@@ -22,9 +22,9 @@ pub fn view(model: &PlayerModel) -> Node<Msg> {
     ]]
 }
 
+#[allow(clippy::too_many_lines)]
 fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Node<Msg> {
-    if let Some(ps) = song {
-        div![
+    song.map_or_else(|| empty!(), |ps| div![
             style! {
                 St::MinHeight => "300px",
                 St::PaddingTop => "2rem"
@@ -96,8 +96,7 @@ fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Nod
                         ],
                     ],
                 ]),
-                if let Some(pi) = player_info {
-                    nodes![
+                player_info.map_or_else(|| nodes!(), |pi| nodes![
                         div![
                             C!["level-item"],
                             IF!(pi.audio_format_rate.is_some() =>
@@ -117,15 +116,9 @@ fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Nod
                                 ]],
                             ]
                         })
-                    ]
-                } else {
-                    nodes!()
-                }
+                    ])
             ],
-        ]
-    } else {
-        empty!()
-    }
+        ])
 }
 
 fn view_track_progress_bar(progress: &SongProgress) -> Node<Msg> {
@@ -160,19 +153,23 @@ fn view_controls_down(model: &PlayerModel) -> Node<Msg> {
         C!["centered", "is-bottom"],
         a![
             C!["player-button-play", "player-button-prev",],
-            ev(Ev::Click, |_| Msg::SendPlayerCommand(PlayerCommand::Prev)),
+            ev(Ev::Click, |_| Msg::SendUserCommand(Player(
+                PlayerCommand::Prev
+            ))),
         ],
         a![
             C!["player-button-play", IF!(playing => "player-button-pause" )],
             ev(Ev::Click, move |_| if playing {
-                Msg::SendPlayerCommand(PlayerCommand::Pause)
+                Msg::SendUserCommand(Player(PlayerCommand::Pause))
             } else {
-                Msg::SendPlayerCommand(PlayerCommand::Play)
+                Msg::SendUserCommand(Player(PlayerCommand::Play))
             })
         ],
         a![
             C!["player-button-play", "player-button-next"],
-            ev(Ev::Click, |_| Msg::SendPlayerCommand(PlayerCommand::Next))
+            ev(Ev::Click, |_| Msg::SendUserCommand(Player(
+                PlayerCommand::Next
+            )))
         ],
     ]
 }
@@ -212,9 +209,9 @@ fn view_controls_up(model: &PlayerModel) -> Node<Msg> {
             button![
                 C!["small-button"],
                 span![C!["icon"], i![C!("material-icons"), shuffle]],
-                ev(Ev::Click, |_| Msg::SendPlayerCommand(
+                ev(Ev::Click, |_| Msg::SendUserCommand(Player(
                     PlayerCommand::RandomToggle
-                )),
+                ))),
             ],
             button![
                 C!["small-button"],

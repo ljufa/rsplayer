@@ -26,11 +26,6 @@ assets = [
         "755",
     ],
     [
-        "../PKGS/x86_64-unknown-linux-gnu/usr/bin/librespot",
-        "usr/bin/",
-        "755",
-    ],
-    [
         "../PKGS/debian/etc/systemd/system/rsplayer.service",
         "etc/systemd/system/rsplayer.service",
         "644",
@@ -42,11 +37,6 @@ name = "rsplayer_aarch64"
 assets = [
     [
         "../target/aarch64-unknown-linux-gnu/release/rsplayer",
-        "usr/bin/",
-        "755",
-    ],
-    [
-        "../PKGS/aarch64-unknown-linux-gnu/usr/bin/librespot",
         "usr/bin/",
         "755",
     ],
@@ -72,11 +62,6 @@ name = "rsplayer_armv7l"
 assets = [
     [
         "../target/armv7-unknown-linux-gnueabihf/release/rsplayer",
-        "usr/bin/",
-        "755",
-    ],
-    [
-        "../PKGS/armv7-unknown-linux-gnueabihf/usr/bin/librespot",
         "usr/bin/",
         "755",
     ],
@@ -131,10 +116,11 @@ tokio.workspace = true
 futures.workspace = true
 tokio-stream.workspace = true
 anyhow.workspace = true
+console-subscriber = "0.1.10"
 
 #warp
-warp = { version = "0.3.3", features = ["compression"] }
-rust-embed = { version = "6.4.2", features = ["warp-ex", "compression"] }
+warp = { version = "0.3.5", features = ["compression"] }
+rust-embed = { version = "6.6.1", features = ["warp-ex", "compression"] }
 warp-embed = "0.4.0"
 
 

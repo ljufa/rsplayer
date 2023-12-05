@@ -1,25 +1,27 @@
-use api_models::{
-    common::{CardMixer, FilterType, GainLevel, PlayerType, SystemCommand, VolumeCrtlType},
-    settings::{
-        AlsaDeviceFormat, AlsaSettings, DacSettings, IRInputControlerSettings, LmsSettings,
-        MetadataStoreSettings, MpdSettings, OLEDSettings, OutputSelectorSettings, RsPlayerSettings,
-        Settings, VolumeControlSettings,
-    },
-    spotify::SpotifyAccountInfo,
-    validator::Validate,
-};
-use seed::{
-    attrs, button, div, empty, h1, i, input, label, log, option, p, prelude::*, section, select,
-    span, C, IF,
-};
 use std::str::FromStr;
+
+use api_models::{
+    common::{
+        CardMixer, FilterType, GainLevel, MetadataCommand::RescanMetadata,
+        SystemCommand, UserCommand, VolumeCrtlType,
+    },
+    settings::{
+        DacSettings, IRInputControlerSettings,
+        MetadataStoreSettings, OLEDSettings, OutputSelectorSettings, RsPlayerSettings,
+        Settings,
+    },
+};
+use gloo_console::log;
+use gloo_net::{Error, http::Request};
+use seed::{
+    attrs, button, C, div, h1,  IF, input, label, option, p, prelude::*,
+    section, select,
+};
 use strum::IntoEnumIterator;
 
 use crate::view_spinner_modal;
 
 const API_SETTINGS_PATH: &str = "/api/settings";
-const API_SPOTIFY_GET_AUTH_URL_PATH: &str = "/api/spotify/get-url";
-const API_SPOTIFY_GET_ACCOUNT_INFO_PATH: &str = "/api/spotify/me";
 
 // ------ ------
 //     Model
@@ -29,38 +31,20 @@ pub struct Model {
     settings: Settings,
     selected_audio_card_index: i32,
     waiting_response: bool,
-    spotify_account_info: Option<SpotifyAccountInfo>,
 }
 
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum Msg {
-    SelectActivePlayer(String),
     // ---- on off toggles ----
-    ToggleRspEnabled,
     ToggleDacEnabled,
-    ToggleSpotifyEnabled,
-    ToggleLmsEnabled,
-    ToggleMpdEnabled,
-    ToggleMpdOverrideConfig,
     ToggleIrEnabled,
     ToggleOledEnabled,
     ToggleOutputSelectorEnabled,
     ToggleRotaryVolume,
     ToggleResumePlayback,
     // ---- Input capture ----
-    InputMpdHostChange(String),
-    InputMpdPortChange(u32),
     InputMetadataMusicDirectoryChanged(String),
-    InputLMSHostChange,
-    InputSpotifyDeviceNameChange(String),
-    InputSpotifyUsernameChange(String),
-    InputSpotifyPasswordChange(String),
-    InputSpotifyAlsaDeviceFormatChanged(AlsaDeviceFormat),
-
-    InputSpotifyDeveloperClientId(String),
-    InputSpotifyDeveloperClientSecret(String),
-    InputSpotifyAuthCallbackUrl(String),
     InputAlsaCardChange(i32),
     InputAlsaPcmChange(String),
     InputLircInputSocketPathChanged(String),
@@ -70,12 +54,7 @@ pub enum Msg {
     InputVolumeCtrlDeviceChanged(VolumeCrtlType),
     InputRspBufferSizeChange(String),
     InputVolumeAlsaMixerChanged(String),
-    ClickSpotifyAuthorizeButton,
-    ClickSpotifyLogoutButton,
     ClickRescanMetadataButton,
-
-    SpotifyAccountInfoFetched(Option<SpotifyAccountInfo>),
-    SpotifyAuthorizationUrlFetched(String),
 
     InputAlsaDeviceChanged(String),
 
@@ -85,19 +64,21 @@ pub enum Msg {
 
     // --- Buttons ----
     SaveSettingsAndRestart,
-    SettingsSaved(fetch::Result<String>),
+    SettingsSaved(Result<String, Error>),
 
     SettingsFetched(Settings),
-    SendCommand(SystemCommand),
+    SendSystemCommand(SystemCommand),
+    SendUserCommand(UserCommand),
 }
 
 // ------ ------
 //     Init
 // ------ ------
+#[allow(clippy::needless_pass_by_value)]
 pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     log!("Settings Init called");
     orders.perform_cmd(async {
-        let response = fetch(API_SETTINGS_PATH)
+        let response = Request::get(API_SETTINGS_PATH).send()
             .await
             .expect("Failed to get settings from backend");
 
@@ -107,28 +88,17 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
             .expect("failed to deserialize to Configuration");
         Msg::SettingsFetched(sett)
     });
-    orders.perform_cmd(async {
-        Msg::SpotifyAccountInfoFetched(
-            fetch(API_SPOTIFY_GET_ACCOUNT_INFO_PATH)
-                .await
-                .expect("")
-                .json::<SpotifyAccountInfo>()
-                .await
-                .ok(),
-        )
-    });
     Model {
         settings: Settings::default(),
         selected_audio_card_index: -1,
         waiting_response: true,
-        spotify_account_info: None,
     }
 }
 
 // ------ ------
 //    Update
 // ------ ------
-
+#[allow(clippy::too_many_lines)]
 pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
         Msg::SaveSettingsAndRestart => {
@@ -139,23 +109,8 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             });
             model.waiting_response = true;
         }
-        Msg::SelectActivePlayer(value) => {
-            model.settings.active_player = PlayerType::from_str(value.as_str()).unwrap();
-        }
         Msg::ToggleDacEnabled => {
             model.settings.dac_settings.enabled = !model.settings.dac_settings.enabled;
-        }
-        Msg::ToggleSpotifyEnabled => {
-            model.settings.spotify_settings.enabled = !model.settings.spotify_settings.enabled;
-        }
-        Msg::ToggleLmsEnabled => {
-            model.settings.lms_settings.enabled = !model.settings.lms_settings.enabled;
-        }
-        Msg::ToggleMpdEnabled => {
-            model.settings.mpd_settings.enabled = !model.settings.mpd_settings.enabled;
-        }
-        Msg::ToggleRspEnabled => {
-            model.settings.rs_player_settings.enabled = !model.settings.rs_player_settings.enabled;
         }
         Msg::ToggleIrEnabled => {
             model.settings.ir_control_settings.enabled =
@@ -172,46 +127,14 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.settings.volume_ctrl_settings.rotary_enabled =
                 !model.settings.volume_ctrl_settings.rotary_enabled;
         }
-        Msg::ToggleMpdOverrideConfig => {
-            model.settings.mpd_settings.override_external_configuration =
-                !model.settings.mpd_settings.override_external_configuration;
-        }
         Msg::ToggleResumePlayback => {
             model.settings.auto_resume_playback = !model.settings.auto_resume_playback;
         }
 
-        Msg::InputMpdHostChange(value) => {
-            model.settings.mpd_settings.server_host = value;
-        }
-        Msg::InputMpdPortChange(value) => {
-            model.settings.mpd_settings.server_port = value;
-        }
         Msg::InputMetadataMusicDirectoryChanged(value) => {
             model.settings.metadata_settings.music_directory = value;
         }
-        Msg::InputLMSHostChange => {}
-        Msg::InputSpotifyDeviceNameChange(value) => {
-            model.settings.spotify_settings.device_name = value;
-        }
-        Msg::InputSpotifyUsernameChange(value) => {
-            model.settings.spotify_settings.username = value;
-        }
-        Msg::InputSpotifyPasswordChange(value) => {
-            model.settings.spotify_settings.password = value;
-        }
-        Msg::InputSpotifyDeveloperClientId(value) => {
-            model.settings.spotify_settings.developer_client_id = value;
-        }
-        Msg::InputSpotifyDeveloperClientSecret(value) => {
-            log!("Secret", value);
-            model.settings.spotify_settings.developer_secret = value;
-        }
-        Msg::InputSpotifyAuthCallbackUrl(value) => {
-            model.settings.spotify_settings.auth_callback_url = value;
-        }
-        Msg::InputSpotifyAlsaDeviceFormatChanged(value) => {
-            model.settings.spotify_settings.alsa_device_format = value;
-        }
+
         Msg::InputAlsaCardChange(value) => {
             model.selected_audio_card_index = value;
         }
@@ -257,33 +180,12 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 model.settings.rs_player_settings.buffer_size_mb = num;
             };
         }
-        Msg::ClickSpotifyAuthorizeButton => {
-            let settings = model.settings.clone();
-            orders.perform_cmd(async move {
-                _ = save_settings(settings, "reload=false".to_string()).await;
-                let url = fetch(API_SPOTIFY_GET_AUTH_URL_PATH)
-                    .await
-                    .expect("msg")
-                    .text()
-                    .await
-                    .expect("msg");
-                _ = seed::util::window().open_with_url(url.as_str());
-            });
-        }
-        Msg::SpotifyAuthorizationUrlFetched(value) => {
-            log!("Url fetched", value);
-            // model.spotify_auth_url = Some(value);
-        }
-        Msg::SpotifyAccountInfoFetched(info) => {
-            model.spotify_account_info = info;
-        }
         Msg::SettingsFetched(sett) => {
             model.waiting_response = false;
             model.settings = sett;
             model.selected_audio_card_index = model.settings.alsa_settings.output_device.card_index;
         }
-        Msg::SettingsSaved(saved) => {
-            log!("Saved settings with result {}", saved);
+        Msg::SettingsSaved(_saved) => {
             model.waiting_response = false;
         }
         Msg::ClickRescanMetadataButton => {
@@ -291,9 +193,9 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             orders.perform_cmd(async move {
                 _ = save_settings(settings, "reload=false".to_string()).await;
             });
-            orders.send_msg(Msg::SendCommand(SystemCommand::RescanMetadata(
-                model.settings.metadata_settings.music_directory.clone(),
-            )));
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(RescanMetadata(
+                model.settings.metadata_settings.music_directory.clone(), false,
+            ))));
         }
         _ => {}
     }
@@ -302,76 +204,16 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 // ------ ------
 //     View
 // ------ ------
-
+#[allow(clippy::too_many_lines)]
 pub fn view(model: &Model) -> Node<Msg> {
-    let model = model;
     let settings = &model.settings;
     div![
         view_spinner_modal(model.waiting_response),
         // players
         section![
             C!["section"],
-            h1![C!["title","has-text-white"], "Players"],
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleRspEnabled),
-                input![
-                    C!["control", "switch"],
-                    attrs! {
-                        At::Name => "rsp_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.rs_player_settings.enabled.as_at_value(),
-                    },
-                ],
-                label![
-                    C!["label","has-text-white"],
-                    "RSPlayer",
-                    attrs! {
-                        At::For => "rsp_cb"
-                    }
-                ]
-            ],
-            IF!(settings.rs_player_settings.enabled => view_rsp(&settings.rs_player_settings)),
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleMpdEnabled),
-                input![
-                    C!["control", "switch"],
-                    attrs! {
-                        At::Name => "mpd_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.mpd_settings.enabled.as_at_value(),
-                    },
-                ],
-                label![
-                    C!["label","has-text-white"],
-                    "Music Player Demon",
-                    attrs! {
-                        At::For => "mpd_cb"
-                    }
-                ]
-            ],
-            IF!(settings.mpd_settings.enabled => view_mpd(&settings.mpd_settings)),
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleSpotifyEnabled),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "spotify_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.spotify_settings.enabled.as_at_value(),
-                    },
-                ],
-                label![
-                    C!["label","has-text-white"],
-                    "Spotify (premium account required)",
-                    attrs! {
-                        At::For => "spotify_cb"
-                    }
-                ]
-            ],
-            IF!(settings.spotify_settings.enabled => view_spotify(model)),
+            h1![C!["title","has-text-white"], "General"],
+            view_rsp(&settings.rs_player_settings),
             div![
                 C!["field"],
                 ev(Ev::Click, |_| Msg::ToggleResumePlayback),
@@ -390,36 +232,6 @@ pub fn view(model: &Model) -> Node<Msg> {
                         At::For => "resume_playback_cb"
                     }
                 ]
-            ],
-            div![
-                C!["field"],
-                label!["Active player:", C!["label","has-text-white"]],
-                div![
-                    C!["select"],
-                    select![
-                        IF!(settings.spotify_settings.enabled =>
-                        option![
-                            attrs! {
-                                At::Value => "SPF"
-                            },
-                            IF!(settings.active_player == PlayerType::SPF => attrs!(At::Selected => "")),
-                            "Spotify"
-                        ]),
-                        IF!(settings.mpd_settings.enabled =>
-                        option![
-                            attrs! {At::Value => "MPD"},
-                            IF!(settings.active_player == PlayerType::MPD => attrs!(At::Selected => "")),
-                            "Music player daemon",
-                        ]),
-                        IF!(settings.rs_player_settings.enabled =>
-                        option![
-                            attrs! {At::Value => "RSP"},
-                            IF!(settings.active_player == PlayerType::RSP => attrs!(At::Selected => "")),
-                            "RSPlayer",
-                        ]),
-                        input_ev(Ev::Change, Msg::SelectActivePlayer),
-                    ],
-                ],
             ],
             div![
                 C!["field", "is-grouped","is-grouped-multiline"],
@@ -584,21 +396,21 @@ pub fn view(model: &Model) -> Node<Msg> {
                 button![
                     C!["button", "is-dark"],
                     "Restart player",
-                    ev(Ev::Click, |_| Msg::SendCommand(
+                    ev(Ev::Click, |_| Msg::SendSystemCommand(
                         SystemCommand::RestartRSPlayer
                     ))
                 ],
                 button![
                     C!["button", "is-dark"],
                     "Restart system",
-                    ev(Ev::Click, |_| Msg::SendCommand(
+                    ev(Ev::Click, |_| Msg::SendSystemCommand(
                         SystemCommand::RestartSystem
                     ))
                 ],
                 button![
                     C!["button", "is-dark"],
                     "Shutdown system",
-                    ev(Ev::Click, |_| Msg::SendCommand(SystemCommand::PowerOff))
+                    ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::PowerOff))
                 ]
         ]
     ]
@@ -609,7 +421,7 @@ fn view_ir_control(ir_settings: &IRInputControlerSettings) -> Node<Msg> {
     div![
         div![
             C!["field"],
-            label!["Remote maker", C!["label","has-text-white"]],
+            label!["Remote maker", C!["label", "has-text-white"]],
             div![
                 C!["control"],
                 div![
@@ -623,7 +435,7 @@ fn view_ir_control(ir_settings: &IRInputControlerSettings) -> Node<Msg> {
         ],
         div![
             C!["field"],
-            label!["LIRC socket path", C!["label","has-text-white"]],
+            label!["LIRC socket path", C!["label", "has-text-white"]],
             div![
                 C!["control"],
                 input![
@@ -639,6 +451,8 @@ fn view_ir_control(ir_settings: &IRInputControlerSettings) -> Node<Msg> {
         ],
     ]
 }
+
+#[allow(clippy::too_many_lines)]
 fn view_volume_control(model: &Model) -> Node<Msg> {
     let volume_settings = &model.settings.volume_ctrl_settings;
     let alsa_settings = &model.settings.alsa_settings;
@@ -687,7 +501,6 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
                                 ),
                                 input_ev(Ev::Change, Msg::InputVolumeAlsaMixerChanged),
                             ],
-                        
                     ],
                 ],
             ]
@@ -751,11 +564,12 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
 
     ]
 }
+
 fn view_oled_display(oled_settings: &OLEDSettings) -> Node<Msg> {
     div![
         div![
             C!["field"],
-            label!["Display Model:", C!["label","has-text-white"]],
+            label!["Display Model:", C!["label", "has-text-white"]],
             div![
                 C!["control"],
                 div![
@@ -766,7 +580,7 @@ fn view_oled_display(oled_settings: &OLEDSettings) -> Node<Msg> {
         ],
         div![
             C!["field"],
-            label!["SPI Device path:", C!["label","has-text-white"]],
+            label!["SPI Device path:", C!["label", "has-text-white"]],
             div![
                 C!["control"],
                 input![
@@ -777,14 +591,17 @@ fn view_oled_display(oled_settings: &OLEDSettings) -> Node<Msg> {
         ],
     ]
 }
+
 fn view_output_selector(_out_settings: &OutputSelectorSettings) -> Node<Msg> {
     div![]
 }
+
+#[allow(clippy::too_many_lines)]
 fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
     div![
         div![
             C!["field"],
-            label!["DAC Chip:", C!["label","has-text-white"]],
+            label!["DAC Chip:", C!["label", "has-text-white"]],
             div![
                 C!["control"],
                 div![
@@ -795,7 +612,7 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
         ],
         div![
             C!["field"],
-            label!["DAC I2C address:", C!["label","has-text-white"]],
+            label!["DAC I2C address:", C!["label", "has-text-white"]],
             div![
                 C!["control"],
                 input![
@@ -806,7 +623,7 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
         ],
         div![
             C!["field"],
-            label!["Digital filter:", C!["label","has-text-white"]],
+            label!["Digital filter:", C!["label", "has-text-white"]],
             div![
                 C!["control"],
                 div![
@@ -830,7 +647,7 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
         // gain level
         div![
             C!["field"],
-            label!["Gain Level:", C!["label","has-text-white"]],
+            label!["Gain Level:", C!["label", "has-text-white"]],
             div![
                 C!["control"],
                 div![
@@ -854,7 +671,7 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
         // sound settings
         div![
             C!["field"],
-            label!["Sound settings:", C!["label","has-text-white"]],
+            label!["Sound settings:", C!["label", "has-text-white"]],
             div![
                 C!["control"],
                 div![
@@ -892,261 +709,10 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
         ]
     ]
 }
-fn view_validation_icon<Ms>(val: &impl api_models::validator::Validate, key: &str) -> Node<Ms> {
-    let class = if let Err(errors) = val.validate() {
-        if errors.errors().contains_key(key) {
-            "fa-exclamation-triangle"
-        } else {
-            "fa-check"
-        }
-    } else {
-        "fa-check"
-    };
 
-    span![C!["icon", "is-small", "is-right"], i![C!["fas", class]]]
-}
-fn view_spotify(model: &Model) -> Node<Msg> {
-    let spot_settings = &model.settings.spotify_settings;
-    div![C!["pb-4"],
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["Spotify connect device name", C!["label","has-text-white"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["field"],
-                    div![C!["control","has-icons-right"],
-                        input![C!["input"], attrs! {At::Value => spot_settings.device_name},],
-                        input_ev(Ev::Input, move |value| {
-                            Msg::InputSpotifyDeviceNameChange(value)
-                        }),
-                        view_validation_icon(spot_settings, "device_name")
-                    ]
-                ]
-            ],
-        ],
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["Spotify username", C!["label","has-text-white"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["field"],
-                    div![C!["control","has-icons-right"],
-                    input![C!["input"], attrs! {At::Value => spot_settings.username},],
-                    input_ev(Ev::Input, move |value| {
-                        Msg::InputSpotifyUsernameChange(value)
-                    }),
-                    view_validation_icon(spot_settings, "username")
-                    ]
-                ]
-            ],
-        ],
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["Spotify password", C!["label","has-text-white"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["field"],
-                    div![C!["control","has-icons-right"],
-                    input![C!["input"], attrs! {At::Value => spot_settings.password, At::Type => "password"}],
-                    input_ev(Ev::Input, move |value| {
-                        Msg::InputSpotifyPasswordChange(value)
-                    }),
-                    view_validation_icon(spot_settings, "password")
-                    ]
-                ]
-            ],
-        ],
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["Developer client id", C!["label","has-text-white"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["field"],
-                    div![C!["control","has-icons-right"],
-                    input![
-                        C!["input"],
-                        attrs! {At::Value => spot_settings.developer_client_id},
-                    ],
-                    input_ev(Ev::Input, move |value| {
-                        Msg::InputSpotifyDeveloperClientId(value)
-                    }),
-                    view_validation_icon(spot_settings, "developer_client_id")
-                    ]
-                ]
-            ],
-        ],
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["Developer secret", C!["label","has-text-white"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["field"],
-                    div![C!["control","has-icons-right"],
-                    input![
-                        C!["input"],
-                        attrs! {At::Value => spot_settings.developer_secret, At::Type => "password"},
-                    ],
-                    input_ev(Ev::Input, move |value| {
-                        Msg::InputSpotifyDeveloperClientSecret(value)
-                    }),
-                    view_validation_icon(spot_settings, "developer_secret")
-                    ]
-                ]
-            ],
-        ],
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["Auth callback url", C!["label","has-text-white"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["field"],
-                    div![C!["control","has-icons-right"],
-                    input![
-                        C!["input"],
-                        attrs! {At::Value => spot_settings.auth_callback_url},
-                    ],
-                    input_ev(Ev::Input, move |value| {
-                        Msg::InputSpotifyAuthCallbackUrl(value)
-                    }),
-                    view_validation_icon(spot_settings, "auth_callback_url")
-                    ]
-                ]
-            ],
-        ],
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["Connected Spotify account", C!["label","has-text-white"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["field"],
-                    IF!(spot_settings.validate().is_ok() && model.spotify_account_info.is_none() =>
-                        button![C!["is-primary", "button", "is-small"], ev(Ev::Click, move |_| Msg::ClickSpotifyAuthorizeButton), "Authorize"]
-                    ),
-                    if let Some(me) = &model.spotify_account_info {
-                        p![
-                            span![C!["is-size-5", "has-text-weight-semibold", "is-italic"],me.display_name.clone()],
-                            span![me.email.clone()],
-                            button![C!["is-primary", "button", "is-small", "ml-1"], ev(Ev::Click, move |_| Msg::ClickSpotifyLogoutButton), "Logout"]
-                        ]
-                    } else {
-                        empty!()
-                    }
-                ]
-            ]
-        ],
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["Audio device format (for librespot)", C!["label","has-text-white"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["field"],
-                    div![C!["control"],
-                    div![
-                        C!["select"],
-                        select![
-                            AlsaDeviceFormat::iter().map(|fs| {
-                                let v: &str = fs.into();
-                                option![
-                                    attrs!( At::Value => v),
-                                    IF!(spot_settings.alsa_device_format == fs => attrs!(At::Selected => "")),
-                                    v
-                                ]
-                            }),
-                            input_ev(Ev::Change, move |v| Msg::InputSpotifyAlsaDeviceFormatChanged(
-                                AlsaDeviceFormat::from_str(v.as_str()).expect("msg")
-                            )),
-                        ],
-                    ],
-                    ]
-                ]
-            ],
-        ],
-
-    ]
-}
-#[allow(dead_code)]
-fn view_lms(lms_settings: &LmsSettings) -> Node<Msg> {
-    div![
-        C!["pb-4"],
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["Logitech media server host", C!["label","has-text-white"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["field"],
-                    input![C!["input"], attrs! {At::Value => lms_settings.server_host},],
-                ]
-            ],
-        ],
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["Player port", C!["label","has-text-white"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["field"],
-                    input![C!["input"], attrs! {At::Value => lms_settings.server_port},],
-                ]
-            ],
-        ],
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["CLI port", C!["label","has-text-white"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["field"],
-                    input![C!["input"], attrs! {At::Value => lms_settings.cli_port},],
-                ]
-            ],
-        ],
-    ]
-}
 fn view_metadata_storage(metadata_settings: &MetadataStoreSettings) -> Node<Msg> {
     div![
-        label!["Music directory path", C!["label","has-text-white"]],
+        label!["Music directory path", C!["label", "has-text-white"]],
         div![
             C!["field", "is-grouped"],
             div![
@@ -1166,123 +732,32 @@ fn view_metadata_storage(metadata_settings: &MetadataStoreSettings) -> Node<Msg>
                 button![
                     C!["button", "is-primary"],
                     ev(Ev::Click, move |_| Msg::ClickRescanMetadataButton),
-                    "Full scan"
-                ]
-            ],
-        ]
-    ]
-}
-fn view_mpd(mpd_settings: &MpdSettings) -> Node<Msg> {
-    div![
-        C!["pb-4"],
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["Music Player Daemon server host", C!["label","has-text-white"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["field"],
-                    div![
-                        C!["control", "has-icons-right"],
-                        input![
-                            C!["input"],
-                            attrs! {At::Value => mpd_settings.server_host},
-                            input_ev(Ev::Input, move |value| { Msg::InputMpdHostChange(value) }),
-                        ],
-                        view_validation_icon(mpd_settings, "server_host")
-                    ]
-                ]
-            ],
-        ],
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["Client port", C!["label","has-text-white"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["field"],
-                    div![
-                        C!["control", "has-icons-right"],
-                        input![
-                            C!["input"],
-                            attrs! {At::Value => mpd_settings.server_port, At::Type => "number"},
-                            input_ev(Ev::Input, move |v| {
-                                Msg::InputMpdPortChange(v.parse::<u32>().unwrap_or_default())
-                            }),
-                        ],
-                        view_validation_icon(mpd_settings, "server_port")
-                    ]
-                ]
-            ],
-        ],
-        div![
-            C!["field", "is-horizontal", "ml-2"],
-            ev(Ev::Click, |_| Msg::ToggleMpdOverrideConfig),
-            div![
-                C!["field-body"],
-                div![
-                    C!["control"],
-                    input![
-                        C!["switch"],
-                        attrs! {
-                            At::Name => "mpd_external_conf_cb"
-                            At::Type => "checkbox"
-                            At::Checked => mpd_settings.override_external_configuration.as_at_value(),
-                        },
-                    ],
-                    label![C!["label","has-text-white"],
-                        "Override /etc/mpd.conf",
-                        attrs! {
-                            At::For => "mpd_external_conf_cb"
-                        }
-                    ]
-                ],
-            ]
-        ],
-    ]
-}
-fn view_rsp(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
-    div![
-        C!["pb-4"],
-        div![
-            C!["field", "is-horizontal"],
-            div![
-                C!["field-label", "is-small"],
-                label!["Input buffer size (in MB)", C!["label","has-text-white"]],
-            ],
-            div![
-                C!["field-body"],
-                div![
-                    C!["field"],
-                    div![
-                        C!["control"],
-                        input![
-                            C!["input"],
-                            attrs! {At::Value => rsp_settings.buffer_size_mb, At::Type => "number"},
-                            input_ev(Ev::Input, move |value| {
-                                Msg::InputRspBufferSizeChange(value)
-                            }),
-                        ],
-                    ]
+                    "Update library"
                 ]
             ],
         ]
     ]
 }
 
-async fn save_settings(settings: Settings, query: String) -> fetch::Result<String> {
-    Request::new(format!("{API_SETTINGS_PATH}?{query}"))
-        .method(Method::Post)
-        .json(&settings)?
-        .fetch()
-        .await?
-        .check_status()?
-        .text()
-        .await
+fn view_rsp(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
+    div![
+            C!["field"],
+            label!["Input buffer size (in MB)", C!["label","has-text-white"]],
+            div![
+                C!["control"],
+                input![
+                    C!["input"],
+                    attrs! {At::Value => rsp_settings.buffer_size_mb, At::Type => "number"},
+                    input_ev(Ev::Input, move |value| {
+                        Msg::InputRspBufferSizeChange(value)
+                    }),
+                ],
+            ],
+        ]
+}
+
+#[allow(clippy::future_not_send)]
+async fn save_settings(settings: Settings, query: String) -> Result<String, Error> {
+    let response = Request::post(format!("{API_SETTINGS_PATH}?{query}").as_str()).json(&settings)?.send().await?;
+    response.text().await
 }

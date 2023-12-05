@@ -10,30 +10,25 @@ edition = "2021"
 api_models = { path = "../rsplayer_api_models" }
 rsplayer_metadata = { path = "../rsplayer_metadata" }
 rsplayer_config = { path = "../rsplayer_config" }
-
 # general
 log.workspace = true
 env_logger.workspace = true
 anyhow.workspace = true
 symphonia.workspace = true
+tokio.workspace = true
 
 #mpd
 mpd = { version = "0.0.12" }
 
 # symphonia
-cpal = "0.15.0"
+cpal = "0.15.2"
 rb = "0.4.1"
-rubato = "0.12.0"
-ureq = "2.6.2"
+# rubato = "0.12.0"
+ureq = "2.7.1"
 
-#spotify
-rspotify = { version = "0.11.6", features = [
-    "client-ureq",
-    "ureq-rustls-tls",
-], default-features = false }
 
 mockall_double = "0.3.0"
 
 [dev-dependencies]
-mockall = "0.11.0"
+mockall = "0.11.4"
 random-string = "1.0.0"

@@ -2,3 +2,5 @@
 target = "wasm32-unknown-unknown"
 [target.'cfg(all(not(target_arch = "wasm32")), not(debug_assertions))']
 rustflags = ["-C", "target-cpu=native"]
+[target.wasm32-unknown-unknown]
+runner = 'wasm-bindgen-test-runner'

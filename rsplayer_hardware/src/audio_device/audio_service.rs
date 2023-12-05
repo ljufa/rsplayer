@@ -65,10 +65,10 @@ impl AudioInterfaceService {
     pub fn toggle_output(&self) -> Option<AudioOut> {
         self.output_selector_pin.as_ref().map(|out_sel_pin| {
             if out_sel_pin.get_value().unwrap() == 0 {
-                let _ = out_sel_pin.set_value(1);
+                _ = out_sel_pin.set_value(1);
                 AudioOut::HEAD
             } else {
-                let _ = out_sel_pin.set_value(0);
+                _ = out_sel_pin.set_value(0);
                 AudioOut::SPKR
             }
         })

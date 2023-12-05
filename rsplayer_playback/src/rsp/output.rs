@@ -10,11 +10,11 @@
 use std::result;
 
 use symphonia::core::audio::{AudioBufferRef, SignalSpec};
-use symphonia::core::units::Duration;
 
 pub trait AudioOutput {
     fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<()>;
     fn flush(&mut self);
+    fn pause(&mut self);
 }
 
 #[allow(dead_code)]
@@ -30,11 +30,12 @@ pub type Result<T> = result::Result<T, AudioOutputError>;
 
 mod cpal {
 
+    use std::time::Duration;
+
     use super::{AudioOutput, AudioOutputError, Result};
 
     use symphonia::core::audio::{AudioBufferRef, RawSample, SampleBuffer, SignalSpec};
     use symphonia::core::conv::ConvertibleSample;
-    use symphonia::core::units::Duration;
 
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
@@ -62,7 +63,7 @@ mod cpal {
     impl CpalAudioOutput {
         pub fn try_open(
             spec: SignalSpec,
-            duration: Duration,
+            duration: u64,
             audio_device: &str,
         ) -> Result<Box<dyn AudioOutput>> {
             // Get default host.
@@ -119,7 +120,7 @@ mod cpal {
     impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         pub fn try_open(
             spec: SignalSpec,
-            duration: Duration,
+            duration: u64,
             device: &cpal::Device,
         ) -> Result<Box<dyn AudioOutput>> {
             let num_channels = spec.channels.count();
@@ -133,7 +134,7 @@ mod cpal {
             };
 
             // Create a ring buffer with a capacity for up-to 200ms of audio.
-            let ring_len = ((2000 * spec.rate as usize) / 1000) * num_channels;
+            let ring_len = ((200 * spec.rate as usize) / 1000) * num_channels;
 
             let ring_buf = SpscRb::new(ring_len);
             let (ring_buf_producer, ring_buf_consumer) = (ring_buf.producer(), ring_buf.consumer());
@@ -148,16 +149,16 @@ mod cpal {
                     data[written..].iter_mut().for_each(|s| *s = T::MID);
                 },
                 move |err| error!("audio output error: {}", err),
-                None,
+                Some(Duration::from_secs(30)),
             );
 
             if let Err(err) = stream_result {
                 error!("audio output stream open error: {}", err);
-
                 return Err(AudioOutputError::OpenStreamError);
             }
 
             let stream = stream_result.unwrap();
+            
 
             // Start the output stream.
             if let Err(err) = stream.play() {
@@ -199,14 +200,19 @@ mod cpal {
 
         fn flush(&mut self) {
             // Flush is best-effort, ignore the returned result.
-            let _ = self.stream.pause();
+            _ = self.stream.pause();
         }
+
+        fn pause(&mut self) {
+            _ = self.stream.pause();
+        }
+        
     }
 }
 
 pub fn try_open(
     spec: SignalSpec,
-    duration: Duration,
+    duration: u64,
     audio_device: &str,
 ) -> Result<Box<dyn AudioOutput>> {
     cpal::CpalAudioOutput::try_open(spec, duration, audio_device)

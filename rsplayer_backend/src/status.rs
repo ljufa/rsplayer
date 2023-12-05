@@ -1,15 +1,22 @@
+use api_models::state::PlayerInfo;
 use api_models::state::SongProgress;
 use api_models::state::StateChangeEvent;
 use log::info;
-use rsplayer_playback::player_service::ArcPlayerService;
+use rsplayer_metadata::queue::QueueService;
+use rsplayer_playback::rsp::PlayerService;
 
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Sender;
 
-pub async fn monitor(player_svc: ArcPlayerService, state_changes_tx: Sender<StateChangeEvent>) {
+pub async fn monitor(
+    player: Arc<PlayerService>,
+    queue_service: Arc<QueueService>,
+    state_changes_tx: Sender<StateChangeEvent>,
+) {
     info!("Status monitor thread started.");
     let mut last_track_info = None;
-    let mut last_player_info = None;
+    let mut last_player_info = PlayerInfo::default();
     let mut last_playing_context = None;
     let mut last_progress = SongProgress {
         total_time: Duration::ZERO,
@@ -18,8 +25,8 @@ pub async fn monitor(player_svc: ArcPlayerService, state_changes_tx: Sender<Stat
     loop {
         tokio::time::sleep(Duration::from_millis(1000)).await;
         // check track info change
-        let player = player_svc.get_current_player();
-        let new_track_info = player.get_current_song();
+
+        let new_track_info = queue_service.get_current_song();
         if last_track_info != new_track_info {
             if let Some(new) = new_track_info.as_ref() {
                 _ = state_changes_tx.send(StateChangeEvent::CurrentSongEvent(new.clone()));
@@ -29,9 +36,7 @@ pub async fn monitor(player_svc: ArcPlayerService, state_changes_tx: Sender<Stat
         // check player info change
         let new_player_info = player.get_player_info();
         if last_player_info != new_player_info {
-            if let Some(new_p_info) = new_player_info.as_ref() {
-                _ = state_changes_tx.send(StateChangeEvent::PlayerInfoEvent(new_p_info.clone()));
-            }
+            _ = state_changes_tx.send(StateChangeEvent::PlayerInfoEvent(new_player_info.clone()));
             last_player_info = new_player_info;
         }
         // check progres info change
@@ -42,8 +47,8 @@ pub async fn monitor(player_svc: ArcPlayerService, state_changes_tx: Sender<Stat
         }
 
         // check playing context change
-        let new_playing_context =
-            player.get_playing_context(api_models::state::PlayingContextQuery::IgnoreSongs);
+        let new_playing_context = queue_service
+            .get_current_playing_context(api_models::state::PlayingContextQuery::IgnoreSongs);
         if last_playing_context != new_playing_context {
             if let Some(new_pc) = new_playing_context.as_ref() {
                 _ = state_changes_tx

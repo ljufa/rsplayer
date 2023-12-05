@@ -4,9 +4,13 @@ extern crate log;
 
 use std::panic;
 use std::sync::Arc;
+use std::time::Duration;
 
 use env_logger::Env;
-use rsplayer_playback::player_service::PlayerService;
+use rsplayer_metadata::playlist::PlaylistService;
+use rsplayer_metadata::queue::QueueService;
+
+use rsplayer_playback::rsp::PlayerService;
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::{select, spawn};
@@ -25,10 +29,14 @@ mod server_warp;
 
 mod status;
 
-#[allow(clippy::redundant_pub_crate)]
+#[allow(clippy::redundant_pub_crate, clippy::too_many_lines)]
 #[tokio::main]
 async fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    console_subscriber::ConsoleLayer::builder()
+        .retention(Duration::from_secs(60))
+        .server_addr(([0, 0, 0, 0], 6669))
+        .init();
     info!(
         r#"
         -------------------------------------------------------------------------
@@ -51,20 +59,21 @@ async fn main() {
     let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate())
         .expect("failed to create signal future");
 
-    let metadata_service = MetadataService::new(&config.get_settings().metadata_settings);
-    if let Err(e) = &metadata_service {
-        error!("Metadata service can't be created. error: {}", e);
-        start_degraded(
-            &mut term_signal,
-            &anyhow::format_err!("Failed to start metaservice"),
-            &config,
-        )
-        .await;
-    }
-    let metadata_service = Arc::new(metadata_service.unwrap());
+    let metadata_service = Arc::new(
+        MetadataService::new(&config.get_settings().metadata_settings)
+            .expect("Failed to start metadata service"),
+    );
+    let playlist_service = Arc::new(PlaylistService::new(
+        &config.get_settings().playlist_settings,
+        metadata_service.clone(),
+    ));
+    let queue_service = Arc::new(QueueService::new(
+        &config.get_settings().playback_queue_settings,
+        metadata_service.clone(),
+        playlist_service.clone(),
+    ));
 
     let ai_service = AudioInterfaceService::new(&config);
-
     if let Err(e) = &ai_service {
         error!("Audio service interface can't be created. error: {}", e);
         start_degraded(&mut term_signal, e, &config).await;
@@ -72,13 +81,11 @@ async fn main() {
     let ai_service = Arc::new(ai_service.unwrap());
     info!("Audio interface service successfully created.");
 
-    let player_service = PlayerService::new(&config, metadata_service.clone());
-    if let Err(e) = &player_service {
-        error!("Player service can't be created. error: {}", e);
-        start_degraded(&mut term_signal, e, &config).await;
-    }
-
-    let player_service = Arc::new(player_service.unwrap());
+    let player_service = Arc::new(PlayerService::new(
+        &config.get_settings(),
+        metadata_service.clone(),
+        queue_service.clone(),
+    ));
     info!("Player service successfully created.");
 
     let (player_commands_tx, player_commands_rx) = tokio::sync::mpsc::channel(10);
@@ -92,12 +99,10 @@ async fn main() {
         player_commands_tx.clone(),
         system_commands_tx.clone(),
         &config,
-        player_service.clone(),
+        playlist_service.clone(),
     );
     if config.get_settings().auto_resume_playback {
-        player_service
-            .get_current_player()
-            .play_from_current_queue_song();
+        player_service.play_from_current_queue_song();
     }
 
     select! {
@@ -113,12 +118,15 @@ async fn main() {
             error!("Exit from OLED writer thread.");
         }
 
-        _ = spawn(status::monitor(player_service.clone(), state_changes_tx.clone())) => {
+        _ = spawn(status::monitor(player_service.clone(), queue_service.clone(), state_changes_tx.clone())) => {
             error!("Exit from status monitor thread.");
         }
 
-        _ = spawn(command_handler::handle_player_commands(
+        _ = spawn(command_handler::handle_user_commands(
                 player_service.clone(),
+                metadata_service.clone(),
+                playlist_service.clone(),
+                queue_service.clone(),
                 config.clone(),
                 player_commands_rx,
                 state_changes_tx.clone())) => {
@@ -160,7 +168,7 @@ async fn start_degraded(
     warn!("Starting server in degraded mode.");
     let http_server_future = server_warp::start_degraded(config, error);
     select! {
-        _ = http_server_future => {}
+        () = http_server_future => {}
 
         _ = term_signal.recv() => {
             info!("Terminate signal received.");
