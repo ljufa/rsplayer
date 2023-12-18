@@ -1,14 +1,14 @@
-use std::env;
-use std::net::Ipv4Addr;
-use std::net::SocketAddrV4;
-use std::net::TcpListener;
 use std::{
     collections::HashMap,
     sync::atomic::{AtomicUsize, Ordering},
 };
 use std::{sync::Arc, time::Duration};
+use std::env;
+use std::net::Ipv4Addr;
+use std::net::SocketAddrV4;
+use std::net::TcpListener;
 
-use futures::Future;
+use futures::{Future, SinkExt};
 use futures::FutureExt;
 use futures::StreamExt;
 use log::debug;
@@ -22,10 +22,11 @@ use tokio::{
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use warp::{
+    Filter,
     hyper::Method,
     ws::{Message, WebSocket},
-    Filter,
 };
+use warp::http::{HeaderMap, HeaderValue};
 
 use api_models::common::SystemCommand;
 use api_models::common::UserCommand;
@@ -50,7 +51,7 @@ type SystemCommandSender = tokio::sync::mpsc::Sender<SystemCommand>;
 #[folder = "../rsplayer_web_ui/public"]
 struct StaticContentDir;
 
-pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Output = ()> {
+pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Output=()> {
     let cors = warp::cors()
         .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
         .allow_any_origin();
@@ -72,7 +73,7 @@ pub fn start(
     player_commands_tx: UserCommandSender,
     system_commands_tx: SystemCommandSender,
     config: &Config,
-) -> (impl Future<Output = ()>, impl Future<Output = ()>) {
+) -> (impl Future<Output=()>, impl Future<Output=()>) {
     // Keep track of all connected users, key is usize, value
     // is a websocket sender.
     let users = Users::default();
@@ -94,12 +95,18 @@ pub fn start(
             // And then our closure will be called when it completes...
             ws.on_upgrade(|websocket| user_connected(websocket, users, player_commands, system_commands))
         });
+
+    let mut cache_headers = HeaderMap::new();
+    cache_headers.insert(warp::http::header::CACHE_CONTROL, HeaderValue::from_static("5184000"));
+
     let ui_static_content = warp::get()
         .and(warp_embed::embed(&StaticContentDir))
-        .with(warp::compression::gzip());
+        .with(warp::compression::gzip())
+        .with(warp::reply::with::headers(cache_headers.clone()));
     let artwork_static_content = warp::path("artwork")
         .and(warp::fs::dir("artwork"))
-        .with(warp::compression::gzip());
+        .with(warp::compression::gzip())
+        .with(warp::reply::with::headers(cache_headers));
 
     let routes = player_ws_path
         .or(filters::settings_save(config.clone()))
@@ -128,16 +135,13 @@ pub fn start(
 
 #[allow(warnings)]
 mod filters {
-    use std::sync::Arc;
-
     use warp::Filter;
 
     use api_models::settings::Settings;
-    use rsplayer_metadata::playlist_service::PlaylistService;
 
-    use super::{handlers, Config};
+    use super::{Config, handlers};
 
-    pub fn settings_save(config: Config) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    pub fn settings_save(config: Config) -> impl Filter<Extract=impl warp::Reply, Error=warp::Rejection> + Clone {
         warp::post()
             .and(warp::path!("api" / "settings"))
             .and(json_body())
@@ -146,7 +150,7 @@ mod filters {
             .and_then(handlers::save_settings)
     }
 
-    pub fn get_settings(config: Config) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    pub fn get_settings(config: Config) -> impl Filter<Extract=impl warp::Reply, Error=warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "settings"))
             .and(with_config(config))
@@ -155,18 +159,18 @@ mod filters {
 
     pub fn get_startup_error(
         error: &anyhow::Error,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    ) -> impl Filter<Extract=impl warp::Reply, Error=warp::Rejection> + Clone {
         let error_msg = error.to_string();
         warp::get()
             .and(warp::path!("api" / "start_error"))
             .map(move || error_msg.to_string())
     }
 
-    fn with_config(config: Config) -> impl Filter<Extract = (Config,), Error = std::convert::Infallible> + Clone {
+    fn with_config(config: Config) -> impl Filter<Extract=(Config, ), Error=std::convert::Infallible> + Clone {
         warp::any().map(move || config.clone())
     }
 
-    fn json_body() -> impl Filter<Extract = (Settings,), Error = warp::Rejection> + Clone {
+    fn json_body() -> impl Filter<Extract=(Settings, ), Error=warp::Rejection> + Clone {
         // When accepting a body, we want a JSON body
         // (and to reject huge payloads)...
         warp::body::json()
@@ -175,14 +179,13 @@ mod filters {
 
 #[allow(warnings, clippy::unused_async)]
 mod handlers {
-    use std::{collections::HashMap, convert::Infallible, process::exit, sync::Arc};
+    use std::{collections::HashMap, convert::Infallible, process::exit};
 
     use log::{debug, error};
     use warp::hyper::StatusCode;
 
     use api_models::settings::Settings;
     use rsplayer_hardware::audio_device::alsa::{self};
-    use rsplayer_metadata::playlist_service::PlaylistService;
 
     use super::Config;
 
