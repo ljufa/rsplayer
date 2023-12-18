@@ -35,9 +35,7 @@ pub fn get_all_cards() -> Vec<AudioCard> {
         for hint in it {
             pcm_devices.push(PcmOutputDevice {
                 name: hint.name.unwrap_or_default(),
-                description: hint
-                    .desc
-                    .map_or(String::new(), |dsc| dsc.replace('\n', " ")),
+                description: hint.desc.map_or(String::new(), |dsc| dsc.replace('\n', " ")),
                 card_index: card.get_index(),
             });
         }
@@ -80,9 +78,7 @@ impl AlsaPcmCard {
     pub fn wait_unlock_audio_dev(&self) -> Result<()> {
         let mut elapsed_time: u64 = 0;
         while elapsed_time < WAIT_TIME_MS {
-            if let Ok(dev) =
-                alsa::PCM::new(self.device_name.as_str(), alsa::Direction::Playback, false)
-            {
+            if let Ok(dev) = alsa::PCM::new(self.device_name.as_str(), alsa::Direction::Playback, false) {
                 let status = dev.status().unwrap();
                 debug!(
                     "Device status {:?} after elapsed time {}",

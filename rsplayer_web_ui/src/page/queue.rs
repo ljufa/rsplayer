@@ -1,15 +1,15 @@
+use api_models::common::PlayerCommand;
 use api_models::common::QueueCommand::RemoveItem;
 use api_models::common::UserCommand;
 use api_models::player::Song;
 use api_models::state::{PlayingContext, PlayingContextQuery, StateChangeEvent};
-use api_models::{common::PlayerCommand, state::PlayingContextType};
 use gloo_console::log;
 use gloo_net::Error;
-use seed::prelude::web_sys::KeyboardEvent;
 use seed::{
-    a, attrs, b, button, div, empty, footer, header, i, id, input, nodes, p, prelude::*, progress,
-    section, span, style, textarea, C, IF,
+    a, attrs, button, C, div, empty, footer, header, i, id, IF, input, p, prelude::*, progress,
+    section, span, style, textarea,
 };
+use seed::prelude::web_sys::KeyboardEvent;
 
 use crate::scrollToId;
 
@@ -57,9 +57,10 @@ pub enum Msg {
 pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     log!("Queue: init");
     orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-        api_models::common::QueueCommand::QueryCurrentPlayingContext(
-            PlayingContextQuery::WithSearchTerm(String::default(), 0),
-        ),
+        api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::WithSearchTerm(
+            String::default(),
+            0,
+        )),
     )));
     orders.stream(streams::window_event(Ev::KeyDown, |event| {
         Msg::KeyPressed(event.unchecked_into())
@@ -90,14 +91,12 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::StatusChangeEventReceived(StateChangeEvent::CurrentSongEvent(evt)) => {
             model.waiting_response = false;
-            model.current_song_id = Some(evt.id);
+            model.current_song_id = Some(evt.file);
             // orders.after_next_render(|_| scrollToId("current"));
         }
         Msg::PlaylistItemSelected(id) => {
             model.current_song_id = Some(id.clone());
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Player(
-                PlayerCommand::PlayItem(id),
-            )));
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Player(PlayerCommand::PlayItem(id))));
         }
         Msg::PlaylistItemRemove(id) => {
             model.playing_context.as_mut().map(|ctx| {
@@ -109,9 +108,10 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::WebSocketOpen => {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentPlayingContext(
-                    PlayingContextQuery::WithSearchTerm(String::default(), 0),
-                ),
+                api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::WithSearchTerm(
+                    String::default(),
+                    0,
+                )),
             )));
             // orders.after_next_render(|_| scrollToId("current"));
             orders.skip();
@@ -123,27 +123,27 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::DoSearch => {
             model.waiting_response = true;
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentPlayingContext(
-                    PlayingContextQuery::WithSearchTerm(model.search_input.clone(), 0),
-                ),
+                api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::WithSearchTerm(
+                    model.search_input.clone(),
+                    0,
+                )),
             )));
         }
         Msg::ShowStartingFromCurrentSong => {
             model.waiting_response = true;
             model.search_input = String::new();
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentPlayingContext(
-                    PlayingContextQuery::CurrentSongPage,
-                ),
+                api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::CurrentSongPage),
             )));
         }
         Msg::ClearSearch => {
             model.waiting_response = true;
             model.search_input = String::new();
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentPlayingContext(
-                    PlayingContextQuery::WithSearchTerm(String::new(), 0),
-                ),
+                api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::WithSearchTerm(
+                    String::new(),
+                    0,
+                )),
             )));
         }
         Msg::LocateCurrentSong => {
@@ -151,9 +151,10 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::LoadMoreItems(offset) => {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentPlayingContext(
-                    PlayingContextQuery::WithSearchTerm(model.search_input.clone(), offset),
-                ),
+                api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::WithSearchTerm(
+                    model.search_input.clone(),
+                    offset,
+                )),
             )));
             orders.after_next_render(move |_| scrollToId("top-list-item"));
         }
@@ -187,17 +188,16 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     });
                 } else {
                     orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                        api_models::common::QueueCommand::AddSongToQueue(
-                            model.add_url_input.clone(),
-                        ),
+                        api_models::common::QueueCommand::AddSongToQueue(model.add_url_input.clone()),
                     )));
                 }
                 model.show_add_url_modal = false;
             }
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentPlayingContext(
-                    PlayingContextQuery::WithSearchTerm(String::default(), 0),
-                ),
+                api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::WithSearchTerm(
+                    String::default(),
+                    0,
+                )),
             )));
         }
         Msg::SaveAsPlaylistButtonClick => {
@@ -213,9 +213,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::SaveAsPlaylist => {
             if model.show_save_playlist_modal && model.save_playlist_input.len() > 3 {
                 orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
-                    api_models::common::PlaylistCommand::SaveQueueAsPlaylist(
-                        model.save_playlist_input.clone(),
-                    ),
+                    api_models::common::PlaylistCommand::SaveQueueAsPlaylist(model.save_playlist_input.clone()),
                 )));
                 model.show_save_playlist_modal = false;
                 model.save_playlist_input = String::default();
@@ -226,9 +224,10 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 api_models::common::QueueCommand::ClearQueue,
             )));
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentPlayingContext(
-                    PlayingContextQuery::WithSearchTerm(String::default(), 0),
-                ),
+                api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::WithSearchTerm(
+                    String::default(),
+                    0,
+                )),
             )));
         }
 
@@ -248,10 +247,7 @@ pub fn view(model: &Model) -> Node<Msg> {
 fn view_save_playlist_modal(model: &Model) -> Node<Msg> {
     div![
         C!["modal", IF!(model.show_save_playlist_modal => "is-active")],
-        div![
-            C!["modal-background"],
-            ev(Ev::Click, |_| Msg::CloseSaveAsPlaylistModal),
-        ],
+        div![C!["modal-background"], ev(Ev::Click, |_| Msg::CloseSaveAsPlaylistModal),],
         div![
             id!("add-url-items-modal"),
             C!["modal-card"],
@@ -300,10 +296,7 @@ fn view_add_url_modal(model: &Model) -> Node<Msg> {
     if model.show_add_url_modal {
         div![
             C!["modal", "is-active"],
-            div![
-                C!["modal-background"],
-                ev(Ev::Click, |_| Msg::CloseAddUrlModal),
-            ],
+            div![C!["modal-background"], ev(Ev::Click, |_| Msg::CloseAddUrlModal),],
             div![
                 id!("add-url-items-modal"),
                 C!["modal-card"],
@@ -341,11 +334,7 @@ fn view_add_url_modal(model: &Model) -> Node<Msg> {
                         "Add",
                         ev(Ev::Click, move |_| Msg::AddUrlToQueue)
                     ],
-                    button![
-                        C!["button"],
-                        "Cancel",
-                        ev(Ev::Click, move |_| Msg::CloseAddUrlModal)
-                    ],
+                    button![C!["button"], "Cancel", ev(Ev::Click, move |_| Msg::CloseAddUrlModal)],
                 ]
             ]
         ]
@@ -353,111 +342,7 @@ fn view_add_url_modal(model: &Model) -> Node<Msg> {
         empty!()
     }
 }
-fn view_context_info(
-    context_type: &PlayingContextType,
-    playing_context: &PlayingContext,
-) -> Vec<Node<Msg>> {
-    match context_type {
-        PlayingContextType::Playlist {
-            description,
-            public,
-            ..
-        } => nodes![
-            p![
-                C!["has-text-light has-background-dark-transparent"],
-                i!("Playlist: "),
-                b!(&playing_context.name)
-            ],
-            description.as_ref().map_or(empty!(), |d| p![
-                C!["has-text-light has-background-dark-transparent"],
-                i!("Description: "),
-                b!(d)
-            ]),
-            public.map_or(empty!(), |p| p![
-                C!["has-text-light has-background-dark-transparent"],
-                IF!(p => i!("Public playlist")),
-            ]),
-        ],
-        PlayingContextType::Album {
-            artists,
-            release_date,
-            label,
-            genres,
-        } => nodes![
-            p![
-                C!["has-text-light has-background-dark-transparent"],
-                i!("Artists: "),
-                b!(artists.join(", "))
-            ],
-            if genres.is_empty() {
-                empty!()
-            } else {
-                p![
-                    C!["has-text-light has-background-dark-transparent"],
-                    i!("Genres: "),
-                    b!(genres.join(", "))
-                ]
-            },
-            p![
-                C!["has-text-light has-background-dark-transparent"],
-                i!("Album: "),
-                b!(&playing_context.name.clone())
-            ],
-            label.as_ref().map_or(empty!(), |l| p![
-                C!["has-text-light has-background-dark-transparent"],
-                i!("Label: "),
-                b!(l)
-            ]),
-            if release_date.is_empty() {
-                empty!()
-            } else {
-                p![
-                    C!["has-text-light has-background-dark-transparent"],
-                    i!("Release date: "),
-                    b!(release_date)
-                ]
-            },
-        ],
 
-        PlayingContextType::Artist {
-            genres,
-            popularity,
-            followers,
-            description,
-        } => nodes![
-            p![
-                C!["has-text-light has-background-dark-transparent"],
-                i!("Artist: "),
-                b!(playing_context.name.clone())
-            ],
-            if genres.is_empty() {
-                p![
-                    C!["has-text-light has-background-dark-transparent"],
-                    i!("Genres: "),
-                    b!(genres.join(", "))
-                ]
-            } else {
-                empty!()
-            },
-            description.as_ref().map_or(empty!(), |d| p![
-                C!["has-text-light has-background-dark-transparent"],
-                i!("Description: "),
-                b!(d)
-            ]),
-            p![
-                C!["has-text-light has-background-dark-transparent"],
-                i!("Popularity: "),
-                b!(popularity)
-            ],
-            p![
-                C!["has-text-light has-background-dark-transparent"],
-                i!("Number of followers: "),
-                b!(followers)
-            ],
-        ],
-        _ => nodes![],
-    }
-}
 
 #[allow(clippy::too_many_lines)]
 fn view_queue_items(model: &Model) -> Node<Msg> {
@@ -467,22 +352,10 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
     let pctx = model.playing_context.as_ref().unwrap();
 
     div![
-        IF!(pctx.image_url.is_some() =>
-            style! {
-                St::BackgroundImage => format!("url({})",pctx.image_url.as_ref().unwrap()),
-                St::BackgroundRepeat => "no-repeat",
-                St::BackgroundSize => "cover",
-                St::MinHeight => "95vh"
-            }
-        ),
         div![
             IF!(model.waiting_response => progress![C!["progress", "is-small"], attrs!{ At::Max => "100"}, style!{ St::MarginBottom => "50px"}]),
         ],
         div![
-            div![section![
-                C!["transparent", "is-hidden-mobile"],
-                view_context_info(&pctx.context_type, pctx),
-            ],],
             pctx.playlist_page.as_ref().map_or_else(|| empty!(), |page| {
                 let offset = page.offset;
                 let iter = page.items.iter();
@@ -554,7 +427,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                     // queue items
                     div![C!["scroll-list list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
                         div![id!("top-list-item")],
-                        iter.map(|it| { view_queue_item(it, pctx, model)  })
+                        iter.map(|it| { view_queue_item(it, model)  })
                     ],
                     button![
                         C!["button","is-fullwidth", "is-outlined", "is-success"],
@@ -567,10 +440,10 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
     ]
 }
 
-fn view_queue_item(song: &Song, playing_context: &PlayingContext, model: &Model) -> Node<Msg> {
-    let id = song.id.clone();
-    let id1 = song.id.clone();
-    let id2 = song.id.clone();
+fn view_queue_item(song: &Song, model: &Model) -> Node<Msg> {
+    let id = song.file.clone();
+    let id1 = song.file.clone();
+    let id2 = song.file.clone();
     div![
         IF!(model.current_song_id.as_ref().map_or(false,|cur| *cur == id ) => id!("current")),
         C![
@@ -587,18 +460,6 @@ fn view_queue_item(song: &Song, playing_context: &PlayingContext, model: &Model)
                     .time
                     .as_ref()
                     .map(|t| span![format!(" [{}]", api_models::common::dur_to_string(t))]),
-            ],
-            div![
-                C!["description", "has-text-light"],
-                match playing_context.context_type {
-                    PlayingContextType::Playlist { .. } => span![
-                        song.artist.as_ref().map(|at| span![i!["Art: "], at]),
-                        song.album.as_ref().map(|a| span![i![" | Alb: "], a]),
-                    ],
-                    PlayingContextType::Artist { .. } =>
-                        span![song.album.as_ref().map(|a| span![i!["Album: "], a]),],
-                    _ => empty!(),
-                },
             ],
             ev(Ev::Click, move |_| Msg::PlaylistItemSelected(id)),
         ],

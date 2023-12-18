@@ -142,41 +142,36 @@ TODO
  
 ## General
 
-* [ ] Automatic library scan after music directory change, or first time setup
-* [ ] Use fixed unique port instead 80 and fallback 8000
-* [x] Make alsa volume control work with any selected device
-* [ ] Convert volume units to db
-* [ ] Browse/search the whole music library
+* [ ] Show files as a tree
+* [ ] Search files
+* [ ] Playlist by genre
+* [ ] Most played songs playlist
+* [ ] Liked songs playlist
+* [ ] New music mix dynamic playlist
 * [ ] Web radio browse/search/~~play~~
+* [ ] Like song
+* [ ] Seek to position
+* [ ] Keep last N songs in *history* when random mode is enabled
+* [ ] Automatic library scan after music directory change, or time based scan
+* [ ] Use fixed unique port instead 80 and fallback 8000
+* [ ] Convert volume units to db
 * [ ] Loudness limitter by BS1770
-* [x] implement own player based on Symphonia
 * [ ] Support more remote control models - configuration and key mapping
 * [ ] Support more AK DAC models
 * [ ] Mute relay
 * [ ] DSP support (i.e. camillaDSP?)
-* [ ] own media management with advanced search
 * [ ] use more information about the song based on last.fm response, update id tags on local files?
-* [ ] lyrics
+* [ ] lyrics?
 * [ ] analyze audio files for song matching and similarity (bliss-rs), create playlists from a song
 * [ ] streaming to local device (i.e. phone) for i.e. preview
 * [ ] convert PCM to DSD on the fly
 <!-- * [ ] UPNP -->
- 
- ## Player page
-* [ ] Seek to position
-* [ ] Keep last N songs in *history* when random mode is enabled
-* [x] Better design, show player control at the bottom of all pages
-* [ ] Show playing context if exists: player type, playlist, album ...
-* [ ] Show the next playing song
-* [ ] Like playing item button
   
 ## Queue page
 * [x] Pagination
 * [x] Manage items (batch, on search results): ~~clear~~, ~~delete~~, ~~play~~, playnext
  
 ## Playlist page
-* [ ] Search all playlists by name
-* [x] ~~Show items of the selected playlist~~
 * [x] Manage selected playlist:
    * ~~play item~~
    * ~~add item(s) to the queue~~
@@ -186,18 +181,13 @@ TODO
 * [x] Pagination
  
 ## Settings page
-* [x] Show modal wait window while the server is restarting. use ws status
 * [ ] Add all settings
 
 ## Code improvements
-* [x] Move configuration to human readable yaml file and make it backward compatible (migration support)
-* [x] migrate away from `failure` crate
 * [ ] get rid of `.unwrap()` calls
+* [ ] get rid of unnecessary `.clone()` calls
 * [ ] refactor names all over the code
 * [ ] replace `warp` with `axum` or `actix`
-* [ ] better control over alsa device lock
-* [ ] control over network shares
-* [x] use separate message channels for system commands: volup, voldown, poweroff, restart ...
 * [ ] write generic fun and macros to reduce code duplication in UI
 
 -------

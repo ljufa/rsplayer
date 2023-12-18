@@ -1,11 +1,10 @@
 use std::{collections::HashMap, time::Duration};
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub struct Song {
-    pub id: String,
-
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
 
@@ -48,9 +47,14 @@ pub struct Song {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image_url: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_id: Option<String>,
+
     pub tags: HashMap<String, String>,
 
     pub file: String,
+
+    pub file_date: DateTime<Utc>,
 }
 
 impl Song {
@@ -97,14 +101,6 @@ impl Song {
             result.push_str(self.file.as_str());
         }
         result
-    }
-    #[must_use]
-    pub fn get_identifier(&self) -> String {
-        if self.id.is_empty() {
-            self.file.clone()
-        } else {
-            self.id.clone()
-        }
     }
     #[must_use]
     pub fn all_text(&self) -> String {

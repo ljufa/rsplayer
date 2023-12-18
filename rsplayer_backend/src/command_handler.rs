@@ -1,44 +1,42 @@
 use std::process::exit;
 use std::sync::Arc;
 
+use log::debug;
+use tokio::sync::broadcast::Sender;
+
+use api_models::common::{SystemCommand, UserCommand};
 use api_models::common::MetadataCommand::{QueryLocalFiles, RescanMetadata};
 use api_models::common::PlayerCommand::{
     Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, RandomToggle, Rewind,
 };
-use api_models::common::PlaylistCommand::{
-    QueryDynamicPlaylists, QueryPlaylistItems, QuerySavedPlaylist, SaveQueueAsPlaylist,
-};
+use api_models::common::PlaylistCommand::{QueryPlaylist, QueryPlaylistItems, SaveQueueAsPlaylist};
 use api_models::common::QueueCommand::{
-    self, AddLocalLibDirectory, AddSongToQueue, ClearQueue, LoadAlbumInQueue, LoadPlaylistInQueue,
-    LoadSongToQueue, QueryCurrentPlayingContext, QueryCurrentSong, RemoveItem,
+    self, AddLocalLibDirectory, AddSongToQueue, ClearQueue, LoadAlbumInQueue, LoadPlaylistInQueue, LoadSongToQueue,
+    QueryCurrentPlayingContext, QueryCurrentSong, RemoveItem,
 };
 use api_models::common::SystemCommand::{
-    ChangeAudioOutput, PowerOff, QueryCurrentStreamerState, RestartRSPlayer, RestartSystem, SetVol,
-    VolDown, VolUp,
+    ChangeAudioOutput, PowerOff, QueryCurrentStreamerState, RestartRSPlayer, RestartSystem, SetVol, VolDown, VolUp,
 };
 use api_models::common::UserCommand::{Metadata, Player, Playlist, Queue};
-use api_models::common::{SystemCommand, UserCommand};
-
+use api_models::playlist::PlaylistType;
 use api_models::state::StateChangeEvent;
-
-use log::debug;
 use rsplayer_config::ArcConfiguration;
-use rsplayer_metadata::metadata::MetadataService;
-
-use rsplayer_metadata::playlist::PlaylistService;
-use rsplayer_metadata::queue::QueueService;
-
-use rsplayer_playback::rsp::PlayerService;
-use tokio::sync::broadcast::Sender;
-
 use rsplayer_hardware::audio_device::audio_service::ArcAudioInterfaceSvc;
+use rsplayer_metadata::album_repository::AlbumRepository;
+use rsplayer_metadata::metadata_service::MetadataService;
+use rsplayer_metadata::playlist_service::PlaylistService;
+use rsplayer_metadata::queue_service::QueueService;
+use rsplayer_metadata::song_repository::SongRepository;
+use rsplayer_playback::rsp::PlayerService;
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 pub async fn handle_user_commands(
     player_service: Arc<PlayerService>,
     metadata_service: Arc<MetadataService>,
     playlist_service: Arc<PlaylistService>,
     queue_service: Arc<QueueService>,
+    album_repository: Arc<AlbumRepository>,
+    song_repository: Arc<SongRepository>,
     _config_store: ArcConfiguration,
     mut input_commands_rx: tokio::sync::mpsc::Receiver<UserCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
@@ -73,9 +71,7 @@ pub async fn handle_user_commands(
             Player(RandomToggle) => player_service.toggle_random_play(),
             Player(QueryCurrentPlayerInfo) => {
                 state_changes_sender
-                    .send(StateChangeEvent::PlayerInfoEvent(
-                        player_service.get_player_info(),
-                    ))
+                    .send(StateChangeEvent::PlayerInfoEvent(player_service.get_player_info()))
                     .unwrap();
             }
 
@@ -91,22 +87,45 @@ pub async fn handle_user_commands(
                     .unwrap();
             }
             Playlist(QueryPlaylistItems(playlist_id, page_no)) => {
+                let songs = playlist_service
+                    .get_playlist_page_by_name(&playlist_id, page_no * 20, 20)
+                    .items;
                 state_changes_sender
-                    .send(StateChangeEvent::PlaylistItemsEvent(
-                        playlist_service.get_dynamic_playlist_items(&playlist_id, page_no),
-                        page_no,
-                    ))
+                    .send(StateChangeEvent::PlaylistItemsEvent(songs, page_no))
                     .unwrap();
             }
-            Playlist(QueryDynamicPlaylists(category_ids, offset, limit)) => {
-                let dynamic_pls =
-                    playlist_service.get_dynamic_playlists(category_ids, offset, limit);
-                state_changes_sender
-                    .send(StateChangeEvent::DynamicPlaylistsPageEvent(dynamic_pls))
-                    .unwrap();
+            Playlist(api_models::common::PlaylistCommand::QueryAlbumItems(album_title, page_no)) => {
+                let songs = album_repository.find_by_id(&album_title).map(|alb| alb.song_keys);
+
+                if let Some(songs) = songs {
+                    let songs = songs
+                        .iter()
+                        .skip(page_no * 20)
+                        .take(20)
+                        .filter_map(|song_key| song_repository.find_by_id(song_key))
+                        .collect::<Vec<_>>();
+                    state_changes_sender
+                        .send(StateChangeEvent::PlaylistItemsEvent(songs, page_no))
+                        .unwrap();
+                }
             }
-            Playlist(QuerySavedPlaylist) => {
-                print!("");
+            Playlist(QueryPlaylist) => {
+                let mut pls = playlist_service.get_playlists();
+                album_repository
+                    .find_all_sort_by_added_desc(20)
+                    .into_iter()
+                    .for_each(|alb| {
+                        pls.items.push(PlaylistType::RecentlyAdded(alb));
+                    });
+                album_repository
+                    .find_all_sort_by_released_desc(20)
+                    .into_iter()
+                    .for_each(|alb| {
+                        pls.items.push(PlaylistType::LatestRelease(alb));
+                    });
+                state_changes_sender
+                    .send(StateChangeEvent::PlaylistsEvent(pls))
+                    .unwrap();
             }
 
             /*
@@ -129,7 +148,8 @@ pub async fn handle_user_commands(
             }
             Queue(LoadPlaylistInQueue(pl_id)) => {
                 player_service.stop_current_song().await;
-                queue_service.load_playlist_in_queue(&pl_id);
+                let pl_songs = playlist_service.get_playlist_page_by_name(&pl_id, 0, 20000).items;
+                queue_service.replace_all(pl_songs.into_iter());
                 player_service.play_from_current_queue_song();
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(
@@ -137,10 +157,48 @@ pub async fn handle_user_commands(
                     ))
                     .unwrap();
             }
-            Queue(LoadAlbumInQueue(_album_id)) => {}
+            Queue(QueueCommand::AddPlaylistToQueue(pl_id)) => {
+                let pl_songs = playlist_service.get_playlist_page_by_name(&pl_id, 0, 20000).items;
+                for song in &pl_songs {
+                    queue_service.add_song(song);
+                }
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(
+                        "Playlist added to queue".to_string(),
+                    ))
+                    .unwrap();
+            }
+            Queue(LoadAlbumInQueue(album_id)) => {
+                if let Some(album) = album_repository.find_by_id(&album_id) {
+                    player_service.stop_current_song().await;
+                    let songs = album.song_keys.iter().filter_map(|sk| song_repository.find_by_id(sk));
+                    queue_service.replace_all(songs);
+                    player_service.play_from_current_queue_song();
+                    state_changes_sender
+                        .send(StateChangeEvent::NotificationSuccess(
+                            "Album loaded into queue".to_string(),
+                        ))
+                        .unwrap();
+                };
+            }
+
+            Queue(QueueCommand::AddAlbumToQueue(album_id)) => {
+                if let Some(album) = album_repository.find_by_id(&album_id) {
+                    album.song_keys.iter().for_each(|sk| {
+                        if let Some(song) = song_repository.find_by_id(sk) {
+                            queue_service.add_song(&song);
+                        }
+                    });
+                    state_changes_sender
+                        .send(StateChangeEvent::NotificationSuccess(
+                            "Album added to queue".to_string(),
+                        ))
+                        .unwrap();
+                };
+            }
 
             Queue(LoadSongToQueue(song_id)) => {
-                if let Some(song) = metadata_service.find_song_by_id(&song_id).as_ref() {
+                if let Some(song) = song_repository.find_by_id(&song_id).as_ref() {
                     player_service.stop_current_song().await;
                     queue_service.clear();
                     queue_service.add_song(song);
@@ -184,6 +242,8 @@ pub async fn handle_user_commands(
                     )))
                     .unwrap();
             }
+
+
             /*
              * Metadata commands
              */
@@ -196,7 +256,7 @@ pub async fn handle_user_commands(
                     .expect("Failed to start metadata scanner thread");
             }
             Metadata(QueryLocalFiles(dir, _)) => {
-                let items = metadata_service.get_items_by_dir(&dir);
+                let items = song_repository.find_by_dir(&dir);
                 state_changes_sender
                     .send(StateChangeEvent::MetadataLocalItems(items))
                     .unwrap();
@@ -204,6 +264,7 @@ pub async fn handle_user_commands(
         }
     }
 }
+
 pub async fn handle_system_commands(
     ai_service: ArcAudioInterfaceSvc,
     _metadata_service: Arc<MetadataService>,

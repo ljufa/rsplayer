@@ -5,11 +5,7 @@ use tokio::sync::broadcast::Receiver;
 pub async fn write(state_changes_rx: Receiver<StateChangeEvent>, config: ArcConfiguration) {
     let settings = config.get_settings();
     if settings.oled_settings.enabled {
-        hw_oled::write(
-            state_changes_rx,
-            settings.oled_settings,
-        )
-        .await;
+        hw_oled::write(state_changes_rx, settings.oled_settings).await;
     } else {
         crate::common::logging_receiver_future(state_changes_rx).await;
     }
@@ -18,7 +14,7 @@ pub async fn write(state_changes_rx: Receiver<StateChangeEvent>, config: ArcConf
 mod hw_oled {
     use super::{Receiver, StateChangeEvent};
     use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
-    use api_models::{ player::Song, settings::OLEDSettings, state::PlayerInfo};
+    use api_models::{player::Song, settings::OLEDSettings, state::PlayerInfo};
     use embedded_graphics::{
         mono_font::{ascii::FONT_4X6, ascii::FONT_5X8, ascii::FONT_6X12, MonoTextStyle},
         pixelcolor::BinaryColor,
@@ -37,10 +33,7 @@ mod hw_oled {
     use linux_embedded_hal::Spidev;
     use linux_embedded_hal::{Delay, Pin};
 
-    pub async fn write(
-        mut state_changes_rx: Receiver<StateChangeEvent>,
-        oled_settings: OLEDSettings,
-    ) {
+    pub async fn write(mut state_changes_rx: Receiver<StateChangeEvent>, oled_settings: OLEDSettings) {
         let mut delay = Delay;
         if let Ok(mut spi) = Spidev::open(oled_settings.spi_device_path) {
             info!("Start OLED writer thread.");
@@ -52,9 +45,7 @@ mod hw_oled {
             spi.configure(&options).expect("error configuring SPI");
             let rst_pin = Pin::new(GPIO_PIN_OUTPUT_LCD_RST);
             rst_pin.export().unwrap();
-            rst_pin
-                .set_direction(Direction::Out)
-                .expect("LCD Reset pin problem");
+            rst_pin.set_direction(Direction::Out).expect("LCD Reset pin problem");
             let mut disp = ST7920::<Spidev, Pin, Pin>::new(spi, rst_pin, None, false);
             disp.init(&mut delay).expect("could not init display");
             disp.clear(&mut delay).expect("could not clear display");
@@ -80,11 +71,7 @@ mod hw_oled {
         }
     }
 
-    fn draw_streamer_info(
-        disp: &mut ST7920<Spidev, Pin, Pin>,
-        delay: &mut dyn DelayUs<u32>,
-        status: &StreamerState,
-    ) {
+    fn draw_streamer_info(disp: &mut ST7920<Spidev, Pin, Pin>, delay: &mut dyn DelayUs<u32>, status: &StreamerState) {
         _ = disp.clear_buffer_region(1, 1, 120, 12, delay);
         //1. player name
         Text::new(
@@ -98,15 +85,10 @@ mod hw_oled {
         )
         .draw(disp)
         .expect("Failed to draw text");
-        disp.flush_region(1, 1, 120, 12, delay)
-            .expect("Failed to flush!");
+        disp.flush_region(1, 1, 120, 12, delay).expect("Failed to flush!");
     }
 
-    fn draw_track_info(
-        disp: &mut ST7920<Spidev, Pin, Pin>,
-        delay: &mut dyn DelayUs<u32>,
-        status: &Song,
-    ) {
+    fn draw_track_info(disp: &mut ST7920<Spidev, Pin, Pin>, delay: &mut dyn DelayUs<u32>, status: &Song) {
         //4. song
         let name = status.info_string();
         let mut title = String::new();
@@ -125,8 +107,7 @@ mod hw_oled {
         }
         debug!("Title length: {} / title: {}", title.len(), title);
 
-        disp.clear_buffer_region(1, 12, 120, 40, delay)
-            .expect("Error");
+        disp.clear_buffer_region(1, 12, 120, 40, delay).expect("Error");
 
         let t = Text::new(
             title.as_str(),
@@ -137,11 +118,7 @@ mod hw_oled {
         disp.flush_region(1, 12, 120, 40, delay).unwrap();
     }
 
-    fn draw_player_info(
-        disp: &mut ST7920<Spidev, Pin, Pin>,
-        delay: &mut dyn DelayUs<u32>,
-        player_info: PlayerInfo,
-    ) {
+    fn draw_player_info(disp: &mut ST7920<Spidev, Pin, Pin>, delay: &mut dyn DelayUs<u32>, player_info: PlayerInfo) {
         _ = disp.clear_buffer_region(1, 50, 120, 12, delay);
         //1. player name
         Text::new(
@@ -159,11 +136,9 @@ mod hw_oled {
                     } else {
                         String::new()
                     }),
-                player_info.random.map_or(String::new(), |r| if r {
-                    "|rnd".to_string()
-                } else {
-                    String::new()
-                })
+                player_info
+                    .random
+                    .map_or(String::new(), |r| if r { "|rnd".to_string() } else { String::new() })
             )
             .as_str(),
             Point::new(1, 60),
@@ -171,7 +146,6 @@ mod hw_oled {
         )
         .draw(disp)
         .expect("Failed to draw text");
-        disp.flush_region(1, 50, 120, 12, delay)
-            .expect("Failed to flush!");
+        disp.flush_region(1, 50, 120, 12, delay).expect("Failed to flush!");
     }
 }

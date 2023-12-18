@@ -20,32 +20,21 @@ unsafe impl Sync for DacAk4497 {}
 
 impl VolumeControlDevice for DacAk4497 {
     fn vol_up(&self) -> Volume {
-        let curr_val = self
-            .i2c_helper
-            .read_register(3)
-            .expect("Register read failed");
-        curr_val.checked_add(self.volume_step).map_or_else(
-            || self.set_vol(255),
-            |new_val| self.set_vol(i64::from(new_val)),
-        )
+        let curr_val = self.i2c_helper.read_register(3).expect("Register read failed");
+        curr_val
+            .checked_add(self.volume_step)
+            .map_or_else(|| self.set_vol(255), |new_val| self.set_vol(i64::from(new_val)))
     }
 
     fn vol_down(&self) -> Volume {
-        let curr_val = self
-            .i2c_helper
-            .read_register(3)
-            .expect("Register read failed");
-        curr_val.checked_sub(self.volume_step).map_or_else(
-            || self.set_vol(0),
-            |new_val| self.set_vol(i64::from(new_val)),
-        )
+        let curr_val = self.i2c_helper.read_register(3).expect("Register read failed");
+        curr_val
+            .checked_sub(self.volume_step)
+            .map_or_else(|| self.set_vol(0), |new_val| self.set_vol(i64::from(new_val)))
     }
 
     fn get_vol(&self) -> Volume {
-        let curr_val = self
-            .i2c_helper
-            .read_register(3)
-            .expect("Register read failed");
+        let curr_val = self.i2c_helper.read_register(3).expect("Register read failed");
         Volume {
             step: i64::from(self.volume_step),
             min: 0,
@@ -215,10 +204,7 @@ impl DacAk4497 {
         // WriteRegister(ak4490,0x06,B10001001);     // Set To DSD Data Mute / DSD Mute Control / DSD Mute Release
         // WriteRegister(ak4490,0x09,B00000001);     // Set To DSD Sampling Speed Control
         // ChangeBit(ak4490, 0x01, 0, false);        // Disable soft mute
-        let reg_val = self
-            .i2c_helper
-            .read_register(2)
-            .expect("Can not read register 2");
+        let reg_val = self.i2c_helper.read_register(2).expect("Can not read register 2");
         if dsd {
             self.soft_mute(true);
             self.i2c_helper.write_register(2, reg_val | 0b1000_0000);

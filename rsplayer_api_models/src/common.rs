@@ -5,17 +5,6 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
-pub const BY_GENRE_PL_PREFIX: &str = "playlist_by_genre_";
-pub const BY_DATE_PL_PREFIX: &str = "playlist_by_date_";
-pub const BY_ARTIST_PL_PREFIX: &str = "playlist_by_artist_";
-pub const BY_FOLDER_PL_PREFIX: &str = "playlist_by_folder_";
-pub const SAVED_PL_PREFIX: &str = "playlist_saved_";
-
-pub const CATEGORY_ID_BY_GENRE: &str = "category_by_genre";
-pub const CATEGORY_ID_BY_DATE: &str = "category_by_date";
-pub const CATEGORY_ID_BY_ARTIST: &str = "category_by_artist";
-pub const CATEGORY_ID_BY_FOLDER: &str = "category_by_folder";
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum MetadataLibraryItem {
@@ -40,7 +29,7 @@ impl MetadataLibraryItem {
     pub fn get_id(&self) -> String {
         match self {
             MetadataLibraryItem::Directory { name } => name.to_string(),
-            MetadataLibraryItem::SongItem(song) => song.id.to_string(),
+            MetadataLibraryItem::SongItem(song) => song.file.to_string(),
             MetadataLibraryItem::Empty => String::new(),
         }
     }
@@ -90,6 +79,7 @@ pub enum VolumeCrtlType {
     Dac,
     Alsa,
 }
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Volume {
     pub step: i64,
@@ -127,10 +117,10 @@ pub enum MetadataCommand {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum PlaylistCommand {
-    QueryDynamicPlaylists(Vec<String>, u32, u32),
     SaveQueueAsPlaylist(String),
     QueryPlaylistItems(String, usize),
-    QuerySavedPlaylist,
+    QueryAlbumItems(String, usize),
+    QueryPlaylist,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -140,6 +130,8 @@ pub enum QueueCommand {
     LoadSongToQueue(String),
     AddSongToQueue(String),
     AddLocalLibDirectory(String),
+    AddPlaylistToQueue(String),
+    AddAlbumToQueue(String),
     LoadLocalLibDirectory(String),
     ClearQueue,
     QueryCurrentSong,
@@ -183,24 +175,12 @@ pub enum FilterType {
     SuperSlow,
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumString, EnumIter, IntoStaticStr,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumString, EnumIter, IntoStaticStr)]
 pub enum GainLevel {
     V25,
     V28,
     V375,
 }
-
-pub enum MetadataProvider {
-    LocalFiles,
-    RadioBrowser,
-}
-pub struct ProtocolHandler {
-    _prefix: String,
-    _metadata_type: MetadataProvider,
-}
-
 
 #[must_use]
 pub fn dur_to_string(duration: &Duration) -> String {

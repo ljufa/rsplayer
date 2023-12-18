@@ -1,19 +1,14 @@
 use api_models::{
     common::{
         MetadataLibraryItem,
-        QueueCommand::{
-            AddLocalLibDirectory, AddSongToQueue, LoadLocalLibDirectory, LoadSongToQueue,
-        },
+        QueueCommand::{AddLocalLibDirectory, AddSongToQueue, LoadLocalLibDirectory, LoadSongToQueue},
         UserCommand,
     },
-    
     state::StateChangeEvent,
 };
 use gloo_console::log;
 
-use seed::{
-    a, attrs, div, empty, i, li, nav, p, prelude::*, span, ul, C, IF,
-};
+use seed::{a, attrs, div, empty, i, li, nav, p, prelude::*, progress, section, span, style, ul, C, IF};
 
 use crate::Urls;
 
@@ -52,7 +47,7 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
             items: Vec::new(),
             current_dir_path: Vec::new(),
         },
-        wait_response: false,
+        wait_response: true,
     }
 }
 
@@ -79,10 +74,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::BreadcrumbClick(level) => {
             log!("Level", level);
-            log!(
-                "Items size before",
-                model.files_model.current_dir_path.len()
-            );
+            log!("Items size before", model.files_model.current_dir_path.len());
             model.files_model.current_dir_path.truncate(level);
             log!("Items size after", model.files_model.current_dir_path.len());
             orders.send_msg(Msg::ListItemClick(String::new()));
@@ -96,9 +88,9 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 });
                 current_dir.push_str(&id);
                 current_dir.push('/');
-                orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                    AddLocalLibDirectory(current_dir),
-                )));
+                orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(AddLocalLibDirectory(
+                    current_dir,
+                ))));
             } else {
                 orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(AddSongToQueue(id))));
             }
@@ -112,13 +104,11 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 });
                 current_dir.push_str(&id);
                 current_dir.push('/');
-                orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                    LoadLocalLibDirectory(current_dir),
-                )));
-            } else {
-                orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(LoadSongToQueue(
-                    id,
+                orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(LoadLocalLibDirectory(
+                    current_dir,
                 ))));
+            } else {
+                orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(LoadSongToQueue(id))));
             }
         }
         Msg::WebSocketOpen => {
@@ -133,11 +123,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 }
 
 pub fn view(model: &Model) -> Node<Msg> {
-    div![div![
-        C!["columns"],
-        
-        div![C!["column"], view_content(model)],
-    ]]
+    div![div![C!["columns"], div![C!["column"], view_content(model)],]]
 }
 
 #[allow(clippy::match_same_arms)]
@@ -147,7 +133,8 @@ fn view_content(model: &Model) -> Node<Msg> {
 
 fn view_files(model: &Model) -> Node<Msg> {
     let mut level = 1;
-    div![
+    section![
+        C!["section"],
         nav![
             C!["breadcrumb", "p-3"],
             attrs!(At::AriaLabel => "breadcrumbs"),
@@ -165,6 +152,9 @@ fn view_files(model: &Model) -> Node<Msg> {
                 })
             ])
         ],
+        div![
+            IF!(model.wait_response => progress![C!["progress", "is-small"], attrs!{ At::Max => "100"}, style!{ St::MarginBottom => "50px"}]),
+        ],
         div![model.files_model.items.iter().map(|item| {
             let title = item.get_title();
             let id = item.get_id();
@@ -172,60 +162,60 @@ fn view_files(model: &Model) -> Node<Msg> {
             let id3 = item.get_id();
             let is_dir = item.is_dir();
             div![
-            C!["list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
-            div![
-                C!["list-item"],
+                C!["list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
                 div![
-                    C!["list-item-content", "has-background-dark-transparent"],
+                    C!["list-item"],
                     div![
-                        C!["list-item-title", "has-text-light"],
-                        span![&title],
-                        if let MetadataLibraryItem::SongItem(song) = item {
-                            span![
-                                &song.date.as_ref().map(|d| span![format!(" ({d})")]),
-                                &song
-                                    .time
-                                    .as_ref()
-                                    .map(|t| span![format!(" [{}]", api_models::common::dur_to_string(t))])
-                            ]
-                        } else {
-                            empty!()
-                        }
+                        C!["list-item-content", "has-background-dark-transparent"],
+                        div![
+                            C!["list-item-title", "has-text-light"],
+                            span![&title],
+                            if let MetadataLibraryItem::SongItem(song) = item {
+                                span![
+                                    &song.date.as_ref().map(|d| span![format!(" ({d})")]),
+                                    &song
+                                        .time
+                                        .as_ref()
+                                        .map(|t| span![format!(" [{}]", api_models::common::dur_to_string(t))])
+                                ]
+                            } else {
+                                empty!()
+                            }
+                        ],
+                        div![
+                            C!["description", "has-text-light"],
+                            if let MetadataLibraryItem::SongItem(song) = item {
+                                span![
+                                    song.artist.as_ref().map(|at| span![i!["Art: "], at]),
+                                    song.album.as_ref().map(|a| span![i![" | Alb: "], a]),
+                                    song.genre.as_ref().map(|a| p![i!["Genre: "], a]),
+                                ]
+                            } else {
+                                empty!()
+                            }
+                        ],
+                        IF!(is_dir => ev(Ev::Click, move |_| Msg::ListItemClick(id)))
                     ],
                     div![
-                        C!["description", "has-text-light"],
-                        if let MetadataLibraryItem::SongItem(song) = item {
-                            span![
-                                song.artist.as_ref().map(|at| span![i!["Art: "], at]),
-                                song.album.as_ref().map(|a| span![i![" | Alb: "], a]),
-                                song.genre.as_ref().map(|a| p![i!["Genre: "], a]),
-                            ]
-                        } else {
-                            empty!()
-                        }
+                        C!["list-item-controls"],
+                        div![
+                            C!["buttons"],
+                            a![
+                                attrs!(At::Title =>"Add song to queue"),
+                                C!["white-icon"],
+                                i![C!("material-icons"), "playlist_add"],
+                                ev(Ev::Click, move |_| Msg::AddItemToQueue(id2, is_dir))
+                            ],
+                            a![
+                                attrs!(At::Title =>"Play song and replace queue"),
+                                C!["white-icon"],
+                                i![C!("material-icons"), "play_circle_filled"],
+                                ev(Ev::Click, move |_| Msg::LoadItemToQueue(id3, is_dir))
+                            ],
+                        ]
                     ],
-                    IF!(is_dir => ev(Ev::Click, move |_| Msg::ListItemClick(id)))
-                ],
-                div![
-                    C!["list-item-controls"],
-                    div![
-                        C!["buttons"],
-                        a![
-                            attrs!(At::Title =>"Add song to queue"),
-                            C!["white-icon"],
-                            i![C!("material-icons"), "playlist_add"],
-                            ev(Ev::Click, move |_| Msg::AddItemToQueue(id2, is_dir))
-                        ],
-                        a![
-                            attrs!(At::Title =>"Play song and replace queue"),
-                            C!["white-icon"],
-                            i![C!("material-icons"), "play_circle_filled"],
-                            ev(Ev::Click, move |_| Msg::LoadItemToQueue(id3, is_dir))
-                        ],
-                    ]
-                ],
+                ]
             ]
-        ]
         })]
     ]
 }

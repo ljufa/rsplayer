@@ -8,44 +8,16 @@ use serde::{Deserialize, Serialize};
 use strum_macros::EnumProperty;
 
 use crate::{
-    common::{MetadataLibraryResult,  Volume},
+    common::{MetadataLibraryResult, Volume},
     player::Song,
-    playlist::{DynamicPlaylistsPage, PlaylistPage},
+    playlist::{PlaylistPage, Playlists},
 };
 
-// todo move somewhere else
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum PlayingContextType {
-    Playlist {
-        snapshot_id: String,
-        description: Option<String>,
-        public: Option<bool>,
-    },
-    Collection,
-    Album {
-        artists: Vec<String>,
-        release_date: String,
-        label: Option<String>,
-        genres: Vec<String>,
-    },
-    Artist {
-        genres: Vec<String>,
-        popularity: u32,
-        followers: u32,
-        description: Option<String>,
-    },
-    Unknown,
-}
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, Deserialize)]
 pub struct PlayingContext {
-    pub id: String,
-    pub name: String,
-    pub context_type: PlayingContextType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub playlist_page: Option<PlaylistPage>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub image_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, Deserialize)]
@@ -85,6 +57,7 @@ pub struct StreamerState {
 
 #[derive(Debug, Clone, Eq, PartialEq, EnumProperty, Serialize, Deserialize)]
 #[strum(serialize_all = "title_case")]
+#[allow(clippy::large_enum_variant)]
 pub enum StateChangeEvent {
     CurrentSongEvent(Song),
     CurrentPlayingContextEvent(PlayingContext),
@@ -92,7 +65,7 @@ pub enum StateChangeEvent {
     PlayerInfoEvent(PlayerInfo),
     SongTimeEvent(SongProgress),
     ErrorEvent(String),
-    DynamicPlaylistsPageEvent(Vec<DynamicPlaylistsPage>),
+    PlaylistsEvent(Playlists),
     PlaylistItemsEvent(Vec<Song>, usize),
     MetadataSongScanStarted,
     MetadataSongScanned(String),
@@ -115,9 +88,7 @@ pub enum PlayerState {
     STOPPED,
 }
 
-#[derive(
-    Debug, Eq, PartialEq, Clone, Hash, Copy, FromPrimitive, ToPrimitive, Serialize, Deserialize,
-)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash, Copy, FromPrimitive, ToPrimitive, Serialize, Deserialize)]
 pub enum AudioOut {
     SPKR,
     HEAD,

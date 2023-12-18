@@ -2,7 +2,7 @@ use api_models::state::PlayerInfo;
 use api_models::state::SongProgress;
 use api_models::state::StateChangeEvent;
 use log::info;
-use rsplayer_metadata::queue::QueueService;
+use rsplayer_metadata::queue_service::QueueService;
 use rsplayer_playback::rsp::PlayerService;
 
 use std::sync::Arc;
@@ -47,12 +47,11 @@ pub async fn monitor(
         }
 
         // check playing context change
-        let new_playing_context = queue_service
-            .get_current_playing_context(api_models::state::PlayingContextQuery::IgnoreSongs);
+        let new_playing_context =
+            queue_service.get_current_playing_context(api_models::state::PlayingContextQuery::IgnoreSongs);
         if last_playing_context != new_playing_context {
             if let Some(new_pc) = new_playing_context.as_ref() {
-                _ = state_changes_tx
-                    .send(StateChangeEvent::CurrentPlayingContextEvent(new_pc.clone()));
+                _ = state_changes_tx.send(StateChangeEvent::CurrentPlayingContextEvent(new_pc.clone()));
             }
             last_playing_context = new_playing_context;
         }

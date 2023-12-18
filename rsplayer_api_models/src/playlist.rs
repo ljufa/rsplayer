@@ -1,23 +1,34 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::player::Song;
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Default, PartialOrd, Ord)]
-pub struct Category {
-    pub id: String,
-    pub icon: String,
-    pub name: String,
-}
-
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Default)]
 pub struct Album {
     pub id: String,
-    pub album_name: String,
-    pub album_type: String,
-    pub images: Vec<String>,
-    pub artists: Vec<String>,
-    pub genres: Vec<String>,
-    pub release_date: Option<String>,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artist: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub genre: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub released: Option<DateTime<Utc>>,
+    pub added: DateTime<Utc>,
+    pub song_keys: Vec<String>,
+}
+
+impl Album {
+    pub fn from_bytes(value: &[u8]) -> Self {
+        let album: Album = serde_json::from_slice(value).expect("Failed to deserialize album!");
+        album
+    }
+    pub fn to_json_string_bytes(&self) -> Vec<u8> {
+        serde_json::to_vec(self).expect("Album serialization failed!")
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Default)]
@@ -33,14 +44,8 @@ pub struct Playlist {
 pub enum PlaylistType {
     Saved(Playlist),
     Featured(Playlist),
-    NewRelease(Album),
-}
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct DynamicPlaylistsPage {
-    pub category_id: String,
-    pub playlists: Vec<Playlist>,
-    pub offset: u32,
-    pub limit: u32,
+    LatestRelease(Album),
+    RecentlyAdded(Album),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
@@ -58,7 +63,7 @@ pub struct PlaylistPage {
 
 impl PlaylistPage {
     pub fn remove_item(&mut self, song_id: &str) {
-        self.items.retain(|s| s.id != song_id);
+        self.items.retain(|s| s.file != song_id);
     }
 }
 
@@ -72,7 +77,11 @@ impl Playlists {
     pub fn has_new_releases(&self) -> bool {
         self.items.iter().any(PlaylistType::is_new_release)
     }
+    pub fn has_recently_added(&self) -> bool {
+        self.items.iter().any(PlaylistType::is_recently_added)
+    }
 }
+
 impl PlaylistType {
     #[must_use]
     pub const fn is_saved(&self) -> bool {
@@ -84,15 +93,10 @@ impl PlaylistType {
     }
     #[must_use]
     pub const fn is_new_release(&self) -> bool {
-        matches!(*self, Self::NewRelease(_))
+        matches!(*self, Self::LatestRelease(_))
     }
-}
-impl Category {
     #[must_use]
-    pub fn sanitized_id(&self) -> String {
-        self.id.replace(
-            &['(', ' ', '/', ')', '+', '&', ',', '\"', '.', ';', ':', '\''][..],
-            "",
-        )
+    pub const fn is_recently_added(&self) -> bool {
+        matches!(*self, Self::RecentlyAdded(_))
     }
 }

@@ -1,13 +1,13 @@
 use std::{
     sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering}, Mutex,
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
     },
     time::Duration,
 };
 
 use log::{error, info, warn};
-use mockall_double::double;
+
 use tokio::task::JoinHandle;
 
 use api_models::{
@@ -15,9 +15,8 @@ use api_models::{
     settings::Settings,
     state::{PlayerInfo, PlayerState, SongProgress},
 };
-#[double]
-use rsplayer_metadata::metadata::MetadataService;
-use rsplayer_metadata::queue::QueueService;
+use rsplayer_metadata::metadata_service::MetadataService;
+use rsplayer_metadata::queue_service::QueueService;
 
 use self::symphonia::PlaybackResult;
 
@@ -43,11 +42,7 @@ pub struct PlayerService {
 }
 impl PlayerService {
     #[must_use]
-    pub fn new(
-        settings: &Settings,
-        metadata_service: Arc<MetadataService>,
-        queue_service: Arc<QueueService>,
-    ) -> Self {
+    pub fn new(settings: &Settings, metadata_service: Arc<MetadataService>, queue_service: Arc<QueueService>) -> Self {
         PlayerService {
             queue_service,
             metadata_service,

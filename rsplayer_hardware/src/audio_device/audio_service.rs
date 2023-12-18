@@ -22,13 +22,8 @@ impl AudioInterfaceService {
     pub fn new(config: &ArcConfiguration) -> Result<Self> {
         let settings = config.get_settings();
         let volume_ctrl_device: Box<dyn VolumeControlDevice + Send + Sync> =
-            if settings.volume_ctrl_settings.ctrl_device == VolumeCrtlType::Dac
-                && settings.dac_settings.enabled
-            {
-                DacAk4497::new(
-                    &config.get_streamer_state().volume_state,
-                    &settings.dac_settings,
-                )?
+            if settings.volume_ctrl_settings.ctrl_device == VolumeCrtlType::Dac && settings.dac_settings.enabled {
+                DacAk4497::new(&config.get_streamer_state().volume_state, &settings.dac_settings)?
             } else {
                 AlsaMixer::new(
                     settings.alsa_settings.output_device.card_index,

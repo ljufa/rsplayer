@@ -5,9 +5,7 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 use validator::Validate;
 
-use crate::common::{
-    AudioCard, CardMixer, FilterType, GainLevel, PcmOutputDevice, VolumeCrtlType,
-};
+use crate::common::{AudioCard, CardMixer, FilterType, GainLevel, PcmOutputDevice, VolumeCrtlType};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -56,7 +54,6 @@ pub struct VolumeControlSettings {
     pub rotary_enabled: bool,
     pub rotary_event_device_path: String,
 }
-
 
 #[derive(
     Debug,
@@ -159,11 +156,10 @@ pub struct OLEDSettings {
     pub spi_device_path: String,
 }
 
-
 impl Default for MetadataStoreSettings {
     fn default() -> Self {
         Self {
-            music_directory: "/var/lib/mpd/music".into(),
+            music_directory: "/music".into(),
             follow_links: true,
             supported_extensions: vec![
                 "flac", "wav", "mp3", "m4a", "aac", "aiff", "alac", "ogg", "wv", "wma", "mp4",
@@ -171,7 +167,7 @@ impl Default for MetadataStoreSettings {
             .into_iter()
             .map(std::borrow::ToOwned::to_owned)
             .collect(),
-            db_path: "metadata.db".to_string(),
+            db_path: "ignored_files.db".to_string(),
         }
     }
 }

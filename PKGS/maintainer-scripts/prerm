@@ -1,2 +1,4 @@
 #!/usr/bin/env bash
 systemctl stop rsplayer || true
+
+rm -rf /opt/rsplayer/*.db

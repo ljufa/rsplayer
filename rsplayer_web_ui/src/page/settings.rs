@@ -2,21 +2,16 @@ use std::str::FromStr;
 
 use api_models::{
     common::{
-        CardMixer, FilterType, GainLevel, MetadataCommand::RescanMetadata,
-        SystemCommand, UserCommand, VolumeCrtlType,
+        CardMixer, FilterType, GainLevel, MetadataCommand::RescanMetadata, SystemCommand, UserCommand, VolumeCrtlType,
     },
     settings::{
-        DacSettings, IRInputControlerSettings,
-        MetadataStoreSettings, OLEDSettings, OutputSelectorSettings, RsPlayerSettings,
-        Settings,
+        DacSettings, IRInputControlerSettings, MetadataStoreSettings, OLEDSettings, OutputSelectorSettings,
+        RsPlayerSettings, Settings,
     },
 };
 use gloo_console::log;
-use gloo_net::{Error, http::Request};
-use seed::{
-    attrs, button, C, div, h1,  IF, input, label, option, p, prelude::*,
-    section, select,
-};
+use gloo_net::{http::Request, Error};
+use seed::{attrs, button, div, h1, input, label, option, p, prelude::*, section, select, C, IF};
 use strum::IntoEnumIterator;
 
 use crate::view_spinner_modal;
@@ -78,7 +73,8 @@ pub enum Msg {
 pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     log!("Settings Init called");
     orders.perform_cmd(async {
-        let response = Request::get(API_SETTINGS_PATH).send()
+        let response = Request::get(API_SETTINGS_PATH)
+            .send()
             .await
             .expect("Failed to get settings from backend");
 
@@ -104,28 +100,23 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::SaveSettingsAndRestart => {
             // todo: show modal wait window while server is restarting. use ws status.
             let settings = model.settings.clone();
-            orders.perform_cmd(async {
-                Msg::SettingsSaved(save_settings(settings, "reload=true".to_string()).await)
-            });
+            orders.perform_cmd(async { Msg::SettingsSaved(save_settings(settings, "reload=true".to_string()).await) });
             model.waiting_response = true;
         }
         Msg::ToggleDacEnabled => {
             model.settings.dac_settings.enabled = !model.settings.dac_settings.enabled;
         }
         Msg::ToggleIrEnabled => {
-            model.settings.ir_control_settings.enabled =
-                !model.settings.ir_control_settings.enabled;
+            model.settings.ir_control_settings.enabled = !model.settings.ir_control_settings.enabled;
         }
         Msg::ToggleOledEnabled => {
             model.settings.oled_settings.enabled = !model.settings.oled_settings.enabled;
         }
         Msg::ToggleOutputSelectorEnabled => {
-            model.settings.output_selector_settings.enabled =
-                !model.settings.output_selector_settings.enabled;
+            model.settings.output_selector_settings.enabled = !model.settings.output_selector_settings.enabled;
         }
         Msg::ToggleRotaryVolume => {
-            model.settings.volume_ctrl_settings.rotary_enabled =
-                !model.settings.volume_ctrl_settings.rotary_enabled;
+            model.settings.volume_ctrl_settings.rotary_enabled = !model.settings.volume_ctrl_settings.rotary_enabled;
         }
         Msg::ToggleResumePlayback => {
             model.settings.auto_resume_playback = !model.settings.auto_resume_playback;
@@ -160,8 +151,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.settings.volume_ctrl_settings.ctrl_device = device;
         }
         Msg::InputVolumeStepChanged(step) => {
-            model.settings.volume_ctrl_settings.volume_step =
-                step.parse::<u8>().unwrap_or_default();
+            model.settings.volume_ctrl_settings.volume_step = step.parse::<u8>().unwrap_or_default();
         }
         Msg::InputVolumeAlsaMixerChanged(mixer) => {
             let pair: Vec<&str> = mixer.split(',').collect();
@@ -194,7 +184,8 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 _ = save_settings(settings, "reload=false".to_string()).await;
             });
             orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(RescanMetadata(
-                model.settings.metadata_settings.music_directory.clone(), false,
+                model.settings.metadata_settings.music_directory.clone(),
+                false,
             ))));
         }
         _ => {}
@@ -426,10 +417,7 @@ fn view_ir_control(ir_settings: &IRInputControlerSettings) -> Node<Msg> {
                 C!["control"],
                 div![
                     C!["select"],
-                    select![option![
-                        attrs!( At::Value => "Apple_A1156"),
-                        "Apple - A1156"
-                    ]]
+                    select![option![attrs!( At::Value => "Apple_A1156"), "Apple - A1156"]]
                 ],
             ],
         ],
@@ -443,9 +431,7 @@ fn view_ir_control(ir_settings: &IRInputControlerSettings) -> Node<Msg> {
                     attrs! {
                         At::Value => ir_settings.input_socket_path
                     },
-                    input_ev(Ev::Input, move |value| {
-                        Msg::InputLircInputSocketPathChanged(value)
-                    }),
+                    input_ev(Ev::Input, move |value| { Msg::InputLircInputSocketPathChanged(value) }),
                 ],
             ],
         ],
@@ -459,7 +445,7 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
     div![
         div![
             C!["field"],
-            label!["Volume control device:", C!["label","has-text-white"]],
+            label!["Volume control device:", C!["label", "has-text-white"]],
             div![
                 C!["control"],
                 div![
@@ -481,33 +467,33 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
             ],
         ],
         IF!(volume_settings.ctrl_device == VolumeCrtlType::Alsa =>
-            div![
-                C!["field"],
-                label!["Alsa mixer:", C!["label","has-text-white"]],
-                div![
-                    C!["control"],
-                    div![
-                        C!["select"],
-                            select![
-                                option!["-- Select mixer --"],
-                                alsa_settings.find_mixers_by_card_index(model.selected_audio_card_index)
-                                .iter()
-                                .map(|pcmd|
-                                    option![
-                                        IF!(volume_settings.alsa_mixer.as_ref().map_or(false, |f| pcmd.index == f.index && pcmd.name == f.name) => attrs!(At::Selected => "")),
-                                        attrs! {At::Value => format!("{},{}", pcmd.index, pcmd.name )},
-                                        pcmd.name.clone()
-                                    ]
-                                ),
-                                input_ev(Ev::Change, Msg::InputVolumeAlsaMixerChanged),
-                            ],
-                    ],
-                ],
-            ]
-         ),
+           div![
+               C!["field"],
+               label!["Alsa mixer:", C!["label","has-text-white"]],
+               div![
+                   C!["control"],
+                   div![
+                       C!["select"],
+                           select![
+                               option!["-- Select mixer --"],
+                               alsa_settings.find_mixers_by_card_index(model.selected_audio_card_index)
+                               .iter()
+                               .map(|pcmd|
+                                   option![
+                                       IF!(volume_settings.alsa_mixer.as_ref().map_or(false, |f| pcmd.index == f.index && pcmd.name == f.name) => attrs!(At::Selected => "")),
+                                       attrs! {At::Value => format!("{},{}", pcmd.index, pcmd.name )},
+                                       pcmd.name.clone()
+                                   ]
+                               ),
+                               input_ev(Ev::Change, Msg::InputVolumeAlsaMixerChanged),
+                           ],
+                   ],
+               ],
+           ]
+        ),
         div![
             C!["field"],
-            label!["Volume step", C!["label","has-text-white"]],
+            label!["Volume step", C!["label", "has-text-white"]],
             div![
                 C!["control"],
                 input![
@@ -516,13 +502,10 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
                         At::Value => volume_settings.volume_step
                         At::Type => "number"
                     },
-                    input_ev(Ev::Input, move |value| {
-                        Msg::InputVolumeStepChanged(value)
-                    }),
+                    input_ev(Ev::Input, move |value| { Msg::InputVolumeStepChanged(value) }),
                 ],
             ],
         ],
-
         div![
             C!["field"],
             ev(Ev::Click, |_| Msg::ToggleRotaryVolume),
@@ -534,7 +517,8 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
                     At::Checked => volume_settings.rotary_enabled.as_at_value(),
                 },
             ],
-            label![C!["label","has-text-white"],
+            label![
+                C!["label", "has-text-white"],
                 "Enable rotary encoder volume control",
                 attrs! {
                     At::For => "rotary_cb"
@@ -561,7 +545,6 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
                 ],
             ]
         )
-
     ]
 }
 
@@ -583,10 +566,7 @@ fn view_oled_display(oled_settings: &OLEDSettings) -> Node<Msg> {
             label!["SPI Device path:", C!["label", "has-text-white"]],
             div![
                 C!["control"],
-                input![
-                    C!["input"],
-                    attrs! {At::Value => oled_settings.spi_device_path},
-                ],
+                input![C!["input"], attrs! {At::Value => oled_settings.spi_device_path},],
             ],
         ],
     ]
@@ -741,23 +721,24 @@ fn view_metadata_storage(metadata_settings: &MetadataStoreSettings) -> Node<Msg>
 
 fn view_rsp(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
     div![
-            C!["field"],
-            label!["Input buffer size (in MB)", C!["label","has-text-white"]],
-            div![
-                C!["control"],
-                input![
-                    C!["input"],
-                    attrs! {At::Value => rsp_settings.buffer_size_mb, At::Type => "number"},
-                    input_ev(Ev::Input, move |value| {
-                        Msg::InputRspBufferSizeChange(value)
-                    }),
-                ],
+        C!["field"],
+        label!["Input buffer size (in MB)", C!["label", "has-text-white"]],
+        div![
+            C!["control"],
+            input![
+                C!["input"],
+                attrs! {At::Value => rsp_settings.buffer_size_mb, At::Type => "number"},
+                input_ev(Ev::Input, move |value| { Msg::InputRspBufferSizeChange(value) }),
             ],
-        ]
+        ],
+    ]
 }
 
 #[allow(clippy::future_not_send)]
 async fn save_settings(settings: Settings, query: String) -> Result<String, Error> {
-    let response = Request::post(format!("{API_SETTINGS_PATH}?{query}").as_str()).json(&settings)?.send().await?;
+    let response = Request::post(format!("{API_SETTINGS_PATH}?{query}").as_str())
+        .json(&settings)?
+        .send()
+        .await?;
     response.text().await
 }

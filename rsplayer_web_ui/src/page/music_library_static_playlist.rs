@@ -1,20 +1,13 @@
-
-
-
 use api_models::common::UserCommand;
-
 use api_models::state::StateChangeEvent;
-
 use api_models::{
     player::Song,
     playlist::{PlaylistType, Playlists},
 };
 use gloo_console::log;
-use gloo_net::http::Request;
-use gloo_net::Error;
 use seed::{
-    a, attrs, button, div, empty, figure, footer, header, i, id, img, nodes, p, prelude::*,
-    progress, section, span, style, C, IF,
+    a, attrs, button, div, figure, footer, header, i, id, img, li, nodes, p, prelude::*, progress, section, span,
+    style, ul, C, IF,
 };
 
 use crate::{attachCarousel, scrollToId};
@@ -26,35 +19,44 @@ pub struct Model {
     pub selected_playlist_items: Vec<Song>,
     pub selected_playlist_id: String,
     pub selected_playlist_name: String,
+    pub selected_playlist_is_album: bool,
     selected_playlist_current_page_no: usize,
 }
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum Msg {
-    StaticPlaylistsFetched(Result<Playlists, Error>),
     StatusChangeEventReceived(StateChangeEvent),
     SendUserCommand(UserCommand),
     ShowPlaylistItemsClicked(bool, String, String),
+    ShowAlbumItemsClicked(String),
     LoadPlaylistIntoQueue(String),
-    LoadAlbumQueue(String),
+    LoadAlbumIntoQueue(String),
+    AddPlaylistToQueue(String),
+    AddAlbumToQueue(String),
     CloseSelectedPlaylistItemsModal,
     KeyPressed(web_sys::KeyboardEvent),
     AddSongToQueue(String),
     PlaySongFromPlaylist(String),
     LoadMorePlaylistItems,
+    WebSocketOpen,
 }
 
 #[allow(clippy::needless_pass_by_value)]
 pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
-    orders.perform_cmd(async { Msg::StaticPlaylistsFetched(get_playlists().await) });
+    orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
+        api_models::common::PlaylistCommand::QueryPlaylist,
+    )));
     
+
+
     orders.stream(streams::window_event(Ev::KeyDown, |event| {
         Msg::KeyPressed(event.unchecked_into())
     }));
     Model {
         static_playlists: Playlists::default(),
         static_playlist_loading: true,
+        selected_playlist_is_album: false,
         selected_playlist_items: Vec::default(),
         selected_playlist_id: String::default(),
         selected_playlist_name: String::default(),
@@ -70,15 +72,6 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
 pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     //log!("PL Update", msg);
     match msg {
-        Msg::StaticPlaylistsFetched(pls) => {
-            model.static_playlist_loading = false;
-            model.static_playlists = pls.unwrap_or_default();
-            orders.after_next_render(|_| {
-                attachCarousel("#featured-pl");
-                attachCarousel("#saved-pl");
-                attachCarousel("#newreleases-pl");
-            });
-        }
         Msg::LoadMorePlaylistItems => {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
                 api_models::common::PlaylistCommand::QueryPlaylistItems(
@@ -88,18 +81,33 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             )));
             orders.after_next_render(move |_| scrollToId("first-list-item"));
         }
-        Msg::StatusChangeEventReceived(StateChangeEvent::PlaylistItemsEvent(
-            playlist_items,
-            page,
-        )) => {
+        Msg::StatusChangeEventReceived(StateChangeEvent::PlaylistItemsEvent(playlist_items, page)) => {
             model.selected_playlist_items = playlist_items;
             model.selected_playlist_current_page_no = page;
+        }
+        Msg::StatusChangeEventReceived(StateChangeEvent::PlaylistsEvent(playlists)) => {
+            model.static_playlist_loading = false;
+            model.static_playlists = playlists;
+            orders.after_next_render(|_| {
+                attachCarousel("#featured-pl");
+                attachCarousel("#saved-pl");
+                attachCarousel("#newreleases-pl");
+            });
         }
         Msg::ShowPlaylistItemsClicked(_is_dynamic, playlist_id, playlist_name) => {
             model.selected_playlist_id = playlist_id.clone();
             model.selected_playlist_name = playlist_name;
+            model.selected_playlist_is_album = false;
             orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
-                api_models::common::PlaylistCommand::QueryPlaylistItems(playlist_id, 1),
+                api_models::common::PlaylistCommand::QueryPlaylistItems(playlist_id, 0),
+            )));
+        }
+        Msg::ShowAlbumItemsClicked(album_id) => {
+            model.selected_playlist_id = album_id.clone();
+            model.selected_playlist_name = album_id.clone();
+            model.selected_playlist_is_album = true;
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
+                api_models::common::PlaylistCommand::QueryAlbumItems(album_id, 0),
             )));
         }
         Msg::CloseSelectedPlaylistItemsModal => {
@@ -130,9 +138,24 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 api_models::common::QueueCommand::LoadSongToQueue(song_id),
             )));
         }
-        Msg::LoadAlbumQueue(album_id) => {
+        Msg::LoadAlbumIntoQueue(album_id) => {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
                 api_models::common::QueueCommand::LoadAlbumInQueue(album_id),
+            )));
+        }
+        Msg::AddAlbumToQueue(album_id) => {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::AddAlbumToQueue(album_id),
+            )));
+        }
+        Msg::AddPlaylistToQueue(pl_id) => {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::AddPlaylistToQueue(pl_id),
+            )));
+        }
+        Msg::WebSocketOpen => {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
+                api_models::common::PlaylistCommand::QueryPlaylist,
             )));
         }
         _ => {}
@@ -140,54 +163,66 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 }
 
 pub fn view(model: &Model) -> Node<Msg> {
-    div![
-        view_selected_playlist_items_modal(model),
-        view_static_playlists(model),
-    ]
+    div![view_selected_playlist_items_modal(model), view_static_playlists(model),]
 }
 
 fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
     let selected_playlist_id = model.selected_playlist_id.clone();
+    let selected_playlist_id2 = model.selected_playlist_id.clone();
     div![
-        C![
-            "modal",
-            IF!(!model.selected_playlist_items.is_empty() => "is-active")
-        ],
-        div![C!["modal-background"],
+        C!["modal", IF!(!model.selected_playlist_items.is_empty() => "is-active")],
+        div![
+            C!["modal-background"],
             ev(Ev::Click, |_| Msg::CloseSelectedPlaylistItemsModal),
         ],
         div![
             id!("selected-playlist-items-modal"),
             C!["modal-card"],
-            header![C!["modal-card-head"],
+            header![
+                C!["modal-card-head"],
                 a![
                     attrs!(At::Title =>"Load playlist into queue"),
                     i![C!("is-large-icon material-icons"), "play_circle_filled"],
-                    ev(Ev::Click, move |_| Msg::LoadPlaylistIntoQueue(selected_playlist_id))
+                    if model.selected_playlist_is_album {
+                        ev(Ev::Click, move |_| Msg::LoadAlbumIntoQueue(selected_playlist_id))
+                    } else {
+                        ev(Ev::Click, move |_| Msg::LoadPlaylistIntoQueue(selected_playlist_id))
+                    }
                 ],
-                p![C!["modal-card-title"],style!(St::MarginLeft => "10px"), model.selected_playlist_name.clone()],
-                button![C!["delete", "is-large"], attrs!(At::AriaLabel =>"close"), ev(Ev::Click, |_| Msg::CloseSelectedPlaylistItemsModal)],
+                a![
+                    attrs!(At::Title =>"Load playlist into queue"),
+                    i![C!("is-large-icon material-icons"), "playlist_add"],
+                    if model.selected_playlist_is_album {
+                        ev(Ev::Click, move |_| Msg::AddAlbumToQueue(selected_playlist_id2))
+                    } else {
+                        ev(Ev::Click, move |_| Msg::AddPlaylistToQueue(selected_playlist_id2))
+                    }
+                ],
+                p![
+                    C!["modal-card-title"],
+                    style!(St::MarginLeft => "10px"),
+                    model.selected_playlist_name.clone()
+                ],
+                button![
+                    C!["delete", "is-large"],
+                    attrs!(At::AriaLabel =>"close"),
+                    ev(Ev::Click, |_| Msg::CloseSelectedPlaylistItemsModal)
+                ],
             ],
             section![
                 C!["modal-card-body"],
-                div![C!["list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
-                div![id!("first-list-item")],
-                model.selected_playlist_items
-                    .iter()
-                    .map(|song| {
-                        let song_id = song.get_identifier();
-                        let song_id2 = song.get_identifier();
-                        div![C!["list-item"],
+                div![
+                    C!["list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
+                    div![id!("first-list-item")],
+                    model.selected_playlist_items.iter().map(|song| {
+                        let song_id = song.file.clone();
+                        let song_id2 = song.file.clone();
+                        div![
+                            C!["list-item"],
                             div![
                                 C!["list-item-content", "has-background-dark-transparent"],
-                                div![
-                                    C!["list-item-title", "has-text-light"],
-                                    song.get_title()
-                                ],
-                                div![
-                                    C!["description", "has-text-light"],
-                                    song.artist.clone()
-                                ]
+                                div![C!["list-item-title", "has-text-light"], song.get_title()],
+                                div![C!["description", "has-text-light"], song.artist.clone()]
                             ],
                             div![
                                 C!["list-item-controls"],
@@ -195,12 +230,14 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
                                     C!["buttons"],
                                     a![
                                         attrs!(At::Title =>"Add song to queue"),
-                                        C!["icon"], i![C!("material-icons"), "playlist_add"],
+                                        C!["icon"],
+                                        i![C!("material-icons"), "playlist_add"],
                                         ev(Ev::Click, move |_| Msg::AddSongToQueue(song_id))
                                     ],
                                     a![
                                         attrs!(At::Title =>"Play song and replace queue"),
-                                        C!["icon"], i![C!("material-icons"), "play_circle_filled"],
+                                        C!["icon"],
+                                        i![C!("material-icons"), "play_circle_filled"],
                                         ev(Ev::Click, move |_| Msg::PlaySongFromPlaylist(song_id2))
                                     ],
                                 ]
@@ -209,14 +246,17 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
                     })
                 ]
             ],
-            footer![C!["modal-card-foot"],
-                button![C!["button","is-fullwidth", "is-outlined", "is-success"],"Load more", ev(Ev::Click, move |_| Msg::LoadMorePlaylistItems)]
-
+            footer![
+                C!["modal-card-foot"],
+                button![
+                    C!["button", "is-fullwidth", "is-outlined", "is-success"],
+                    "Load more",
+                    ev(Ev::Click, move |_| Msg::LoadMorePlaylistItems)
+                ]
             ]
         ],
     ]
 }
-
 
 fn view_static_playlists(model: &Model) -> Node<Msg> {
     section![
@@ -226,8 +266,8 @@ fn view_static_playlists(model: &Model) -> Node<Msg> {
         C!["section"],
         div![
             C!["container"],
-            IF!(model.static_playlists.has_featured() => nodes![
-                span![C!["title is-3 has-text-light has-background-dark-transparent"], "Featured"],
+            IF!(model.static_playlists.has_recently_added() => nodes![
+                span![C!["title is-3 has-text-light has-background-dark-transparent"], "Recently added"],
                 section![
                     C!["section"],
                     div![
@@ -237,26 +277,11 @@ fn view_static_playlists(model: &Model) -> Node<Msg> {
                             .static_playlists
                             .items
                             .iter()
-                            .filter(|it| it.is_featured())
+                            .filter(|it| it.is_recently_added())
                             .map(view_static_playlist_carousel_item)
                     ],
                 ]]
             ),
-            IF!(model.static_playlists.has_saved() => nodes![
-            span![C!["title is-3 has-text-light has-background-dark-transparent"], "Saved"],
-            section![
-                C!["section"],
-                div![
-                    C!["carousel"],
-                    id!("saved-pl"),
-                    model
-                        .static_playlists
-                        .items
-                        .iter()
-                        .filter(|it| it.is_saved())
-                        .map(view_static_playlist_carousel_item)
-                ],
-            ]]),
             IF!(model.static_playlists.has_new_releases() => nodes![
             span![C!["title is-3 has-text-light has-background-dark-transparent"], "New releases"],
             section![
@@ -269,6 +294,21 @@ fn view_static_playlists(model: &Model) -> Node<Msg> {
                         .items
                         .iter()
                         .filter(|it| it.is_new_release())
+                        .map(view_static_playlist_carousel_item)
+                ],
+            ]]),
+            IF!(model.static_playlists.has_saved() => nodes![
+            span![C!["title is-3 has-text-light has-background-dark-transparent"], "Saved"],
+            section![
+                C!["section"],
+                div![
+                    C!["carousel"],
+                    id!("saved-pl"),
+                    model
+                        .static_playlists
+                        .items
+                        .iter()
+                        .filter(|it| it.is_saved())
                         .map(view_static_playlist_carousel_item)
                 ],
             ]]),
@@ -295,29 +335,20 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                                 attrs! {At::Src => pl.image.as_ref().map_or("/headphones.png".to_string(),std::clone::Clone::clone)}
                             ]
                         ],
-                        span![
-                            C!["play-button"],
-                            ev(Ev::Click, |_| Msg::LoadPlaylistIntoQueue(id))
-                        ]
+                        span![C!["play-button"], ev(Ev::Click, |_| Msg::LoadPlaylistIntoQueue(id))]
                     ],
-                    div![
-                        C!["card-footer"],
-                        a![
-                            ev(Ev::Click, |_| Msg::ShowPlaylistItemsClicked(
-                                false, id2, name
-                            )),
-                            C!["card-footer-item"],
-                            pl.name.clone(),
-                            pl.owner_name
-                                .as_ref()
-                                .map_or(String::new(), |ow| format!(" by {ow}"))
-                        ],
-                    ]
+                    div![a![
+                        C!["card-footer-item", "box"],
+                        ev(Ev::Click, |_| Msg::ShowPlaylistItemsClicked(false, id2, name)),
+                        C!["card-footer-item"],
+                        pl.name.clone()
+                    ],]
                 ]
             ]
         }
-        PlaylistType::NewRelease(album) => {
+        PlaylistType::LatestRelease(album) | PlaylistType::RecentlyAdded(album) => {
             let id = album.id.clone();
+            let id2 = album.id.clone();
             div![
                 C![format!("item-{id}")],
                 div![
@@ -328,36 +359,28 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                             C!["image", "is-square"],
                             img![
                                 C!["image-center-half-size"],
-                                attrs! {At::Src => album.images.first().map_or("/headphones.png".to_string(),std::clone::Clone::clone)}
+                                IF!(album.image_id.is_none() => attrs! {At::Src => "/headphones.png"}),
+                                IF!(album.image_id.is_some() => attrs! {At::Src => format!("/artwork/{}", album.image_id.as_ref().unwrap())}),
                             ]
                         ],
-                        span![
-                            C!["play-button"],
-                            ev(Ev::Click, |_| Msg::LoadAlbumQueue(id))
-                        ]
+                        span![C!["play-button"], ev(Ev::Click, |_| Msg::LoadAlbumIntoQueue(id))]
                     ],
-                    div![
-                        C!["card-content"],
-                        p![format!("Album: {}", album.album_name.clone())],
-                        album
-                            .artists
-                            .first()
-                            .map_or(empty!(), |art| p![format!("Artist: {art}")]),
-                        album
-                            .release_date
-                            .as_ref()
-                            .map_or(empty!(), |rdate| p![format!("Release date: {rdate}")])
-                    ]
+                    div![a![
+                        ev(Ev::Click, |_| Msg::ShowAlbumItemsClicked(id2)),
+                        C!["card-footer-item", "box"],
+                        ul![
+                            style! {St::TextAlign => "center"},
+                            li![i![album.title.clone()]],
+                            li![album.artist.as_ref().map_or(String::new(), |art| art.clone())],
+                            li![album.genre.as_ref().map_or(String::new(), |genre| genre.clone())],
+                            li![album
+                                .released
+                                .as_ref()
+                                .map_or(String::new(), |rdate| format!("{}", rdate.format("%Y")))],
+                        ]
+                    ],]
                 ]
             ]
         }
     }
 }
-
-#[allow(clippy::future_not_send)]
-pub async fn get_playlists() -> Result<Playlists, Error> {
-    let response = Request::get("/api/playlist").send().await?;
-    let playlists: Playlists = response.json().await?;
-    Ok(playlists)
-}
-

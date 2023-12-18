@@ -27,16 +27,12 @@ impl Configuration {
         _ = db.compare_and_swap(
             SETTINGS_KEY,
             None as Option<IVec>,
-            Some(IVec::from(
-                serde_json::to_vec(&Settings::default()).unwrap(),
-            )),
+            Some(IVec::from(serde_json::to_vec(&Settings::default()).unwrap())),
         );
         _ = db.compare_and_swap(
             STATE_KEY,
             None as Option<IVec>,
-            Some(IVec::from(
-                serde_json::to_vec(&StreamerState::default()).unwrap(),
-            )),
+            Some(IVec::from(serde_json::to_vec(&StreamerState::default()).unwrap())),
         );
         Self { db }
     }
@@ -56,16 +52,12 @@ impl Configuration {
     }
 
     pub fn save_settings(&self, settings: &Settings) {
-        _ = self
-            .db
-            .insert(SETTINGS_KEY, serde_json::to_vec(&settings).unwrap());
+        _ = self.db.insert(SETTINGS_KEY, serde_json::to_vec(&settings).unwrap());
         _ = self.db.flush();
     }
 
     fn save_streamer_state(&self, streamer_status: &StreamerState) {
-        _ = self
-            .db
-            .insert(STATE_KEY, serde_json::to_vec(streamer_status).unwrap());
+        _ = self.db.insert(STATE_KEY, serde_json::to_vec(streamer_status).unwrap());
     }
 
     pub fn get_streamer_state(&self) -> StreamerState {

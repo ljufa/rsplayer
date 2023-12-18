@@ -11,9 +11,7 @@ use symphonia::core::audio::Channels;
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, Track};
-use symphonia::core::io::{
-    MediaSource, MediaSourceStream, MediaSourceStreamOptions, ReadOnlySource,
-};
+use symphonia::core::io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions, ReadOnlySource};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::TimeBase;
@@ -68,9 +66,7 @@ pub fn play_file(
     };
 
     let codec_parameters = &track.codec_params;
-    let tb = codec_parameters
-        .time_base
-        .unwrap_or_else(|| TimeBase::new(1, 1));
+    let tb = codec_parameters.time_base.unwrap_or_else(|| TimeBase::new(1, 1));
     let dur = codec_parameters
         .n_frames
         .map_or(1, |frames| codec_parameters.start_ts + frames);
@@ -132,7 +128,7 @@ pub fn play_file(
                         break Err(format_err!("Failed to open audio output {}", audio_device));
                     };
                     debug!("Audio opened");
-                    
+
                     audio_output.replace(audio_out);
                 } else {
                     // TODO: Check the audio spec. and duration hasn't changed.
@@ -143,7 +139,7 @@ pub fn play_file(
                 if packet.ts() > 0 {
                     if let Some(audio_output) = audio_output.as_mut() {
                         debug!("Before audio write");
-                        
+
                         _ = audio_output.write(decoded_buff);
                     }
                 }
@@ -164,11 +160,7 @@ pub fn play_file(
     loop_result
 }
 
-fn get_source(
-    music_dir: &str,
-    path_str: &str,
-    hint: &mut Hint,
-) -> Result<Box<dyn MediaSource>, anyhow::Error> {
+fn get_source(music_dir: &str, path_str: &str, hint: &mut Hint) -> Result<Box<dyn MediaSource>, anyhow::Error> {
     let source = if path_str.starts_with("http") {
         let agent = ureq::AgentBuilder::new()
             .timeout_connect(Duration::from_secs(10))
@@ -177,10 +169,7 @@ fn get_source(
             .build();
         let resp = agent.get(path_str).set("accept", "*/*").call()?;
         let status = resp.status();
-        info!(
-            "response status code:{status} / status text:{}",
-            resp.status_text()
-        );
+        info!("response status code:{status} / status text:{}", resp.status_text());
         resp.headers_names()
             .iter()
             .for_each(|header| debug!("{header} = {:?}", resp.header(header).unwrap_or("")));
@@ -202,7 +191,5 @@ fn get_source(
 }
 
 fn first_supported_track(tracks: &[Track]) -> Option<&Track> {
-    tracks
-        .iter()
-        .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
+    tracks.iter().find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
 }

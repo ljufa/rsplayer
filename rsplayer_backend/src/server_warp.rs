@@ -1,20 +1,3 @@
-use api_models::common::SystemCommand;
-use api_models::common::UserCommand;
-use api_models::serde_json;
-use futures::Future;
-use futures::FutureExt;
-use futures::StreamExt;
-
-use log::debug;
-use log::error;
-use log::info;
-use log::warn;
-use rsplayer_config::Configuration;
-
-use api_models::state::StateChangeEvent;
-
-use rsplayer_metadata::playlist::PlaylistService;
-use rust_embed::RustEmbed;
 use std::env;
 use std::net::Ipv4Addr;
 use std::net::SocketAddrV4;
@@ -24,6 +7,15 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 use std::{sync::Arc, time::Duration};
+
+use futures::Future;
+use futures::FutureExt;
+use futures::StreamExt;
+use log::debug;
+use log::error;
+use log::info;
+use log::warn;
+use rust_embed::RustEmbed;
 use tokio::{
     sync::{broadcast::Receiver, mpsc, RwLock},
     time::sleep,
@@ -34,6 +26,12 @@ use warp::{
     ws::{Message, WebSocket},
     Filter,
 };
+
+use api_models::common::SystemCommand;
+use api_models::common::UserCommand;
+use api_models::serde_json;
+use api_models::state::StateChangeEvent;
+use rsplayer_config::Configuration;
 
 /// Our global unique user id counter.
 static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
@@ -74,7 +72,6 @@ pub fn start(
     player_commands_tx: UserCommandSender,
     system_commands_tx: SystemCommandSender,
     config: &Config,
-    playlist_service: Arc<PlaylistService>,
 ) -> (impl Future<Output = ()>, impl Future<Output = ()>) {
     // Keep track of all connected users, key is usize, value
     // is a websocket sender.
@@ -93,25 +90,22 @@ pub fn start(
         .and(users_f)
         .and(player_commands_tx)
         .and(system_commands_tx)
-        .map(
-            |ws: warp::ws::Ws, users, player_commands, system_commands| {
-                // And then our closure will be called when it completes...
-                ws.on_upgrade(|websocket| {
-                    user_connected(websocket, users, player_commands, system_commands)
-                })
-            },
-        );
+        .map(|ws: warp::ws::Ws, users, player_commands, system_commands| {
+            // And then our closure will be called when it completes...
+            ws.on_upgrade(|websocket| user_connected(websocket, users, player_commands, system_commands))
+        });
     let ui_static_content = warp::get()
         .and(warp_embed::embed(&StaticContentDir))
+        .with(warp::compression::gzip());
+    let artwork_static_content = warp::path("artwork")
+        .and(warp::fs::dir("artwork"))
         .with(warp::compression::gzip());
 
     let routes = player_ws_path
         .or(filters::settings_save(config.clone()))
         .or(filters::get_settings(config.clone()))
-        .or(filters::get_static_playlists(playlist_service.clone()))
-        .or(filters::get_playlist_items(playlist_service.clone()))
-        .or(filters::get_playlist_categories(playlist_service))
         .or(ui_static_content)
+        .or(artwork_static_content)
         .with(cors);
 
     let ws_handle = async move {
@@ -134,19 +128,16 @@ pub fn start(
 
 #[allow(warnings)]
 mod filters {
-    use std::{collections::HashMap, sync::Arc};
+    use std::sync::Arc;
+
+    use warp::Filter;
 
     use api_models::settings::Settings;
-
-    use rsplayer_metadata::playlist::PlaylistService;
-    use rsplayer_playback::rsp::PlayerService;
-    use warp::Filter;
+    use rsplayer_metadata::playlist_service::PlaylistService;
 
     use super::{handlers, Config};
 
-    pub fn settings_save(
-        config: Config,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    pub fn settings_save(config: Config) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::post()
             .and(warp::path!("api" / "settings"))
             .and(json_body())
@@ -154,14 +145,14 @@ mod filters {
             .and(warp::query())
             .and_then(handlers::save_settings)
     }
-    pub fn get_settings(
-        config: Config,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+
+    pub fn get_settings(config: Config) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "settings"))
             .and(with_config(config))
             .and_then(handlers::get_settings)
     }
+
     pub fn get_startup_error(
         error: &anyhow::Error,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
@@ -170,44 +161,9 @@ mod filters {
             .and(warp::path!("api" / "start_error"))
             .map(move || error_msg.to_string())
     }
-    pub fn get_static_playlists(
-        player_service: Arc<PlaylistService>,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::get()
-            .and(warp::path!("api" / "playlist"))
-            .and(with_playlist_svc(player_service))
-            .and_then(handlers::get_static_playlists)
-    }
 
-    pub fn get_playlist_categories(
-        player_service: Arc<PlaylistService>,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::get()
-            .and(warp::path!("api" / "categories"))
-            .and(with_playlist_svc(player_service))
-            .and_then(handlers::get_playlist_categories)
-    }
-
-    pub fn get_playlist_items(
-        player_service: Arc<PlaylistService>,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::get()
-            .and(warp::path!("api" / "playlist" / String))
-            .and(with_playlist_svc(player_service))
-            .and_then(handlers::get_playlist_items)
-    }
-
-    fn with_config(
-        config: Config,
-    ) -> impl Filter<Extract = (Config,), Error = std::convert::Infallible> + Clone {
+    fn with_config(config: Config) -> impl Filter<Extract = (Config,), Error = std::convert::Infallible> + Clone {
         warp::any().map(move || config.clone())
-    }
-
-    fn with_playlist_svc(
-        player_svc: Arc<PlaylistService>,
-    ) -> impl Filter<Extract = (Arc<PlaylistService>,), Error = std::convert::Infallible> + Clone
-    {
-        warp::any().map(move || player_svc.clone())
     }
 
     fn json_body() -> impl Filter<Extract = (Settings,), Error = warp::Rejection> + Clone {
@@ -219,22 +175,16 @@ mod filters {
 
 #[allow(warnings, clippy::unused_async)]
 mod handlers {
-    use log::{debug, error};
-    use rsplayer_metadata::playlist::PlaylistService;
-    use std::{
-        collections::HashMap,
-        convert::Infallible,
-        process::{exit, ExitCode},
-        sync::Arc,
-    };
+    use std::{collections::HashMap, convert::Infallible, process::exit, sync::Arc};
 
-    use rsplayer_hardware::audio_device::alsa::{self, AlsaPcmCard};
+    use log::{debug, error};
+    use warp::hyper::StatusCode;
+
+    use api_models::settings::Settings;
+    use rsplayer_hardware::audio_device::alsa::{self};
+    use rsplayer_metadata::playlist_service::PlaylistService;
 
     use super::Config;
-    use api_models::settings::Settings;
-
-    use rsplayer_config::Configuration;
-    use warp::hyper::StatusCode;
 
     pub async fn save_settings(
         settings: Settings,
@@ -276,29 +226,6 @@ mod handlers {
         settings.alsa_settings.available_audio_cards = cards;
 
         Ok(warp::reply::json(settings))
-    }
-
-    pub async fn get_static_playlists(
-        player_service: Arc<PlaylistService>,
-    ) -> Result<impl warp::Reply, Infallible> {
-        Ok(warp::reply::json(&player_service.get_playlists()))
-    }
-    pub async fn get_playlist_categories(
-        player_service: Arc<PlaylistService>,
-    ) -> Result<impl warp::Reply, Infallible> {
-        Ok(warp::reply::json(
-            &PlaylistService::get_playlist_categories(),
-        ))
-    }
-
-
-    pub async fn get_playlist_items(
-        playlist_name: String,
-        player_service: Arc<PlaylistService>,
-    ) -> Result<impl warp::Reply, Infallible> {
-        Ok(warp::reply::json(
-            &player_service.get_dynamic_playlist_items(&playlist_name, 1),
-        ))
     }
 }
 

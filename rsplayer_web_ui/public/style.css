@@ -521,10 +521,12 @@ input.input-size {
 
 .card {
   background-color: transparent;
+  padding: 10px;
 }
 
 .card-footer-item {
   background-color: rgba(255, 255, 255, 0.634);
+  margin: 15px;
 }
 
 .image-center-half-size {

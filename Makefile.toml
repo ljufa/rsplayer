@@ -5,7 +5,7 @@
 RPI_HOST = "192.168.5.122"
 TARGET = "aarch64-unknown-linux-gnu"
 
-RELEASE_VERSION = "0.6.8"
+RELEASE_VERSION = "0.7.1"
 RELEASE_BRANCH = "main"
 
 [config]
@@ -138,6 +138,7 @@ script = [
 
 [tasks.package_deb_local]
 dependencies = ["build_ui_release", "build_release", "package_deb_release"]
+script = "rsync -avvP target/${TARGET}/debian/*.deb pi@${RPI_HOST}:~"
 
 [tasks.tag]
 script = [

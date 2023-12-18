@@ -1,22 +1,22 @@
+extern crate api_models;
+
+use std::{rc::Rc, str::FromStr};
+
 use api_models::{
     common::{PlayerCommand, QueueCommand, SystemCommand, UserCommand, Volume},
     player::Song,
     state::{AudioOut, PlayerInfo, PlayerState, SongProgress, StateChangeEvent, StreamerState},
 };
-use PlayerCommand::{Next, Pause, Play, Prev, RandomToggle};
-use UserCommand::{Player, Queue};
-
-use gloo_net::http::Request;
-use seed::{prelude::*, *};
-
 use gloo_console::{error, log};
-use std::{rc::Rc, str::FromStr};
+use gloo_net::http::Request;
+use PlayerCommand::{Next, Pause, Play, Prev, RandomToggle};
+use seed::{*, prelude::*};
+use serde::Deserialize;
+use strum_macros::IntoStaticStr;
+use UserCommand::{Player, Queue};
 use wasm_sockets::{self, ConnectionStatus, EventClient, Message, WebSocketError};
 use web_sys::CloseEvent;
 
-use serde::Deserialize;
-use strum_macros::IntoStaticStr;
-extern crate api_models;
 mod page;
 
 const SETTINGS: &str = "settings";
@@ -26,8 +26,7 @@ const FIRST_SETUP: &str = "setup";
 const PLAYER: &str = "player";
 const MUSIC_LIBRARY: &str = "library";
 const MUSIC_LIBRARY_FILES: &str = "files";
-const MUSIC_LIBRARY_PL_STATIC: &str = "saved";
-const MUSIC_LIBRARY_PL_DYNAMIC: &str = "dynamic";
+const MUSIC_LIBRARY_PL_STATIC: &str = "playlists";
 
 // ------ ------
 //     Model
@@ -51,6 +50,7 @@ struct Model {
     metadata_scan_info: Option<String>,
     notification: Option<StateChangeEvent>,
 }
+
 #[allow(clippy::large_enum_variant)]
 pub enum Msg {
     WebSocketOpened,
@@ -64,7 +64,6 @@ pub enum Msg {
     StartErrorReceived(String),
     Queue(page::queue::Msg),
     MusicLibraryStaticPlaylist(page::music_library_static_playlist::Msg),
-    MusicLibraryDynamicPlaylist(page::music_library_dynamic_playlist::Msg),
     MusicLibraryFiles(page::music_library_files::Msg),
     Ignore,
 
@@ -80,16 +79,19 @@ pub enum Msg {
 pub struct AlbumInfo {
     pub album: Album,
 }
+
 #[derive(Debug, Deserialize)]
 pub struct Album {
     image: Vec<Image>,
 }
+
 #[derive(Debug, Deserialize)]
 pub struct Image {
     size: String,
     #[serde(rename = "#text")]
     text: String,
 }
+
 // ------ Page ------
 #[derive(Debug, IntoStaticStr)]
 #[allow(clippy::large_enum_variant)]
@@ -99,7 +101,6 @@ enum Page {
     Player,
     Queue(page::queue::Model),
     MusicLibraryStaticPlaylist(page::music_library_static_playlist::Model),
-    MusicLibraryDynamicPlaylist(page::music_library_dynamic_playlist::Model),
     MusicLibraryFiles(page::music_library_files::Model),
     NotFound,
 }
@@ -119,18 +120,10 @@ impl Page {
                     url,
                     &mut orders.proxy(Msg::MusicLibraryFiles),
                 )),
-                MUSIC_LIBRARY_PL_STATIC => {
-                    Self::MusicLibraryStaticPlaylist(page::music_library_static_playlist::init(
-                        url,
-                        &mut orders.proxy(Msg::MusicLibraryStaticPlaylist),
-                    ))
-                }
-                MUSIC_LIBRARY_PL_DYNAMIC => {
-                    Self::MusicLibraryDynamicPlaylist(page::music_library_dynamic_playlist::init(
-                        url,
-                        &mut orders.proxy(Msg::MusicLibraryDynamicPlaylist),
-                    ))
-                }
+                MUSIC_LIBRARY_PL_STATIC => Self::MusicLibraryStaticPlaylist(page::music_library_static_playlist::init(
+                    url,
+                    &mut orders.proxy(Msg::MusicLibraryStaticPlaylist),
+                )),
                 _ => Self::NotFound,
             },
             PLAYER | "" => Self::Player,
@@ -142,10 +135,7 @@ impl Page {
         !matches!(self, Page::Settings(_))
     }
     const fn has_tabs(&self) -> bool {
-        matches!(
-            self,
-            Page::MusicLibraryFiles(_) | Page::MusicLibraryStaticPlaylist(_) | Page::MusicLibraryDynamicPlaylist(_)
-        )
+        matches!(self, Page::MusicLibraryFiles(_) | Page::MusicLibraryStaticPlaylist(_))
     }
 }
 
@@ -155,9 +145,7 @@ impl Page {
 #[allow(clippy::needless_pass_by_value)]
 fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
     let page = Page::new(url.clone(), orders);
-    orders
-        .subscribe(Msg::UrlChanged)
-        .notify(subs::UrlChanged(url.clone()));
+    orders.subscribe(Msg::UrlChanged).notify(subs::UrlChanged(url.clone()));
 
     orders.perform_cmd(async {
         let response = Request::get("/api/start_error")
@@ -223,24 +211,23 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.web_socket_reconnector = None;
             log!("WebSocket connection is open now");
             orders.send_msg(Msg::SendUserCommand(Queue(QueueCommand::QueryCurrentSong)));
-            orders.send_msg(Msg::SendUserCommand(Player(
-                PlayerCommand::QueryCurrentPlayerInfo,
-            )));
-            orders.send_msg(Msg::SendSystemCommand(
-                SystemCommand::QueryCurrentStreamerState,
-            ));
+            orders.send_msg(Msg::SendUserCommand(Player(PlayerCommand::QueryCurrentPlayerInfo)));
+            orders.send_msg(Msg::SendSystemCommand(SystemCommand::QueryCurrentStreamerState));
             if let Page::Queue(model) = &mut model.page {
-                page::queue::update(
-                    page::queue::Msg::WebSocketOpen,
-                    model,
-                    &mut orders.proxy(Msg::Queue),
-                );
+                page::queue::update(page::queue::Msg::WebSocketOpen, model, &mut orders.proxy(Msg::Queue));
             }
             if let Page::MusicLibraryFiles(model) = &mut model.page {
                 page::music_library_files::update(
                     page::music_library_files::Msg::WebSocketOpen,
                     model,
                     &mut orders.proxy(Msg::MusicLibraryFiles),
+                );
+            }
+            if let Page::MusicLibraryStaticPlaylist(model) = &mut model.page {
+                page::music_library_static_playlist::update(
+                    page::music_library_static_playlist::Msg::WebSocketOpen,
+                    model,
+                    &mut orders.proxy(Msg::MusicLibraryStaticPlaylist),
                 );
             }
         }
@@ -256,9 +243,8 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             // Chrome doesn't invoke `on_error` when the connection is lost.
             if !close_event.was_clean() && model.web_socket_reconnector.is_none() {
                 orders.after_next_render(|_| scrollToId("reconnectinfo"));
-                model.web_socket_reconnector = Some(
-                    orders.stream_with_handle(streams::interval(2000, || Msg::ReconnectWebSocket)),
-                );
+                model.web_socket_reconnector =
+                    Some(orders.stream_with_handle(streams::interval(2000, || Msg::ReconnectWebSocket)));
             }
         }
 
@@ -266,9 +252,8 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             log!("WebSocket failed");
             if model.web_socket_reconnector.is_none() {
                 orders.after_next_render(|_| scrollToId("reconnectinfo"));
-                model.web_socket_reconnector = Some(
-                    orders.stream_with_handle(streams::interval(1000, || Msg::ReconnectWebSocket)),
-                );
+                model.web_socket_reconnector =
+                    Some(orders.stream_with_handle(streams::interval(1000, || Msg::ReconnectWebSocket)));
             }
         }
 
@@ -303,8 +288,7 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     model.player_model.player_info = Some(pi.clone());
                 }
                 StateChangeEvent::MetadataSongScanStarted => {
-                    model.metadata_scan_info =
-                        Some("Music directory scanning started.".to_string());
+                    model.metadata_scan_info = Some("Music directory scanning started.".to_string());
                     orders.after_next_render(|_| scrollToId("scaninfo"));
                 }
                 StateChangeEvent::MetadataSongScanned(info) => {
@@ -315,8 +299,7 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     orders.stream(streams::interval(5000, || Msg::HideMetadataScanInfo));
                     orders.after_next_render(|_| scrollToId("scaninfo"));
                 }
-                StateChangeEvent::NotificationSuccess(_)
-                | StateChangeEvent::NotificationError(_) => {
+                StateChangeEvent::NotificationSuccess(_) | StateChangeEvent::NotificationError(_) => {
                     model.notification = Some(chg_ev.clone());
                     orders.stream(streams::interval(4000, || Msg::HideNotification));
                     orders.skip();
@@ -342,26 +325,16 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     model,
                     &mut orders.proxy(Msg::MusicLibraryStaticPlaylist),
                 );
-            } else if let Page::MusicLibraryDynamicPlaylist(model) = &mut model.page {
-                page::music_library_dynamic_playlist::update(
-                    page::music_library_dynamic_playlist::Msg::StatusChangeEventReceived(chg_ev),
-                    model,
-                    &mut orders.proxy(Msg::MusicLibraryDynamicPlaylist),
-                );
             }
         }
 
         Msg::Settings(msg) => {
             if let Page::Settings(sett_model) = &mut model.page {
                 if let page::settings::Msg::SendSystemCommand(cmd) = &msg {
-                    _ = model
-                        .web_socket
-                        .send_string(&serde_json::to_string(cmd).unwrap());
+                    _ = model.web_socket.send_string(&serde_json::to_string(cmd).unwrap());
                 }
                 if let page::settings::Msg::SendUserCommand(cmd) = &msg {
-                    _ = model
-                        .web_socket
-                        .send_string(&serde_json::to_string(cmd).unwrap());
+                    _ = model.web_socket.send_string(&serde_json::to_string(cmd).unwrap());
                 }
                 page::settings::update(msg, sett_model, &mut orders.proxy(Msg::Settings));
             }
@@ -370,9 +343,7 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::MusicLibraryStaticPlaylist(msg) => {
             if let Page::MusicLibraryStaticPlaylist(player_model) = &mut model.page {
                 if let page::music_library_static_playlist::Msg::SendUserCommand(cmd) = &msg {
-                    _ = model
-                        .web_socket
-                        .send_string(&serde_json::to_string(cmd).unwrap());
+                    _ = model.web_socket.send_string(&serde_json::to_string(cmd).unwrap());
                 }
                 page::music_library_static_playlist::update(
                     msg,
@@ -381,27 +352,11 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 );
             }
         }
-        Msg::MusicLibraryDynamicPlaylist(msg) => {
-            if let Page::MusicLibraryDynamicPlaylist(player_model) = &mut model.page {
-                if let page::music_library_dynamic_playlist::Msg::SendUserCommand(cmd) = &msg {
-                    _ = model
-                        .web_socket
-                        .send_string(&serde_json::to_string(cmd).unwrap());
-                }
-                page::music_library_dynamic_playlist::update(
-                    msg,
-                    player_model,
-                    &mut orders.proxy(Msg::MusicLibraryDynamicPlaylist),
-                );
-            }
-        }
 
         Msg::Queue(msg) => {
             if let Page::Queue(player_model) = &mut model.page {
                 if let page::queue::Msg::SendUserCommand(cmd) = &msg {
-                    _ = model
-                        .web_socket
-                        .send_string(&serde_json::to_string(cmd).unwrap());
+                    _ = model.web_socket.send_string(&serde_json::to_string(cmd).unwrap());
                 }
                 page::queue::update(msg, player_model, &mut orders.proxy(Msg::Queue));
             }
@@ -410,15 +365,9 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::MusicLibraryFiles(msg) => {
             if let Page::MusicLibraryFiles(music_lib_model) = &mut model.page {
                 if let page::music_library_files::Msg::SendUserCommand(cmd) = &msg {
-                    _ = model
-                        .web_socket
-                        .send_string(&serde_json::to_string(cmd).unwrap());
+                    _ = model.web_socket.send_string(&serde_json::to_string(cmd).unwrap());
                 }
-                page::music_library_files::update(
-                    msg,
-                    music_lib_model,
-                    &mut orders.proxy(Msg::MusicLibraryFiles),
-                );
+                page::music_library_files::update(msg, music_lib_model, &mut orders.proxy(Msg::MusicLibraryFiles));
             }
         }
 
@@ -435,14 +384,10 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.startup_error = Some(error_msg);
         }
         Msg::SendUserCommand(cmd) => {
-            _ = model
-                .web_socket
-                .send_string(&serde_json::to_string(&cmd).unwrap());
+            _ = model.web_socket.send_string(&serde_json::to_string(&cmd).unwrap());
         }
         Msg::SendSystemCommand(cmd) => {
-            _ = model
-                .web_socket
-                .send_string(&serde_json::to_string(&cmd).unwrap());
+            _ = model.web_socket.send_string(&serde_json::to_string(&cmd).unwrap());
             log!(format!("lib {:?}", cmd));
             if let SystemCommand::SetVol(vol) = cmd {
                 model.player_model.streamer_status.volume_state.current = i64::from(vol);
@@ -461,9 +406,16 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 // ------ ------
 
 fn view(model: &Model) -> impl IntoNodes<Msg> {
+    let mut bg = "radial-gradient(circle, rgb(49, 144, 228) 0%, rgb(29, 84, 166) 100%);".to_string();
+    if model.page.has_image_background() {
+        if let Some(bg_image) = get_background_image(&model.player_model) {
+            bg = format!("url({})", bg_image)
+        }
+    };
+
     div![
         style! {
-            St::BackgroundImage => get_background_image(&model.player_model,model.page.has_image_background()),
+            St::BackgroundImage => bg,
             St::BackgroundRepeat => "no-repeat",
             St::BackgroundSize => "cover",
             St::MinHeight => "95vh",
@@ -478,6 +430,7 @@ fn view(model: &Model) -> impl IntoNodes<Msg> {
         view_notification(model)
     ]
 }
+
 fn view_reconnect_notification(model: &Model) -> Node<Msg> {
     if model.web_socket_reconnector.is_some() {
         div![
@@ -493,6 +446,7 @@ fn view_reconnect_notification(model: &Model) -> Node<Msg> {
         empty!()
     }
 }
+
 fn view_notification(model: &Model) -> Node<Msg> {
     div![
         style! {
@@ -500,18 +454,15 @@ fn view_notification(model: &Model) -> Node<Msg> {
             "bottom" => 0
             "position" => "fixed"
         },
-        model
-            .notification
-            .as_ref()
-            .map_or(empty!(), |not| match not {
-                StateChangeEvent::NotificationSuccess(info) => {
-                    div![C!["notification", "is-success", "is-light"], info]
-                }
-                StateChangeEvent::NotificationError(error) => {
-                    div![C!["notification", "is-error", "is-light"], error]
-                }
-                _ => empty!(),
-            })
+        model.notification.as_ref().map_or(empty!(), |not| match not {
+            StateChangeEvent::NotificationSuccess(info) => {
+                div![C!["notification", "is-success", "is-light"], info]
+            }
+            StateChangeEvent::NotificationError(error) => {
+                div![C!["notification", "is-error", "is-light"], error]
+            }
+            _ => empty!(),
+        })
     ]
 }
 
@@ -536,9 +487,7 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
         return empty!();
     };
     let playing = player_model.player_info.as_ref().map_or(false, |f| {
-        f.state
-            .as_ref()
-            .map_or(false, |f| *f == PlayerState::PLAYING)
+        f.state.as_ref().map_or(false, |f| *f == PlayerState::PLAYING)
     });
     let shuffle_class = player_model.player_info.as_ref().map_or("fa-shuffle", |r| {
         if r.random.unwrap_or(false) {
@@ -557,17 +506,12 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
             C!["level", "is-mobile"],
             // image
             div![
-                C![
-                    "level-left",
-                    "is-flex-grow-1",
-                    "is-hidden-mobile",
-                    "is-clickable"
-                ],
+                C!["level-left", "is-flex-grow-1", "is-hidden-mobile", "is-clickable"],
                 div![
                     C!["level-item"],
                     figure![
                         C!["image", "is-64x64"],
-                        img![attrs! {"src" => get_album_image(player_model)}]
+                        img![attrs! {"src" => get_background_image(player_model).unwrap_or("/headphones.png".to_string())}],
                     ]
                 ],
                 ev(Ev::Click, |_| { Urls::player_abs().go_and_load() })
@@ -587,23 +531,17 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
                         ],
                         p![
                             C!["heading", "has-overflow-ellipsis-text"],
-                            player_model
-                                .current_song
+                            player_model.current_song.as_ref().map_or(String::new(), |fa| fa
+                                .album
                                 .as_ref()
-                                .map_or(String::new(), |fa| fa
-                                    .album
-                                    .as_ref()
-                                    .map_or(String::new(), std::clone::Clone::clone))
+                                .map_or(String::new(), std::clone::Clone::clone))
                         ],
                         p![
                             C!["heading", "has-overflow-ellipsis-text"],
-                            player_model
-                                .current_song
+                            player_model.current_song.as_ref().map_or(String::new(), |fa| fa
+                                .artist
                                 .as_ref()
-                                .map_or(String::new(), |fa| fa
-                                    .artist
-                                    .as_ref()
-                                    .map_or(String::new(), std::clone::Clone::clone))
+                                .map_or(String::new(), std::clone::Clone::clone))
                         ],
                     ]
                 ],
@@ -617,11 +555,7 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
                     div![
                         C!["has-text-centered", "available-width"],
                         span![
-                            C![
-                                "is-size-6",
-                                "has-text-light",
-                                "has-background-dark-transparent"
-                            ],
+                            C!["is-size-6", "has-text-light", "has-background-dark-transparent"],
                             player_model.progress.format_time()
                         ],
                         progress![
@@ -675,9 +609,7 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
                             attrs! {"min"=> player_model.streamer_status.volume_state.min},
                             attrs! {"type"=> "range"},
                             input_ev(Ev::Change, move |selected| Msg::SendSystemCommand(
-                                SystemCommand::SetVol(
-                                    u8::from_str(selected.as_str()).unwrap_or_default()
-                                )
+                                SystemCommand::SetVol(u8::from_str(selected.as_str()).unwrap_or_default())
                             )),
                         ],],
                     ]
@@ -688,11 +620,7 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
                 div![
                     C!["level-item"],
                     i![
-                        C![
-                            "fas",
-                            "is-clickable",
-                            "fa-up-right-and-down-left-from-center"
-                        ],
+                        C!["fas", "is-clickable", "fa-up-right-and-down-left-from-center"],
                         ev(Ev::Click, |_| { Urls::player_abs().go_and_load() })
                     ],
                 ]
@@ -709,10 +637,7 @@ fn view_startup_error(error_msg: Option<&String>) -> Node<Msg> {
                 C!["message-header"],
                 p![
                     "Startup error! Please check  ",
-                    a![
-                        "settings.",
-                        ev(Ev::Click, |_| { Urls::settings_abs().go_and_load() }),
-                    ]
+                    a!["settings.", ev(Ev::Click, |_| { Urls::settings_abs().go_and_load() }),]
                 ],
             ],
             div![C!["message-body"], error]
@@ -737,13 +662,8 @@ fn view_content(main_model: &Model, base_url: &Url) -> Node<Msg> {
             Page::Player => page::player::view(&main_model.player_model),
             Page::Queue(model) => page::queue::view(model).map_msg(Msg::Queue),
             Page::MusicLibraryStaticPlaylist(model) =>
-                page::music_library_static_playlist::view(model)
-                    .map_msg(Msg::MusicLibraryStaticPlaylist),
-            Page::MusicLibraryDynamicPlaylist(model) =>
-                page::music_library_dynamic_playlist::view(model)
-                    .map_msg(Msg::MusicLibraryDynamicPlaylist),
-            Page::MusicLibraryFiles(model) =>
-                page::music_library_files::view(model).map_msg(Msg::MusicLibraryFiles),
+                page::music_library_static_playlist::view(model).map_msg(Msg::MusicLibraryStaticPlaylist),
+            Page::MusicLibraryFiles(model) => page::music_library_files::view(model).map_msg(Msg::MusicLibraryFiles),
         }
     ]
 }
@@ -760,11 +680,7 @@ fn view_navigation_tabs(page: &Page) -> Node<Msg> {
                 IF!(page_name == "Player" => C!["is-active"]),
                 a![span![
                     C!["icon", "is-small"],
-                    i![
-                        C!["material-icons"],
-                        attrs!("aria-hidden" => "true"),
-                        "music_note"
-                    ],
+                    i![C!["material-icons"], attrs!("aria-hidden" => "true"), "music_note"],
                 ]],
                 ev(Ev::Click, |_| { Urls::player_abs().go_and_load() }),
             ],
@@ -772,27 +688,19 @@ fn view_navigation_tabs(page: &Page) -> Node<Msg> {
                 IF!(page_name == "Queue" => C!["is-active"]),
                 a![span![
                     C!["icon", "is-small"],
-                    i![
-                        C!["material-icons"],
-                        attrs!("aria-hidden" => "true"),
-                        "queue_music"
-                    ],
+                    i![C!["material-icons"], attrs!("aria-hidden" => "true"), "queue_music"],
                 ]],
                 ev(Ev::Click, |_| { Urls::queue_abs().go_and_load() }),
             ],
             li![
-                IF!(page_name == "MusicLibraryFiles" || page_name ==  "MusicLibraryStaticPlaylist" || page_name == "MusicLibraryDynamicPlaylist" => C!["is-active"]),
+                IF!(page_name == "MusicLibraryFiles" || page_name ==  "MusicLibraryStaticPlaylist" => C!["is-active"]),
                 a![span![
                     C!["icon", "is-small"],
-                    i![
-                        C!["material-icons"],
-                        attrs!("aria-hidden" => "true"),
-                        "library_music"
-                    ],
+                    i![C!["material-icons"], attrs!("aria-hidden" => "true"), "library_music"],
                 ],],
                 ev(Ev::Click, |_| {
                     Urls::library_abs()
-                        .add_hash_path_part(MUSIC_LIBRARY_FILES)
+                        .add_hash_path_part(MUSIC_LIBRARY_PL_STATIC)
                         .go_and_load()
                 }),
             ],
@@ -800,11 +708,7 @@ fn view_navigation_tabs(page: &Page) -> Node<Msg> {
                 IF!(page_name == "Settings" => C!["is-active"]),
                 a![span![
                     C!["icon", "is-small"],
-                    i![
-                        C!["material-icons"],
-                        attrs!("aria-hidden" => "true"),
-                        "tune"
-                    ],
+                    i![C!["material-icons"], attrs!("aria-hidden" => "true"), "tune"],
                 ]],
                 ev(Ev::Click, |_| { Urls::settings_abs().go_and_load() }),
             ],
@@ -818,6 +722,13 @@ fn view_music_lib_tabs(page: &Page) -> Node<Msg> {
         C!["tabs", "is-boxed", "is-centered", "is-toggle", "pt-3"],
         ul![
             li![
+                IF!(page_name == "MusicLibraryStaticPlaylist" => C!["is-active"]),
+                a![
+                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_PL_STATIC)},
+                    span!("Playlists")
+                ]
+            ],
+            li![
                 IF!(page_name == "MusicLibraryFiles" => C!["is-active"]),
                 a![
                     attrs! {At::Href => Urls::library_abs().add_hash_path_part("files")},
@@ -825,24 +736,17 @@ fn view_music_lib_tabs(page: &Page) -> Node<Msg> {
                 ],
             ],
             li![
-                IF!(page_name == "MusicLibraryStaticPlaylist" => C!["is-active"]),
-                a![
-                    attrs! {At::Href => Urls::library_abs().add_hash_path_part("saved")},
-                    span!("Saved pl")
-                ]
-            ],
-            li![
                 IF!(page_name == "MusicLibraryDynamicPlaylist" => C!["is-active"]),
-                a![
-                    attrs! {At::Href => Urls::library_abs().add_hash_path_part("dynamic")},
-                    span!("Dynamic pl")
-                ]
+                 a![
+                     attrs! {At::Href => ""},
+                     span!("Discover")
+                 ]
             ],
             li![
                 IF!(page_name == "Radio" => C!["is-active"]),
                 a![
-                    attrs! {At::Href => Urls::library_abs().add_hash_path_part("radio")},
-                    span!("Radio")
+                    attrs! {At::Href => ""},
+                     span!("Radio")
                 ]
             ],
         ],
@@ -937,9 +841,9 @@ fn create_websocket(orders: &impl Orders<Msg>) -> Result<EventClient, WebSocketE
     })));
 
     let send = msg_sender.clone();
-    client.set_on_message(Some(Box::new(
-        move |_: &EventClient, msg: wasm_sockets::Message| decode_message(msg, &Rc::clone(&send)),
-    )));
+    client.set_on_message(Some(Box::new(move |_: &EventClient, msg: wasm_sockets::Message| {
+        decode_message(msg, &Rc::clone(&send))
+    })));
     Ok(client)
 }
 
@@ -954,6 +858,12 @@ fn decode_message(message: Message, msg_sender: &Rc<dyn Fn(Option<Msg>)>) {
 
 #[allow(clippy::future_not_send)]
 async fn update_album_cover(track: Song) -> Msg {
+    if let Some(image_id) = track.image_id {
+        return Msg::AlbumImageUpdated(Image {
+            size: "mega".to_string(),
+            text: format!("/artwork/{}", image_id),
+        });
+    };
     if track.album.is_some() && track.artist.is_some() {
         let ai = get_album_image_from_lastfm_api(track.album.unwrap(), track.artist.unwrap()).await;
         ai.map_or_else(|| Msg::Ignore, Msg::AlbumImageUpdated)
@@ -961,6 +871,7 @@ async fn update_album_cover(track: Song) -> Msg {
         Msg::Ignore
     }
 }
+
 #[allow(clippy::future_not_send)]
 async fn get_album_image_from_lastfm_api(album: String, artist: String) -> Option<Image> {
     let current = seed::browser::util::window().location();
@@ -984,26 +895,14 @@ async fn get_album_image_from_lastfm_api(album: String, artist: String) -> Optio
         None
     }
 }
-fn get_background_image(model: &PlayerModel, has_image: bool) -> String {
-    let default_bg =
-        "radial-gradient(circle, rgb(49, 144, 228) 0%, rgb(29, 84, 166) 100%);".to_string();
-    if !has_image {
-        return default_bg;
-    }
+
+fn get_background_image(model: &PlayerModel) -> Option<String> {
     if let Some(ps) = model.current_song.as_ref() {
-        ps.image_url
-            .as_ref()
-            .map_or(default_bg, |f| format!("url({f})"))
-    } else {
-        default_bg
+        if let Some(image_id) = ps.image_id.as_ref() {
+            return Some(format!("/artwork/{}", image_id));
+        };
+        return ps.image_url.clone();
     }
+    None
 }
 
-fn get_album_image(model: &PlayerModel) -> String {
-    model.current_song.as_ref().map_or_else(String::new, |ps| {
-        ps.image_url
-            .as_ref()
-            .map_or("/no_album.png", |f| f)
-            .to_string()
-    })
-}

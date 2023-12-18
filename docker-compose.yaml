@@ -1,7 +1,7 @@
 version: "3"
 services:
   rsplayer:
-    image: ljufa/rsplayer:docker-test_push
+    image: ljufa/rsplayer:latest
     devices:
       - /dev/snd
     ports:

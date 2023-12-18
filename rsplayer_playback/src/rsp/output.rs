@@ -46,12 +46,7 @@ mod cpal {
     pub struct CpalAudioOutput;
 
     trait AudioOutputSample:
-        cpal::Sample
-        + cpal::SizedSample
-        + ConvertibleSample
-        + RawSample
-        + std::marker::Send
-        + 'static
+        cpal::Sample + cpal::SizedSample + ConvertibleSample + RawSample + std::marker::Send + 'static
     {
     }
 
@@ -61,11 +56,7 @@ mod cpal {
     impl AudioOutputSample for i32 {}
 
     impl CpalAudioOutput {
-        pub fn try_open(
-            spec: SignalSpec,
-            duration: u64,
-            audio_device: &str,
-        ) -> Result<Box<dyn AudioOutput>> {
+        pub fn try_open(spec: SignalSpec, duration: u64, audio_device: &str) -> Result<Box<dyn AudioOutput>> {
             // Get default host.
             let host = cpal::default_host();
             let device = host
@@ -85,18 +76,10 @@ mod cpal {
             // Select proper playback routine based on sample format.
             // CpalAudioOutputImpl::<i32>::try_open(spec, duration, &device);
             match config.sample_format() {
-                cpal::SampleFormat::F32 => {
-                    CpalAudioOutputImpl::<f32>::try_open(spec, duration, &device)
-                }
-                cpal::SampleFormat::I32 => {
-                    CpalAudioOutputImpl::<i32>::try_open(spec, duration, &device)
-                }
-                cpal::SampleFormat::I16 => {
-                    CpalAudioOutputImpl::<i16>::try_open(spec, duration, &device)
-                }
-                cpal::SampleFormat::U16 => {
-                    CpalAudioOutputImpl::<u16>::try_open(spec, duration, &device)
-                }
+                cpal::SampleFormat::F32 => CpalAudioOutputImpl::<f32>::try_open(spec, duration, &device),
+                cpal::SampleFormat::I32 => CpalAudioOutputImpl::<i32>::try_open(spec, duration, &device),
+                cpal::SampleFormat::I16 => CpalAudioOutputImpl::<i16>::try_open(spec, duration, &device),
+                cpal::SampleFormat::U16 => CpalAudioOutputImpl::<u16>::try_open(spec, duration, &device),
                 cpal::SampleFormat::I8 => todo!(),
                 cpal::SampleFormat::I64 => todo!(),
                 cpal::SampleFormat::U8 => todo!(),
@@ -118,11 +101,7 @@ mod cpal {
     }
 
     impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
-        pub fn try_open(
-            spec: SignalSpec,
-            duration: u64,
-            device: &cpal::Device,
-        ) -> Result<Box<dyn AudioOutput>> {
+        pub fn try_open(spec: SignalSpec, duration: u64, device: &cpal::Device) -> Result<Box<dyn AudioOutput>> {
             let num_channels = spec.channels.count();
 
             // Output audio stream config.
@@ -158,7 +137,6 @@ mod cpal {
             }
 
             let stream = stream_result.unwrap();
-            
 
             // Start the output stream.
             if let Err(err) = stream.play() {
@@ -206,14 +184,9 @@ mod cpal {
         fn pause(&mut self) {
             _ = self.stream.pause();
         }
-        
     }
 }
 
-pub fn try_open(
-    spec: SignalSpec,
-    duration: u64,
-    audio_device: &str,
-) -> Result<Box<dyn AudioOutput>> {
+pub fn try_open(spec: SignalSpec, duration: u64, audio_device: &str) -> Result<Box<dyn AudioOutput>> {
     cpal::CpalAudioOutput::try_open(spec, duration, audio_device)
 }

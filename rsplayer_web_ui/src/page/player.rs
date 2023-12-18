@@ -3,9 +3,7 @@ use api_models::common::{PlayerCommand, SystemCommand, Volume};
 use api_models::player::Song;
 use api_models::state::{AudioOut, PlayerInfo, PlayerState, SongProgress};
 
-use seed::{
-    a, attrs, button, div, empty, i, input, nav, nodes, p, prelude::*, progress, span, style, C, IF,
-};
+use seed::{a, attrs, button, div, empty, i, input, nav, nodes, p, prelude::*, progress, span, style, C, IF};
 
 use std::str::FromStr;
 
@@ -24,101 +22,105 @@ pub fn view(model: &PlayerModel) -> Node<Msg> {
 
 #[allow(clippy::too_many_lines)]
 fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Node<Msg> {
-    song.map_or_else(|| empty!(), |ps| div![
-            style! {
-                St::MinHeight => "300px",
-                St::PaddingTop => "2rem"
-            },
-            C!["transparent"],
-            nav![
-                C!["level", "is-flex-direction-column"],
-                IF!(ps.title.is_some() =>
-                div![
-                    C!["level-item has-text-centered"],
+    song.map_or_else(
+        || empty!(),
+        |ps| {
+            div![
+                style! {
+                    St::MinHeight => "300px",
+                    St::PaddingTop => "2rem"
+                },
+                C!["transparent"],
+                nav![
+                    C!["level", "is-flex-direction-column"],
+                    IF!(ps.title.is_some() =>
                     div![
-                        p![
-                            C!["is-size-3 has-text-light has-background-dark-transparent"],
-                            ps.title.as_ref().map_or("NA", |f| f)
+                        C!["level-item has-text-centered"],
+                        div![
+                            p![
+                                C!["is-size-3 has-text-light has-background-dark-transparent"],
+                                ps.title.as_ref().map_or("NA", |f| f)
+                            ],
                         ],
-                    ],
-                ]),
-                IF!(ps.album.is_some() =>
-                div![
-                    C!["level-item"],
-                    div![
-                        p![
-                            C!["has-text-light has-background-dark-transparent"],
-                            ps.album.as_ref().map_or("NA", |f| f)
-                        ],
-                    ],
-                ]),
-                IF!(ps.artist.is_some() =>
-                div![
-                    C!["level-item"],
-                    div![
-                        p![
-                            C!["has-text-light has-background-dark-transparent"],
-                            ps.artist.as_ref().map_or("NA", |f| f)
-                        ],
-                    ],
-                ]),
-                if ps.title.is_none() {
+                    ]),
+                    IF!(ps.album.is_some() =>
                     div![
                         C!["level-item"],
-                        div![p![
-                            C!["has-text-light has-background-dark-transparent"],
-                            ps.file.clone()
-                        ],],
-                    ]
-                } else {
-                    empty!()
-                },
-            ],
-            nav![
-                C!["level", "is-flex-direction-column"],
-                IF!(ps.genre.is_some() =>
-                div![
-                    C!["level-item"],
-                    div![
-                        p![
-                            C!["has-text-light has-background-dark-transparent"],
-                            ps.genre.as_ref().map_or("NA", |f| f)
+                        div![
+                            p![
+                                C!["has-text-light has-background-dark-transparent"],
+                                ps.album.as_ref().map_or("NA", |f| f)
+                            ],
                         ],
-                    ],
-                ]),
-                IF!(ps.date.is_some() =>
-                div![
-                    C!["level-item"],
+                    ]),
+                    IF!(ps.artist.is_some() =>
                     div![
-                        p![
-                            C!["has-text-light has-background-dark-transparent"],
-                            ps.date.as_ref().map_or("NA", |f| f)
+                        C!["level-item"],
+                        div![
+                            p![
+                                C!["has-text-light has-background-dark-transparent"],
+                                ps.artist.as_ref().map_or("NA", |f| f)
+                            ],
                         ],
-                    ],
-                ]),
-                player_info.map_or_else(|| nodes!(), |pi| nodes![
+                    ]),
+                    if ps.title.is_none() {
                         div![
                             C!["level-item"],
-                            IF!(pi.audio_format_rate.is_some() =>
-                                div![p![
+                            div![p![
                                 C!["has-text-light has-background-dark-transparent"],
-                                format!("Freq: {} | Bit: {} | Ch: {}", pi.audio_format_rate.map_or(0, |f|f),
-                                pi.audio_format_bit.map_or(0, |f|f), pi.audio_format_channels.map_or(0,|f|f))
-                            ]]),
+                                ps.file.clone()
+                            ],],
+                        ]
+                    } else {
+                        empty!()
+                    },
+                ],
+                nav![
+                    C!["level", "is-flex-direction-column"],
+                    IF!(ps.genre.is_some() =>
+                    div![
+                        C!["level-item"],
+                        div![
+                            p![
+                                C!["has-text-light has-background-dark-transparent"],
+                                ps.genre.as_ref().map_or("NA", |f| f)
+                            ],
                         ],
-                        pi.codec.as_ref().map(|c| {
+                    ]),
+                    IF!(ps.date.is_some() =>
+                    div![
+                        C!["level-item"],
+                        div![
+                            p![
+                                C!["has-text-light has-background-dark-transparent"],
+                                ps.date.as_ref().map_or("NA", |f| f)
+                            ],
+                        ],
+                    ]),
+                    player_info.map_or_else(
+                        || nodes!(),
+                        |pi| nodes![
                             div![
                                 C!["level-item"],
-                                div![p![
+                                IF!(pi.audio_format_rate.is_some() =>
+                                    div![p![
                                     C!["has-text-light has-background-dark-transparent"],
-                                    "Codec: ",
-                                    c
-                                ]],
-                            ]
-                        })
-                    ])
-            ],
-        ])
+                                    format!("Freq: {} | Bit: {} | Ch: {}", pi.audio_format_rate.map_or(0, |f|f),
+                                    pi.audio_format_bit.map_or(0, |f|f), pi.audio_format_channels.map_or(0,|f|f))
+                                ]]),
+                            ],
+                            pi.codec.as_ref().map(|c| {
+                                div![
+                                    C!["level-item"],
+                                    div![p![C!["has-text-light has-background-dark-transparent"], "Codec: ", c]],
+                                ]
+                            })
+                        ]
+                    )
+                ],
+            ]
+        },
+    )
 }
 
 fn view_track_progress_bar(progress: &SongProgress) -> Node<Msg> {
@@ -128,11 +130,7 @@ fn view_track_progress_bar(progress: &SongProgress) -> Node<Msg> {
         },
         C!["has-text-centered"],
         span![
-            C![
-                "is-size-6",
-                "has-text-light",
-                "has-background-dark-transparent"
-            ],
+            C!["is-size-6", "has-text-light", "has-background-dark-transparent"],
             progress.format_time()
         ],
         progress![
@@ -145,17 +143,13 @@ fn view_track_progress_bar(progress: &SongProgress) -> Node<Msg> {
 }
 fn view_controls_down(model: &PlayerModel) -> Node<Msg> {
     let playing = model.player_info.as_ref().map_or(false, |f| {
-        f.state
-            .as_ref()
-            .map_or(false, |f| *f == PlayerState::PLAYING)
+        f.state.as_ref().map_or(false, |f| *f == PlayerState::PLAYING)
     });
     div![
         C!["centered", "is-bottom"],
         a![
             C!["player-button-play", "player-button-prev",],
-            ev(Ev::Click, |_| Msg::SendUserCommand(Player(
-                PlayerCommand::Prev
-            ))),
+            ev(Ev::Click, |_| Msg::SendUserCommand(Player(PlayerCommand::Prev))),
         ],
         a![
             C!["player-button-play", IF!(playing => "player-button-pause" )],
@@ -167,9 +161,7 @@ fn view_controls_down(model: &PlayerModel) -> Node<Msg> {
         ],
         a![
             C!["player-button-play", "player-button-next"],
-            ev(Ev::Click, |_| Msg::SendUserCommand(Player(
-                PlayerCommand::Next
-            )))
+            ev(Ev::Click, |_| Msg::SendUserCommand(Player(PlayerCommand::Next)))
         ],
     ]
 }
@@ -197,9 +189,7 @@ fn view_controls_up(model: &PlayerModel) -> Node<Msg> {
             button![
                 C!["small-button"],
                 span![C!("icon"), i![C!("fas fa-volume-down")]],
-                ev(Ev::Click, |_| Msg::SendSystemCommand(
-                    SystemCommand::VolDown
-                ))
+                ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::VolDown))
             ],
             button![
                 C!["small-button"],
@@ -209,16 +199,12 @@ fn view_controls_up(model: &PlayerModel) -> Node<Msg> {
             button![
                 C!["small-button"],
                 span![C!["icon"], i![C!("material-icons"), shuffle]],
-                ev(Ev::Click, |_| Msg::SendUserCommand(Player(
-                    PlayerCommand::RandomToggle
-                ))),
+                ev(Ev::Click, |_| Msg::SendUserCommand(Player(PlayerCommand::RandomToggle))),
             ],
             button![
                 C!["small-button"],
                 span![C!["icon"], i![C!("material-icons"), audio_out]],
-                ev(Ev::Click, |_| Msg::SendSystemCommand(
-                    SystemCommand::ChangeAudioOutput
-                ))
+                ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::ChangeAudioOutput))
             ]
         ]
     ]

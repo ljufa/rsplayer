@@ -19,10 +19,7 @@ mod hw_volume {
 
     use evdev::{Device, InputEventKind};
 
-    pub async fn listen(
-        system_commands_tx: Sender<SystemCommand>,
-        volume_settings: VolumeControlSettings,
-    ) {
+    pub async fn listen(system_commands_tx: Sender<SystemCommand>, volume_settings: VolumeControlSettings) {
         if let Ok(device) = Device::open(volume_settings.rotary_event_device_path) {
             info!("Start Volume Control thread.");
             let mut events = device.into_event_stream().expect("Failed");

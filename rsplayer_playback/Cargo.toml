@@ -17,9 +17,6 @@ anyhow.workspace = true
 symphonia.workspace = true
 tokio.workspace = true
 
-#mpd
-mpd = { version = "0.0.12" }
-
 # symphonia
 cpal = "0.15.2"
 rb = "0.4.1"

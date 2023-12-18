@@ -7,9 +7,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use env_logger::Env;
-use rsplayer_metadata::playlist::PlaylistService;
-use rsplayer_metadata::queue::QueueService;
+use rsplayer_metadata::album_repository;
+use rsplayer_metadata::playlist_service::PlaylistService;
+use rsplayer_metadata::queue_service::QueueService;
 
+use album_repository::AlbumRepository;
 use rsplayer_playback::rsp::PlayerService;
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio::sync::broadcast;
@@ -22,7 +24,8 @@ use rsplayer_hardware::input::ir_lirc;
 use rsplayer_hardware::input::volume_rotary;
 use rsplayer_hardware::oled::st7920;
 
-use rsplayer_metadata::metadata::MetadataService;
+use rsplayer_metadata::metadata_service::MetadataService;
+use rsplayer_metadata::song_repository::SongRepository;
 
 mod command_handler;
 mod server_warp;
@@ -55,23 +58,29 @@ async fn main() {
     );
 
     let config = Arc::new(Configuration::new());
+    info!("Configuration successfully loaded.");
 
-    let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate())
-        .expect("failed to create signal future");
+    let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate()).expect("failed to create signal future");
 
+    let album_repository = Arc::new(AlbumRepository::default());
+    let song_repository = Arc::new(SongRepository::default());
     let metadata_service = Arc::new(
-        MetadataService::new(&config.get_settings().metadata_settings)
-            .expect("Failed to start metadata service"),
+        MetadataService::new(
+            &config.get_settings().metadata_settings,
+            song_repository.clone(),
+            album_repository.clone(),
+        )
+        .expect("Failed to start metadata service"),
     );
-    let playlist_service = Arc::new(PlaylistService::new(
-        &config.get_settings().playlist_settings,
-        metadata_service.clone(),
-    ));
+    info!("Metadata service successfully created.");
+
+    let playlist_service = Arc::new(PlaylistService::new(&config.get_settings().playlist_settings));
+    info!("Playlist service successfully created.");
     let queue_service = Arc::new(QueueService::new(
         &config.get_settings().playback_queue_settings,
-        metadata_service.clone(),
-        playlist_service.clone(),
+        song_repository.clone(),
     ));
+    info!("Queue service successfully created.");
 
     let ai_service = AudioInterfaceService::new(&config);
     if let Err(e) = &ai_service {
@@ -99,7 +108,6 @@ async fn main() {
         player_commands_tx.clone(),
         system_commands_tx.clone(),
         &config,
-        playlist_service.clone(),
     );
     if config.get_settings().auto_resume_playback {
         player_service.play_from_current_queue_song();
@@ -127,6 +135,8 @@ async fn main() {
                 metadata_service.clone(),
                 playlist_service.clone(),
                 queue_service.clone(),
+                album_repository.clone(),
+                song_repository.clone(),
                 config.clone(),
                 player_commands_rx,
                 state_changes_tx.clone())) => {
@@ -160,11 +170,7 @@ async fn main() {
 }
 
 #[allow(clippy::redundant_pub_crate)]
-async fn start_degraded(
-    term_signal: &mut Signal,
-    error: &anyhow::Error,
-    config: &Arc<Configuration>,
-) {
+async fn start_degraded(term_signal: &mut Signal, error: &anyhow::Error, config: &Arc<Configuration>) {
     warn!("Starting server in degraded mode.");
     let http_server_future = server_warp::start_degraded(config, error);
     select! {

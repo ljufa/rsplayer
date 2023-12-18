@@ -1,44 +1,100 @@
 use std::{
     fs::File,
     path::Path,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{self, Duration},
 };
 
 use anyhow::{Error, Result};
+use chrono::{DateTime, Utc};
 use log::{info, warn};
 use sled::Db;
 use symphonia::core::{
     formats::FormatOptions,
     io::{MediaSourceStream, MediaSourceStreamOptions},
-    meta::{MetadataOptions, StandardTagKey, Tag},
+    meta::{MetadataOptions, StandardTagKey, Tag, Visual},
     probe::{Hint, ProbeResult},
 };
 use tokio::sync::broadcast::Sender;
 use walkdir::WalkDir;
 
-use api_models::{
-    common::to_database_key, player::Song, settings::MetadataStoreSettings, state::StateChangeEvent,
-};
+use api_models::{common::to_database_key, player::Song, settings::MetadataStoreSettings, state::StateChangeEvent};
 
-pub struct LocalLibrary {
-    db: Db,
+use crate::album_repository::AlbumRepository;
+use crate::song_repository::SongRepository;
+
+const ARTWORK_DIR: &str = "artwork";
+
+pub struct MetadataService {
+    ignored_files_db: Db,
     settings: MetadataStoreSettings,
     scan_running: AtomicBool,
+    song_repository: Arc<SongRepository>,
+    album_repository: Arc<AlbumRepository>,
 }
 
-impl LocalLibrary {
-    pub fn new(settings: &MetadataStoreSettings) -> Result<Self> {
+impl MetadataService {
+    pub fn new(
+        settings: &MetadataStoreSettings,
+        song_repository: Arc<SongRepository>,
+        album_repository: Arc<AlbumRepository>,
+    ) -> Result<Self> {
         let settings = settings.clone();
-        let db = sled::open(settings.db_path.as_str())?;
+        let ignored_files_db = sled::open(&settings.db_path)?;
         Ok(Self {
-            db,
+            ignored_files_db,
             settings,
             scan_running: AtomicBool::new(false),
+            song_repository,
+            album_repository,
         })
     }
-    pub fn find_song_by_id(&self, song_id: &str) -> Option<Song> {
-        self.get_all_songs_iterator().find(|s| s.id == song_id)
+
+    pub fn scan_music_dir(&self, full_scan: bool, state_changes_sender: &Sender<StateChangeEvent>) {
+        if self.scan_running.load(Ordering::SeqCst) {
+            return;
+        }
+        self.scan_running.store(true, Ordering::SeqCst);
+        let start_time = time::Instant::now();
+        state_changes_sender
+            .send(StateChangeEvent::MetadataSongScanStarted)
+            .expect("msg send error");
+        if full_scan {
+            self.song_repository.delete_all();
+        }
+
+        if !Path::new(ARTWORK_DIR).exists() {
+            std::fs::create_dir(ARTWORK_DIR).expect("Failed to create artwork directory");
+        }
+        let (new_files, deleted_db_keys) = self.get_diff();
+        let count = self.add_songs_to_db(new_files, state_changes_sender);
+
+        if !full_scan {
+            info!("Deleting {} files from database", deleted_db_keys.len());
+            for db_key in &deleted_db_keys {
+                self.song_repository.delete(db_key);
+                state_changes_sender
+                    .send(StateChangeEvent::MetadataSongScanned(format!(
+                        "Key {db_key} deleted from database"
+                    )))
+                    .expect("Status send failed");
+            }
+        }
+        state_changes_sender
+            .send(StateChangeEvent::MetadataSongScanFinished(format!(
+                "Music directory scan finished: {count} files scanned in {} seconds",
+                start_time.elapsed().as_secs()
+            )))
+            .expect("Status send failed");
+        info!(
+            "Scanning of {} files finished in {}s",
+            count,
+            start_time.elapsed().as_secs()
+        );
+        self.scan_running.store(false, Ordering::SeqCst);
     }
 
     fn full_path_to_database_key(&self, input: &str) -> String {
@@ -54,7 +110,6 @@ impl LocalLibrary {
         let mut added_files: Vec<String> = Vec::new();
         let mut deleted_keys: Vec<String> = Vec::new();
         let mut unchanged_keys: Vec<String> = Vec::new();
-        let excluded_db = self.db.open_tree("excluded").expect("DB error");
 
         for entry in WalkDir::new(&self.settings.music_directory)
             .follow_links(self.settings.follow_links)
@@ -63,9 +118,10 @@ impl LocalLibrary {
             .filter_map(std::result::Result::ok)
             .filter(|de| de.file_type().is_file())
             .filter(|de| {
-                let ext = de.path().extension().map_or("no_ext".to_string(), |ex| {
-                    ex.to_str().unwrap().to_lowercase()
-                });
+                let ext = de
+                    .path()
+                    .extension()
+                    .map_or("no_ext".to_string(), |ex| ex.to_str().unwrap().to_lowercase());
                 self.settings.supported_extensions.contains(&ext)
             })
             .map(|de| {
@@ -74,69 +130,23 @@ impl LocalLibrary {
                     self.full_path_to_database_key(de.path().to_str().unwrap()),
                 )
             })
-            .filter(|de| !excluded_db.contains_key(&de.1).unwrap_or(false))
+            .filter(|de| !self.ignored_files_db.contains_key(&de.1).unwrap_or(false))
         {
-            if self.db.contains_key(entry.1.as_bytes()).unwrap_or(false) {
+            if self.song_repository.find_by_id(&entry.1).is_some() {
                 unchanged_keys.push(entry.1.clone());
             } else {
                 added_files.push(entry.0.clone());
             }
         }
-        for entry in self.db.iter().filter_map(Result::ok) {
-            let iveckey = entry.0.to_vec();
-            let key = String::from_utf8_lossy(&iveckey);
-            if !unchanged_keys.contains(&key.to_string()) {
-                deleted_keys.push(key.into_owned());
+        for song in self.song_repository.get_all_iterator() {
+            if !unchanged_keys.contains(&song.file) {
+                deleted_keys.push(song.file);
             }
         }
         (added_files, deleted_keys)
     }
 
-    pub fn scan_music_dir(&self, full_scan: bool, state_changes_sender: &Sender<StateChangeEvent>) {
-        if self.scan_running.load(Ordering::SeqCst) {
-            return;
-        }
-        self.scan_running.store(true, Ordering::SeqCst);
-        let start_time = time::Instant::now();
-        state_changes_sender.send(StateChangeEvent::MetadataSongScanStarted).expect("msg send error");
-        if full_scan {
-            _ = self.db.clear();
-        }
-        let (new_files, deleted_db_keys) = self.get_diff();
-        let count = self.add_songs_to_db(new_files, state_changes_sender);
-
-        if !full_scan {
-            info!("Deleting {} files from database", deleted_db_keys.len());
-            for db_key in &deleted_db_keys {
-                self.db.remove(db_key).expect("Delete failed");
-                state_changes_sender
-                    .send(StateChangeEvent::MetadataSongScanned(
-                        format!("Key {db_key} deleted from database"),
-                    ))
-                    .expect("Status send failed");
-                _ = self.db.flush();
-            }
-        }
-        state_changes_sender
-        .send(StateChangeEvent::MetadataSongScanFinished(format!(
-            "Music directory scan finished: {count} files scanned in {} seconds",
-            start_time.elapsed().as_secs()
-        )))
-        .expect("Status send failed");
-    info!(
-        "Scanning of {} files finished in {}s",
-        count,
-        start_time.elapsed().as_secs()
-    );
-    self.scan_running.store(false, Ordering::SeqCst);
-    }
-
-    fn add_songs_to_db(
-        &self,
-        files: Vec<String>,
-        state_changes_sender: &Sender<StateChangeEvent>,
-    ) -> u32 {
-        let excluded_db = self.db.open_tree("excluded").expect("DB error");
+    fn add_songs_to_db(&self, files: Vec<String>, state_changes_sender: &Sender<StateChangeEvent>) -> u32 {
         let mut count = 0;
         for file in files {
             state_changes_sender
@@ -144,24 +154,29 @@ impl LocalLibrary {
                     "Scanning: {count}. {file}"
                 )))
                 .expect("Status send failed");
-            if let Err(e) = self.scan_single_file(Path::new(&file)) {
-                excluded_db
-                    .insert(self.full_path_to_database_key(&file), e.to_string().as_bytes())
-                    .expect("DB error");
+            {
+                if let Err(e) = self.scan_single_file(Path::new(&file)) {
+                    self.ignored_files_db
+                        .insert(self.full_path_to_database_key(&file), e.to_string().as_bytes())
+                        .expect("DB error");
+                }
             }
             if count % 100 == 0 {
-                _ = self.db.flush();
+                self.song_repository.flush();
             }
             count += 1;
         }
-        _ = self.db.flush();
-        _ = excluded_db.flush();
+        self.song_repository.flush();
+        _ = self.ignored_files_db.flush();
         count
     }
 
     fn scan_single_file(&self, file_path: &Path) -> Result<()> {
         info!("Scanning file:\t{:?}", file_path);
+
         let file = Box::new(File::open(file_path).unwrap());
+        let file_modification_date: DateTime<Utc> = file.as_ref().metadata()?.modified()?.into();
+
         let mss = MediaSourceStream::new(file, MediaSourceStreamOptions::default());
 
         let mut hint = Hint::new();
@@ -180,16 +195,24 @@ impl LocalLibrary {
         info!("Scanning file:\t{}", file_p);
         match symphonia::default::get_probe().format(&hint, mss, &format_opts, &metadata_opts) {
             Ok(mut probed) => {
-                let mut song = build_song(&mut probed);
+                let (mut song, image_data) = build_song(&mut probed);
 
-                song.id = self
-                    .db
-                    .generate_id()
-                    .expect("failed to generate id")
-                    .to_string();
+                if let Some(image_data) = &image_data {
+                    let image_id = uuid::Uuid::new_v4();
+                    if let Err(e) = std::fs::write(Path::new(ARTWORK_DIR).join(image_id.to_string()), &image_data.data)
+                    {
+                        warn!("Error writing image file: {}", e);
+                    } else {
+                        song.image_id = Some(image_id.to_string());
+                    }
+                };
+
                 song.file = file_p.to_string();
+                song.file_date = file_modification_date;
                 log::debug!("Add/update song in database: {:?}", song);
-                _ = self.db.insert(file_p, song.to_json_string_bytes());
+                self.song_repository.save(&song);
+                self.album_repository.update_from_song(song);
+
                 Ok(())
             }
             Err(err) => {
@@ -198,16 +221,11 @@ impl LocalLibrary {
             }
         }
     }
-    pub fn get_all_songs_iterator(&self) -> impl Iterator<Item = Song> {
-        self.db
-            .iter()
-            .filter_map(std::result::Result::ok)
-            .map_while(|s| Song::bytes_to_song(&s.1))
-    }
 }
 
-fn build_song(probed: &mut ProbeResult) -> Song {
+fn build_song(probed: &mut ProbeResult) -> (Song, Option<Visual>) {
     let mut song = Song::default();
+    let mut image_data: Option<Visual> = None;
     if let Some(track) = probed.format.default_track() {
         let params = &track.codec_params;
         if let Some(n_frames) = params.n_frames {
@@ -234,8 +252,7 @@ fn build_song(probed: &mut ProbeResult) -> Song {
                 StandardTagKey::Performer => song.performer = from_tag_value_to_option(known_tag),
                 StandardTagKey::TrackNumber => song.track = from_tag_value_to_option(known_tag),
                 StandardTagKey::TrackTitle => {
-                    let title = from_tag_value_to_option(known_tag);
-                    song.title = title;
+                    song.title = from_tag_value_to_option(known_tag);
                 }
                 _ => {}
             }
@@ -246,8 +263,11 @@ fn build_song(probed: &mut ProbeResult) -> Song {
                 from_tag_value_to_option(unknown_tag).unwrap_or_default(),
             );
         }
+        if let Some(v) = metadata_rev.visuals().iter().next() {
+            image_data = Some(v.clone());
+        }
     }
-    song
+    (song, image_data)
 }
 
 #[allow(clippy::unnecessary_wraps)]
