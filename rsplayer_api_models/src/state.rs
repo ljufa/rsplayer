@@ -13,7 +13,6 @@ use crate::{
     playlist::{PlaylistPage, Playlists},
 };
 
-
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, Deserialize)]
 pub struct PlayingContext {
     #[serde(skip_serializing_if = "Option::is_none")]

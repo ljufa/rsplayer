@@ -143,16 +143,11 @@ mod test {
     #[test]
     fn should_get_albums() {
         let album_repository = create_album_repo();
+        #[rustfmt::skip]
         insert_albums!(
             &album_repository,
-            "a1",
-            "Album One",
-            "RP and E Goldstein",
-            Some("Classical"),
-            "a2",
-            "Album Two",
-            "Artist 1",
-            Some("Club"),
+            "a1", "Album One", "RP and E Goldstein", Some("Classical"),
+            "a2", "Album Two", "Artist 1", Some("Club")
         );
         let albums = album_repository.find_all();
         assert_eq!(albums.len(), 2);
@@ -168,43 +163,16 @@ mod test {
     #[test]
     fn should_get_latest_added_albums() {
         let album_repository = create_album_repo();
+        #[rustfmt::skip]
         insert_albums_with_date!(
-            &album_repository,
-            "a4",
-            "Album 7",
-            "Artist 2",
-            Some(-7),
-            None,
-            "a4",
-            "Album 6",
-            "Artist 2",
-            Some(-6),
-            None,
-            "a1",
-            "Album 1",
-            "Artist 1",
-            Some(-1),
-            None,
-            "a4",
-            "Album 5",
-            "Artist 2",
-            Some(-5),
-            None,
-            "a2",
-            "Album 2",
-            "Artist 1",
-            Some(-2),
-            None,
-            "a3",
-            "Album 3",
-            "Artist 2",
-            Some(-3),
-            None,
-            "a4",
-            "Album 4",
-            "Artist 2",
-            Some(-4),
-            None,
+            &album_repository, 
+            "a4", "Album 7", "Artist 2", Some(-7), None,
+            "a4", "Album 6", "Artist 2", Some(-6), None,
+            "a1", "Album 1", "Artist 1", Some(-1), None,
+            "a4", "Album 5", "Artist 2", Some(-5), None,
+            "a2", "Album 2", "Artist 1", Some(-2), None,
+            "a3", "Album 3", "Artist 2", Some(-3), None,
+            "a4", "Album 4", "Artist 2", Some(-4), None,
         );
         let result = album_repository.find_all_sort_by_added_desc(3);
         assert_eq!(result.len(), 3);
@@ -216,43 +184,16 @@ mod test {
     #[test]
     fn should_get_latest_released_albums() {
         let album_repository = create_album_repo();
+        #[rustfmt::skip]
         insert_albums_with_date!(
             &album_repository,
-            "a7",
-            "Album 7",
-            "Artist 2",
-            None,
-            Some(-4),
-            "a6",
-            "Album 6",
-            "Artist 2",
-            None,
-            Some(-2),
-            "a1",
-            "Album 1",
-            "Artist 1",
-            None,
-            Some(-6),
-            "a5",
-            "Album 5",
-            "Artist 2",
-            None,
-            Some(-1),
-            "a2",
-            "Album 2",
-            "Artist 1",
-            None,
-            Some(-1),
-            "a3",
-            "Album 3",
-            "Artist 2",
-            None,
-            Some(-3),
-            "a4",
-            "Album 4",
-            "Artist 2",
-            None,
-            Some(-6),
+            "a7", "Album 7", "Artist 2", None, Some(-4),
+            "a6", "Album 6", "Artist 2", None, Some(-2),
+            "a1", "Album 1", "Artist 1", None, Some(-6),
+            "a5", "Album 5", "Artist 2", None, Some(-1),
+            "a2", "Album 2", "Artist 1", None, Some(-1),
+            "a3", "Album 3", "Artist 2", None, Some(-3),
+            "a4", "Album 4", "Artist 2", None, Some(-6),
         );
 
         let result = album_repository.find_all_sort_by_released_desc(3);

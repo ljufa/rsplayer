@@ -1,1 +1,2 @@
 max_width = 120
+# skip_macro_invocations = [ "insert_albums_with_date" ]

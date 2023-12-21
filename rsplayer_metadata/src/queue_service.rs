@@ -219,9 +219,7 @@ impl QueueService {
         _ = self.status_db.remove(CURRENT_SONG_KEY);
     }
     pub fn get_current_playing_context(&self, query: PlayingContextQuery) -> Option<PlayingContext> {
-        let mut pc = PlayingContext {
-            playlist_page: None,
-        };
+        let mut pc = PlayingContext { playlist_page: None };
         let page_size = 100;
         match query {
             PlayingContextQuery::WithSearchTerm(term, offset) => {

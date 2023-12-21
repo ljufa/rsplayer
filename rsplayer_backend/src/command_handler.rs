@@ -4,7 +4,6 @@ use std::sync::Arc;
 use log::debug;
 use tokio::sync::broadcast::Sender;
 
-use api_models::common::{SystemCommand, UserCommand};
 use api_models::common::MetadataCommand::{QueryLocalFiles, RescanMetadata};
 use api_models::common::PlayerCommand::{
     Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, RandomToggle, Rewind,
@@ -18,6 +17,7 @@ use api_models::common::SystemCommand::{
     ChangeAudioOutput, PowerOff, QueryCurrentStreamerState, RestartRSPlayer, RestartSystem, SetVol, VolDown, VolUp,
 };
 use api_models::common::UserCommand::{Metadata, Player, Playlist, Queue};
+use api_models::common::{SystemCommand, UserCommand};
 use api_models::playlist::PlaylistType;
 use api_models::state::StateChangeEvent;
 use rsplayer_config::ArcConfiguration;
@@ -242,7 +242,6 @@ pub async fn handle_user_commands(
                     )))
                     .unwrap();
             }
-
 
             /*
              * Metadata commands
