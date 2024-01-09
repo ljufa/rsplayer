@@ -8,9 +8,9 @@ use std::{
 };
 use std::{sync::Arc, time::Duration};
 
+use futures::Future;
 use futures::FutureExt;
 use futures::StreamExt;
-use futures::{Future, SinkExt};
 use log::debug;
 use log::error;
 use log::info;

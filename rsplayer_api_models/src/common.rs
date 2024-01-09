@@ -12,6 +12,7 @@ pub enum MetadataLibraryItem {
     Directory { name: String },
     Empty,
 }
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MetadataLibraryResult {
     pub items: Vec<MetadataLibraryItem>,
@@ -28,8 +29,8 @@ impl MetadataLibraryItem {
     }
     pub fn get_id(&self) -> String {
         match self {
-            MetadataLibraryItem::Directory { name } => name.to_string(),
-            MetadataLibraryItem::SongItem(song) => song.file.to_string(),
+            MetadataLibraryItem::Directory { name } => format!("{name}/"),
+            MetadataLibraryItem::SongItem(song) => song.get_file_name_without_path(),
             MetadataLibraryItem::Empty => String::new(),
         }
     }

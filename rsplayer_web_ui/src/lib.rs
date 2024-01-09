@@ -9,13 +9,13 @@ use api_models::{
 };
 use gloo_console::{error, log};
 use gloo_net::http::Request;
-use PlayerCommand::{Next, Pause, Play, Prev, RandomToggle};
-use seed::{*, prelude::*};
+use seed::{prelude::*, *};
 use serde::Deserialize;
 use strum_macros::IntoStaticStr;
-use UserCommand::{Player, Queue};
 use wasm_sockets::{self, ConnectionStatus, EventClient, Message, WebSocketError};
 use web_sys::CloseEvent;
+use PlayerCommand::{Next, Pause, Play, Prev, RandomToggle};
+use UserCommand::{Player, Queue};
 
 mod page;
 
@@ -511,7 +511,9 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
                     C!["level-item"],
                     figure![
                         C!["image", "is-64x64"],
-                        img![attrs! {"src" => get_background_image(player_model).unwrap_or("/headphones.png".to_string())}],
+                        img![
+                            attrs! {"src" => get_background_image(player_model).unwrap_or("/headphones.png".to_string())}
+                        ],
                     ]
                 ],
                 ev(Ev::Click, |_| { Urls::player_abs().go_and_load() })
@@ -737,17 +739,11 @@ fn view_music_lib_tabs(page: &Page) -> Node<Msg> {
             ],
             li![
                 IF!(page_name == "MusicLibraryDynamicPlaylist" => C!["is-active"]),
-                 a![
-                     attrs! {At::Href => ""},
-                     span!("Discover")
-                 ]
+                a![attrs! {At::Href => ""}, span!("Discover")]
             ],
             li![
                 IF!(page_name == "Radio" => C!["is-active"]),
-                a![
-                    attrs! {At::Href => ""},
-                     span!("Radio")
-                ]
+                a![attrs! {At::Href => ""}, span!("Radio")]
             ],
         ],
     ]
@@ -905,4 +901,3 @@ fn get_background_image(model: &PlayerModel) -> Option<String> {
     }
     None
 }
-

@@ -1,16 +1,16 @@
 use api_models::{
     common::{
         MetadataLibraryItem,
-        QueueCommand::{AddLocalLibDirectory, AddSongToQueue, LoadLocalLibDirectory, LoadSongToQueue},
+        QueueCommand::{AddLocalLibDirectory, LoadLocalLibDirectory},
         UserCommand,
     },
     state::StateChangeEvent,
 };
-use gloo_console::log;
 
-use seed::{a, attrs, div, empty, i, li, nav, p, prelude::*, progress, section, span, style, ul, C, IF};
+use indextree::{Arena, NodeId};
+use seed::{div, empty, i, li, p, prelude::*, section, span, ul, C, IF};
 
-use crate::Urls;
+use crate::view_spinner_modal;
 
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
@@ -18,21 +18,41 @@ pub enum Msg {
     WebSocketOpen,
     SendUserCommand(UserCommand),
     StatusChangeEventReceived(StateChangeEvent),
-    ListItemClick(String),
-    BreadcrumbClick(usize),
-    AddItemToQueue(String, bool),
-    LoadItemToQueue(String, bool),
-
+    ExpandNodeClick(NodeId),
+    CollapseNodeClick(NodeId),
+    AddItemToQueue(NodeId),
+    LoadItemToQueue(NodeId),
     Playlists(crate::page::music_library_static_playlist::Msg),
 }
+
 #[derive(Debug)]
-pub struct FilesModel {
-    items: Vec<MetadataLibraryItem>,
-    current_dir_path: Vec<String>,
+pub struct TreeModel {
+    arena: Arena<MetadataLibraryItem>,
+    root: NodeId,
+    current: NodeId,
+}
+impl TreeModel {
+    fn new() -> Self {
+        let mut arena = Arena::new();
+        let root = arena.new_node(MetadataLibraryItem::Empty);
+        TreeModel {
+            arena,
+            root,
+            current: root,
+        }
+    }
+    fn get_full_path(&self, id: NodeId) -> String {
+        let path: String = id.ancestors(&self.arena).fold(String::new(), |mut acc, n| {
+            let node = self.arena.get(n).unwrap().get();
+            acc.insert_str(0, &node.get_id());
+            acc
+        });
+        path
+    }
 }
 #[derive(Debug)]
 pub struct Model {
-    files_model: FilesModel,
+    tree: TreeModel,
     wait_response: bool,
 }
 
@@ -41,12 +61,8 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
         api_models::common::MetadataCommand::QueryLocalFiles(String::new(), 0),
     )));
-
     Model {
-        files_model: FilesModel {
-            items: Vec::new(),
-            current_dir_path: Vec::new(),
-        },
+        tree: TreeModel::new(),
         wait_response: true,
     }
 }
@@ -55,61 +71,34 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
 pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
         Msg::StatusChangeEventReceived(StateChangeEvent::MetadataLocalItems(result)) => {
-            model.files_model.items = result.items;
             model.wait_response = false;
-        }
-        Msg::ListItemClick(id) => {
-            if !id.is_empty() {
-                model.files_model.current_dir_path.push(id);
-            }
-            let mut current_dir = String::new();
-            model.files_model.current_dir_path.iter().for_each(|p| {
-                current_dir.push_str(p);
-                current_dir.push('/');
+            result.items.into_iter().for_each(|item| {
+                let node = model.tree.arena.new_node(item);
+                model.tree.current.append(node, &mut model.tree.arena);
             });
+        }
+        Msg::ExpandNodeClick(id) => {
             model.wait_response = true;
+            model.tree.current = id;
+            let path = model.tree.get_full_path(id);
             orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
-                api_models::common::MetadataCommand::QueryLocalFiles(current_dir, 0),
+                api_models::common::MetadataCommand::QueryLocalFiles(path, 0),
             )));
         }
-        Msg::BreadcrumbClick(level) => {
-            log!("Level", level);
-            log!("Items size before", model.files_model.current_dir_path.len());
-            model.files_model.current_dir_path.truncate(level);
-            log!("Items size after", model.files_model.current_dir_path.len());
-            orders.send_msg(Msg::ListItemClick(String::new()));
-        }
-        Msg::AddItemToQueue(id, is_dir) => {
-            if is_dir {
-                let mut current_dir = String::new();
-                model.files_model.current_dir_path.iter().for_each(|p| {
-                    current_dir.push_str(p);
-                    current_dir.push('/');
-                });
-                current_dir.push_str(&id);
-                current_dir.push('/');
-                orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(AddLocalLibDirectory(
-                    current_dir,
-                ))));
-            } else {
-                orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(AddSongToQueue(id))));
+        Msg::CollapseNodeClick(id) => {
+            let arena = model.tree.arena.clone();
+            let children = id.children(&arena);
+            for c in children {
+                c.remove_subtree(&mut model.tree.arena);
             }
         }
-        Msg::LoadItemToQueue(id, is_dir) => {
-            if is_dir {
-                let mut current_dir = String::new();
-                model.files_model.current_dir_path.iter().for_each(|p| {
-                    current_dir.push_str(p);
-                    current_dir.push('/');
-                });
-                current_dir.push_str(&id);
-                current_dir.push('/');
-                orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(LoadLocalLibDirectory(
-                    current_dir,
-                ))));
-            } else {
-                orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(LoadSongToQueue(id))));
-            }
+        Msg::AddItemToQueue(id) => {
+            let path = model.tree.get_full_path(id);
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(AddLocalLibDirectory(path))));
+        }
+        Msg::LoadItemToQueue(id) => {
+            let path = model.tree.get_full_path(id);
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(LoadLocalLibDirectory(path))));
         }
         Msg::WebSocketOpen => {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
@@ -132,97 +121,91 @@ fn view_content(model: &Model) -> Node<Msg> {
 }
 
 fn view_files(model: &Model) -> Node<Msg> {
-    let mut level = 1;
     section![
+        view_spinner_modal(model.wait_response),
         C!["section"],
-        nav![
-            C!["breadcrumb", "p-3"],
-            attrs!(At::AriaLabel => "breadcrumbs"),
-            IF!(!model.files_model.current_dir_path.is_empty() =>
-            ul![
-                C!["has-background-dark-transparent", "p-3"],
-                li![a![
-                    "Root",
-                    attrs! {At::Href => Urls::library_abs().add_hash_path_part("files")}
-                ]],
-                model.files_model.current_dir_path.iter().map(|dir| {
-                    let l = li![a![dir, ev(Ev::Click, move |_| Msg::BreadcrumbClick(level))]];
-                    level += 1;
-                    l
-                })
-            ])
-        ],
-        div![
-            IF!(model.wait_response => progress![C!["progress", "is-small"], attrs!{ At::Max => "100"}, style!{ St::MarginBottom => "50px"}]),
-        ],
-        div![model.files_model.items.iter().map(|item| {
-            let title = item.get_title();
-            let id = item.get_id();
-            let id2 = item.get_id();
-            let id3 = item.get_id();
-            let is_dir = item.is_dir();
-            div![
-                C!["list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
-                div![
-                    C!["list-item"],
-                    div![
-                        C!["list-item-content", "has-background-dark-transparent"],
-                        div![
-                            C!["list-item-title", "has-text-light"],
-                            span![&title],
-                            if let MetadataLibraryItem::SongItem(song) = item {
-                                span![
-                                    &song.date.as_ref().map(|d| span![format!(" ({d})")]),
-                                    &song
-                                        .time
-                                        .as_ref()
-                                        .map(|t| span![format!(" [{}]", api_models::common::dur_to_string(t))])
-                                ]
-                            } else {
-                                empty!()
-                            }
-                        ],
-                        div![
-                            C!["description", "has-text-light"],
-                            if let MetadataLibraryItem::SongItem(song) = item {
-                                span![
-                                    song.artist.as_ref().map(|at| span![i!["Art: "], at]),
-                                    song.album.as_ref().map(|a| span![i![" | Alb: "], a]),
-                                    song.genre.as_ref().map(|a| p![i!["Genre: "], a]),
-                                ]
-                            } else {
-                                empty!()
-                            }
-                        ],
-                        IF!(is_dir => ev(Ev::Click, move |_| Msg::ListItemClick(id)))
-                    ],
-                    div![
-                        C!["list-item-controls"],
-                        div![
-                            C!["buttons"],
-                            a![
-                                attrs!(At::Title =>"Add song to queue"),
-                                C!["white-icon"],
-                                i![C!("material-icons"), "playlist_add"],
-                                ev(Ev::Click, move |_| Msg::AddItemToQueue(id2, is_dir))
-                            ],
-                            a![
-                                attrs!(At::Title =>"Play song and replace queue"),
-                                C!["white-icon"],
-                                i![C!("material-icons"), "play_circle_filled"],
-                                ev(Ev::Click, move |_| Msg::LoadItemToQueue(id3, is_dir))
-                            ],
-                        ]
-                    ],
-                ]
-            ]
-        })]
+        ul![C!["wtree"], get_tree_start_node(model.tree.root, &model.tree.arena)],
     ]
+}
+fn get_tree_start_node(node_id: NodeId, arena: &Arena<MetadataLibraryItem>) -> Node<Msg> {
+    let Some(value) = arena.get(node_id) else {
+        return empty!();
+    };
+    let item = value.get();
+    let children: Vec<NodeId> = node_id.children(arena).collect();
+    let mut li: Node<Msg> = li![];
+    let mut span: Node<Msg> = span![C!["has-background-dark-transparent"]];
+    let mut label = String::new();
+    let mut is_dir = false;
+    let mut is_root = false;
+    match item {
+        MetadataLibraryItem::SongItem(song) => {
+            label = song.get_file_name_without_path();
+        }
+        MetadataLibraryItem::Directory { name } => {
+            label = name.clone();
+            is_dir = true;
+        }
+        MetadataLibraryItem::Empty => {
+            is_root = true;
+        }
+    };
+    if !is_root {
+        span.add_child(
+            div![
+            C!["level", "is-mobile"],
+            div![
+                C!["level-left"],
+                IF!(is_dir =>
+                    if children.is_empty() {
+                        i![C!["material-icons"], "expand_more"]
+                    } else {
+                        i![C!["material-icons"], "expand_less"]
+                    }
+                ),
+                IF!(is_dir =>
+                    if children.is_empty() {
+                            ev(Ev::Click, move |_| Msg::ExpandNodeClick(node_id))
+                    } else {
+                            ev(Ev::Click, move |_| Msg::CollapseNodeClick(node_id))
+                    }
+                ),
+                div![
+                    C!["level-item", "is-flex-grow-3"],
+                    p![C!["has-overflow-ellipsis-text"], label]
+                ],
+            ],
+            div![
+                C!["level-right"],
+                div![
+                    C!["level-item", "mr-5"],
+                    i![C!["material-icons"], "playlist_add"],
+                    ev(Ev::Click, move |_| Msg::AddItemToQueue(node_id))
+                ],
+                div![
+                    C!["level-item"],
+                    i![C!["material-icons"], "play_circle_filled"],
+                    ev(Ev::Click, move |_| Msg::LoadItemToQueue(node_id))
+                ],
+            ],
+            ]
+        );
+    }
+
+    li.add_child(span);
+    if !children.is_empty() {
+        let mut ul: Node<Msg> = ul!();
+        for c in children {
+            ul.add_child(get_tree_start_node(c, arena));
+        }
+        li.add_child(ul);
+    }
+    li
 }
 
 #[cfg(test)]
 mod test {
-    use gloo_console::log;
+
     use indextree::Arena;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -234,7 +217,6 @@ mod test {
         let l22 = arena.new_node("L22");
         let l31 = arena.new_node("L31");
         let l32 = arena.new_node("L32");
-
         l21.append(l31, arena);
         l1.append(l22, arena);
         l1.append(l21, arena);
@@ -246,25 +228,7 @@ mod test {
         l321.append(arena.new_node("L3312"), arena);
         l22.append(arena.new_node("L221"), arena);
         l22.append(arena.new_node("L222"), arena);
-        let traverser = l1.traverse(arena);
-        log!("<ul>");
-        traverser.for_each(|n| match n {
-            indextree::NodeEdge::Start(sn) => {
-                let childen_count = sn.children(arena).count();
-                let value = arena.get(sn).unwrap();
-                log!(format!("<li>{}", value.get()));
-                if childen_count > 0 {
-                    log!(format!("<ul>"));
-                }
-            }
-            indextree::NodeEdge::End(en) => {
-                log!("</li>");
-                if arena[en].next_sibling().is_none() {
-                    log!("</ul>");
-                }
-            }
-        });
-        //https://jsfiddle.net/1fynun7a/1591/
-        log!(format!("{}", l1.debug_pretty_print(arena)));
+        // let tree = get_tree_start_node(l1, arena);
+        // log!(format!("tree: {}", tree));
     }
 }

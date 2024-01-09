@@ -47,8 +47,6 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
         api_models::common::PlaylistCommand::QueryPlaylist,
     )));
-    
-
 
     orders.stream(streams::window_event(Ev::KeyDown, |event| {
         Msg::KeyPressed(event.unchecked_into())

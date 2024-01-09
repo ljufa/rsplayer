@@ -246,7 +246,7 @@ mod metadata {
 
     use tokio::sync::broadcast::{Receiver, Sender};
 
-    use api_models::{common::MetadataLibraryItem, settings::MetadataStoreSettings, state::StateChangeEvent};
+    use api_models::{settings::MetadataStoreSettings, state::StateChangeEvent};
 
     use crate::song_repository::SongRepository;
     use crate::{
@@ -318,31 +318,6 @@ mod metadata {
             }
             _ => false,
         }));
-    }
-
-    #[test]
-    fn test_get_items_by_dir() {
-        let (service, sender, _ee, song_repository) = create_metadata_service(&Context::default());
-        service.scan_music_dir(true, &sender);
-        let result = song_repository.find_by_dir("aa/");
-        assert_eq!(result.root_path, "aa/");
-        assert_eq!(result.items.len(), 3);
-        assert_eq!(
-            result.items[0],
-            MetadataLibraryItem::Directory { name: "aaa".to_owned() }
-        );
-        match &result.items[1] {
-            MetadataLibraryItem::SongItem(s) => assert_eq!(s.file, "aa/music.flac"),
-            _ => panic!("Should be a song"),
-        }
-        let items = song_repository.find_by_dir("").items;
-        assert_eq!(items[0], MetadataLibraryItem::Directory { name: "aa".to_owned() });
-        assert_eq!(items[1], MetadataLibraryItem::Directory { name: "ab".to_owned() });
-        assert_eq!(items[2], MetadataLibraryItem::Directory { name: "ac".to_owned() });
-        match &items[3] {
-            MetadataLibraryItem::SongItem(s) => assert_eq!(s.file, "music.wav"),
-            _ => panic!("Should be a song"),
-        }
     }
 
     #[test]

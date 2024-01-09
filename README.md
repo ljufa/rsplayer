@@ -84,12 +84,6 @@ If you would like to contribute to RSPlayer, please submit a pull request or ope
 ## License
 RSPlayer is licensed under the MIT license. See the LICENSE file for more information.
 
-## Demo videos
-[![Demo video](https://img.youtube.com/vi/S-LKkZeLEQ0/hqdefault.jpg)](https://youtu.be/S-LKkZeLEQ0)
-[![Demo video](https://img.youtube.com/vi/kH-_5-JRHrw/hqdefault.jpg)](https://youtu.be/kH-_5-JRHrw)
-[![Demo video](https://img.youtube.com/vi/biqSZ9TTWOg/hqdefault.jpg)](https://youtu.be/biqSZ9TTWOg)
-
-
 ## Architecture
 ![Diagram](docs/dev/architecture-2022-09-05-1620.png)
 ## My Audio Streamer Implementation

@@ -142,13 +142,14 @@ TODO
  
 ## General
 
-* [ ] Show files as a tree
+* [x] Show files as a tree
+* [ ] Show media library (artist/album) as a tree
+* [ ] Web radio browse/search/~~play~~
 * [ ] Search files
 * [ ] Playlist by genre
 * [ ] Most played songs playlist
 * [ ] Liked songs playlist
 * [ ] New music mix dynamic playlist
-* [ ] Web radio browse/search/~~play~~
 * [ ] Like song
 * [ ] Seek to position
 * [ ] Keep last N songs in *history* when random mode is enabled

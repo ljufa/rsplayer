@@ -5,11 +5,11 @@ use api_models::player::Song;
 use api_models::state::{PlayingContext, PlayingContextQuery, StateChangeEvent};
 use gloo_console::log;
 use gloo_net::Error;
-use seed::{
-    a, attrs, button, C, div, empty, footer, header, i, id, IF, input, p, prelude::*, progress,
-    section, span, style, textarea,
-};
 use seed::prelude::web_sys::KeyboardEvent;
+use seed::{
+    a, attrs, button, div, empty, footer, header, i, id, input, p, prelude::*, progress, section, span, style,
+    textarea, C, IF,
+};
 
 use crate::scrollToId;
 
@@ -342,7 +342,6 @@ fn view_add_url_modal(model: &Model) -> Node<Msg> {
         empty!()
     }
 }
-
 
 #[allow(clippy::too_many_lines)]
 fn view_queue_items(model: &Model) -> Node<Msg> {

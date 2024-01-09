@@ -102,6 +102,10 @@ impl Song {
         }
         result
     }
+    pub fn get_file_name_without_path(&self) -> String {
+        self.file.rsplit('/').next().unwrap().to_owned()
+    }
+
     #[must_use]
     pub fn all_text(&self) -> String {
         let mut result = String::new();

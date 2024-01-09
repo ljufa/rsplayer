@@ -486,7 +486,7 @@ input[type=range].slider {
 p.has-overflow-ellipsis-text {
   white-space: nowrap;
   text-overflow: ellipsis;
-  width: 380px;
+  width: 580px;
   overflow: hidden;
 }
 
@@ -542,6 +542,82 @@ input.input-size {
   width: -moz-available;
   width: -webkit-fill-available;
 }
+
 .breadcrumb a {
   color: white;
+}
+
+.wtree {
+  li {
+    list-style-type: none;
+    margin: 10px 0 10px 10px;
+    position: relative;
+
+    &:before {
+      content: "";
+      position: absolute;
+      top: -10px;
+      left: -20px;
+      border-left: 1px solid #ddd;
+      border-bottom: 1px solid #ddd;
+      width: 20px;
+      height: 15px;
+    }
+
+    &:after {
+      position: absolute;
+      content: "";
+      top: 5px;
+      left: -20px;
+      border-left: 1px solid #ddd;
+      border-top: 1px solid #ddd;
+      width: 20px;
+      height: 100%;
+    }
+
+    &:last-child:after {
+      display: none;
+    }
+
+    span {
+      display: block;
+      border: 1px solid #ddd;
+      padding: 5px;
+      color: #fff;
+      text-decoration: none;
+    }
+  }
+}
+
+.wtree {
+  li {
+    span {
+
+      &:hover,
+      &:focus {
+        background: #eee;
+        color: #000;
+        border: 1px solid #aaa;
+
+        &+ul {
+          li {
+            span {
+              background: #eee;
+              color: #000;
+              border: 1px solid #aaa;
+            }
+          }
+        }
+      }
+
+      &:hover+ul,
+      &:focus+ul {
+        li {
+          &:after, &:before {
+            border-color: #aaa;
+          }
+        }
+      }
+    }
+  }
 }
