@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use crate::{player::Song, state::PlayingContextQuery};
+use chrono::{DateTime, Utc};
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
@@ -10,6 +11,8 @@ use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 pub enum MetadataLibraryItem {
     SongItem(Song),
     Directory { name: String },
+    Artist { name: String },
+    Album { name: String, year: Option<DateTime<Utc>> },
     Empty,
 }
 
@@ -23,13 +26,17 @@ impl MetadataLibraryItem {
     pub fn get_title(&self) -> String {
         match self {
             MetadataLibraryItem::SongItem(song) => song.get_title(),
-            MetadataLibraryItem::Directory { name } => name.to_string(),
+            MetadataLibraryItem::Directory { name } | MetadataLibraryItem::Artist { name } => name.to_string(),
+            MetadataLibraryItem::Album { name, year } => year
+                .as_ref()
+                .map_or_else(|| name.to_string(), |year| format!("{name} ({year})")),
             MetadataLibraryItem::Empty => String::new(),
         }
     }
     pub fn get_id(&self) -> String {
         match self {
             MetadataLibraryItem::Directory { name } => format!("{name}/"),
+            MetadataLibraryItem::Artist { name } | MetadataLibraryItem::Album { name, year: _ } => name.to_owned(),
             MetadataLibraryItem::SongItem(song) => song.get_file_name_without_path(),
             MetadataLibraryItem::Empty => String::new(),
         }
@@ -113,6 +120,9 @@ pub enum PlayerCommand {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum MetadataCommand {
     QueryLocalFiles(String, u32),
+    QueryArtists,
+    QueryAlbumsByArtist(String),
+    QuerySongsByAlbum(String),
     RescanMetadata(String, bool),
 }
 
@@ -128,12 +138,14 @@ pub enum PlaylistCommand {
 pub enum QueueCommand {
     LoadPlaylistInQueue(String),
     LoadAlbumInQueue(String),
+    LoadArtistInQueue(String),
     LoadSongToQueue(String),
+    LoadLocalLibDirectory(String),
     AddSongToQueue(String),
+    AddArtistToQueue(String),
     AddLocalLibDirectory(String),
     AddPlaylistToQueue(String),
     AddAlbumToQueue(String),
-    LoadLocalLibDirectory(String),
     ClearQueue,
     QueryCurrentSong,
     QueryCurrentPlayingContext(PlayingContextQuery),

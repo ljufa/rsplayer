@@ -83,11 +83,3 @@ If you would like to contribute to RSPlayer, please submit a pull request or ope
 
 ## License
 RSPlayer is licensed under the MIT license. See the LICENSE file for more information.
-
-## Architecture
-![Diagram](docs/dev/architecture-2022-09-05-1620.png)
-## My Audio Streamer Implementation
-**[KiCad files](docs/kicad/)** could be found here
-![front](docs/dev/my_streamer_front_small.jpg)
-![back](docs/dev/my_streamer_back_small.jpg)
-![inside](docs/dev/my_streamer_inside_small.jpg)

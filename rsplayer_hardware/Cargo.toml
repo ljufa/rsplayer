@@ -17,8 +17,8 @@ anyhow.workspace = true
 
 #other
 unidecode = "0.3.0"
-alsa = "0.8.0"
-url = "2.3.1"
+alsa = "0.8.1"
+url = "2.5.0"
 
 #gpio, i2c
 gpio-cdev = { version = "0.6.0" }

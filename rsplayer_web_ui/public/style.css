@@ -494,6 +494,10 @@ p.has-overflow-ellipsis-text {
   p.has-overflow-ellipsis-text {
     width: 160px;
   }
+  p.level-item {
+    width: 160px;
+    justify-content: left;
+  }
 }
 
 input.input-size {
@@ -582,7 +586,7 @@ input.input-size {
     span {
       display: block;
       border: 1px solid #ddd;
-      padding: 5px;
+      /*padding: 5px;*/
       color: #fff;
       text-decoration: none;
     }

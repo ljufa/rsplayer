@@ -12,6 +12,16 @@ impl AlbumRepository {
         Self { albums_db: db }
     }
 
+    pub fn find_all_album_artists(&self) -> Vec<String> {
+        let mut result: Vec<String> = self
+            .find_all()
+            .iter()
+            .map(|a| a.artist.clone().unwrap_or_default())
+            .collect();
+        result.sort();
+        result.dedup();
+        result
+    }
     pub fn find_all(&self) -> Vec<Album> {
         self.albums_db
             .iter()
@@ -201,6 +211,51 @@ mod test {
         assert_eq!(result[0].title, "Album 2");
         assert_eq!(result[1].title, "Album 5");
         assert_eq!(result[2].title, "Album 6");
+    }
+
+    #[test]
+    fn test_find_all_album_artists() {
+        let album_repository = create_album_repo();
+        #[rustfmt::skip]
+        insert_albums!(
+            &album_repository,
+            "a1", "Album One", "RP and E Goldstein", Some("Classical"),
+            "a2", "Album Two", "Artist 1", Some("Club"),
+            "a3", "Album Three", "RP and E Goldstein", Some("Classical"),
+            "a4", "Album Four", "Artist 2", Some("Club"),
+            "a5", "Album Five", "RP and E Goldstein", Some("Classical"),
+            "a6", "Album Six", "Artist 3", Some("Club"),
+        );
+        let result = album_repository.find_all_album_artists();
+        assert_eq!(result.len(), 4);
+        assert_eq!(result[0], "Artist 1");
+        assert_eq!(result[1], "Artist 2");
+        assert_eq!(result[2], "Artist 3");
+        assert_eq!(result[3], "RP and E Goldstein");
+    }
+
+    #[test]
+    fn test_find_by_artist() {
+        let album_repository = create_album_repo();
+        #[rustfmt::skip]
+        insert_albums!(
+            &album_repository,
+            "a1", "Album One", "RP and E Goldstein", Some("Classical"),
+            "a2", "Album Two", "Artist 1", Some("Club"),
+            "a3", "Album Three", "RP and E Goldstein", Some("Classical"),
+            "a4", "Album Four", "Artist 2", Some("Club"),
+            "a5", "Album Five", "RP and E Goldstein", Some("Classical"),
+            "a6", "Album Six", "Artist 3", Some("Club"),
+        );
+        let mut result = album_repository.find_by_artist("RP and E Goldstein");
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].title, "Album One");
+        assert_eq!(result[1].title, "Album Three");
+        assert_eq!(result[2].title, "Album Five");
+
+        result = album_repository.find_by_artist("Artist 1");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].title, "Album Two");
     }
 
     fn create_album(

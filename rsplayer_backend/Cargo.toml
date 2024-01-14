@@ -116,12 +116,12 @@ tokio.workspace = true
 futures.workspace = true
 tokio-stream.workspace = true
 anyhow.workspace = true
-console-subscriber = "0.1.10"
+console-subscriber = "0.2.0"
 
 #warp
-warp = { version = "0.3.5", features = ["compression"] }
-rust-embed = { version = "6.6.1", features = ["warp-ex", "compression"] }
-warp-embed = "0.4.0"
+warp = { version = "0.3.6", features = ["compression"] }
+rust-embed = { version = "8.2.0", features = ["warp-ex", "compression"] }
+warp-embed = "0.5.0"
 
 
 [profile.release]

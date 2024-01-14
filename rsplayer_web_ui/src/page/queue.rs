@@ -423,7 +423,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                         ],
                     ]],
 
-                    // queue items
+                    // queue items`
                     div![C!["scroll-list list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
                         div![id!("top-list-item")],
                         iter.map(|it| { view_queue_item(it, model)  })

@@ -140,19 +140,21 @@ TODO
 
 # Roadmap
  
-## General
+## Features
 
 * [x] Show files as a tree
-* [ ] Show media library (artist/album) as a tree
-* [ ] Web radio browse/search/~~play~~
-* [ ] Search files
+* [x] Show media library (artist/album) as a tree
+* [x] Web radio browse/play
+* [ ] Like/Favorite song/radio
 * [ ] Playlist by genre
 * [ ] Most played songs playlist
 * [ ] Liked songs playlist
 * [ ] New music mix dynamic playlist
-* [ ] Like song
+* [ ] Search files/radio
 * [ ] Seek to position
 * [ ] Keep last N songs in *history* when random mode is enabled
+* [ ] Windows support
+* [ ] MacOS support
 * [ ] Automatic library scan after music directory change, or time based scan
 * [ ] Use fixed unique port instead 80 and fallback 8000
 * [ ] Convert volume units to db
@@ -162,29 +164,14 @@ TODO
 * [ ] Mute relay
 * [ ] DSP support (i.e. camillaDSP?)
 * [ ] use more information about the song based on last.fm response, update id tags on local files?
-* [ ] lyrics?
 * [ ] analyze audio files for song matching and similarity (bliss-rs), create playlists from a song
 * [ ] streaming to local device (i.e. phone) for i.e. preview
 * [ ] convert PCM to DSD on the fly
+* [ ] Add all settings to settings page
 <!-- * [ ] UPNP -->
-  
-## Queue page
-* [x] Pagination
-* [x] Manage items (batch, on search results): ~~clear~~, ~~delete~~, ~~play~~, playnext
  
-## Playlist page
-* [x] Manage selected playlist:
-   * ~~play item~~
-   * ~~add item(s) to the queue~~
-   * play next
-   * ~~replace queue with item(s)~~
-   * delete playlist
-* [x] Pagination
- 
-## Settings page
-* [ ] Add all settings
-
 ## Code improvements
+
 * [ ] get rid of `.unwrap()` calls
 * [ ] get rid of unnecessary `.clone()` calls
 * [ ] refactor names all over the code
@@ -281,4 +268,13 @@ cargo make copy_remote
 * build and copy to rpi device 
 `cargo make copy_remote`  
 
-... TODO ...
+# My DIY streamer implementation
+
+## Architecture
+![Diagram](dev/architecture-2022-09-05-1620.png)
+## My Audio Streamer Implementation
+**[KiCad files](docs/kicad/)** could be found here
+![front](dev/my_streamer_front_small.jpg)
+![back](dev/my_streamer_back_small.jpg)
+![inside](dev/my_streamer_inside_small.jpg)
+

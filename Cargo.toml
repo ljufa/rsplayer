@@ -1,4 +1,5 @@
 [workspace]
+resolver = "2"
 members = [
     "rsplayer_api_models",
     "rsplayer_backend",
@@ -12,7 +13,7 @@ exclude = ["rsplayer_web_ui"]
 
 [workspace.dependencies]
 log = { version = "0.4" }
-env_logger = "0.10.0"
+env_logger = "0.10.1"
 anyhow = "1.0"
 serde = {version = "1", features = ["derive"]}
 serde_json = "1"
@@ -20,7 +21,7 @@ sled = "0.34.7"
 symphonia = { version = "0.5.3", features = ["all"] }
 cfg-if = "1.0.0"
 tokio = { version = "1", features = ["full", "tracing"] }
-futures = { version = "0.3.24", default-features = false }
-tokio-stream = "0.1.10"
+futures = { version = "0.3.30", default-features = false }
+tokio-stream = "0.1.14"
 chrono = {verson = "0.4.31",  features = ["serde"]}
 uuid = { version = "1", features = ["serde", "v4"] }

@@ -10,14 +10,14 @@ use api_models::common::PlayerCommand::{
 };
 use api_models::common::PlaylistCommand::{QueryPlaylist, QueryPlaylistItems, SaveQueueAsPlaylist};
 use api_models::common::QueueCommand::{
-    self, AddLocalLibDirectory, AddSongToQueue, ClearQueue, LoadAlbumInQueue, LoadPlaylistInQueue, LoadSongToQueue,
-    QueryCurrentPlayingContext, QueryCurrentSong, RemoveItem,
+    self, AddLocalLibDirectory, AddSongToQueue, ClearQueue, LoadAlbumInQueue, LoadArtistInQueue, LoadPlaylistInQueue,
+    LoadSongToQueue, QueryCurrentPlayingContext, QueryCurrentSong, RemoveItem,
 };
 use api_models::common::SystemCommand::{
     ChangeAudioOutput, PowerOff, QueryCurrentStreamerState, RestartRSPlayer, RestartSystem, SetVol, VolDown, VolUp,
 };
 use api_models::common::UserCommand::{Metadata, Player, Playlist, Queue};
-use api_models::common::{SystemCommand, UserCommand};
+use api_models::common::{MetadataCommand, MetadataLibraryItem, MetadataLibraryResult, SystemCommand, UserCommand};
 use api_models::playlist::PlaylistType;
 use api_models::state::StateChangeEvent;
 use rsplayer_config::ArcConfiguration;
@@ -112,13 +112,13 @@ pub async fn handle_user_commands(
             Playlist(QueryPlaylist) => {
                 let mut pls = playlist_service.get_playlists();
                 album_repository
-                    .find_all_sort_by_added_desc(20)
+                    .find_all_sort_by_added_desc(30)
                     .into_iter()
                     .for_each(|alb| {
                         pls.items.push(PlaylistType::RecentlyAdded(alb));
                     });
                 album_repository
-                    .find_all_sort_by_released_desc(20)
+                    .find_all_sort_by_released_desc(30)
                     .into_iter()
                     .for_each(|alb| {
                         pls.items.push(PlaylistType::LatestRelease(alb));
@@ -181,6 +181,23 @@ pub async fn handle_user_commands(
                         .unwrap();
                 };
             }
+            Queue(LoadArtistInQueue(name)) => {
+                player_service.stop_current_song().await;
+                queue_service.clear();
+                album_repository
+                    .find_by_artist(&name)
+                    .iter()
+                    .flat_map(|alb| &alb.song_keys)
+                    .for_each(|sk| {
+                        queue_service.add_song_by_id(sk);
+                    });
+                player_service.play_from_current_queue_song();
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(
+                        "All artist's albums loaded into queue".to_string(),
+                    ))
+                    .unwrap();
+            }
 
             Queue(QueueCommand::AddAlbumToQueue(album_id)) => {
                 if let Some(album) = album_repository.find_by_id(&album_id) {
@@ -196,19 +213,31 @@ pub async fn handle_user_commands(
                         .unwrap();
                 };
             }
+            Queue(QueueCommand::AddArtistToQueue(name)) => {
+                album_repository.find_by_artist(&name).iter().for_each(|alb| {
+                    alb.song_keys.iter().for_each(|sk| {
+                        if let Some(song) = song_repository.find_by_id(sk) {
+                            queue_service.add_song(&song);
+                        }
+                    });
+                });
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(
+                        "All artist's albums added to queue".to_string(),
+                    ))
+                    .unwrap();
+            }
 
             Queue(LoadSongToQueue(song_id)) => {
-                if let Some(song) = song_repository.find_by_id(&song_id).as_ref() {
-                    player_service.stop_current_song().await;
-                    queue_service.clear();
-                    queue_service.add_song(song);
-                    player_service.play_from_current_queue_song();
-                    state_changes_sender
-                        .send(StateChangeEvent::NotificationSuccess(
-                            "Queue replaced with one song".to_string(),
-                        ))
-                        .unwrap();
-                }
+                player_service.stop_current_song().await;
+                queue_service.clear();
+                queue_service.add_song_by_id(&song_id);
+                player_service.play_from_current_queue_song();
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(
+                        "Queue replaced with one song".to_string(),
+                    ))
+                    .unwrap();
             }
             Queue(QueryCurrentSong) => {
                 if let Some(song) = queue_service.get_current_song() {
@@ -258,6 +287,49 @@ pub async fn handle_user_commands(
                 let items = song_repository.find_by_dir(&dir);
                 state_changes_sender
                     .send(StateChangeEvent::MetadataLocalItems(items))
+                    .unwrap();
+            }
+            Metadata(MetadataCommand::QueryArtists) => {
+                let items: Vec<MetadataLibraryItem> = album_repository
+                    .find_all_album_artists()
+                    .iter()
+                    .map(|art| MetadataLibraryItem::Artist { name: art.to_owned() })
+                    .collect();
+                state_changes_sender
+                    .send(StateChangeEvent::MetadataLocalItems(MetadataLibraryResult {
+                        items,
+                        root_path: String::new(),
+                    }))
+                    .unwrap();
+            }
+            Metadata(MetadataCommand::QueryAlbumsByArtist(artist)) => {
+                let items: Vec<MetadataLibraryItem> = album_repository
+                    .find_by_artist(&artist)
+                    .iter()
+                    .map(|alb| MetadataLibraryItem::Album {
+                        name: alb.title.clone(),
+                        year: alb.released,
+                    })
+                    .collect();
+                state_changes_sender
+                    .send(StateChangeEvent::MetadataLocalItems(MetadataLibraryResult {
+                        items,
+                        root_path: String::new(),
+                    }))
+                    .unwrap();
+            }
+            Metadata(MetadataCommand::QuerySongsByAlbum(album)) => {
+                let items: Vec<MetadataLibraryItem> = album_repository
+                    .find_by_id(&album)
+                    .iter()
+                    .flat_map(|alb| alb.song_keys.iter().filter_map(|sk| song_repository.find_by_id(sk)))
+                    .map(MetadataLibraryItem::SongItem)
+                    .collect();
+                state_changes_sender
+                    .send(StateChangeEvent::MetadataLocalItems(MetadataLibraryResult {
+                        items,
+                        root_path: String::new(),
+                    }))
                     .unwrap();
             }
         }

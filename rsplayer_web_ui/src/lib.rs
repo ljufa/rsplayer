@@ -26,6 +26,8 @@ const FIRST_SETUP: &str = "setup";
 const PLAYER: &str = "player";
 const MUSIC_LIBRARY: &str = "library";
 const MUSIC_LIBRARY_FILES: &str = "files";
+const MUSIC_LIBRARY_ARTISTS: &str = "artists";
+const MUSIC_LIBRARY_RADIO: &str = "radio";
 const MUSIC_LIBRARY_PL_STATIC: &str = "playlists";
 
 // ------ ------
@@ -65,6 +67,8 @@ pub enum Msg {
     Queue(page::queue::Msg),
     MusicLibraryStaticPlaylist(page::music_library_static_playlist::Msg),
     MusicLibraryFiles(page::music_library_files::Msg),
+    MusicLibraryArtists(page::music_library_artists::Msg),
+    MusicLibraryRadio(page::music_library_radio::Msg),
     Ignore,
 
     SendUserCommand(UserCommand),
@@ -102,6 +106,8 @@ enum Page {
     Queue(page::queue::Model),
     MusicLibraryStaticPlaylist(page::music_library_static_playlist::Model),
     MusicLibraryFiles(page::music_library_files::Model),
+    MusicLibraryArtists(page::music_library_artists::Model),
+    MusicLibraryRadio(page::music_library_radio::Model),
     NotFound,
 }
 
@@ -120,6 +126,14 @@ impl Page {
                     url,
                     &mut orders.proxy(Msg::MusicLibraryFiles),
                 )),
+                MUSIC_LIBRARY_RADIO => Self::MusicLibraryRadio(page::music_library_radio::init(
+                    url,
+                    &mut orders.proxy(Msg::MusicLibraryRadio),
+                )),
+                MUSIC_LIBRARY_ARTISTS => Self::MusicLibraryArtists(page::music_library_artists::init(
+                    url,
+                    &mut orders.proxy(Msg::MusicLibraryArtists),
+                )),
                 MUSIC_LIBRARY_PL_STATIC => Self::MusicLibraryStaticPlaylist(page::music_library_static_playlist::init(
                     url,
                     &mut orders.proxy(Msg::MusicLibraryStaticPlaylist),
@@ -135,7 +149,13 @@ impl Page {
         !matches!(self, Page::Settings(_))
     }
     const fn has_tabs(&self) -> bool {
-        matches!(self, Page::MusicLibraryFiles(_) | Page::MusicLibraryStaticPlaylist(_))
+        matches!(
+            self,
+            Page::MusicLibraryFiles(_)
+                | Page::MusicLibraryStaticPlaylist(_)
+                | Page::MusicLibraryArtists(_)
+                | Page::MusicLibraryRadio(_)
+        )
     }
 }
 
@@ -221,6 +241,20 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     page::music_library_files::Msg::WebSocketOpen,
                     model,
                     &mut orders.proxy(Msg::MusicLibraryFiles),
+                );
+            }
+            if let Page::MusicLibraryArtists(model) = &mut model.page {
+                page::music_library_artists::update(
+                    page::music_library_artists::Msg::WebSocketOpen,
+                    model,
+                    &mut orders.proxy(Msg::MusicLibraryArtists),
+                );
+            }
+            if let Page::MusicLibraryRadio(model) = &mut model.page {
+                page::music_library_radio::update(
+                    page::music_library_radio::Msg::WebSocketOpen,
+                    model,
+                    &mut orders.proxy(Msg::MusicLibraryRadio),
                 );
             }
             if let Page::MusicLibraryStaticPlaylist(model) = &mut model.page {
@@ -325,6 +359,12 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     model,
                     &mut orders.proxy(Msg::MusicLibraryStaticPlaylist),
                 );
+            } else if let Page::MusicLibraryArtists(model) = &mut model.page {
+                page::music_library_artists::update(
+                    page::music_library_artists::Msg::StatusChangeEventReceived(chg_ev),
+                    model,
+                    &mut orders.proxy(Msg::MusicLibraryArtists),
+                );
             }
         }
 
@@ -368,6 +408,22 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     _ = model.web_socket.send_string(&serde_json::to_string(cmd).unwrap());
                 }
                 page::music_library_files::update(msg, music_lib_model, &mut orders.proxy(Msg::MusicLibraryFiles));
+            }
+        }
+        Msg::MusicLibraryArtists(msg) => {
+            if let Page::MusicLibraryArtists(music_lib_model) = &mut model.page {
+                if let page::music_library_artists::Msg::SendUserCommand(cmd) = &msg {
+                    _ = model.web_socket.send_string(&serde_json::to_string(cmd).unwrap());
+                }
+                page::music_library_artists::update(msg, music_lib_model, &mut orders.proxy(Msg::MusicLibraryArtists));
+            }
+        }
+        Msg::MusicLibraryRadio(msg) => {
+            if let Page::MusicLibraryRadio(music_lib_model) = &mut model.page {
+                if let page::music_library_radio::Msg::SendUserCommand(cmd) = &msg {
+                    _ = model.web_socket.send_string(&serde_json::to_string(cmd).unwrap());
+                }
+                page::music_library_radio::update(msg, music_lib_model, &mut orders.proxy(Msg::MusicLibraryRadio));
             }
         }
 
@@ -666,6 +722,9 @@ fn view_content(main_model: &Model, base_url: &Url) -> Node<Msg> {
             Page::MusicLibraryStaticPlaylist(model) =>
                 page::music_library_static_playlist::view(model).map_msg(Msg::MusicLibraryStaticPlaylist),
             Page::MusicLibraryFiles(model) => page::music_library_files::view(model).map_msg(Msg::MusicLibraryFiles),
+            Page::MusicLibraryArtists(model) =>
+                page::music_library_artists::view(model).map_msg(Msg::MusicLibraryArtists),
+            Page::MusicLibraryRadio(model) => page::music_library_radio::view(model).map_msg(Msg::MusicLibraryRadio),
         }
     ]
 }
@@ -733,17 +792,27 @@ fn view_music_lib_tabs(page: &Page) -> Node<Msg> {
             li![
                 IF!(page_name == "MusicLibraryFiles" => C!["is-active"]),
                 a![
-                    attrs! {At::Href => Urls::library_abs().add_hash_path_part("files")},
+                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_FILES)},
                     span!("Files"),
+                ],
+            ],
+            li![
+                IF!(page_name == "MusicLibraryRadio" => C!["is-active"]),
+                a![
+                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_RADIO)},
+                    span!("Radio")
+                ]
+            ],
+            li![
+                IF!(page_name == "MusicLibraryArtists" => C!["is-active"]),
+                a![
+                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_ARTISTS)},
+                    span!("Artists"),
                 ],
             ],
             li![
                 IF!(page_name == "MusicLibraryDynamicPlaylist" => C!["is-active"]),
                 a![attrs! {At::Href => ""}, span!("Discover")]
-            ],
-            li![
-                IF!(page_name == "Radio" => C!["is-active"]),
-                a![attrs! {At::Href => ""}, span!("Radio")]
             ],
         ],
     ]

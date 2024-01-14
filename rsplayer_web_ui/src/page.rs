@@ -1,5 +1,7 @@
 pub mod home;
+pub mod music_library_artists;
 pub mod music_library_files;
+pub mod music_library_radio;
 pub mod music_library_static_playlist;
 pub mod not_found;
 pub mod player;
