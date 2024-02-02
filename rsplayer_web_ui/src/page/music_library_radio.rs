@@ -1,7 +1,8 @@
 use api_models::common::{QueueCommand, UserCommand};
 use gloo_net::http::Request;
 use indextree::{Arena, NodeId};
-use seed::{attrs, div, empty, i, img, input, label, li, p, prelude::*, section, span, style, ul, C, IF};
+use seed::prelude::web_sys::KeyboardEvent;
+use seed::{a, attrs, div, empty, i, img, input, label, li, p, prelude::*, section, span, style, ul, C, IF};
 use serde::{Deserialize, Serialize};
 
 use crate::page::music_library_radio::Msg::{
@@ -65,9 +66,13 @@ pub enum Msg {
     ExpandNodeClick(NodeId),
     CollapseNodeClick(NodeId),
     WebSocketOpen,
+    SearchInputChanged(String),
+    DoSearch,
+    ClearSearch,
+
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum FilterType {
     Country,
     Language,
@@ -98,6 +103,7 @@ pub struct Model {
     wait_response: bool,
     filter_type: FilterType,
     tree: TreeModel,
+    search_input: String,
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -107,6 +113,7 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
         wait_response: true,
         filter_type: FilterType::Country,
         tree: TreeModel::new(),
+        search_input: String::new(),
     }
 }
 
@@ -207,6 +214,25 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 ))));
             }
         }
+        Msg::SearchInputChanged(term) => {
+            orders.skip();
+            model.search_input = term;
+        }
+        Msg::DoSearch => {
+            model.wait_response = true;
+            model.tree = TreeModel::new();
+            let search_term = model.search_input.clone();
+            orders.perform_cmd(
+                async move { StationsFetched(search_stations_by_name(&search_term).await) },
+            );
+        }
+        Msg::ClearSearch => {
+            model.wait_response = true;
+            model.tree = TreeModel::new();
+            model.search_input = String::new();
+            orders.send_msg(Msg::ChangeCategory(FilterType::Country));
+        }
+
         _ => {
             orders.skip();
         }
@@ -216,14 +242,52 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 pub fn view(model: &Model) -> Node<Msg> {
     section![
         view_spinner_modal(model.wait_response),
-        C!["section"],
+        view_search_input(model),
         ul![
             C!["wtree"],
-            get_tree_start_node(model.tree.root, &model.tree.arena, &model.filter_type)
+            get_tree_start_node(model.tree.root, &model.tree.arena, &model.filter_type, !model.search_input.is_empty())
         ]
     ]
 }
-
+fn view_search_input(model: &Model) -> Node<Msg> {
+    div![
+        C!["transparent is-flex is-justify-content-center has-background-dark-transparent mt-2"],
+        div![
+            C!["control"],
+            input![
+                C!["input", "input-size"],
+                attrs! {
+                    At::Value => model.search_input,
+                    At::Name => "search",
+                    At::Type => "text",
+                    At::Placeholder => "Find radio station by name",
+                },
+                input_ev(Ev::Input, Msg::SearchInputChanged),
+                ev(Ev::KeyDown, |keyboard_event| {
+                    if keyboard_event.value_of().to_string() == "[object KeyboardEvent]" {
+                        let kev: KeyboardEvent = keyboard_event.unchecked_into();
+                        IF!(kev.key_code() == 13 => Msg::DoSearch)
+                    } else {
+                        None
+                    }
+                }),
+            ],
+        ],
+        div![
+            C!["control"],
+            a![
+                attrs!(At::Title =>"Search"),
+                i![C!["material-icons", "is-large-icon", "white-icon"], "search"],
+                ev(Ev::Click, move |_| Msg::DoSearch)
+            ],
+            a![
+                attrs!(At::Title =>"Clear search / Show all songs"),
+                i![C!["material-icons", "is-large-icon", "white-icon"], "backspace"],
+                ev(Ev::Click, move |_| Msg::ClearSearch)
+            ],
+        ],
+    ]
+}
 fn view_filter(filter_type: &FilterType) -> Node<Msg> {
     div![
         C!["control"],
@@ -268,7 +332,7 @@ fn view_filter(filter_type: &FilterType) -> Node<Msg> {
 }
 
 #[allow(clippy::collection_is_never_read)]
-fn get_tree_start_node(node_id: NodeId, arena: &Arena<TreeNode>, filter_type: &FilterType) -> Node<Msg> {
+fn get_tree_start_node(node_id: NodeId, arena: &Arena<TreeNode>, filter_type: &FilterType, is_search_mode: bool) -> Node<Msg> {
     let Some(value) = arena.get(node_id) else {
         return empty!();
     };
@@ -309,7 +373,7 @@ fn get_tree_start_node(node_id: NodeId, arena: &Arena<TreeNode>, filter_type: &F
         style! {
             St::Height => node_height,
         },
-        IF!(is_root => view_filter(filter_type)),
+        IF!(is_root && !is_search_mode => view_filter(filter_type)),
         IF!(is_root => style! { St::Padding => "5px" }),
     ];
 
@@ -391,7 +455,7 @@ fn get_tree_start_node(node_id: NodeId, arena: &Arena<TreeNode>, filter_type: &F
     if !children.is_empty() {
         let mut ul: Node<Msg> = ul!();
         for c in children {
-            ul.add_child(get_tree_start_node(c, arena, filter_type));
+            ul.add_child(get_tree_start_node(c, arena, filter_type, is_search_mode));
         }
         li.add_child(ul);
     }
@@ -400,6 +464,16 @@ fn get_tree_start_node(node_id: NodeId, arena: &Arena<TreeNode>, filter_type: &F
 
 const RADIO_BROWSER_URL: &str = "https://de1.api.radio-browser.info/json/";
 
+async fn search_stations_by_name(name: &str) -> Vec<Station> {
+    let url = format!("{}stations/search?name={}&limit=300&hidebroken=true", RADIO_BROWSER_URL, name);
+    Request::get(&url)
+        .send()
+        .await
+        .unwrap()
+        .json::<Vec<Station>>()
+        .await
+        .unwrap()
+}
 async fn fetch_countries() -> Vec<Country> {
     let url = format!("{}countries?limit=200&hidebroken=true", RADIO_BROWSER_URL);
     Request::get(&url)

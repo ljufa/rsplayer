@@ -8,16 +8,16 @@ use api_models::common::MetadataCommand::{QueryLocalFiles, RescanMetadata};
 use api_models::common::PlayerCommand::{
     Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, RandomToggle, Rewind,
 };
-use api_models::common::PlaylistCommand::{QueryPlaylist, QueryPlaylistItems, SaveQueueAsPlaylist};
+use api_models::common::PlaylistCommand::{QueryAlbumItems, QueryPlaylist, QueryPlaylistItems, SaveQueueAsPlaylist};
 use api_models::common::QueueCommand::{
     self, AddLocalLibDirectory, AddSongToQueue, ClearQueue, LoadAlbumInQueue, LoadArtistInQueue, LoadPlaylistInQueue,
-    LoadSongToQueue, QueryCurrentPlayingContext, QueryCurrentSong, RemoveItem,
+    LoadSongToQueue, QueryCurrentQueue, QueryCurrentSong, RemoveItem,
 };
 use api_models::common::SystemCommand::{
     ChangeAudioOutput, PowerOff, QueryCurrentStreamerState, RestartRSPlayer, RestartSystem, SetVol, VolDown, VolUp,
 };
 use api_models::common::UserCommand::{Metadata, Player, Playlist, Queue};
-use api_models::common::{MetadataCommand, MetadataLibraryItem, MetadataLibraryResult, SystemCommand, UserCommand};
+use api_models::common::{MetadataCommand, MetadataLibraryItem, SystemCommand, UserCommand};
 use api_models::playlist::PlaylistType;
 use api_models::state::StateChangeEvent;
 use rsplayer_config::ArcConfiguration;
@@ -94,7 +94,7 @@ pub async fn handle_user_commands(
                     .send(StateChangeEvent::PlaylistItemsEvent(songs, page_no))
                     .unwrap();
             }
-            Playlist(api_models::common::PlaylistCommand::QueryAlbumItems(album_title, page_no)) => {
+            Playlist(QueryAlbumItems(album_title, page_no)) => {
                 let songs = album_repository.find_by_id(&album_title).map(|alb| alb.song_keys);
 
                 if let Some(songs) = songs {
@@ -246,12 +246,11 @@ pub async fn handle_user_commands(
                         .unwrap();
                 }
             }
-            Queue(QueryCurrentPlayingContext(query)) => {
-                if let Some(pc) = queue_service.get_current_playing_context(query) {
-                    state_changes_sender
-                        .send(StateChangeEvent::CurrentPlayingContextEvent(pc))
-                        .unwrap();
-                }
+            Queue(QueryCurrentQueue(query)) => {
+                let queue = queue_service.query_current_queue(query);
+                state_changes_sender
+                    .send(StateChangeEvent::CurrentQueueEvent(queue))
+                    .unwrap();
             }
             Queue(AddLocalLibDirectory(dir)) => {
                 queue_service.add_songs_from_dir(&dir);
@@ -284,7 +283,13 @@ pub async fn handle_user_commands(
                     .expect("Failed to start metadata scanner thread");
             }
             Metadata(QueryLocalFiles(dir, _)) => {
-                let items = song_repository.find_by_dir(&dir);
+                let items = metadata_service.search_local_files_by_dir(&dir);
+                state_changes_sender
+                    .send(StateChangeEvent::MetadataLocalItems(items))
+                    .unwrap();
+            }
+            Metadata(MetadataCommand::SearchLocalFiles(term, limit)) => {
+                let items = metadata_service.search_local_files_by_dir_contains(&term, limit);
                 state_changes_sender
                     .send(StateChangeEvent::MetadataLocalItems(items))
                     .unwrap();
@@ -296,10 +301,23 @@ pub async fn handle_user_commands(
                     .map(|art| MetadataLibraryItem::Artist { name: art.to_owned() })
                     .collect();
                 state_changes_sender
-                    .send(StateChangeEvent::MetadataLocalItems(MetadataLibraryResult {
-                        items,
-                        root_path: String::new(),
-                    }))
+                    .send(StateChangeEvent::MetadataLocalItems(items))
+                    .unwrap();
+            }
+            Metadata(MetadataCommand::SearchArtists(term)) => {
+                let items: Vec<MetadataLibraryItem> = album_repository
+                    .find_all_album_artists()
+                    .iter()
+                    .filter_map(|art| {
+                        if art.to_lowercase().contains(&term.to_lowercase()) {
+                            Some(MetadataLibraryItem::Artist { name: art.to_owned() })
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                state_changes_sender
+                    .send(StateChangeEvent::MetadataLocalItems(items))
                     .unwrap();
             }
             Metadata(MetadataCommand::QueryAlbumsByArtist(artist)) => {
@@ -312,10 +330,7 @@ pub async fn handle_user_commands(
                     })
                     .collect();
                 state_changes_sender
-                    .send(StateChangeEvent::MetadataLocalItems(MetadataLibraryResult {
-                        items,
-                        root_path: String::new(),
-                    }))
+                    .send(StateChangeEvent::MetadataLocalItems(items))
                     .unwrap();
             }
             Metadata(MetadataCommand::QuerySongsByAlbum(album)) => {
@@ -326,10 +341,19 @@ pub async fn handle_user_commands(
                     .map(MetadataLibraryItem::SongItem)
                     .collect();
                 state_changes_sender
-                    .send(StateChangeEvent::MetadataLocalItems(MetadataLibraryResult {
-                        items,
-                        root_path: String::new(),
-                    }))
+                    .send(StateChangeEvent::MetadataLocalItems(items))
+                    .unwrap();
+            }
+            Metadata(MetadataCommand::LikeMediaItem(id)) => {
+                metadata_service.like_media_item(&id);
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(format!("Song {id} liked",)))
+                    .unwrap();
+            }
+            Metadata(MetadataCommand::DislikeMediaItem(id)) => {
+                metadata_service.dislike_media_item(&id);
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(format!("Song {id} disliked",)))
                     .unwrap();
             }
         }

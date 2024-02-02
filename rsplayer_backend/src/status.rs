@@ -17,7 +17,7 @@ pub async fn monitor(
     info!("Status monitor thread started.");
     let mut last_track_info = None;
     let mut last_player_info = PlayerInfo::default();
-    let mut last_playing_context = None;
+    let mut last_query_queue_result = None;
     let mut last_progress = SongProgress {
         total_time: Duration::ZERO,
         current_time: Duration::ZERO,
@@ -47,13 +47,13 @@ pub async fn monitor(
         }
 
         // check playing context change
-        let new_playing_context =
-            queue_service.get_current_playing_context(api_models::state::PlayingContextQuery::IgnoreSongs);
-        if last_playing_context != new_playing_context {
-            if let Some(new_pc) = new_playing_context.as_ref() {
-                _ = state_changes_tx.send(StateChangeEvent::CurrentPlayingContextEvent(new_pc.clone()));
-            }
-            last_playing_context = new_playing_context;
+        let new_query_queue_result =
+            queue_service.query_current_queue(api_models::state::CurrentQueueQuery::IgnoreSongs);
+        if last_query_queue_result != new_query_queue_result {
+            // if let Some(new_qc) = new_query_queue_result.as_ref() {
+            _ = state_changes_tx.send(StateChangeEvent::CurrentQueueEvent(new_query_queue_result.clone()));
+            // }
+            last_query_queue_result = new_query_queue_result;
         }
     }
 }

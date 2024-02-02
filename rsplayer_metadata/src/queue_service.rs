@@ -6,27 +6,27 @@ use std::sync::{
 use rand::Rng;
 use sled::{Db, IVec, Tree};
 
-use api_models::{
-    player::Song,
-    playlist::PlaylistPage,
-    settings::PlaybackQueueSetting,
-    state::{PlayingContext, PlayingContextQuery},
-};
+use api_models::{player::Song, playlist::PlaylistPage, settings::PlaybackQueueSetting, state::CurrentQueueQuery};
 
-use crate::song_repository::SongRepository;
+use crate::{play_statistic_repository::PlayStatisticsRepository, song_repository::SongRepository};
 
 pub struct QueueService {
     queue_db: Db,
     status_db: Tree,
     random_flag: AtomicBool,
     song_repository: Arc<SongRepository>,
+    statistics_repository: Arc<PlayStatisticsRepository>,
 }
 
 const CURRENT_SONG_KEY: &str = "current_song_key";
 
 impl QueueService {
     #[must_use]
-    pub fn new(settings: &PlaybackQueueSetting, song_repository: Arc<SongRepository>) -> Self {
+    pub fn new(
+        settings: &PlaybackQueueSetting,
+        song_repository: Arc<SongRepository>,
+        statistics_repository: Arc<PlayStatisticsRepository>,
+    ) -> Self {
         let db = sled::open(&settings.db_path).expect("Failed to open queue db");
         let status_db = db.open_tree("status").expect("Failed to open status tree");
         let random_flag = status_db.contains_key("random_next").unwrap_or(false);
@@ -35,6 +35,7 @@ impl QueueService {
             status_db,
             random_flag: AtomicBool::new(random_flag),
             song_repository,
+            statistics_repository,
         }
     }
 
@@ -59,7 +60,9 @@ impl QueueService {
     pub fn get_current_song(&self) -> Option<Song> {
         if let Some(current_key) = self.get_current_or_first_song_key() {
             if let Ok(Some(value)) = self.queue_db.get(current_key) {
-                return Song::bytes_to_song(&value);
+                let mut song = Song::bytes_to_song(&value).expect("Failed to parse song");
+                song.statistics = self.statistics_repository.find_by_id(song.file.as_str());
+                return Some(song);
             }
         }
         None
@@ -218,11 +221,11 @@ impl QueueService {
         _ = self.queue_db.clear();
         _ = self.status_db.remove(CURRENT_SONG_KEY);
     }
-    pub fn get_current_playing_context(&self, query: PlayingContextQuery) -> Option<PlayingContext> {
-        let mut pc = PlayingContext { playlist_page: None };
+    pub fn query_current_queue(&self, query: CurrentQueueQuery) -> Option<PlaylistPage> {
+        let mut pc = None;
         let page_size = 100;
         match query {
-            PlayingContextQuery::WithSearchTerm(term, offset) => {
+            CurrentQueueQuery::WithSearchTerm(term, offset) => {
                 let (total, songs) = self.get_queue_page(offset, page_size, |song| {
                     if term.len() > 2 {
                         song.all_text().to_lowercase().contains(&term.to_lowercase())
@@ -236,9 +239,9 @@ impl QueueService {
                     limit: page_size,
                     items: songs,
                 };
-                pc.playlist_page = Some(page);
+                pc = Some(page);
             }
-            PlayingContextQuery::CurrentSongPage => {
+            CurrentQueueQuery::CurrentSongPage => {
                 let songs = self.get_queue_page_starting_from_current_song(page_size);
                 let page = PlaylistPage {
                     total: page_size,
@@ -246,12 +249,12 @@ impl QueueService {
                     limit: page_size,
                     items: songs,
                 };
-                pc.playlist_page = Some(page);
+                pc = Some(page);
             }
 
-            PlayingContextQuery::IgnoreSongs => {}
+            CurrentQueueQuery::IgnoreSongs => {}
         }
-        Some(pc)
+        pc
     }
 
     pub fn add_songs_from_dir(&self, dir: &str) {

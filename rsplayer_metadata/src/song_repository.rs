@@ -1,5 +1,4 @@
-use api_models::common::{MetadataLibraryItem, MetadataLibraryResult};
-use sled::Db;
+use sled::{Db, IVec};
 
 use api_models::player::Song;
 
@@ -47,37 +46,17 @@ impl SongRepository {
             .filter_map(std::result::Result::ok)
             .map_while(|s| Song::bytes_to_song(&s.1))
     }
-    pub fn find_by_dir(&self, dir: &str) -> MetadataLibraryResult {
-        let start_time = std::time::Instant::now();
 
-        let result = self
-            .songs_db
-            .scan_prefix(dir.as_bytes())
-            .filter_map(std::result::Result::ok)
-            .map(|(key, value)| {
-                let key = String::from_utf8(key.to_vec()).unwrap();
-                let Some((_, right)) = key.split_once(dir) else {
-                    return MetadataLibraryItem::Empty;
-                };
-                if right.contains('/') {
-                    let Some((left, _)) = right.split_once('/') else {
-                        return MetadataLibraryItem::Empty;
-                    };
-                    MetadataLibraryItem::Directory { name: left.to_owned() }
-                } else {
-                    MetadataLibraryItem::SongItem(Song::bytes_to_song(&value).expect(
-                        "Failed to
-                         convert bytes to song",
-                    ))
-                }
-            });
-        let mut unique: Vec<MetadataLibraryItem> = result.collect();
-        unique.dedup();
-        log::info!("find_by_dir took {:?}", start_time.elapsed());
-        MetadataLibraryResult {
-            items: unique,
-            root_path: dir.to_owned(),
-        }
+    pub fn find_by_key_contains(&self, search_term: &str) -> impl Iterator<Item = (IVec, IVec)> {
+        let st = search_term.to_lowercase();
+        self.songs_db.iter().filter_map(Result::ok).filter(move |(key, _)| {
+            let key_s = String::from_utf8(key.to_vec()).unwrap();
+            key_s.to_lowercase().contains(&st)
+        })
+    }
+
+    pub fn find_by_key_prefix(&self, prefix: &str) -> impl Iterator<Item = (IVec, IVec)> {
+        self.songs_db.scan_prefix(prefix.as_bytes()).filter_map(Result::ok)
     }
     pub fn flush(&self) {
         self.songs_db.flush().expect("Failed to flush db");
@@ -92,7 +71,7 @@ impl Default for SongRepository {
 
 #[cfg(test)]
 mod test {
-    use api_models::{common::MetadataLibraryItem, player::Song};
+    use api_models::player::Song;
 
     use crate::{song_repository::SongRepository, test::test_shared};
 
@@ -137,43 +116,4 @@ mod test {
         assert_eq!(songs.len(), 4);
     }
 
-    #[test]
-    fn test_find_by_dir() {
-        let song_repository = create_song_repo();
-        #[rustfmt::skip]
-        insert_songs!(
-            &song_repository,
-            "hq/artist1/album1/file1", "title1", "artist1", "album1",
-            "hq/artist1/album1/file2", "title2", "artist1", "album1",
-            "hq/artist2/album2/file1", "title4", "artist4", "album4",
-            "hq/file1", "title5", "artist5", "album4",
-            "hq test/comp1/file2", "title2", "artist2", "album2",
-            "hq test/comp2/file3", "title3", "artist3", "album3",
-        );
-        let result = song_repository.find_by_dir("hq/");
-        assert_eq!(result.root_path, "hq/");
-        assert_eq!(result.items.len(), 3);
-        assert_eq!(
-            result.items[0],
-            MetadataLibraryItem::Directory {
-                name: "artist1".to_owned()
-            }
-        );
-        assert_eq!(
-            result.items[1],
-            MetadataLibraryItem::Directory {
-                name: "artist2".to_owned()
-            }
-        );
-        assert_eq!(result.items[2].get_title(), "title5");
-
-        let result = song_repository.find_by_dir("hq test/");
-        assert_eq!(result.items.len(), 2);
-        assert_eq!(
-            result.items[0],
-            MetadataLibraryItem::Directory {
-                name: "comp1".to_owned()
-            }
-        );
-    }
 }

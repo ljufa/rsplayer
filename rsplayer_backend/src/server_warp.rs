@@ -97,7 +97,10 @@ pub fn start(
         });
 
     let mut cache_headers = HeaderMap::new();
-    cache_headers.insert(warp::http::header::CACHE_CONTROL, HeaderValue::from_static("5184000"));
+    cache_headers.insert(
+        warp::http::header::CACHE_CONTROL,
+        HeaderValue::from_static("max-age=5184000"),
+    );
 
     let ui_static_content = warp::get()
         .and(warp_embed::embed(&StaticContentDir))
@@ -237,9 +240,10 @@ async fn notify_users(users_to_notify: &Users, status_change_event: StateChangeE
         let json_msg = serde_json::to_string(&status_change_event).unwrap();
         if !json_msg.is_empty() {
             let users = users_to_notify.read().await;
-            users
-                .iter()
-                .for_each(|tx| _ = tx.1.send(Ok(Message::text(json_msg.clone()))));
+            users.iter().for_each(|tx| {
+                let send_result = tx.1.send(Ok(Message::text(json_msg.clone())));
+                debug!("Sent message to user: {:?} with result: {:?}", tx.0, send_result);
+            });
         }
     }
 }
@@ -262,11 +266,13 @@ async fn user_connected(
     // to the websocket...
     let (tx, rx) = mpsc::unbounded_channel();
     let rx = UnboundedReceiverStream::new(rx);
-    tokio::task::spawn(rx.forward(to_user_ws).map(|result| {
-        if let Err(e) = result {
-            debug!("websocket send error: {}", e);
-        }
-    }));
+    _ = tokio::task::Builder::new()
+        .name(&format!("Websocket thread for user:{user_id}"))
+        .spawn(rx.forward(to_user_ws).map(|result| {
+            if let Err(e) = result {
+                debug!("websocket send error: {}", e);
+            }
+        }));
 
     // Save the sender in our list of connected users.
     users.write().await.insert(user_id, tx);
@@ -303,10 +309,10 @@ async fn user_connected(
 }
 
 async fn user_disconnected(my_id: usize, users: &Users) {
-    debug!("good bye user: {}", my_id);
-
+    info!("good bye user: {}", my_id);
     // Stream closed up, so remove from the user list
     users.write().await.remove(&my_id);
+    info!("Number of active websockets is: {}", users.read().await.len());
 }
 
 fn get_port() -> u16 {

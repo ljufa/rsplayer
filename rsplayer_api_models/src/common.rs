@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use crate::{player::Song, state::PlayingContextQuery};
+use crate::{player::Song, state::CurrentQueueQuery};
 use chrono::{DateTime, Utc};
-use num_derive::{FromPrimitive, ToPrimitive};
+use num_derive::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
@@ -14,12 +14,6 @@ pub enum MetadataLibraryItem {
     Artist { name: String },
     Album { name: String, year: Option<DateTime<Utc>> },
     Empty,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MetadataLibraryResult {
-    pub items: Vec<MetadataLibraryItem>,
-    pub root_path: String,
 }
 
 impl MetadataLibraryItem {
@@ -69,19 +63,7 @@ pub struct AudioCard {
 }
 
 #[derive(
-    Debug,
-    Hash,
-    Serialize,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    FromPrimitive,
-    ToPrimitive,
-    Deserialize,
-    EnumString,
-    EnumIter,
-    IntoStaticStr,
+    Debug, Hash, Serialize, Clone, Copy, PartialEq, Eq, ToPrimitive, Deserialize, EnumString, EnumIter, IntoStaticStr,
 )]
 pub enum VolumeCrtlType {
     Dac,
@@ -119,11 +101,15 @@ pub enum PlayerCommand {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum MetadataCommand {
-    QueryLocalFiles(String, u32),
+    QueryLocalFiles(String, usize),
+    SearchLocalFiles(String, usize),
     QueryArtists,
+    SearchArtists(String),
     QueryAlbumsByArtist(String),
     QuerySongsByAlbum(String),
     RescanMetadata(String, bool),
+    LikeMediaItem(String),
+    DislikeMediaItem(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -148,7 +134,7 @@ pub enum QueueCommand {
     AddAlbumToQueue(String),
     ClearQueue,
     QueryCurrentSong,
-    QueryCurrentPlayingContext(PlayingContextQuery),
+    QueryCurrentQueue(CurrentQueueQuery),
     RemoveItem(String),
 }
 
@@ -166,19 +152,7 @@ pub enum SystemCommand {
 }
 
 #[derive(
-    Debug,
-    Hash,
-    Serialize,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    FromPrimitive,
-    ToPrimitive,
-    Deserialize,
-    EnumString,
-    EnumIter,
-    IntoStaticStr,
+    Debug, Hash, Serialize, Clone, Copy, PartialEq, Eq, ToPrimitive, Deserialize, EnumString, EnumIter, IntoStaticStr,
 )]
 pub enum FilterType {
     SharpRollOff,

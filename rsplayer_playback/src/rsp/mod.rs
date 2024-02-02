@@ -65,6 +65,9 @@ impl PlayerService {
         if self.is_playing() {
             return;
         }
+        if let Some(s) = self.queue_service.get_current_song() {
+            self.metadata_service.increase_play_count(&s.file);
+        }
         *self.play_handle.lock().unwrap() = Some(self.play_all_in_queue());
     }
 

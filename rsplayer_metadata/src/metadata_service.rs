@@ -21,19 +21,26 @@ use symphonia::core::{
 use tokio::sync::broadcast::Sender;
 use walkdir::WalkDir;
 
-use api_models::{common::to_database_key, player::Song, settings::MetadataStoreSettings, state::StateChangeEvent};
+use api_models::{
+    common::{to_database_key, MetadataLibraryItem},
+    player::Song,
+    settings::MetadataStoreSettings,
+    stat::PlayItemStatistics,
+    state::StateChangeEvent,
+};
 
-use crate::album_repository::AlbumRepository;
 use crate::song_repository::SongRepository;
+use crate::{album_repository::AlbumRepository, play_statistic_repository::PlayStatisticsRepository};
 
 const ARTWORK_DIR: &str = "artwork";
 
 pub struct MetadataService {
     ignored_files_db: Db,
-    settings: MetadataStoreSettings,
+    pub settings: MetadataStoreSettings,
     scan_running: AtomicBool,
     song_repository: Arc<SongRepository>,
     album_repository: Arc<AlbumRepository>,
+    statistic_repository: Arc<PlayStatisticsRepository>,
 }
 
 impl MetadataService {
@@ -41,6 +48,7 @@ impl MetadataService {
         settings: &MetadataStoreSettings,
         song_repository: Arc<SongRepository>,
         album_repository: Arc<AlbumRepository>,
+        statistic_repository: Arc<PlayStatisticsRepository>,
     ) -> Result<Self> {
         let settings = settings.clone();
         let ignored_files_db = sled::open(&settings.db_path)?;
@@ -50,7 +58,88 @@ impl MetadataService {
             scan_running: AtomicBool::new(false),
             song_repository,
             album_repository,
+            statistic_repository,
         })
+    }
+
+    pub fn like_media_item(&self, media_item_id: &str) {
+        self.update_or_create_media_item_stat(media_item_id, |item| item.liked_count += 1);
+    }
+
+    pub fn dislike_media_item(&self, media_item_id: &str) {
+        self.update_or_create_media_item_stat(media_item_id, |item| item.liked_count -= 1);
+    }
+
+    pub fn increase_play_count(&self, media_item_id: &str) {
+        self.update_or_create_media_item_stat(media_item_id, |item| item.play_count += 1);
+    }
+
+    fn update_or_create_media_item_stat<J>(&self, media_item_id: &str, mut job: J)
+    where
+        J: FnMut(&mut PlayItemStatistics),
+    {
+        if let Some(mut stat) = self.statistic_repository.find_by_id(media_item_id) {
+            job(&mut stat);
+            self.statistic_repository.save(&stat);
+        } else {
+            let mut stat = PlayItemStatistics {
+                play_item_id: media_item_id.to_string(),
+                ..Default::default()
+            };
+            job(&mut stat);
+            self.statistic_repository.save(&stat);
+        };
+    }
+
+    pub fn search_local_files_by_dir(&self, dir: &str) -> Vec<MetadataLibraryItem> {
+        let start_time = std::time::Instant::now();
+        let result = self.song_repository.find_by_key_prefix(dir).map(|(key, value)| {
+            let key = String::from_utf8(key.to_vec()).unwrap();
+            let Some((_, right)) = key.split_once(dir) else {
+                return MetadataLibraryItem::Empty;
+            };
+            if right.contains('/') {
+                let Some((left, _)) = right.split_once('/') else {
+                    return MetadataLibraryItem::Empty;
+                };
+                MetadataLibraryItem::Directory { name: left.to_owned() }
+            } else {
+                MetadataLibraryItem::SongItem(Song::bytes_to_song(&value).expect(
+                    "Failed to
+                         convert bytes to song",
+                ))
+            }
+        });
+        let mut unique: Vec<MetadataLibraryItem> = result.collect();
+        unique.dedup();
+        log::info!("search_local_files_by_dir took {:?}", start_time.elapsed());
+        unique
+    }
+
+    pub fn search_local_files_by_dir_contains(&self, search_term: &str, limit: usize) -> Vec<MetadataLibraryItem> {
+        let start_time = std::time::Instant::now();
+        let result = self
+            .song_repository
+            .find_by_key_contains(search_term)
+            .map(|(key, value)| {
+                let key = String::from_utf8(key.to_vec()).unwrap();
+                if let Some((path, _)) = key.rsplit_once('/') {
+                    if path.to_lowercase().contains(search_term.to_lowercase().as_str()) {
+                        MetadataLibraryItem::Directory { name: path.to_owned() }
+                    } else {
+                        MetadataLibraryItem::SongItem(
+                            Song::bytes_to_song(&value).expect("Failed to convert bytes to song"),
+                        )
+                    }
+                } else {
+                    MetadataLibraryItem::Empty
+                }
+            })
+            .take(limit);
+        let mut unique: Vec<MetadataLibraryItem> = result.collect();
+        unique.dedup();
+        log::info!("search_local_files_by_dir_contains took {:?}", start_time.elapsed());
+        unique
     }
 
     pub fn scan_music_dir(&self, full_scan: bool, state_changes_sender: &Sender<StateChangeEvent>) {

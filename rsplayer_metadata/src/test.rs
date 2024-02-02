@@ -3,6 +3,7 @@ mod queue {
 
     use api_models::settings::PlaybackQueueSetting;
 
+    use crate::play_statistic_repository::PlayStatisticsRepository;
     use crate::song_repository::SongRepository;
     use crate::{
         queue_service::QueueService,
@@ -230,37 +231,32 @@ mod queue {
 
     fn create_queue_with_ctx(ctx: &Context) -> QueueService {
         let song_repo = Arc::new(SongRepository::new(&format!("{}_songrepo", ctx.db_dir)));
+        let stat_repo = Arc::new(PlayStatisticsRepository::new(&format!("{}_statrepo", ctx.db_dir)));
 
         QueueService::new(
             &PlaybackQueueSetting {
                 db_path: format!("{}_queue", ctx.db_dir.clone()),
             },
             song_repo,
+            stat_repo,
         )
     }
 }
 
 #[cfg(test)]
 mod metadata {
-    use std::{fs, path::Path, process::Command, sync::Arc, vec};
+    use std::{fs, process::Command, vec};
 
-    use tokio::sync::broadcast::{Receiver, Sender};
+    use api_models::state::StateChangeEvent;
 
-    use api_models::{settings::MetadataStoreSettings, state::StateChangeEvent};
-
-    use crate::song_repository::SongRepository;
-    use crate::{
-        album_repository::{self},
-        metadata_service::MetadataService,
-        test::test_shared::Context,
-    };
+    use crate::test::test_shared::TestContext;
 
     #[test]
     fn should_scan_music_dir_first_time() {
-        let (service, sender, _receiver, song_repository) = create_metadata_service(&Context::default());
-        service.scan_music_dir(true, &sender);
-        assert_eq!(song_repository.get_all_iterator().count(), 6);
-        let result = song_repository.find_by_id("aa/aaa/music.flac");
+        let ctx = TestContext::new();
+        ctx.metadata_service.scan_music_dir(true, &ctx.sender);
+        assert_eq!(ctx.song_repository.get_all_iterator().count(), 6);
+        let result = ctx.song_repository.find_by_id("aa/aaa/music.flac");
         if let Some(saved_song) = result {
             assert_eq!(saved_song.artist, Some("Artist 1".to_owned()));
             assert_eq!(saved_song.title, Some("FlacTitle".to_owned()));
@@ -275,11 +271,11 @@ mod metadata {
 
     #[test]
     fn should_incrementally_scan_music_dir_add_2_new_files() {
-        let mut context = Context::default();
+        let mut context = TestContext::new();
         std::fs::create_dir_all(&context.db_dir).expect("failed to create dir");
         context.music_dir = context.db_dir.clone();
+        context.metadata_service.settings.music_directory = context.db_dir.clone();
         std::fs::create_dir_all(&context.music_dir).expect("failed to create dir");
-        let (service, sender, mut reciever, song_repository) = create_metadata_service(&context);
 
         // copy content of assets into /tmp
         Command::new("cp")
@@ -290,8 +286,8 @@ mod metadata {
             .expect("failed to execute process")
             .wait()
             .expect("failed to wait");
-        service.scan_music_dir(true, &sender);
-        assert_eq!(song_repository.get_all_iterator().count(), 6);
+        context.metadata_service.scan_music_dir(true, &context.sender);
+        assert_eq!(context.song_repository.get_all_iterator().count(), 6);
 
         fs::copy(
             format!("{}/assets/music.wav", &context.music_dir),
@@ -304,11 +300,11 @@ mod metadata {
         )
         .expect("Failed to copy file");
         fs::remove_file(format!("{}/assets/aa/aaa/music.flac", &context.music_dir)).expect("Failed to delete file");
-        service.scan_music_dir(false, &sender);
-        assert_eq!(song_repository.get_all_iterator().count(), 7);
+        context.metadata_service.scan_music_dir(false, &context.sender);
+        assert_eq!(context.song_repository.get_all_iterator().count(), 7);
 
         let mut events = vec![];
-        while let Ok(ev) = reciever.try_recv() {
+        while let Ok(ev) = context.receiver.try_recv() {
             events.push(ev);
         }
         assert_eq!(events.len(), 13);
@@ -322,45 +318,45 @@ mod metadata {
 
     #[test]
     fn should_get_song() {
-        let (service, sender, _receiver, song_repository) = create_metadata_service(&Context::default());
-        service.scan_music_dir(true, &sender);
-        let song = song_repository.find_by_id("aa/music.m4a");
+        let ctx = TestContext::new();
+        ctx.metadata_service.scan_music_dir(true, &ctx.sender);
+        let song = ctx.song_repository.find_by_id("aa/music.m4a");
         assert!(song.is_some());
         assert_eq!(song.unwrap().file, "aa/music.m4a");
     }
 
-    pub fn create_metadata_service(
-        context: &Context,
-    ) -> (
-        MetadataService,
-        Sender<StateChangeEvent>,
-        Receiver<StateChangeEvent>,
-        Arc<SongRepository>,
-    ) {
-        let path = &format!("{}_ams", context.db_dir.clone());
-        if Path::new(path).exists() {
-            _ = std::fs::remove_dir_all(path);
-        }
-        let settings = MetadataStoreSettings {
-            db_path: path.to_owned(),
-            music_directory: context.music_dir.clone(),
-            ..Default::default()
-        };
-        let album_repository = Arc::new(album_repository::AlbumRepository::new(&format!(
-            "{}_arp",
-            context.db_dir
-        )));
-        let song_repository = Arc::new(SongRepository::new(&format!("{}_srp", context.db_dir)));
-        let sender = tokio::sync::broadcast::channel(20).0;
-        let receiver = sender.subscribe();
-        (
-            MetadataService::new(&settings, song_repository.clone(), album_repository)
-                .expect("Failed to create service"),
-            sender,
-            receiver,
-            song_repository,
-        )
+    #[test]
+    fn test_like_media_item() {
+        let ctx = TestContext::new();
+        ctx.metadata_service.scan_music_dir(true, &ctx.sender);
+        ctx.metadata_service.like_media_item("aa/music.m4a");
+        let stat = ctx.stat_repository.find_by_id("aa/music.m4a").unwrap();
+        assert_eq!(stat.liked_count, 1);
+        ctx.metadata_service.like_media_item("aa/music.m4a");
+        let stat = ctx.stat_repository.find_by_id("aa/music.m4a").unwrap();
+        assert_eq!(stat.liked_count, 2);
     }
+
+    #[test]
+    fn test_dislike_media_item() {
+        let ctx = TestContext::new();
+        ctx.metadata_service.scan_music_dir(true, &ctx.sender);
+        ctx.metadata_service.dislike_media_item("aa/music.m4a");
+        ctx.metadata_service.dislike_media_item("aa/music.m4a");
+        let stat = ctx.stat_repository.find_by_id("aa/music.m4a").unwrap();
+        assert_eq!(stat.liked_count, -2);
+    }
+
+    #[test]
+    fn test_increase_play_count() {
+        let ctx = TestContext::new();
+        ctx.metadata_service.scan_music_dir(true, &ctx.sender);
+        ctx.metadata_service.increase_play_count("aa/music.m4a");
+        ctx.metadata_service.increase_play_count("aa/music.m4a");
+        let stat = ctx.stat_repository.find_by_id("aa/music.m4a").unwrap();
+        assert_eq!(stat.play_count, 2);
+    }
+    
 }
 
 mod playlist {
@@ -417,9 +413,15 @@ mod playlist {
 }
 
 pub mod test_shared {
-    use std::path::Path;
+    use std::{path::Path, sync::Arc};
 
-    use api_models::{common::to_database_key, player::Song};
+    use api_models::{common::to_database_key, player::Song, settings::MetadataStoreSettings, state::StateChangeEvent};
+    use tokio::sync::broadcast::{Receiver, Sender};
+
+    use crate::{
+        album_repository::AlbumRepository, metadata_service::MetadataService,
+        play_statistic_repository::PlayStatisticsRepository, song_repository::SongRepository,
+    };
 
     pub fn create_song(ext: &str) -> Song {
         let file = format!("assets/music.{ext}");
@@ -453,6 +455,63 @@ pub mod test_shared {
     }
 
     impl Drop for Context {
+        fn drop(&mut self) {
+            let path = &self.db_dir;
+            if Path::new(path).exists() {
+                _ = std::fs::remove_dir_all(path);
+            }
+        }
+    }
+
+    pub struct TestContext {
+        pub metadata_service: MetadataService,
+        pub sender: Sender<StateChangeEvent>,
+        pub receiver: Receiver<StateChangeEvent>,
+        pub song_repository: Arc<SongRepository>,
+        pub album_repository: Arc<AlbumRepository>,
+        pub stat_repository: Arc<PlayStatisticsRepository>,
+        pub music_dir: String,
+        pub db_dir: String,
+    }
+    impl TestContext {
+        pub fn new() -> Self {
+            let rnd = random_string::generate(25, "utf8");
+            let db_dir = format!("/tmp/rsptest_{rnd}");
+            let music_dir = "assets".to_owned();
+            let path = &format!("{db_dir}_ams");
+            if Path::new(path).exists() {
+                _ = std::fs::remove_dir_all(path);
+            }
+            let settings = MetadataStoreSettings {
+                db_path: path.to_owned(),
+                music_directory: music_dir.clone(),
+                ..Default::default()
+            };
+            let album_repository = Arc::new(AlbumRepository::new(&format!("{db_dir}_arp")));
+            let song_repository = Arc::new(SongRepository::new(&format!("{db_dir}_srp")));
+            let stat_repository = Arc::new(PlayStatisticsRepository::new(&format!("{db_dir}_pst")));
+            let sender = tokio::sync::broadcast::channel(20).0;
+            let receiver = sender.subscribe();
+
+            Self {
+                metadata_service: MetadataService::new(
+                    &settings,
+                    song_repository.clone(),
+                    album_repository.clone(),
+                    stat_repository.clone(),
+                )
+                .expect("Failed to create service"),
+                sender,
+                receiver,
+                song_repository,
+                album_repository,
+                stat_repository,
+                music_dir,
+                db_dir,
+            }
+        }
+    }
+    impl Drop for TestContext {
         fn drop(&mut self) {
             let path = &self.db_dir;
             if Path::new(path).exists() {

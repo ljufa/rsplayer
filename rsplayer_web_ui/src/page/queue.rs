@@ -2,7 +2,8 @@ use api_models::common::PlayerCommand;
 use api_models::common::QueueCommand::RemoveItem;
 use api_models::common::UserCommand;
 use api_models::player::Song;
-use api_models::state::{PlayingContext, PlayingContextQuery, StateChangeEvent};
+use api_models::playlist::PlaylistPage;
+use api_models::state::{CurrentQueueQuery, StateChangeEvent};
 use gloo_console::log;
 use gloo_net::Error;
 use seed::prelude::web_sys::KeyboardEvent;
@@ -15,7 +16,7 @@ use crate::scrollToId;
 
 #[derive(Debug)]
 pub struct Model {
-    playing_context: Option<PlayingContext>,
+    current_queue: Option<PlaylistPage>,
     current_song_id: Option<String>,
     search_input: String,
     waiting_response: bool,
@@ -28,7 +29,7 @@ pub struct Model {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum Msg {
-    PlayingContextFetched(Result<Option<PlayingContext>, Error>),
+    CurrentQueueFetched(Result<Option<PlaylistPage>, Error>),
     SendUserCommand(UserCommand),
     PlaylistItemSelected(String),
     PlaylistItemRemove(String),
@@ -57,17 +58,14 @@ pub enum Msg {
 pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     log!("Queue: init");
     orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-        api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::WithSearchTerm(
-            String::default(),
-            0,
-        )),
+        api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(String::default(), 0)),
     )));
     orders.stream(streams::window_event(Ev::KeyDown, |event| {
         Msg::KeyPressed(event.unchecked_into())
     }));
 
     Model {
-        playing_context: None,
+        current_queue: None,
         current_song_id: None,
         waiting_response: true,
         search_input: String::default(),
@@ -85,9 +83,9 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
 #[allow(clippy::too_many_lines)]
 pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
-        Msg::StatusChangeEventReceived(StateChangeEvent::CurrentPlayingContextEvent(pc)) => {
+        Msg::StatusChangeEventReceived(StateChangeEvent::CurrentQueueEvent(pc)) => {
             model.waiting_response = false;
-            model.playing_context = Some(pc);
+            model.current_queue = pc;
         }
         Msg::StatusChangeEventReceived(StateChangeEvent::CurrentSongEvent(evt)) => {
             model.waiting_response = false;
@@ -99,16 +97,14 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Player(PlayerCommand::PlayItem(id))));
         }
         Msg::PlaylistItemRemove(id) => {
-            model.playing_context.as_mut().map(|ctx| {
-                ctx.playlist_page.as_mut().map(|page| {
-                    page.remove_item(&id);
-                })
-            });
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(RemoveItem(id))));
+            if let Some(queue) = model.current_queue.as_mut() {
+                queue.remove_item(&id);
+                orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(RemoveItem(id))));
+            }
         }
         Msg::WebSocketOpen => {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::WithSearchTerm(
+                api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
                     String::default(),
                     0,
                 )),
@@ -123,7 +119,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::DoSearch => {
             model.waiting_response = true;
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::WithSearchTerm(
+                api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
                     model.search_input.clone(),
                     0,
                 )),
@@ -133,14 +129,14 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.waiting_response = true;
             model.search_input = String::new();
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::CurrentSongPage),
+                api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::CurrentSongPage),
             )));
         }
         Msg::ClearSearch => {
             model.waiting_response = true;
             model.search_input = String::new();
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::WithSearchTerm(
+                api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
                     String::new(),
                     0,
                 )),
@@ -151,7 +147,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::LoadMoreItems(offset) => {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::WithSearchTerm(
+                api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
                     model.search_input.clone(),
                     offset,
                 )),
@@ -194,7 +190,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 model.show_add_url_modal = false;
             }
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::WithSearchTerm(
+                api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
                     String::default(),
                     0,
                 )),
@@ -224,7 +220,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 api_models::common::QueueCommand::ClearQueue,
             )));
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentPlayingContext(PlayingContextQuery::WithSearchTerm(
+                api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
                     String::default(),
                     0,
                 )),
@@ -244,6 +240,7 @@ pub fn view(model: &Model) -> Node<Msg> {
         view_queue_items(model)
     ]
 }
+
 fn view_save_playlist_modal(model: &Model) -> Node<Msg> {
     div![
         C!["modal", IF!(model.show_save_playlist_modal => "is-active")],
@@ -264,6 +261,9 @@ fn view_save_playlist_modal(model: &Model) -> Node<Msg> {
                 C!["modal-card-body"],
                 input![
                     C!["input"],
+                    attrs! {
+                        At::AutoFocus => true.as_at_value();
+                    },
                     input_ev(Ev::Input, Msg::SaveAsPlaylistInputChanged),
                     ev(Ev::KeyDown, |keyboard_event| {
                         if keyboard_event.value_of().to_string() == "[object KeyboardEvent]" {
@@ -345,22 +345,20 @@ fn view_add_url_modal(model: &Model) -> Node<Msg> {
 
 #[allow(clippy::too_many_lines)]
 fn view_queue_items(model: &Model) -> Node<Msg> {
-    if model.playing_context.is_none() {
+    if model.current_queue.is_none() {
         return empty!();
     }
-    let pctx = model.playing_context.as_ref().unwrap();
-
     div![
         div![
             IF!(model.waiting_response => progress![C!["progress", "is-small"], attrs!{ At::Max => "100"}, style!{ St::MarginBottom => "50px"}]),
         ],
         div![
-            pctx.playlist_page.as_ref().map_or_else(|| empty!(), |page| {
+            model.current_queue.as_ref().map_or_else(|| empty!(), |page| {
                 let offset = page.offset;
                 let iter = page.items.iter();
                 div![
                     div![
-                        C!["transparent field has-addons has-background-dark-transparent"],
+                        C!["transparent is-flex is-justify-content-center has-background-dark-transparent mt-2"],
                         div![C!["control"],
                             input![
                                 C!["input", "input-size"],
@@ -395,33 +393,30 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                         ],
                     ],
                     div![
-                        C!["field has-addons has-background-dark-transparent"],
-                        style!{
-                            St::BorderStyle => "groove",
-
-                        },
+                        C!["transparent field is-flex is-justify-content-center has-background-dark-transparent"],
                         div![C!["control"],
-                        a![
-                            attrs!(At::Title => "Add URL to queue"),
-                            i![C!["pr-2","pl-2","material-icons", "white-icon"], "queue"],
-                            ev(Ev::Click, move |_| Msg::AddUrlButtonClick)
-                        ],
-                        a![
-                            attrs!(At::Title =>"Save queue as playlist"),
-                            i![C!["pr-2","material-icons", "white-icon"], "save"],
-                            ev(Ev::Click, move |_| Msg::SaveAsPlaylistButtonClick)
-                        ],
-                        a![
-                            attrs!(At::Title =>"Show queue starting from current song"),
-                            i![C!["pr-2","material-icons", "white-icon"], "filter_center_focus"],
-                            ev(Ev::Click, move |_| Msg::ShowStartingFromCurrentSong)
-                        ],
-                        a![
-                            attrs!(At::Title =>"Clear queue"),
-                            i![C!["pr-2", "material-icons", "white-icon"], "clear"],
-                            ev(Ev::Click, move |_| Msg::ClearQueue)
-                        ],
-                    ]],
+                            a![
+                                attrs!(At::Title => "Add URL to queue"),
+                                i![C!["pr-3","pl-2","material-icons","is-large-icon", "white-icon"], "queue"],
+                                ev(Ev::Click, move |_| Msg::AddUrlButtonClick)
+                            ],
+                            a![
+                                attrs!(At::Title =>"Save queue as playlist"),
+                                i![C!["pr-3","material-icons","is-large-icon", "white-icon"], "save"],
+                                ev(Ev::Click, move |_| Msg::SaveAsPlaylistButtonClick)
+                            ],
+                            a![
+                                attrs!(At::Title =>"Show queue starting from current song"),
+                                i![C!["pr-3","material-icons","is-large-icon", "white-icon"], "filter_center_focus"],
+                                ev(Ev::Click, move |_| Msg::ShowStartingFromCurrentSong)
+                            ],
+                            a![
+                                attrs!(At::Title =>"Clear queue"),
+                                i![C!["pr-3", "material-icons","is-large-icon", "white-icon"], "clear"],
+                                ev(Ev::Click, move |_| Msg::ClearQueue)
+                            ],
+                        ]
+                    ],
 
                     // queue items`
                     div![C!["scroll-list list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],

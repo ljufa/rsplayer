@@ -3,24 +3,19 @@ use core::option::Option;
 
 use core::time::Duration;
 
-use num_derive::{FromPrimitive, ToPrimitive};
+use num_derive::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumProperty;
 
+use crate::common::MetadataLibraryItem;
 use crate::{
-    common::{MetadataLibraryResult, Volume},
+    common::Volume,
     player::Song,
     playlist::{PlaylistPage, Playlists},
 };
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, Deserialize)]
-pub struct PlayingContext {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub playlist_page: Option<PlaylistPage>,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq, Eq, Deserialize)]
-pub enum PlayingContextQuery {
+pub enum CurrentQueueQuery {
     WithSearchTerm(String, usize),
     CurrentSongPage,
     IgnoreSongs,
@@ -59,7 +54,7 @@ pub struct StreamerState {
 #[allow(clippy::large_enum_variant)]
 pub enum StateChangeEvent {
     CurrentSongEvent(Song),
-    CurrentPlayingContextEvent(PlayingContext),
+    CurrentQueueEvent(Option<PlaylistPage>),
     StreamerStateEvent(StreamerState),
     PlayerInfoEvent(PlayerInfo),
     SongTimeEvent(SongProgress),
@@ -69,7 +64,7 @@ pub enum StateChangeEvent {
     MetadataSongScanStarted,
     MetadataSongScanned(String),
     MetadataSongScanFinished(String),
-    MetadataLocalItems(MetadataLibraryResult),
+    MetadataLocalItems(Vec<MetadataLibraryItem>),
     NotificationSuccess(String),
     NotificationError(String),
 }
@@ -87,7 +82,7 @@ pub enum PlayerState {
     STOPPED,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, Hash, Copy, FromPrimitive, ToPrimitive, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash, Copy, ToPrimitive, Serialize, Deserialize)]
 pub enum AudioOut {
     SPKR,
     HEAD,

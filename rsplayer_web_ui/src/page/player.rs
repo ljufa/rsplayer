@@ -1,5 +1,5 @@
-use api_models::common::UserCommand::Player;
-use api_models::common::{PlayerCommand, SystemCommand, Volume};
+use api_models::common::UserCommand::{self, Player};
+use api_models::common::{MetadataCommand, PlayerCommand, SystemCommand, Volume};
 use api_models::player::Song;
 use api_models::state::{AudioOut, PlayerInfo, PlayerState, SongProgress};
 
@@ -205,7 +205,27 @@ fn view_controls_up(model: &PlayerModel) -> Node<Msg> {
                 C!["small-button"],
                 span![C!["icon"], i![C!("material-icons"), audio_out]],
                 ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::ChangeAudioOutput))
-            ]
+            ],
+            model.current_song.as_ref().map(|s| {
+                let id = s.file.clone();
+                let id2 = s.file.clone();
+                let id3 = s.file.clone();
+                let (like_class, cmd) = s.statistics.as_ref().map_or_else(
+                    || ("favorite_border", MetadataCommand::LikeMediaItem(id3)),
+                    |stat| {
+                        if stat.liked_count > 0 {
+                            ("favorite", MetadataCommand::DislikeMediaItem(id))
+                        } else {
+                            ("favorite_border", MetadataCommand::LikeMediaItem(id2))
+                        }
+                    },
+                );
+                button![
+                    C!["small-button"],
+                    span![C!["icon"], i![C!("material-icons"), like_class]],
+                    ev(Ev::Click, |_| Msg::SendUserCommand(UserCommand::Metadata(cmd)))
+                ]
+            }),
         ]
     ]
 }

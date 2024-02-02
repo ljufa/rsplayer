@@ -7,7 +7,11 @@ use api_models::{
     state::StateChangeEvent,
 };
 use indextree::{Arena, NodeId};
-use seed::{div, empty, i, li, p, prelude::*, section, span, style, ul, C, IF};
+use seed::{
+    a, attrs, div, empty, i, input, li, p,
+    prelude::{web_sys::KeyboardEvent, *},
+    section, span, style, ul, C, IF,
+};
 
 use crate::view_spinner_modal;
 
@@ -21,6 +25,9 @@ pub enum Msg {
     CollapseNodeClick(NodeId),
     AddItemToQueue(NodeId),
     LoadItemToQueue(NodeId),
+    SearchInputChanged(String),
+    DoSearch,
+    ClearSearch,
 }
 
 #[derive(Debug)]
@@ -40,10 +47,18 @@ impl TreeModel {
             current: root,
         }
     }
-    fn get_full_path(&self, id: NodeId) -> String {
+    fn get_full_path(&self, id: NodeId, is_search_mode: bool) -> String {
         let path: String = id.ancestors(&self.arena).fold(String::new(), |mut acc, n| {
             let node = self.arena.get(n).unwrap().get();
-            acc.insert_str(0, &node.get_id());
+            if is_search_mode {
+                if let MetadataLibraryItem::SongItem(song) = node {
+                    acc.insert_str(0, &song.file);
+                } else {
+                    acc.insert_str(0, &node.get_id());
+                }
+            } else {
+                acc.insert_str(0, &node.get_id());
+            }
             acc
         });
         path
@@ -54,6 +69,7 @@ impl TreeModel {
 pub struct Model {
     tree: TreeModel,
     wait_response: bool,
+    search_input: String,
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -64,6 +80,7 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     Model {
         tree: TreeModel::new(),
         wait_response: true,
+        search_input: String::new(),
     }
 }
 
@@ -72,15 +89,22 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
         Msg::StatusChangeEventReceived(StateChangeEvent::MetadataLocalItems(result)) => {
             model.wait_response = false;
-            result.items.into_iter().for_each(|item| {
-                let node = model.tree.arena.new_node(item);
-                model.tree.current.append(node, &mut model.tree.arena);
-            });
+            if model.search_input.is_empty() {
+                result.into_iter().for_each(|item| {
+                    let node = model.tree.arena.new_node(item);
+                    model.tree.current.append(node, &mut model.tree.arena);
+                });
+            } else {
+                result.into_iter().for_each(|item| {
+                    let node = model.tree.arena.new_node(item);
+                    model.tree.root.append(node, &mut model.tree.arena);
+                });
+            }
         }
         Msg::ExpandNodeClick(id) => {
             model.wait_response = true;
             model.tree.current = id;
-            let path = model.tree.get_full_path(id);
+            let path = model.tree.get_full_path(id, false);
             orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
                 api_models::common::MetadataCommand::QueryLocalFiles(path, 0),
             )));
@@ -93,13 +117,33 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             }
         }
         Msg::AddItemToQueue(id) => {
-            let path = model.tree.get_full_path(id);
+            let path = model.tree.get_full_path(id, !model.search_input.is_empty());
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(AddLocalLibDirectory(path))));
         }
         Msg::LoadItemToQueue(id) => {
-            let path = model.tree.get_full_path(id);
+            let path = model.tree.get_full_path(id, !model.search_input.is_empty());
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(LoadLocalLibDirectory(path))));
         }
+        Msg::SearchInputChanged(term) => {
+            orders.skip();
+            model.search_input = term;
+        }
+        Msg::DoSearch => {
+            model.wait_response = true;
+            model.tree = TreeModel::new();
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+                api_models::common::MetadataCommand::SearchLocalFiles(model.search_input.clone(), 100),
+            )));
+        }
+        Msg::ClearSearch => {
+            model.wait_response = true;
+            model.tree = TreeModel::new();
+            model.search_input = String::new();
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+                api_models::common::MetadataCommand::QueryLocalFiles(String::new(), 0),
+            )));
+        }
+
         Msg::WebSocketOpen => {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
                 api_models::common::MetadataCommand::QueryLocalFiles(String::new(), 0),
@@ -112,19 +156,61 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 }
 
 pub fn view(model: &Model) -> Node<Msg> {
-    view_files(model)
+    div![view_search_input(model), view_files(model)]
 }
 
+fn view_search_input(model: &Model) -> Node<Msg> {
+    div![
+        C!["transparent is-flex is-justify-content-center has-background-dark-transparent mt-2"],
+        div![
+            C!["control"],
+            input![
+                C!["input", "input-size"],
+                attrs! {
+                    At::Value => model.search_input,
+                    At::Name => "search",
+                    At::Type => "text",
+                    At::Placeholder => "Find a song or directory",
+                },
+                input_ev(Ev::Input, Msg::SearchInputChanged),
+                ev(Ev::KeyDown, |keyboard_event| {
+                    if keyboard_event.value_of().to_string() == "[object KeyboardEvent]" {
+                        let kev: KeyboardEvent = keyboard_event.unchecked_into();
+                        IF!(kev.key_code() == 13 => Msg::DoSearch)
+                    } else {
+                        None
+                    }
+                }),
+            ],
+        ],
+        div![
+            C!["control"],
+            a![
+                attrs!(At::Title =>"Search"),
+                i![C!["material-icons", "is-large-icon", "white-icon"], "search"],
+                ev(Ev::Click, move |_| Msg::DoSearch)
+            ],
+            a![
+                attrs!(At::Title =>"Clear search / Show all songs"),
+                i![C!["material-icons", "is-large-icon", "white-icon"], "backspace"],
+                ev(Ev::Click, move |_| Msg::ClearSearch)
+            ],
+        ],
+    ]
+}
 fn view_files(model: &Model) -> Node<Msg> {
     section![
         view_spinner_modal(model.wait_response),
-        C!["section"],
-        ul![C!["wtree"], get_tree_start_node(model.tree.root, &model.tree.arena)],
+        C!["pr-2", "pl-1"],
+        ul![
+            C!["wtree"],
+            get_tree_start_node(model.tree.root, &model.tree.arena, !model.search_input.is_empty())
+        ],
     ]
 }
 
 #[allow(clippy::collection_is_never_read)]
-fn get_tree_start_node(node_id: NodeId, arena: &Arena<MetadataLibraryItem>) -> Node<Msg> {
+fn get_tree_start_node(node_id: NodeId, arena: &Arena<MetadataLibraryItem>, is_search_mode: bool) -> Node<Msg> {
     let Some(value) = arena.get(node_id) else {
         return empty!();
     };
@@ -154,8 +240,9 @@ fn get_tree_start_node(node_id: NodeId, arena: &Arena<MetadataLibraryItem>) -> N
         }
         _ => {}
     };
+    let show_expand_button = is_dir && !is_search_mode;
     if !is_root {
-        let left_position = if is_dir { "20px" } else { "0px" };
+        let left_position = if show_expand_button { "20px" } else { "0px" };
         span.add_child(div![
             C!["level", "is-mobile"],
             div![
@@ -163,7 +250,7 @@ fn get_tree_start_node(node_id: NodeId, arena: &Arena<MetadataLibraryItem>) -> N
                 style! {
                     St::Height => node_height,
                 },
-                IF!(is_dir =>
+                IF!(show_expand_button =>
 
                     if children.is_empty() {
                         i![C!["material-icons"], "expand_more"]
@@ -171,7 +258,7 @@ fn get_tree_start_node(node_id: NodeId, arena: &Arena<MetadataLibraryItem>) -> N
                         i![C!["material-icons"], "expand_less"]
                     }
                 ),
-                IF!(is_dir =>
+                IF!(show_expand_button =>
                     if children.is_empty() {
                             ev(Ev::Click, move |_| Msg::ExpandNodeClick(node_id))
                     } else {
@@ -211,7 +298,7 @@ fn get_tree_start_node(node_id: NodeId, arena: &Arena<MetadataLibraryItem>) -> N
     if !children.is_empty() {
         let mut ul: Node<Msg> = ul!();
         for c in children {
-            ul.add_child(get_tree_start_node(c, arena));
+            ul.add_child(get_tree_start_node(c, arena, is_search_mode));
         }
         li.add_child(ul);
     }

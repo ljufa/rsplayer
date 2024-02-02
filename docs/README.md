@@ -145,12 +145,13 @@ TODO
 * [x] Show files as a tree
 * [x] Show media library (artist/album) as a tree
 * [x] Web radio browse/play
-* [ ] Like/Favorite song/radio
+* [x] Like/Favorite song/radio
+* [x] Search files/radio/artist
 * [ ] Playlist by genre
 * [ ] Most played songs playlist
 * [ ] Liked songs playlist
+* [ ] Show favorited radios on top of the list 
 * [ ] New music mix dynamic playlist
-* [ ] Search files/radio
 * [ ] Seek to position
 * [ ] Keep last N songs in *history* when random mode is enabled
 * [ ] Windows support
@@ -171,7 +172,8 @@ TODO
 <!-- * [ ] UPNP -->
  
 ## Code improvements
-
+* [ ] replace sled with native_db or redb (high memory usage)
+* [ ] improve websocket server to drop messages for inactive clients (retention time)
 * [ ] get rid of `.unwrap()` calls
 * [ ] get rid of unnecessary `.clone()` calls
 * [ ] refactor names all over the code

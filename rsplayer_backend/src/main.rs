@@ -4,28 +4,27 @@ extern crate log;
 
 use std::panic;
 use std::sync::Arc;
+#[cfg(debug_assertions)]
 use std::time::Duration;
 
 use env_logger::Env;
-use rsplayer_metadata::album_repository;
-use rsplayer_metadata::playlist_service::PlaylistService;
-use rsplayer_metadata::queue_service::QueueService;
-
-use album_repository::AlbumRepository;
-use rsplayer_playback::rsp::PlayerService;
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::{select, spawn};
 
+use album_repository::AlbumRepository;
 use rsplayer_config::Configuration;
-
 use rsplayer_hardware::audio_device::audio_service::AudioInterfaceService;
 use rsplayer_hardware::input::ir_lirc;
 use rsplayer_hardware::input::volume_rotary;
 use rsplayer_hardware::oled::st7920;
-
+use rsplayer_metadata::album_repository;
 use rsplayer_metadata::metadata_service::MetadataService;
+use rsplayer_metadata::play_statistic_repository::PlayStatisticsRepository;
+use rsplayer_metadata::playlist_service::PlaylistService;
+use rsplayer_metadata::queue_service::QueueService;
 use rsplayer_metadata::song_repository::SongRepository;
+use rsplayer_playback::rsp::PlayerService;
 
 mod command_handler;
 mod server_warp;
@@ -36,6 +35,7 @@ mod status;
 #[tokio::main]
 async fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    #[cfg(debug_assertions)]
     console_subscriber::ConsoleLayer::builder()
         .retention(Duration::from_secs(60))
         .server_addr(([0, 0, 0, 0], 6669))
@@ -64,11 +64,13 @@ async fn main() {
 
     let album_repository = Arc::new(AlbumRepository::default());
     let song_repository = Arc::new(SongRepository::default());
+    let statistics_repository = Arc::new(PlayStatisticsRepository::default());
     let metadata_service = Arc::new(
         MetadataService::new(
             &config.get_settings().metadata_settings,
             song_repository.clone(),
             album_repository.clone(),
+            statistics_repository.clone(),
         )
         .expect("Failed to start metadata service"),
     );
@@ -79,6 +81,7 @@ async fn main() {
     let queue_service = Arc::new(QueueService::new(
         &config.get_settings().playback_queue_settings,
         song_repository.clone(),
+        statistics_repository.clone(),
     ));
     info!("Queue service successfully created.");
 
