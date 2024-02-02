@@ -356,7 +356,6 @@ mod metadata {
         let stat = ctx.stat_repository.find_by_id("aa/music.m4a").unwrap();
         assert_eq!(stat.play_count, 2);
     }
-    
 }
 
 mod playlist {

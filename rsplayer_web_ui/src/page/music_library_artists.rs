@@ -3,7 +3,11 @@ use api_models::{
     state::StateChangeEvent,
 };
 use indextree::{Arena, NodeId};
-use seed::{a, attrs, div, empty, i, input, li, p, prelude::{web_sys::KeyboardEvent, *}, section, span, style, ul, C, IF};
+use seed::{
+    a, attrs, div, empty, i, input, li, p,
+    prelude::{web_sys::KeyboardEvent, *},
+    section, span, style, ul, C, IF,
+};
 
 use crate::view_spinner_modal;
 
@@ -20,7 +24,6 @@ pub enum Msg {
     SearchInputChanged(String),
     DoSearch,
     ClearSearch,
-
 }
 
 #[derive(Debug)]
@@ -159,7 +162,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.tree = TreeModel::new();
             model.search_input = String::new();
             orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
-                api_models::common::MetadataCommand::QueryArtists
+                api_models::common::MetadataCommand::QueryArtists,
             )));
         }
 
@@ -216,7 +219,10 @@ fn view_files(model: &Model) -> Node<Msg> {
     section![
         view_spinner_modal(model.wait_response),
         C!["pr-2", "pl-1"],
-        ul![C!["wtree"], get_tree_start_node(model.tree.root, &model.tree.arena, !model.search_input.is_empty())],
+        ul![
+            C!["wtree"],
+            get_tree_start_node(model.tree.root, &model.tree.arena, !model.search_input.is_empty())
+        ],
     ]
 }
 

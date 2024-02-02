@@ -115,5 +115,4 @@ mod test {
         let songs = song_repository.find_all();
         assert_eq!(songs.len(), 4);
     }
-
 }

@@ -69,7 +69,6 @@ pub enum Msg {
     SearchInputChanged(String),
     DoSearch,
     ClearSearch,
-
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -222,9 +221,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.wait_response = true;
             model.tree = TreeModel::new();
             let search_term = model.search_input.clone();
-            orders.perform_cmd(
-                async move { StationsFetched(search_stations_by_name(&search_term).await) },
-            );
+            orders.perform_cmd(async move { StationsFetched(search_stations_by_name(&search_term).await) });
         }
         Msg::ClearSearch => {
             model.wait_response = true;
@@ -245,7 +242,12 @@ pub fn view(model: &Model) -> Node<Msg> {
         view_search_input(model),
         ul![
             C!["wtree"],
-            get_tree_start_node(model.tree.root, &model.tree.arena, &model.filter_type, !model.search_input.is_empty())
+            get_tree_start_node(
+                model.tree.root,
+                &model.tree.arena,
+                &model.filter_type,
+                !model.search_input.is_empty()
+            )
         ]
     ]
 }
@@ -332,7 +334,12 @@ fn view_filter(filter_type: &FilterType) -> Node<Msg> {
 }
 
 #[allow(clippy::collection_is_never_read)]
-fn get_tree_start_node(node_id: NodeId, arena: &Arena<TreeNode>, filter_type: &FilterType, is_search_mode: bool) -> Node<Msg> {
+fn get_tree_start_node(
+    node_id: NodeId,
+    arena: &Arena<TreeNode>,
+    filter_type: &FilterType,
+    is_search_mode: bool,
+) -> Node<Msg> {
     let Some(value) = arena.get(node_id) else {
         return empty!();
     };
@@ -465,7 +472,10 @@ fn get_tree_start_node(node_id: NodeId, arena: &Arena<TreeNode>, filter_type: &F
 const RADIO_BROWSER_URL: &str = "https://de1.api.radio-browser.info/json/";
 
 async fn search_stations_by_name(name: &str) -> Vec<Station> {
-    let url = format!("{}stations/search?name={}&limit=300&hidebroken=true", RADIO_BROWSER_URL, name);
+    let url = format!(
+        "{}stations/search?name={}&limit=300&hidebroken=true",
+        RADIO_BROWSER_URL, name
+    );
     Request::get(&url)
         .send()
         .await
