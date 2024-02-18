@@ -531,7 +531,14 @@ fn view_metadata_scan_notification(model: &Model) -> Node<Msg> {
                 C!["notification", "is-info", "is-light"],
                 button![C!("delete")],
                 p!["Music directory scan is running..."],
-                p!(info)
+                p![
+                    style! {
+                        St::Overflow => "hidden",
+                        St::TextOverflow => "ellipsis",
+                        St::OverflowWrap => "nowrap",
+                    },
+                    info
+                ]
             ]
         },
     )

@@ -152,8 +152,10 @@ TODO
 * [ ] Liked songs playlist
 * [ ] Show favorited radios on top of the list 
 * [ ] New music mix dynamic playlist
+* [ ] Generate missing album cover image using album name
 * [ ] Seek to position
 * [ ] Keep last N songs in *history* when random mode is enabled
+* [ ] Play item next (when in queue) / Give prio
 * [ ] Windows support
 * [ ] MacOS support
 * [ ] Automatic library scan after music directory change, or time based scan

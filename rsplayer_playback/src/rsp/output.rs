@@ -169,7 +169,10 @@ mod cpal {
             // Write all the interleaved samples to the ring buffer.
             let mut samples = self.sample_buf.samples();
 
-            while let Some(written) = self.ring_buf_producer.write_blocking(samples) {
+            while let Ok(Some(written)) = self
+                .ring_buf_producer
+                .write_blocking_timeout(samples, Duration::from_secs(1))
+            {
                 samples = &samples[written..];
             }
 
@@ -188,5 +191,9 @@ mod cpal {
 }
 
 pub fn try_open(spec: SignalSpec, duration: u64, audio_device: &str) -> Result<Box<dyn AudioOutput>> {
-    cpal::CpalAudioOutput::try_open(spec, duration, audio_device)
+    let result = cpal::CpalAudioOutput::try_open(spec, duration, audio_device);
+    if result.is_err() && audio_device.starts_with("hw:") {
+        return cpal::CpalAudioOutput::try_open(spec, duration, &audio_device.replace("hw:", "plughw:"));
+    }
+    result
 }

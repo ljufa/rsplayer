@@ -358,7 +358,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                 let iter = page.items.iter();
                 div![
                     div![
-                        C!["transparent is-flex is-justify-content-center has-background-dark-transparent mt-2"],
+                        C!["transparent is-flex is-justify-content-center has-background-dark-transparent"],
                         div![C!["control"],
                             input![
                                 C!["input", "input-size"],

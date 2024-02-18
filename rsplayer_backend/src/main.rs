@@ -32,7 +32,7 @@ mod server_warp;
 mod status;
 
 #[allow(clippy::redundant_pub_crate, clippy::too_many_lines)]
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     #[cfg(debug_assertions)]
@@ -41,7 +41,7 @@ async fn main() {
         .server_addr(([0, 0, 0, 0], 6669))
         .init();
     info!(
-        r#"
+        r#" 
         -------------------------------------------------------------------------
 
             ██████╗ ███████╗██████╗ ██╗      █████╗ ██╗   ██╗███████╗██████╗ 

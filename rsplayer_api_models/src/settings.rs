@@ -162,7 +162,7 @@ impl Default for MetadataStoreSettings {
             music_directory: "/music".into(),
             follow_links: true,
             supported_extensions: vec![
-                "flac", "wav", "mp3", "m4a", "aac", "aiff", "alac", "ogg", "wv", "wma", "mp4",
+                "flac", "wav", "mp3", "m4a", "aac", "aiff", "alac", "ogg", "wma", "mp4",
             ]
             .into_iter()
             .map(std::borrow::ToOwned::to_owned)

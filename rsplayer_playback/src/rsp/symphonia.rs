@@ -104,16 +104,12 @@ pub fn play_file(
             }
             Err(err) => break Err(err.into()),
         };
-        debug!("Packet timestamp is: {}", packet.ts());
         *time.lock().unwrap() = (dur.seconds, tb.calc_time(packet.ts()).seconds);
-        debug!("Time updated");
         // Decode the packet into audio samples.
         match decoder.decode(&packet) {
             Ok(decoded_buff) => {
-                debug!("Decoded packet");
                 // If the audio output is not open, try to open it.
                 if audio_output.is_none() {
-                    debug!("Decoded packet");
                     // Get the audio buffer specification. This is a description of the decoded
                     // audio buffer's sample format and sample rate.
                     let spec = *decoded_buff.spec();
@@ -139,7 +135,6 @@ pub fn play_file(
                 if packet.ts() > 0 {
                     if let Some(audio_output) = audio_output.as_mut() {
                         debug!("Before audio write");
-
                         _ = audio_output.write(decoded_buff);
                     }
                 }
