@@ -67,6 +67,8 @@ pub enum StateChangeEvent {
     MetadataLocalItems(Vec<MetadataLibraryItem>),
     NotificationSuccess(String),
     NotificationError(String),
+
+    FavoriteRadioStations(Vec<String>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

@@ -221,13 +221,13 @@ fn view_files(model: &Model) -> Node<Msg> {
         C!["pr-2", "pl-1"],
         ul![
             C!["wtree"],
-            get_tree_start_node(model.tree.root, &model.tree.arena, !model.search_input.is_empty())
+            get_tree_start_node(model.tree.root, &model.tree.arena)
         ],
     ]
 }
 
 #[allow(clippy::collection_is_never_read)]
-fn get_tree_start_node(node_id: NodeId, arena: &Arena<MetadataLibraryItem>, is_search_mode: bool) -> Node<Msg> {
+fn get_tree_start_node(node_id: NodeId, arena: &Arena<MetadataLibraryItem>) -> Node<Msg> {
     let Some(value) = arena.get(node_id) else {
         return empty!();
     };
@@ -316,7 +316,7 @@ fn get_tree_start_node(node_id: NodeId, arena: &Arena<MetadataLibraryItem>, is_s
     if !children.is_empty() {
         let mut ul: Node<Msg> = ul!();
         for c in children {
-            ul.add_child(get_tree_start_node(c, arena, is_search_mode));
+            ul.add_child(get_tree_start_node(c, arena));
         }
         li.add_child(ul);
     }

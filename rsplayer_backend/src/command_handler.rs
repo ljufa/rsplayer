@@ -356,6 +356,12 @@ pub async fn handle_user_commands(
                     .send(StateChangeEvent::NotificationSuccess(format!("Song {id} disliked",)))
                     .unwrap();
             }
+            Metadata(MetadataCommand::QueryFavoriteRadioStations) => {
+                let favorites = metadata_service.get_favorite_radio_stations();
+                state_changes_sender
+                    .send(StateChangeEvent::FavoriteRadioStations(favorites))
+                    .unwrap();
+            }
         }
     }
 }

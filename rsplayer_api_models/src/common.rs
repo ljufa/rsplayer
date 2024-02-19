@@ -110,6 +110,7 @@ pub enum MetadataCommand {
     RescanMetadata(String, bool),
     LikeMediaItem(String),
     DislikeMediaItem(String),
+    QueryFavoriteRadioStations,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]

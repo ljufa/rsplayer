@@ -1,4 +1,5 @@
-use api_models::common::{QueueCommand, UserCommand};
+use api_models::common::{MetadataCommand, QueueCommand, UserCommand};
+use api_models::state::StateChangeEvent;
 use gloo_net::http::Request;
 use indextree::{Arena, NodeId};
 use seed::prelude::web_sys::KeyboardEvent;
@@ -20,6 +21,7 @@ pub struct Country {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Station {
+    stationuuid: String,
     name: String,
     url: String,
     favicon: String,
@@ -52,10 +54,12 @@ enum TreeNode {
     Station(Station),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Msg {
     SendUserCommand(UserCommand),
+    FavoriteRadioStation(NodeId),
+    UnfavoriteRadioStation(NodeId),
     AddItemToQueue(NodeId),
     LoadItemToQueue(NodeId),
     CountriesFetched(Vec<Country>),
@@ -69,10 +73,12 @@ pub enum Msg {
     SearchInputChanged(String),
     DoSearch,
     ClearSearch,
+    StatusChangeEventReceived(StateChangeEvent),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum FilterType {
+    Favorites,
     Country,
     Language,
     Tag,
@@ -107,10 +113,12 @@ pub struct Model {
 
 #[allow(clippy::needless_pass_by_value)]
 pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
-    orders.perform_cmd(async { CountriesFetched(fetch_countries().await) });
+    orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+        MetadataCommand::QueryFavoriteRadioStations,
+    )));
     Model {
-        wait_response: true,
-        filter_type: FilterType::Country,
+        wait_response: false,
+        filter_type: FilterType::Favorites,
         tree: TreeModel::new(),
         search_input: String::new(),
     }
@@ -129,6 +137,11 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 }
                 FilterType::Tag => {
                     orders.perform_cmd(async { TagsFetched(fetch_tags().await) });
+                }
+                FilterType::Favorites => {
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+                        MetadataCommand::QueryFavoriteRadioStations,
+                    )));
                 }
             }
             model.wait_response = true;
@@ -160,6 +173,12 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 model.tree.current.append(node, &mut model.tree.arena);
             });
         }
+        Msg::StatusChangeEventReceived(StateChangeEvent::FavoriteRadioStations(event)) => {
+            model.wait_response = false;
+            model.tree = TreeModel::new();
+            orders.perform_cmd(async { StationsFetched(fetch_stations_by_uuid(event).await) });
+        }
+
         ExpandNodeClick(id) => {
             model.wait_response = true;
             model.tree.current = id;
@@ -211,6 +230,22 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(QueueCommand::LoadSongToQueue(
                     station.url.clone(),
                 ))));
+            }
+        }
+        Msg::FavoriteRadioStation(id) => {
+            let node = model.tree.arena.get(id).unwrap().get();
+            if let TreeNode::Station(station) = node {
+                orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+                    MetadataCommand::LikeMediaItem(format!("radio_uuid_{}", station.stationuuid)),
+                )));
+            }
+        }
+        Msg::UnfavoriteRadioStation(id) => {
+            let node = model.tree.arena.get(id).unwrap().get();
+            if let TreeNode::Station(station) = node {
+                orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+                    MetadataCommand::DislikeMediaItem(format!("radio_uuid_{}", station.stationuuid)),
+                )));
             }
         }
         Msg::SearchInputChanged(term) => {
@@ -300,6 +335,18 @@ fn view_filter(filter_type: &FilterType) -> Node<Msg> {
                     At::Type => "radio",
                     At::Name => "filter",
                 },
+                IF!(filter_type == &FilterType::Favorites => attrs! { At::Checked => "checked" }),
+                ev(Ev::Change, |_| ChangeCategory(FilterType::Favorites)),
+            ],
+            "Favorites"
+        ],
+        label![
+            C!["radio"],
+            input![
+                attrs! {
+                    At::Type => "radio",
+                    At::Name => "filter",
+                },
                 IF!(filter_type == &FilterType::Country => attrs! { At::Checked => "checked" }),
                 ev(Ev::Change, |_| ChangeCategory(FilterType::Country)),
             ],
@@ -351,6 +398,12 @@ fn get_tree_start_node(
     let mut is_dir = false;
     let mut is_root = false;
     let mut favicon = String::new();
+    let is_favorites = matches!(filter_type, FilterType::Favorites);
+    let (fav_icon, fav_action) = if is_favorites {
+        ("favorite", Msg::UnfavoriteRadioStation(node_id))
+    } else {
+        ("favorite_border", Msg::FavoriteRadioStation(node_id))
+    };
     match item {
         TreeNode::Country(country) => {
             label = format!("{} ({})", country.name, country.stationcount);
@@ -445,6 +498,11 @@ fn get_tree_start_node(
                 C!["level-right"],
                 div![
                     C!["level-item", "mr-5"],
+                    i![C!["material-icons"], fav_icon],
+                    ev(Ev::Click, move |_| fav_action)
+                ],
+                div![
+                    C!["level-item", "mr-5"],
                     i![C!["material-icons"], "playlist_add"],
                     ev(Ev::Click, move |_| AddItemToQueue(node_id))
                 ],
@@ -495,13 +553,23 @@ async fn fetch_countries() -> Vec<Country> {
         .unwrap()
 }
 
-async fn fetch_stations(by: &str, country: &str) -> Vec<Station> {
+async fn fetch_stations_by_uuid(uuids: Vec<String>) -> Vec<Station> {
+    let url = format!("{}stations/byuuid?uuids={}", RADIO_BROWSER_URL, uuids.join(","));
+    Request::get(&url)
+        .send()
+        .await
+        .unwrap()
+        .json::<Vec<Station>>()
+        .await
+        .unwrap()
+}
+
+async fn fetch_stations(by: &str, value: &str) -> Vec<Station> {
     let url = format!(
         "{}stations/{by}/{}?limit=300&hidebroken=true&order=votes&reverse=true",
-        RADIO_BROWSER_URL, country
+        RADIO_BROWSER_URL, value
     );
     Request::get(&url)
-        .header("User-Agent", "github.com/ljufa/rsplayer")
         .send()
         .await
         .unwrap()
@@ -547,7 +615,7 @@ mod test {
         log!("cnt len", cnt.len());
         log!("name", &cnt[0].name);
         log!("name", &cnt[0].iso_3166_1);
-        assert!(cnt.len() > 0);
+        assert!(!cnt.is_empty());
     }
 
     #[wasm_bindgen_test]
@@ -565,7 +633,7 @@ mod test {
             log!("codec", &s.codec);
             // log!("bitrate", &s.bitrate);
         });
-        assert!(stations.len() > 0);
+        assert!(!stations.is_empty());
     }
 
     #[wasm_bindgen_test]
@@ -575,6 +643,6 @@ mod test {
         languages.iter().take(5).for_each(|s| {
             log!("name", &s.name);
         });
-        assert!(languages.len() > 0);
+        assert!(!languages.is_empty());
     }
 }

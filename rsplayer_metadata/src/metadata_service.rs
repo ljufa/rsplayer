@@ -62,6 +62,20 @@ impl MetadataService {
         })
     }
 
+    pub fn get_favorite_radio_stations(&self) -> Vec<String> {
+        self.statistic_repository
+            .find_by_key_prefix("radio_uuid_")
+            .iter()
+            .filter(|stat| stat.liked_count > 0)
+            .map(|stat| {
+                stat.play_item_id
+                    .strip_prefix("radio_uuid_")
+                    .unwrap_or_default()
+                    .to_string()
+            })
+            .collect()
+    }
+
     pub fn like_media_item(&self, media_item_id: &str) {
         self.update_or_create_media_item_stat(media_item_id, |item| item.liked_count += 1);
     }

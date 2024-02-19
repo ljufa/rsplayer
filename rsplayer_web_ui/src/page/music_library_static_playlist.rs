@@ -198,7 +198,7 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
                 ],
                 p![
                     C!["modal-card-title"],
-                    style!{
+                    style! {
                         St::MarginLeft => "10px",
                         St::FlexShrink => "1"
                     },

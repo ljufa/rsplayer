@@ -20,6 +20,17 @@ impl PlayStatisticsRepository {
             play_item_statistics
         })
     }
+    pub fn find_by_key_prefix(&self, prefix: &str) -> Vec<PlayItemStatistics> {
+        let mut play_item_statistics = Vec::new();
+        for item in self.db.scan_prefix(prefix) {
+            let (_, value) = item.expect("Failed to get play item statistics");
+            let play_item_statistics_json = value.to_vec();
+            let play_item_statistics_json = String::from_utf8(play_item_statistics_json).unwrap();
+            let stat: PlayItemStatistics = serde_json::from_str(&play_item_statistics_json).unwrap();
+            play_item_statistics.push(stat);
+        }
+        play_item_statistics
+    }
 
     pub fn save(&self, play_item_statistics: &PlayItemStatistics) {
         let play_item_id = play_item_statistics.play_item_id.clone();

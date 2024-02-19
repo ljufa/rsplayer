@@ -365,6 +365,12 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     model,
                     &mut orders.proxy(Msg::MusicLibraryArtists),
                 );
+            } else if let Page::MusicLibraryRadio(model) = &mut model.page {
+                page::music_library_radio::update(
+                    page::music_library_radio::Msg::StatusChangeEventReceived(chg_ev),
+                    model,
+                    &mut orders.proxy(Msg::MusicLibraryRadio),
+                );
             }
         }
 

@@ -161,12 +161,10 @@ impl Default for MetadataStoreSettings {
         Self {
             music_directory: "/music".into(),
             follow_links: true,
-            supported_extensions: vec![
-                "flac", "wav", "mp3", "m4a", "aac", "aiff", "alac", "ogg", "wma", "mp4",
-            ]
-            .into_iter()
-            .map(std::borrow::ToOwned::to_owned)
-            .collect(),
+            supported_extensions: vec!["flac", "wav", "mp3", "m4a", "aac", "aiff", "alac", "ogg", "wma", "mp4"]
+                .into_iter()
+                .map(std::borrow::ToOwned::to_owned)
+                .collect(),
             db_path: "ignored_files.db".to_string(),
         }
     }
