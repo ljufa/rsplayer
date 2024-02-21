@@ -247,6 +247,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     MetadataCommand::DislikeMediaItem(format!("radio_uuid_{}", station.stationuuid)),
                 )));
             }
+            id.remove(&mut model.tree.arena);
         }
         Msg::SearchInputChanged(term) => {
             orders.skip();
