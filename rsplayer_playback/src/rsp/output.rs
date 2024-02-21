@@ -7,8 +7,8 @@
 
 //! Platform-dependant Audio Outputs
 
-use std::result;
 
+use anyhow::Result;
 use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 
 pub trait AudioOutput {
@@ -17,23 +17,13 @@ pub trait AudioOutput {
     fn pause(&mut self);
 }
 
-#[allow(dead_code)]
-#[allow(clippy::enum_variant_names)]
-#[derive(Debug)]
-pub enum AudioOutputError {
-    OpenStreamError,
-    PlayStreamError,
-    StreamClosedError,
-}
-
-pub type Result<T> = result::Result<T, AudioOutputError>;
-
 mod cpal {
 
     use std::time::Duration;
 
-    use super::{AudioOutput, AudioOutputError, Result};
+    use super::AudioOutput;
 
+    use anyhow::{Error, Result};
     use symphonia::core::audio::{AudioBufferRef, RawSample, SampleBuffer, SignalSpec};
     use symphonia::core::conv::ConvertibleSample;
 
@@ -60,16 +50,15 @@ mod cpal {
             // Get default host.
             let host = cpal::default_host();
             let device = host
-                .devices()
-                .unwrap()
-                .find(|d| d.name().unwrap() == audio_device)
-                .unwrap();
+                .devices()?
+                .find(|d| d.name().unwrap_or_default() == audio_device)
+                .ok_or_else(|| Error::msg(format!("Device {audio_device} not found!")))?;
             debug!("Spec: {:?}", spec);
             let config = match device.default_output_config() {
                 Ok(config) => config,
                 Err(err) => {
-                    error!("failed to get default     output device config: {}", err);
-                    return Err(AudioOutputError::OpenStreamError);
+                    error!("failed to get default output device config: {}", err);
+                    return Err(err.into());
                 }
             };
 
@@ -133,16 +122,15 @@ mod cpal {
 
             if let Err(err) = stream_result {
                 error!("audio output stream open error: {}", err);
-                return Err(AudioOutputError::OpenStreamError);
+                return Err(err.into());
             }
 
-            let stream = stream_result.unwrap();
+            let stream = stream_result?;
 
             // Start the output stream.
             if let Err(err) = stream.play() {
                 error!("audio output stream play error: {}", err);
-
-                return Err(AudioOutputError::PlayStreamError);
+                return Err(err.into());
             }
 
             let sample_buf = SampleBuffer::<T>::new(duration, spec);
