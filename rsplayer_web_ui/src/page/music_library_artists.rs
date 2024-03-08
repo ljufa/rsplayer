@@ -219,10 +219,7 @@ fn view_files(model: &Model) -> Node<Msg> {
     section![
         view_spinner_modal(model.wait_response),
         C!["pr-2", "pl-1"],
-        ul![
-            C!["wtree"],
-            get_tree_start_node(model.tree.root, &model.tree.arena)
-        ],
+        ul![C!["wtree"], get_tree_start_node(model.tree.root, &model.tree.arena)],
     ]
 }
 

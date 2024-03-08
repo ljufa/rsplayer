@@ -6,7 +6,7 @@ use tokio::sync::broadcast::Sender;
 
 use api_models::common::MetadataCommand::{QueryLocalFiles, RescanMetadata};
 use api_models::common::PlayerCommand::{
-    Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, RandomToggle, Rewind,
+    Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, RandomToggle, Seek,
 };
 use api_models::common::PlaylistCommand::{QueryAlbumItems, QueryPlaylist, QueryPlaylistItems, SaveQueueAsPlaylist};
 use api_models::common::QueueCommand::{
@@ -40,38 +40,49 @@ pub async fn handle_user_commands(
     _config_store: ArcConfiguration,
     mut input_commands_rx: tokio::sync::mpsc::Receiver<UserCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
-) -> ! {
+) {
     loop {
         let Some(cmd) = input_commands_rx.recv().await else {
             continue;
         };
         debug!("Received command {:?}", cmd);
+        let sender = &state_changes_sender.clone();
         match cmd {
             /*
              * Player commands
              */
             Player(Play) => {
-                player_service.play_from_current_queue_song();
+                player_service.play_from_current_queue_song(sender);
             }
             Player(PlayItem(id)) => {
-                player_service.play_song(&id).await;
+                player_service.play_song(&id, sender).await;
             }
             Player(Pause) => {
                 player_service.pause_current_song();
+                sender
+                    .send(StateChangeEvent::PlaybackStateEvent(
+                        api_models::state::PlayerState::PAUSED,
+                    ))
+                    .unwrap();
             }
             Player(Next) => {
-                player_service.play_next_song().await;
+                player_service.play_next_song(sender).await;
             }
             Player(Prev) => {
-                player_service.play_prev_song().await;
+                player_service.play_prev_song(sender).await;
             }
-            Player(Rewind(sec)) => {
+            Player(Seek(sec)) => {
                 player_service.seek_current_song(sec);
             }
-            Player(RandomToggle) => player_service.toggle_random_play(),
+            Player(RandomToggle) => {
+                sender
+                    .send(StateChangeEvent::RandomToggleEvent(queue_service.toggle_random_next()))
+                    .unwrap();
+            }
             Player(QueryCurrentPlayerInfo) => {
+                let is_random = queue_service.get_random_next();
                 state_changes_sender
-                    .send(StateChangeEvent::PlayerInfoEvent(player_service.get_player_info()))
+                    .send(StateChangeEvent::RandomToggleEvent(is_random))
                     .unwrap();
             }
 
@@ -150,7 +161,7 @@ pub async fn handle_user_commands(
                 player_service.stop_current_song().await;
                 let pl_songs = playlist_service.get_playlist_page_by_name(&pl_id, 0, 20000).items;
                 queue_service.replace_all(pl_songs.into_iter());
-                player_service.play_from_current_queue_song();
+                player_service.play_from_current_queue_song(sender);
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(
                         "Playlist loaded into queue".to_string(),
@@ -173,7 +184,7 @@ pub async fn handle_user_commands(
                     player_service.stop_current_song().await;
                     let songs = album.song_keys.iter().filter_map(|sk| song_repository.find_by_id(sk));
                     queue_service.replace_all(songs);
-                    player_service.play_from_current_queue_song();
+                    player_service.play_from_current_queue_song(sender);
                     state_changes_sender
                         .send(StateChangeEvent::NotificationSuccess(
                             "Album loaded into queue".to_string(),
@@ -191,7 +202,7 @@ pub async fn handle_user_commands(
                     .for_each(|sk| {
                         queue_service.add_song_by_id(sk);
                     });
-                player_service.play_from_current_queue_song();
+                player_service.play_from_current_queue_song(sender);
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(
                         "All artist's albums loaded into queue".to_string(),
@@ -232,7 +243,7 @@ pub async fn handle_user_commands(
                 player_service.stop_current_song().await;
                 queue_service.clear();
                 queue_service.add_song_by_id(&song_id);
-                player_service.play_from_current_queue_song();
+                player_service.play_from_current_queue_song(sender);
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(
                         "Queue replaced with one song".to_string(),
@@ -263,12 +274,12 @@ pub async fn handle_user_commands(
             Queue(QueueCommand::LoadLocalLibDirectory(dir)) => {
                 player_service.stop_current_song().await;
                 queue_service.load_songs_from_dir(&dir);
-                player_service.play_from_current_queue_song();
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(format!(
                         "Dir {dir} loaded to queue"
                     )))
                     .unwrap();
+                player_service.play_from_current_queue_song(sender);
             }
 
             /*

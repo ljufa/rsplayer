@@ -17,7 +17,7 @@ chrono.workspace = true
 uuid.workspace = true
 
 api_models = {path = "../rsplayer_api_models"}
-walkdir = "2"
+walkdir = "2.5.0"
 mockall = "0.12.1"
 mockall_double = "0.3.1"
 

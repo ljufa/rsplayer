@@ -95,7 +95,7 @@ pub enum PlayerCommand {
     Play,
     PlayItem(String),
     RandomToggle,
-    Rewind(i8),
+    Seek(u16),
     QueryCurrentPlayerInfo,
 }
 

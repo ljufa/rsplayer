@@ -5,7 +5,7 @@ use anyhow::Result;
 
 pub const GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY: u32 = 9;
 
-pub const GPIO_PIN_OUTPUT_LCD_RST: u64 = 25;
+pub const GPIO_PIN_OUTPUT_LCD_RST: u32 = 25;
 pub const GPIO_PIN_OUTPUT_DAC_PDN_RST: u32 = 14;
 
 pub fn set_output_pin_value(pin_no: u32, value: bool) {

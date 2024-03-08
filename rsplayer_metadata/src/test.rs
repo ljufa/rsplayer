@@ -76,6 +76,45 @@ mod queue {
     }
 
     #[test]
+    fn should_return_previous_when_random_mode_is_on() {
+        let queue = create_queue();
+        for ext in 0..150 {
+            queue.add_song(&create_song(format!("{ext}_song").as_str()));
+        }
+        assert!(queue.toggle_random_next());
+
+        queue.move_current_to_next_song();
+        let first_next = queue.get_current_song().unwrap().file;
+
+        queue.move_current_to_next_song();
+        let second_next = queue.get_current_song().unwrap().file;
+
+        queue.move_current_to_next_song();
+        let third_next = queue.get_current_song().unwrap().file;
+
+        queue.move_current_to_next_song();
+        let fourth_next = queue.get_current_song().unwrap().file;
+
+        queue.move_current_to_next_song();
+
+        queue.move_current_to_previous_song();
+        let mut prev = queue.get_current_song().unwrap().file;
+        assert_eq!(fourth_next, prev);
+
+        queue.move_current_to_previous_song();
+        prev = queue.get_current_song().unwrap().file;
+        assert_eq!(third_next, prev);
+
+        queue.move_current_to_previous_song();
+        prev = queue.get_current_song().unwrap().file;
+        assert_eq!(second_next, prev);
+
+        queue.move_current_to_previous_song();
+        prev = queue.get_current_song().unwrap().file;
+        assert_eq!(first_next, prev);
+    }
+
+    #[test]
     fn should_remove_song() {
         let queue = create_queue();
         queue.add_song(&create_song("aac"));

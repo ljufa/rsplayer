@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU16, Ordering},
     Arc,
 };
 
@@ -14,6 +14,8 @@ pub struct QueueService {
     queue_db: Db,
     status_db: Tree,
     random_flag: AtomicBool,
+    random_history_db: Tree,
+    random_history_index: AtomicU16,
     song_repository: Arc<SongRepository>,
     statistics_repository: Arc<PlayStatisticsRepository>,
 }
@@ -29,18 +31,25 @@ impl QueueService {
     ) -> Self {
         let db = sled::open(&settings.db_path).expect("Failed to open queue db");
         let status_db = db.open_tree("status").expect("Failed to open status tree");
+        let random_history_db = db
+            .open_tree("random_history")
+            .expect("Failed to open random_history tree");
+        random_history_db.clear().expect("Failed to clear random history");
+        random_history_db.flush().expect("Failed to flush random history");
         let random_flag = status_db.contains_key("random_next").unwrap_or(false);
         Self {
             queue_db: db,
             status_db,
             random_flag: AtomicBool::new(random_flag),
+            random_history_db,
+            random_history_index: AtomicU16::new(0),
             song_repository,
             statistics_repository,
         }
     }
 
-    pub fn toggle_random_next(&self) {
-        _ = self
+    pub fn toggle_random_next(&self) -> bool {
+        let result = self
             .random_flag
             .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |existing| {
                 let new = !existing;
@@ -51,6 +60,7 @@ impl QueueService {
                 }
                 Some(new)
             });
+        !result.expect("msg")
     }
 
     pub fn get_random_next(&self) -> bool {
@@ -80,7 +90,9 @@ impl QueueService {
             let Some(Ok(rand_key)) = self.queue_db.iter().nth(rand_position) else {
                 return false;
             };
-            _ = self.status_db.insert(CURRENT_SONG_KEY, rand_key.0);
+            _ = self.status_db.insert(CURRENT_SONG_KEY, &rand_key.0);
+            let ridx = self.random_history_index.fetch_add(1, Ordering::SeqCst) + 1;
+            _ = self.random_history_db.insert(ridx.to_ne_bytes(), rand_key.0);
             true
         } else {
             let Some(current_key) = self.get_current_or_first_song_key() else {
@@ -96,13 +108,23 @@ impl QueueService {
     }
 
     pub fn move_current_to_previous_song(&self) -> bool {
-        let Some(current_key) = self.get_current_or_first_song_key() else {
-            return false;
-        };
-        let Ok(Some(prev_entry)) = self.queue_db.get_lt(current_key) else {
-            return false;
-        };
-        _ = self.status_db.insert(CURRENT_SONG_KEY, prev_entry.0);
+        let ridx = self.random_history_index.load(Ordering::SeqCst);
+        if self.get_random_next() && ridx > 0 {
+            let ridx = ridx - 1;
+            let Ok(Some(prev)) = self.random_history_db.get(ridx.to_ne_bytes()) else {
+                return false;
+            };
+            self.random_history_index.store(ridx, Ordering::SeqCst);
+            _ = self.status_db.insert(CURRENT_SONG_KEY, prev);
+        } else {
+            let Some(current_key) = self.get_current_or_first_song_key() else {
+                return false;
+            };
+            let Ok(Some(prev_entry)) = self.queue_db.get_lt(current_key) else {
+                return false;
+            };
+            _ = self.status_db.insert(CURRENT_SONG_KEY, prev_entry.0);
+        }
         true
     }
 

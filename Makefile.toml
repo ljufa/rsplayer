@@ -1,11 +1,11 @@
 [env]
-# RPI_HOST = "192.168.5.3"
-# TARGET = "arm-unknown-linux-gnueabihf"
+RPI_HOST = "192.168.5.3"
+TARGET = "arm-unknown-linux-gnueabihf"
 
-RPI_HOST = "192.168.5.4"
-TARGET = "aarch64-unknown-linux-gnu"
+# RPI_HOST = "192.168.5.4"
+# TARGET = "aarch64-unknown-linux-gnu"
 
-RELEASE_VERSION = "0.8.6"
+RELEASE_VERSION = "0.9.0"
 RELEASE_BRANCH = "main"
 
 [config]

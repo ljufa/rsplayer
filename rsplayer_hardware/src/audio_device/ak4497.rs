@@ -78,9 +78,7 @@ impl DacAk4497 {
                 error!("Dac not available on i2c bus, sending power down command.");
                 // if not available powerdown dac pin
                 press_pdn_button();
-                self.i2c_helper
-                    .read_register(0)
-                    .expect("Dac not available after restart");
+                self.i2c_helper.read_register(0)?;
             }
         }
         debug!("Dac registry before init");

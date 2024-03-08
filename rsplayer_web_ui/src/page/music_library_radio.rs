@@ -351,7 +351,7 @@ fn view_filter(filter_type: &FilterType) -> Node<Msg> {
                 IF!(filter_type == &FilterType::Country => attrs! { At::Checked => "checked" }),
                 ev(Ev::Change, |_| ChangeCategory(FilterType::Country)),
             ],
-            "By Country"
+            "Countries"
         ],
         label![
             C!["radio"],
@@ -364,7 +364,7 @@ fn view_filter(filter_type: &FilterType) -> Node<Msg> {
                 IF!(filter_type == &FilterType::Language => attrs! { At::Checked => "checked" }),
                 ev(Ev::Change, |_| ChangeCategory(FilterType::Language)),
             ],
-            "By Language"
+            "Languages"
         ],
         label![
             C!["radio"],
@@ -376,7 +376,7 @@ fn view_filter(filter_type: &FilterType) -> Node<Msg> {
                 IF!(filter_type == &FilterType::Tag => attrs! { At::Checked => "checked" }),
                 ev(Ev::Change, |_| ChangeCategory(FilterType::Tag)),
             ],
-            "By Tag"
+            "Tags"
         ]
     ]
 }
@@ -498,17 +498,17 @@ fn get_tree_start_node(
             div![
                 C!["level-right"],
                 div![
-                    C!["level-item", "mr-5"],
+                    C!["level-item", "mr-2"],
                     i![C!["material-icons"], fav_icon],
                     ev(Ev::Click, move |_| fav_action)
                 ],
                 div![
-                    C!["level-item", "mr-5"],
+                    C!["level-item", "mr-2"],
                     i![C!["material-icons"], "playlist_add"],
                     ev(Ev::Click, move |_| AddItemToQueue(node_id))
                 ],
                 div![
-                    C!["level-item", "mr-5"],
+                    C!["level-item", "mr-2"],
                     i![C!["material-icons"], "play_circle_filled"],
                     ev(Ev::Click, move |_| LoadItemToQueue(node_id))
                 ],

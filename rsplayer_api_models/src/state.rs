@@ -25,19 +25,13 @@ pub enum CurrentQueueQuery {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct PlayerInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub state: Option<PlayerState>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub random: Option<bool>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_format_rate: Option<u32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_format_bit: Option<u32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub audio_format_channels: Option<u32>,
+    pub audio_format_channels: Option<usize>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub codec: Option<String>,
@@ -67,8 +61,9 @@ pub enum StateChangeEvent {
     MetadataLocalItems(Vec<MetadataLibraryItem>),
     NotificationSuccess(String),
     NotificationError(String),
-
     FavoriteRadioStations(Vec<String>),
+    PlaybackStateEvent(PlayerState),
+    RandomToggleEvent(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

@@ -7,7 +7,6 @@
 
 //! Platform-dependant Audio Outputs
 
-
 use anyhow::Result;
 use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 

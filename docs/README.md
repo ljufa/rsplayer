@@ -150,12 +150,12 @@ TODO
 * [ ] Playlist by genre
 * [ ] Most played songs playlist
 * [ ] Liked songs playlist
-* [ ] Show favorited radios on top of the list 
+* [x] Show favorited radios on top of the list 
 * [ ] New music mix dynamic playlist
 * [ ] Generate missing album cover image using album name
-* [ ] Seek to position
-* [ ] Keep last N songs in *history* when random mode is enabled
-* [ ] Play item next (when in queue) / Give prio
+* [x] Seek to position
+* [x] Keep last N songs in *history* when random mode is enabled
+* [ ] Create/release build without HW support
 * [ ] Windows support
 * [ ] MacOS support
 * [ ] Automatic library scan after music directory change, or time based scan
@@ -166,6 +166,7 @@ TODO
 * [ ] Support more AK DAC models
 * [ ] Mute relay
 * [ ] DSP support (i.e. camillaDSP?)
+* [ ] DSD playback support
 * [ ] use more information about the song based on last.fm response, update id tags on local files?
 * [ ] analyze audio files for song matching and similarity (bliss-rs), create playlists from a song
 * [ ] streaming to local device (i.e. phone) for i.e. preview

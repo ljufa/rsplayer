@@ -1,11 +1,13 @@
 use std::fs::File;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::Arc;
 use std::thread::{self};
 use std::time::Duration;
 
 use anyhow::{format_err, Result};
+
+use api_models::state::{PlayerInfo, SongProgress, StateChangeEvent};
 use log::{debug, info, warn};
 use symphonia::core::audio::Channels;
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
@@ -14,8 +16,9 @@ use symphonia::core::formats::{FormatOptions, FormatReader, Track};
 use symphonia::core::io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions, ReadOnlySource};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
-use symphonia::core::units::TimeBase;
+use symphonia::core::units::{Time, TimeBase};
 use symphonia::default::{get_codecs, get_probe};
+use tokio::sync::broadcast::Sender;
 
 use crate::rsp::output::AudioOutput;
 
@@ -28,16 +31,16 @@ pub enum PlaybackResult {
     PlaybackStopped,
 }
 unsafe impl Send for PlaybackResult {}
-#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn play_file(
     path_str: &str,
     running: &Arc<AtomicBool>,
     paused: &Arc<AtomicBool>,
-    time: &Arc<Mutex<(u64, u64)>>,
-    codec_params: &Arc<Mutex<(Option<u32>, Option<u32>, Option<usize>, Option<String>)>>,
+    skip_to_time: &Arc<AtomicU16>,
     audio_device: &str,
     buffer_size_mb: usize,
     music_dir: &str,
+    changes_tx: &Sender<StateChangeEvent>,
 ) -> Result<PlaybackResult> {
     debug!("Playing file {}", path_str);
     running.store(true, Ordering::SeqCst);
@@ -59,12 +62,12 @@ pub fn play_file(
     };
 
     let mut reader: Box<dyn FormatReader> = probed.format;
-    let decode_opts = &DecoderOptions::default();
 
-    let Some(track) = first_supported_track(reader.tracks()) else {
+    let tracks = reader.tracks();
+    let Some(track) = first_supported_track(tracks) else {
         return Err(format_err!("Invalid track"));
     };
-
+    let track_id = track.id;
     let codec_parameters = &track.codec_params;
     let tb = codec_parameters.time_base.unwrap_or_else(|| TimeBase::new(1, 1));
     let dur = codec_parameters
@@ -76,10 +79,20 @@ pub fn play_file(
     let bps = codec_parameters.bits_per_sample;
     let chan_num = codec_parameters.channels.map(Channels::count);
     let cd = symphonia::default::get_codecs().get_codec(codec_parameters.codec);
-    *codec_params.lock().unwrap() = (rate, bps, chan_num, cd.map(|c| c.long_name.to_string()));
+    changes_tx
+        .send(StateChangeEvent::PlayerInfoEvent(PlayerInfo {
+            audio_format_bit: bps,
+            audio_format_channels: chan_num,
+            audio_format_rate: rate,
+            codec: cd.map(|c| c.long_name.to_string()),
+        }))
+        .expect("msg send failed");
+
+    let decode_opts = &DecoderOptions::default();
     let mut decoder = get_codecs().make(codec_parameters, decode_opts)?;
     let mut audio_output: Option<Box<dyn AudioOutput>> = None;
     let mut paused_time = 0;
+    let mut last_current_time = 0;
     // Decode and play the packets belonging to the selected track.
     let loop_result = loop {
         if !running.load(Ordering::SeqCst) {
@@ -96,7 +109,22 @@ pub fn play_file(
             }
             continue;
         }
-        // Get the next packet from the format reader.
+        if skip_to_time.load(Ordering::SeqCst) > 0 {
+            let skip_to = skip_to_time.swap(0, Ordering::SeqCst);
+            debug!("Seeking to {}", skip_to);
+            let seek_result = reader.seek(
+                symphonia::core::formats::SeekMode::Accurate,
+                symphonia::core::formats::SeekTo::Time {
+                    time: Time::new(u64::from(skip_to), 0.0),
+                    track_id: Some(track_id),
+                },
+            );
+            if let Err(err) = seek_result {
+                warn!("Seek failed: {}", err);
+            }
+        };
+
+        //  Get the next packet from the format reader.
         let packet = match reader.next_packet() {
             Ok(packet) => packet,
             Err(Error::IoError(error)) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
@@ -104,7 +132,17 @@ pub fn play_file(
             }
             Err(err) => break Err(err.into()),
         };
-        *time.lock().unwrap() = (dur.seconds, tb.calc_time(packet.ts()).seconds);
+
+        let current_time = tb.calc_time(packet.ts()).seconds;
+        if current_time != last_current_time {
+            last_current_time = current_time;
+            changes_tx
+                .send(StateChangeEvent::SongTimeEvent(SongProgress {
+                    total_time: Duration::from_secs(dur.seconds),
+                    current_time: Duration::from_secs(current_time),
+                }))
+                .expect("msg send failed");
+        }
         // Decode the packet into audio samples.
         match decoder.decode(&packet) {
             Ok(decoded_buff) => {

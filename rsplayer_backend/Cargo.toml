@@ -1,11 +1,11 @@
 [package]
 name = "rsplayer"
-version = "0.2.0"
+version = "0.9.0"
 authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
 edition = "2021"
 license-file = "../LICENSE"
 repository = "https://github.com/ljufa/rsplayer"
-description = "RSPlayer - Music Player for Raspberry PI and software controller for AK4xxx DAC chips"
+description = "RSPlayer - Music Player"
 
 [package.metadata.deb]
 name = "rsplayer"
@@ -120,7 +120,7 @@ console-subscriber = "0.2.0"
 
 #warp
 warp = { version = "0.3.6", features = ["compression"] }
-rust-embed = { version = "8.2.0", features = ["warp-ex", "compression"] }
+rust-embed = { version = "8.3.0", features = ["warp-ex", "compression"] }
 warp-embed = "0.5.0"
 
 

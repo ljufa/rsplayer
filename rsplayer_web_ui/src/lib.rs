@@ -3,7 +3,7 @@ extern crate api_models;
 use std::{rc::Rc, str::FromStr};
 
 use api_models::{
-    common::{PlayerCommand, QueueCommand, SystemCommand, UserCommand, Volume},
+    common::{MetadataCommand, PlayerCommand, QueueCommand, SystemCommand, UserCommand, Volume},
     player::Song,
     state::{AudioOut, PlayerInfo, PlayerState, SongProgress, StateChangeEvent, StreamerState},
 };
@@ -39,6 +39,9 @@ pub struct PlayerModel {
     player_info: Option<PlayerInfo>,
     current_song: Option<Song>,
     progress: SongProgress,
+    random: bool,
+    player_state: PlayerState,
+    stop_progress_updates: bool,
 }
 
 // #[derive(Debug)]
@@ -54,6 +57,7 @@ struct Model {
 }
 
 #[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
 pub enum Msg {
     WebSocketOpened,
     WebSocketMessageReceived(String),
@@ -77,6 +81,12 @@ pub enum Msg {
     HideMetadataScanInfo,
     HideNotification,
     ReloadApp,
+
+    SeekTrackPosition(u16),
+    ResumeProgressUpdates,
+    SetVolume(String),
+
+    LikeMediaItemClick(MetadataCommand),
 }
 
 #[derive(Debug, Deserialize)]
@@ -192,6 +202,9 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
             player_info: None,
             current_song: None,
             progress: SongProgress::default(),
+            random: false,
+            player_state: PlayerState::STOPPED,
+            stop_progress_updates: false,
         },
         metadata_scan_info: None,
         notification: None,
@@ -224,7 +237,7 @@ impl<'a> Urls<'a> {
 // ------ ------
 //    Update
 // ------ ------
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
         Msg::WebSocketOpened => {
@@ -300,6 +313,53 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::AlbumImageUpdated(image) => {
             model.player_model.current_song.as_mut().unwrap().image_url = Some(image.text);
         }
+        Msg::SeekTrackPosition(pos) => {
+            log!(format!("Seeking to {}", pos));
+            model.player_model.stop_progress_updates = true;
+            model.player_model.progress.current_time = std::time::Duration::from_secs(pos.into());
+            orders.send_msg(Msg::SendUserCommand(Player(PlayerCommand::Seek(pos))));
+            orders.perform_cmd(cmds::timeout(2000, || Msg::ResumeProgressUpdates));
+        }
+        Msg::ResumeProgressUpdates => {
+            log!("Resuming progress updates");
+            model.player_model.stop_progress_updates = false;
+            orders.skip();
+        }
+        Msg::SetVolume(volstr) => {
+            let vol = i64::from_str(volstr.as_str()).unwrap_or_default();
+            model.player_model.streamer_status.volume_state.current = vol;
+            orders.send_msg(Msg::SendSystemCommand(SystemCommand::SetVol(
+                u8::from_str(volstr.as_str()).unwrap_or_default(),
+            )));
+        }
+        Msg::LikeMediaItemClick(MetadataCommand::LikeMediaItem(item_id)) => {
+            model
+                .player_model
+                .current_song
+                .as_mut()
+                .unwrap()
+                .statistics
+                .as_mut()
+                .unwrap()
+                .liked_count = 1;
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+                MetadataCommand::LikeMediaItem(item_id),
+            )));
+        }
+        Msg::LikeMediaItemClick(MetadataCommand::DislikeMediaItem(item_id)) => {
+            model
+                .player_model
+                .current_song
+                .as_mut()
+                .unwrap()
+                .statistics
+                .as_mut()
+                .unwrap()
+                .liked_count = 0;
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+                MetadataCommand::DislikeMediaItem(item_id),
+            )));
+        }
         Msg::HideMetadataScanInfo => {
             model.metadata_scan_info = None;
         }
@@ -321,6 +381,12 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 StateChangeEvent::PlayerInfoEvent(pi) => {
                     model.player_model.player_info = Some(pi.clone());
                 }
+                StateChangeEvent::RandomToggleEvent(random) => {
+                    model.player_model.random = *random;
+                }
+                StateChangeEvent::PlaybackStateEvent(ps) => {
+                    model.player_model.player_state = ps.clone();
+                }
                 StateChangeEvent::MetadataSongScanStarted => {
                     model.metadata_scan_info = Some("Music directory scanning started.".to_string());
                     orders.after_next_render(|_| scrollToId("scaninfo"));
@@ -330,12 +396,12 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 }
                 StateChangeEvent::MetadataSongScanFinished(info) => {
                     model.metadata_scan_info = Some(info.clone());
-                    orders.stream(streams::interval(5000, || Msg::HideMetadataScanInfo));
+                    orders.perform_cmd(cmds::timeout(5000, || Msg::HideMetadataScanInfo));
                     orders.after_next_render(|_| scrollToId("scaninfo"));
                 }
                 StateChangeEvent::NotificationSuccess(_) | StateChangeEvent::NotificationError(_) => {
                     model.notification = Some(chg_ev.clone());
-                    orders.stream(streams::interval(4000, || Msg::HideNotification));
+                    orders.perform_cmd(cmds::timeout(4000, || Msg::HideNotification));
                     orders.skip();
                 }
                 _ => {}
@@ -437,7 +503,12 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             let msg = serde_json::from_str::<StateChangeEvent>(&message)
                 .unwrap_or_else(|_| panic!("Failed to decode WebSocket text message: {message}"));
             if let StateChangeEvent::SongTimeEvent(st) = msg {
+                if model.player_model.stop_progress_updates {
+                    log!("Progress updates are stopped");
+                    return;
+                }
                 model.player_model.progress = st;
+                model.player_model.player_state = PlayerState::PLAYING;
             } else {
                 orders.send_msg(Msg::StatusChangeEventReceived(msg));
             }
@@ -460,6 +531,7 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             _ = window().location().reload();
         }
         Msg::Ignore => {}
+        _ => {}
     }
 }
 
@@ -468,7 +540,7 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 // ------ ------
 
 fn view(model: &Model) -> impl IntoNodes<Msg> {
-    let mut bg = "radial-gradient(circle, rgb(49, 144, 228) 0%, rgb(29, 84, 166) 100%);".to_string();
+    let mut bg = "radial-gradient(circle, rgb(49, 144, 228) 0%, rgb(0, 0, 0) 100%);".to_string();
     if model.page.has_image_background() {
         if let Some(bg_image) = get_background_image(&model.player_model) {
             bg = format!("url({})", bg_image)
@@ -555,16 +627,13 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
     if matches!(page, Page::Player) {
         return empty!();
     };
-    let playing = player_model.player_info.as_ref().map_or(false, |f| {
-        f.state.as_ref().map_or(false, |f| *f == PlayerState::PLAYING)
-    });
-    let shuffle_class = player_model.player_info.as_ref().map_or("fa-shuffle", |r| {
-        if r.random.unwrap_or(false) {
-            "fa-shuffle"
-        } else {
-            "fa-list-ol"
-        }
-    });
+    let playing = player_model.player_state == PlayerState::PLAYING;
+
+    let shuffle_class = if player_model.random {
+        "fa-shuffle"
+    } else {
+        "fa-list-ol"
+    };
 
     div![
         C!["page-foot", "container"],
@@ -575,7 +644,7 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
             C!["level", "is-mobile"],
             // image
             div![
-                C!["level-left", "is-flex-grow-1", "is-hidden-mobile", "is-clickable"],
+                C!["level-left", "is-flex-grow-1", "is-hidden-mobile", "is-clickable", "mr-2"],
                 div![
                     C!["level-item"],
                     figure![
@@ -591,7 +660,7 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
             div![
                 C!["level-left", "is-flex-grow-3", "is-clickable"],
                 div![
-                    C!["level-item", "available-width"],
+                    C!["level-item","is-justify-content-flex-start", "available-width"],
                     div![
                         p![
                             C!["heading", "has-overflow-ellipsis-text"],
@@ -642,7 +711,7 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
             div![
                 C!["level-right", "is-flex-grow-3"],
                 div![
-                    C!["level-item"],
+                    C!["level-item", "is-justify-content-flex-end"],
                     div![
                         div![
                             i![
@@ -675,13 +744,11 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
                         div![input![
                             C!["slider", "is-success"],
                             attrs! {"value"=> player_model.streamer_status.volume_state.current},
-                            attrs! {"step"=> player_model.streamer_status.volume_state.step},
+                            // attrs! {"step"=> player_model.streamer_status.volume_state.step},
                             attrs! {"max"=> player_model.streamer_status.volume_state.max},
                             attrs! {"min"=> player_model.streamer_status.volume_state.min},
                             attrs! {"type"=> "range"},
-                            input_ev(Ev::Change, move |selected| Msg::SendSystemCommand(
-                                SystemCommand::SetVol(u8::from_str(selected.as_str()).unwrap_or_default())
-                            )),
+                            input_ev(Ev::Change, Msg::SetVolume),
                         ],],
                     ]
                 ],
@@ -954,7 +1021,7 @@ async fn update_album_cover(track: Song) -> Msg {
 async fn get_album_image_from_lastfm_api(album: String, artist: String) -> Option<Image> {
     let current = seed::browser::util::window().location();
     let protocol = current.protocol().map_or("http:".to_owned(), |f| f);
-    let response = Request::get(format!("{protocol}//ws.audioscrobbler.com/2.0/?method=album.getinfo&album={album}&artist={artist}&api_key=3b3df6c5dd3ad07222adc8dd3ccd8cdc&format=json").as_str()).send().await;
+    let response = Request::get(format!("{protocol}//ws.audioscrobbler.com/2.0/?api_key=3b3df6c5dd3ad07222adc8dd3ccd8cdc&format=json&method=album.getinfo&album={album}&artist={artist}").as_str()).send().await;
     if let Ok(response) = response {
         let info = response.json::<AlbumInfo>().await;
         if let Ok(info) = info {

@@ -29,8 +29,6 @@ use rsplayer_playback::rsp::PlayerService;
 mod command_handler;
 mod server_warp;
 
-mod status;
-
 #[allow(clippy::redundant_pub_crate, clippy::too_many_lines)]
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -40,11 +38,13 @@ async fn main() {
         .retention(Duration::from_secs(60))
         .server_addr(([0, 0, 0, 0], 6669))
         .init();
+    let version = env!("CARGO_PKG_VERSION");
+    info!("Starting RSPlayer {version}.");
     info!(
         r#" 
         -------------------------------------------------------------------------
 
-            ██████╗ ███████╗██████╗ ██╗      █████╗ ██╗   ██╗███████╗██████╗ 
+            ██████╗ ███████╗██████╗ ██╗      █████╗ ██╗   ██╗███████╗██████╗
             ██╔══██╗██╔════╝██╔══██╗██║     ██╔══██╗╚██╗ ██╔╝██╔════╝██╔══██╗
             ██████╔╝███████╗██████╔╝██║     ███████║ ╚████╔╝ █████╗  ██████╔╝
             ██╔══██╗╚════██║██╔═══╝ ██║     ██╔══██║  ╚██╔╝  ██╔══╝  ██╔══██╗
@@ -112,8 +112,9 @@ async fn main() {
         system_commands_tx.clone(),
         &config,
     );
+
     if config.get_settings().auto_resume_playback {
-        player_service.play_from_current_queue_song();
+        player_service.play_from_current_queue_song(&state_changes_tx);
     }
 
     select! {
@@ -127,10 +128,6 @@ async fn main() {
 
         _ = spawn(st7920::write(state_changes_tx.subscribe(), config.clone())) => {
             error!("Exit from OLED writer thread.");
-        }
-
-        _ = spawn(status::monitor(player_service.clone(), queue_service.clone(), state_changes_tx.clone())) => {
-            error!("Exit from status monitor thread.");
         }
 
         _ = spawn(command_handler::handle_user_commands(

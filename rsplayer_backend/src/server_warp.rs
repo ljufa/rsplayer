@@ -99,7 +99,7 @@ pub fn start(
     let mut cache_headers = HeaderMap::new();
     cache_headers.insert(
         warp::http::header::CACHE_CONTROL,
-        HeaderValue::from_static("max-age=5184000"),
+        HeaderValue::from_static("max-age=259200"), // 3 days
     );
 
     let ui_static_content = warp::get()
@@ -217,7 +217,6 @@ mod handlers {
                 Err(e) => {
                     exit(1);
                     error!("Restart command failed with error:{e}");
-                    Ok(StatusCode::INTERNAL_SERVER_ERROR)
                 }
             }
         } else {

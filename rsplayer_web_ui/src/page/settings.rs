@@ -438,6 +438,7 @@ fn view_ir_control(ir_settings: &IRInputControlerSettings) -> Node<Msg> {
     ]
 }
 
+// use strum::IntoEnumIterator;
 #[allow(clippy::too_many_lines)]
 fn view_volume_control(model: &Model) -> Node<Msg> {
     let volume_settings = &model.settings.volume_ctrl_settings;
