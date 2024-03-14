@@ -3,6 +3,7 @@ use api_models::common::GainLevel;
 
 use api_models::common::{FilterType, Volume};
 use api_models::settings::DacSettings;
+use std::thread;
 use std::time::Duration;
 
 use crate::mcu::gpio;
@@ -56,6 +57,15 @@ impl VolumeControlDevice for DacAk4497 {
     }
 }
 
+#[allow(dead_code)]
+const fn is_bit_set(input: u8, n: u8) -> bool {
+    if n < 8 {
+        input & (1 << n) != 0
+    } else {
+        false
+    }
+}
+
 impl DacAk4497 {
     pub fn new(volume_state: &Volume, settings: &DacSettings) -> Result<Box<Self>> {
         let dac = Self {
@@ -67,6 +77,7 @@ impl DacAk4497 {
     }
 
     fn initialize(&self, volume: &Volume, dac_settings: &DacSettings) -> Result<()> {
+        self.debug_registers("before pdn");
         // reset dac
         press_pdn_button();
         // try talking to dac,
@@ -81,25 +92,42 @@ impl DacAk4497 {
                 self.i2c_helper.read_register(0)?;
             }
         }
-        debug!("Dac registry before init");
-        self.get_reg_values()
-            .expect("Can not read dac registry")
-            .into_iter()
-            .for_each(|r| debug!("{}", r));
 
-        self.i2c_helper.write_register(0, 0b1000_1111);
-        self.i2c_helper.write_register(1, 0b1010_0010);
+        self.debug_registers("before init");
+
+        // control 1
+        // ACKS = 1 (ignored when AFSD = 1)
+        // AFSD = 1
+        // PCM mode normal, mode 3, 16-bit I2S Compatible
+        self.i2c_helper.write_register(0, 0b1000_0111);
+
+        // control 2
+        // DEM[1:0] = 00 - De-emphasis Filter Control on 44.1 kHz
+        // self.i2c_helper.write_register(1, 0b00100000);
         self.set_vol(volume.current);
         self.filter(dac_settings.filter);
         self.set_gain(dac_settings.gain);
         self.hi_load(dac_settings.heavy_load);
         self.change_sound_setting(dac_settings.sound_sett)?;
-        debug!("Dac registry After init");
-        self.get_reg_values()
-            .expect("Can not read dac registry")
-            .into_iter()
-            .for_each(|r| debug!("{}", r));
+        self.debug_registers("after init");
         Ok(())
+    }
+
+    fn debug_registers(&self, msg: &str) {
+        debug!("Dac registry {}", msg);
+        if let Ok(f) = self.get_reg_values() {
+            for s in &f {
+                debug!("{}", s);
+            }
+        }
+    }
+    fn get_reg_values(&self) -> Result<Vec<String>> {
+        let mut result = Vec::new();
+        for rg in 0..15 {
+            let val = self.i2c_helper.read_register(rg)?;
+            result.push(format!("Register {rg} has value {val:#010b} ({val})"));
+        }
+        Ok(result)
     }
 
     pub fn change_sound_setting(&self, setting_no: u8) -> Result<u8> {
@@ -132,15 +160,6 @@ impl DacAk4497 {
             _ => return Err(anyhow::format_err!("Unknown setting no {}", setting_no)),
         }
         Ok(setting_no)
-    }
-
-    pub fn get_reg_values(&self) -> Result<Vec<String>> {
-        let mut result = Vec::new();
-        for rg in 0..15 {
-            let val = self.i2c_helper.read_register(rg)?;
-            result.push(format!("Register {rg} has value {val:#010b} ({val})"));
-        }
-        Ok(result)
     }
 
     pub fn filter(&self, typ: FilterType) -> FilterType {
@@ -189,33 +208,26 @@ impl DacAk4497 {
     #[allow(dead_code)]
     fn reset(&self) {
         self.i2c_helper.change_bit(0, 0, false);
+        thread::sleep(Duration::from_millis(50));
         self.i2c_helper.change_bit(0, 0, true);
     }
 
     #[allow(dead_code)]
     pub fn dsd_pcm(&self, dsd: bool) {
-        // ChangeBit(ak4490, 0x01, 0, true);         // Enable soft mute
-        // ChangeBit(ak4490, 0x02, 7, true);         // Set To DSD Mode
-        // WriteRegister(ak4490,0x00,B00000000);     // Reset
-        // WriteRegister(ak4490,0x00,B00000001);     // Normal operation
-        // WriteRegister(ak4490,0x00,B10001111);     // Set To Master Clock Frequency Auto / 32Bit I2S Mode
-        // WriteRegister(ak4490,0x06,B10001001);     // Set To DSD Data Mute / DSD Mute Control / DSD Mute Release
-        // WriteRegister(ak4490,0x09,B00000001);     // Set To DSD Sampling Speed Control
-        // ChangeBit(ak4490, 0x01, 0, false);        // Disable soft mute
-        let reg_val = self.i2c_helper.read_register(2).expect("Can not read register 2");
         if dsd {
-            self.soft_mute(true);
-            self.i2c_helper.write_register(2, reg_val | 0b1000_0000);
-            self.i2c_helper.write_register(0, 0b0000_0000);
-            self.i2c_helper.write_register(0, 0b0000_0001);
-            self.i2c_helper.write_register(0, 0b1000_1111);
+            // switch to DSD mode
+            self.i2c_helper.change_bit(0, 0, false);
+            thread::sleep(Duration::from_millis(50));
+            self.i2c_helper.change_bit(2, 7, true);
+            thread::sleep(Duration::from_millis(50));
+            self.i2c_helper.change_bit(0, 0, true);
             self.i2c_helper.write_register(6, 0b1001_1001);
             self.i2c_helper.write_register(9, 0b0000_0001);
-            self.soft_mute(false);
         } else {
-            self.i2c_helper.write_register(2, reg_val & 0b0111_1111);
+            self.i2c_helper.change_bit(2, 7, false);
+            self.reset();
+            self.i2c_helper.write_register(0, 0b1001_0111);
         }
-        self.reset();
     }
 
     #[allow(dead_code)]

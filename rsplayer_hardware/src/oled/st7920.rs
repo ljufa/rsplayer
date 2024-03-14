@@ -13,7 +13,7 @@ pub async fn write(state_changes_rx: Receiver<StateChangeEvent>, config: ArcConf
 
 mod hw_oled {
     use super::{Receiver, StateChangeEvent};
-    use crate::mcu::gpio::GPIO_PIN_OUTPUT_LCD_RST;
+    use crate::mcu::gpio::{get_output_pin_handle, GPIO_PIN_OUTPUT_LCD_RST};
     use api_models::{player::Song, settings::OLEDSettings, state::PlayerInfo};
     use embedded_graphics::{
         mono_font::{ascii::FONT_4X6, ascii::FONT_5X8, ascii::FONT_6X12, MonoTextStyle},
@@ -28,10 +28,10 @@ mod hw_oled {
 
     use api_models::state::StreamerState;
 
-    use linux_embedded_hal::{sysfs_gpio::Direction, SysfsPin};
+    use linux_embedded_hal::CdevPin;
 
+    use linux_embedded_hal::spidev::{SpiModeFlags, SpidevOptions};
     use linux_embedded_hal::{Delay, SpidevDevice};
-    use linux_embedded_hal::spidev::{SpidevOptions, SpiModeFlags};
 
     pub async fn write(mut state_changes_rx: Receiver<StateChangeEvent>, oled_settings: OLEDSettings) {
         let mut delay = Delay;
@@ -43,13 +43,9 @@ mod hw_oled {
                 .mode(SpiModeFlags::SPI_CS_HIGH)
                 .build();
             spi.configure(&options).expect("error configuring SPI");
-            //let rst_pin = get_output_pin_handle(GPIO_PIN_OUTPUT_LCD_RST).unwrap();
-            let rst_pin = SysfsPin::new(u64::from(GPIO_PIN_OUTPUT_LCD_RST));
-            rst_pin.export().expect("LCD Reset pin problem");
-            rst_pin.set_direction(Direction::Out).expect("LCD Reset pin problem");
-            
-            // let pin = CdevPin::new(rst_pin).expect("LCD Reset pin problem");
-            let mut disp = ST7920::<SpidevDevice, SysfsPin, SysfsPin>::new(spi, rst_pin, None, false);
+            let rst_pin = get_output_pin_handle(GPIO_PIN_OUTPUT_LCD_RST).unwrap();
+            let rst_pin = CdevPin::new(rst_pin).expect("LCD Reset pin problem");
+            let mut disp = ST7920::<SpidevDevice, CdevPin, CdevPin>::new(spi, rst_pin, None, false);
             disp.init(&mut delay).expect("could not init display");
             disp.clear(&mut delay).expect("could not clear display");
             loop {
@@ -74,7 +70,11 @@ mod hw_oled {
         }
     }
 
-    fn draw_streamer_info(disp: &mut ST7920<SpidevDevice, SysfsPin, SysfsPin>, delay: &mut Delay, status: &StreamerState) {
+    fn draw_streamer_info(
+        disp: &mut ST7920<SpidevDevice, CdevPin, CdevPin>,
+        delay: &mut Delay,
+        status: &StreamerState,
+    ) {
         _ = disp.clear_buffer_region(1, 1, 120, 12);
         //1. player name
         Text::new(
@@ -91,7 +91,7 @@ mod hw_oled {
         disp.flush_region(1, 1, 120, 12, delay).expect("Failed to flush!");
     }
 
-    fn draw_track_info(disp: &mut ST7920<SpidevDevice, SysfsPin, SysfsPin>, delay: &mut Delay, status: &Song) {
+    fn draw_track_info(disp: &mut ST7920<SpidevDevice, CdevPin, CdevPin>, delay: &mut Delay, status: &Song) {
         //4. song
         let name = status.info_string();
         let mut title = String::new();
@@ -121,7 +121,11 @@ mod hw_oled {
         disp.flush_region(1, 12, 120, 40, delay).unwrap();
     }
 
-    fn draw_player_info(disp: &mut ST7920<SpidevDevice, SysfsPin, SysfsPin>, delay: &mut Delay, player_info: &PlayerInfo) {
+    fn draw_player_info(
+        disp: &mut ST7920<SpidevDevice, CdevPin, CdevPin>,
+        delay: &mut Delay,
+        player_info: &PlayerInfo,
+    ) {
         _ = disp.clear_buffer_region(1, 50, 120, 12);
         //1. player name
         Text::new(

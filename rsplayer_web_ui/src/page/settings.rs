@@ -49,6 +49,7 @@ pub enum Msg {
     InputVolumeCtrlDeviceChanged(VolumeCrtlType),
     InputRspBufferSizeChange(String),
     InputVolumeAlsaMixerChanged(String),
+    InputDacAddressChanged(String),
     ClickRescanMetadataButton,
 
     InputAlsaDeviceChanged(String),
@@ -168,6 +169,11 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::InputRspBufferSizeChange(value) => {
             if let Ok(num) = value.parse::<usize>() {
                 model.settings.rs_player_settings.buffer_size_mb = num;
+            };
+        }
+        Msg::InputDacAddressChanged(value) => {
+            if let Ok(num) = value.parse::<u16>() {
+                model.settings.dac_settings.i2c_address = num;
             };
         }
         Msg::SettingsFetched(sett) => {
@@ -598,8 +604,9 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
                 C!["control"],
                 input![
                     C!["input"],
-                    attrs! {At::Value => dac_settings.i2c_address, At::Type => "number"},
+                    attrs! {At::Value => dac_settings.i2c_address},
                 ],
+                input_ev(Ev::Input, move |value| { Msg::InputDacAddressChanged(value) }),
             ],
         ],
         div![

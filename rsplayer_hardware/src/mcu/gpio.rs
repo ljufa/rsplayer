@@ -3,7 +3,7 @@ use gpio_cdev::{chips, Chip, LineDirection, LineHandle, LineRequestFlags};
 
 use anyhow::Result;
 
-pub const GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY: u32 = 9;
+pub const GPIO_PIN_OUT_AUDIO_OUT_SELECTOR_RELAY: u32 = 23;
 
 pub const GPIO_PIN_OUTPUT_LCD_RST: u32 = 25;
 pub const GPIO_PIN_OUTPUT_DAC_PDN_RST: u32 = 14;

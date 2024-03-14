@@ -9,7 +9,7 @@ pub struct I2CHelper {
 
 impl I2CHelper {
     pub fn new(address: u16) -> Result<Self> {
-        let mut i2c = I2c::new()?;
+        let mut i2c = I2c::with_bus(0)?;
         i2c.set_slave_address(address)?;
         Ok(Self { i2c })
     }
