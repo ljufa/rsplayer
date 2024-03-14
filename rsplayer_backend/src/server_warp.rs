@@ -199,26 +199,11 @@ mod handlers {
     ) -> Result<impl warp::Reply, Infallible> {
         debug!("Settings to save {:?} and reload {:?}", settings, query);
         config.save_settings(&settings);
-        // todo: find better way to trigger service restart by systemd
         let param = query.get("reload").unwrap();
-
         if param == "true" {
-            match std::process::Command::new("sudo")
-                .arg("systemctl")
-                .arg("restart")
-                .arg("rsplayer")
-                .spawn()
-            {
-                Ok(child) => {
-                    debug!("Restart command invoked.");
-                    child.wait_with_output().expect("Error");
-                    Ok(StatusCode::CREATED)
-                }
-                Err(e) => {
-                    exit(1);
-                    error!("Restart command failed with error:{e}");
-                }
-            }
+            info!("Reloading service");
+            // systemd should start the service again
+            exit(1);
         } else {
             Ok(StatusCode::CREATED)
         }
