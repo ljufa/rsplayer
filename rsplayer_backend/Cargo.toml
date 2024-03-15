@@ -1,6 +1,6 @@
 [package]
 name = "rsplayer"
-version = "0.9.0"
+version = "0.9.6"
 authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
 edition = "2021"
 license-file = "../LICENSE"
@@ -30,6 +30,16 @@ assets = [
         "etc/systemd/system/rsplayer.service",
         "644",
     ],
+    [
+        "../PKGS/debian/etc/polkit-1/rules.d/99-rsplayer.rules",
+        "etc/polkit-1/rules.d/",
+        "644",
+    ],
+    [
+        "../PKGS/debian/opt/rsplayer/self.*",
+        "opt/rsplayer/",
+        "644",
+    ],
 ]
 
 [package.metadata.deb.variants.aarch64-unknown-linux-gnu]
@@ -48,6 +58,16 @@ assets = [
     [
         "../PKGS/debian/etc/systemd/system/rsplayer.service",
         "etc/systemd/system/rsplayer.service",
+        "644",
+    ],
+    [
+        "../PKGS/debian/etc/polkit-1/rules.d/99-rsplayer.rules",
+        "etc/polkit-1/rules.d/",
+        "644",
+    ],
+    [
+        "../PKGS/debian/opt/rsplayer/self.*",
+        "opt/rsplayer/",
         "644",
     ],
     [
@@ -76,6 +96,16 @@ assets = [
         "644",
     ],
     [
+        "../PKGS/debian/etc/polkit-1/rules.d/99-rsplayer.rules",
+        "etc/polkit-1/rules.d/",
+        "644",
+    ],
+    [
+        "../PKGS/debian/opt/rsplayer/self.*",
+        "opt/rsplayer/",
+        "644",
+    ],
+    [
         "../PKGS/debian/etc/lirc/lircd.conf.d/*",
         "etc/lirc/lircd.conf.d",
         "644",
@@ -92,6 +122,16 @@ assets = [
     [
         "../PKGS/debian/etc/systemd/system/rsplayer.service",
         "etc/systemd/system/rsplayer.service",
+        "644",
+    ],
+    [
+        "../PKGS/debian/etc/polkit-1/rules.d/99-rsplayer.rules",
+        "etc/polkit-1/rules.d/",
+        "644",
+    ],
+    [
+        "../PKGS/debian/opt/rsplayer/self.*",
+        "opt/rsplayer/",
         "644",
     ],
     [
@@ -119,7 +159,7 @@ anyhow.workspace = true
 console-subscriber = "0.2.0"
 
 #warp
-warp = { version = "0.3.6", features = ["compression"] }
+warp = { version = "0.3.6", features = ["compression", "tls"] }
 rust-embed = { version = "8.3.0", features = ["warp-ex", "compression"] }
 warp-embed = "0.5.0"
 

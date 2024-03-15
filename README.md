@@ -1,21 +1,27 @@
 # RSPlayer
-RSPlayer is an open-source music player software that allows you to play audio files from you local storage, internet radio streams. It executes as a service and provides a web user interface on port 80.
+RSPlayer is open-source music player designed specifically for headless computing environments. It shines on devices like the Raspberry Pi and other Linux-powered Single Board Computers (SBCs).
 
-### Detailed documentation -> https://ljufa.github.io/rsplayer/
+Operating as a system service, RSPlayer offers a web-based user interface, making it a perfect fit for devices without dedicated monitors or input peripherals. The UI is meticulously designed to be responsive and intuitive, delivering a seamless user experience across mobile devices, tablets, and PCs.
+
+Under the hood, RSPlayer harnesses the power of the [Symphonia](https://github.com/pdeljanov/Symphonia) and [Cpal](https://github.com/rustaudio/cpal) crates. These allow RSPlayer to handle audio decoding and playback efficiently, leveraging Rust's native capabilities for high-performance audio playback.
+
+For DIY enthusiasts seeking a customizable, high-performance music player for their projects, RSPlayer is the go-to choice. Its lightweight design and efficient resource usage make it ideal for transforming your Raspberry Pi or other SBCs into a dedicated music station.
+
 ### Online demo -> https://rsplayer.dlj.freemyip.com/
+### Detailed documentation -> https://ljufa.github.io/rsplayer/
 
 ## Installation
 To install RSPlayer, execute the following script (requires curl):
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)
 ```
-The installation script will install all the necessary files, configure the systemd service, and start the service.
+The installation script will install all the necessary files, configure and start the systemd service.
 
-To stop the RSPlayer service, run the following command:
+To stop RSPlayer, run the following command:
 ```bash
 sudo systemctl stop rsplayer
 ```
-To start the RSPlayer service again, run the following command:
+To start RSPlayer service again, run the following command:
 ```bash
 sudo systemctl start rsplayer
 ```
@@ -46,7 +52,7 @@ volumes:
 ## Usage
 Once RSPlayer is installed, you can access the web user interface by navigating to http://localhost or the IP address of the machine on which it is installed. From the web user interface, you can finish configuration following steps described [here](https://ljufa.github.io/rsplayer/#/?id=basic-configuration).
 
-For minimal working configuration it is required to select *Audio interface*, *PCM device*, *Music directory path* followed by *Full scan*.
+For minimal working configuration it is required to select *Audio interface*, *PCM device*, *Music directory path* followed by *Update library*.
 
 ## Features
 * Basic player features: play, next, prev, volume control
@@ -58,7 +64,7 @@ For minimal working configuration it is required to select *Audio interface*, *P
 Optionaly with additional hardware devices it provides:
 * Hardware volume control by DAC chip
 * Infrared remote control: Play, Pause, Next, Prev, Volume Up/Down, Poweroff
-* Volume control using knob/rotary encoder
+* Volume control using rotary encoder
 * Oled display for song and player info
 * Switch audio output between speakers and headphones
 * Change DAC settings: digital filter, gain, sound profile

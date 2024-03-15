@@ -4,9 +4,9 @@
 
 RPI_HOST = "192.168.5.4"
 TARGET = "aarch64-unknown-linux-gnu"
-# TARGET = "x86_64-unknown-linux-gnu"
 
-RELEASE_VERSION = "0.9.5"
+
+RELEASE_VERSION = "0.9.6"
 RELEASE_BRANCH = "main"
 
 [config]
@@ -128,7 +128,7 @@ script = "sudo pkill -9 rsplayer || true"
 
 [tasks.run_local]
 dependencies = ["kill_local"]
-env = { "RUST_LOG" = "rsplayer=info,rsplayer_playback=info,warp=info", "RUST_BACKTRACE" = "full", "RSPLAYER_HTTP_PORT" = "8000" }
+env = { "RUST_LOG" = "rsplayer=info,rsplayer_playback=info,warp=info", "RUST_BACKTRACE" = "full", "RSPLAYER_HTTP_PORT" = "8000", "RSPLAYER_HTTPS_PORT" = "8443" }
 cwd = ".run"
 command = "cargo"
 args = ["run"]

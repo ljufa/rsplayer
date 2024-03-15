@@ -418,27 +418,20 @@ pub async fn handle_system_commands(
                     };
                 }
                 PowerOff => {
-                    std::process::Command::new("systemctl")
-                        .arg("poweroff")
+                    info!("Shutting down system");
+                    std::process::Command::new("/usr/sbin/poweroff")
                         .spawn()
                         .expect("halt command failed");
-                    exit(0);
                 }
                 RestartSystem => {
-                    std::process::Command::new("systemctl")
-                        .arg("reboot")
+                    info!("Restarting system");
+                    std::process::Command::new("/usr/sbin/reboot")
                         .spawn()
                         .expect("halt command failed");
-                    exit(0);
                 }
                 RestartRSPlayer => {
-                    let rs = std::process::Command::new("systemctl")
-                        .arg("restart")
-                        .arg("rsplayer")
-                        .spawn();
-                    if rs.is_err() {
-                        exit(1)
-                    }
+                    info!("Restarting RSPlayer");
+                    exit(1);
                 }
                 QueryCurrentStreamerState => {
                     let ss = config_store.get_streamer_state();

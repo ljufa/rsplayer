@@ -155,7 +155,6 @@ TODO
 * [ ] Generate missing album cover image using album name
 * [x] Seek to position
 * [x] Keep last N songs in *history* when random mode is enabled
-* [ ] Create/release build without HW support
 * [ ] Windows support
 * [ ] MacOS support
 * [ ] Automatic library scan after music directory change, or time based scan
@@ -166,17 +165,15 @@ TODO
 * [ ] Support more AK DAC models
 * [ ] Mute relay
 * [ ] DSP support (i.e. camillaDSP?)
-* [ ] DSD playback support
+* [ ] DSD/DoP playback support
 * [ ] use more information about the song based on last.fm response, update id tags on local files?
 * [ ] analyze audio files for song matching and similarity (bliss-rs), create playlists from a song
 * [ ] streaming to local device (i.e. phone) for i.e. preview
-* [ ] convert PCM to DSD on the fly
 * [ ] Add all settings to settings page
 <!-- * [ ] UPNP -->
  
 ## Code improvements
 * [ ] replace sled with native_db or redb (high memory usage)
-* [ ] improve websocket server to drop messages for inactive clients (retention time)
 * [ ] get rid of `.unwrap()` calls
 * [ ] get rid of unnecessary `.clone()` calls
 * [ ] refactor names all over the code

@@ -106,7 +106,7 @@ async fn main() {
 
     let (state_changes_tx, _) = broadcast::channel(20);
 
-    let (http_server_future, websocket_future) = server_warp::start(
+    let (http_server_future, https_server_future, websocket_future) = server_warp::start(
         state_changes_tx.subscribe(),
         player_commands_tx.clone(),
         system_commands_tx.clone(),
@@ -152,6 +152,8 @@ async fn main() {
         }
 
         _ = spawn(http_server_future) => {}
+
+        _ = spawn(https_server_future) => {}
 
         _ = spawn(websocket_future) => {
             error!("Exit from websocket thread.");

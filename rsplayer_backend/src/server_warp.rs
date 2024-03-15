@@ -1,7 +1,5 @@
 use std::env;
-use std::net::Ipv4Addr;
-use std::net::SocketAddrV4;
-use std::net::TcpListener;
+use std::u16;
 use std::{
     collections::HashMap,
     sync::atomic::{AtomicUsize, Ordering},
@@ -12,7 +10,6 @@ use futures::Future;
 use futures::FutureExt;
 use futures::StreamExt;
 use log::debug;
-use log::error;
 use log::info;
 use log::warn;
 use rust_embed::RustEmbed;
@@ -65,7 +62,7 @@ pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Out
         .or(filters::get_startup_error(error))
         .with(cors);
 
-    warp::serve(routes).run(([0, 0, 0, 0], get_port()))
+    warp::serve(routes).run(([0, 0, 0, 0], get_ports().0))
 }
 
 pub fn start(
@@ -73,7 +70,11 @@ pub fn start(
     player_commands_tx: UserCommandSender,
     system_commands_tx: SystemCommandSender,
     config: &Config,
-) -> (impl Future<Output = ()>, impl Future<Output = ()>) {
+) -> (
+    impl Future<Output = ()>,
+    impl Future<Output = ()>,
+    impl Future<Output = ()>,
+) {
     // Keep track of all connected users, key is usize, value
     // is a websocket sender.
     let users = Users::default();
@@ -132,8 +133,13 @@ pub fn start(
             }
         }
     };
-    let http_handle = warp::serve(routes).run(([0, 0, 0, 0], get_port()));
-    (http_handle, ws_handle)
+    let http_handle = warp::serve(routes.clone()).run(([0, 0, 0, 0], get_ports().0));
+    let https_handle = warp::serve(routes)
+        .tls()
+        .cert_path("self.crt")
+        .key_path("self.key")
+        .run(([0, 0, 0, 0], get_ports().1));
+    (http_handle, https_handle, ws_handle)
 }
 
 #[allow(warnings)]
@@ -299,29 +305,14 @@ async fn user_disconnected(my_id: usize, users: &Users) {
     info!("Number of active websockets is: {}", users.read().await.len());
 }
 
-fn get_port() -> u16 {
-    let fallback_port = 8000;
-    let default_port = "80";
-    let port = env::var("RSPLAYER_HTTP_PORT").unwrap_or_else(|_| default_port.to_string());
-    if let Ok(port) = port.parse::<u16>() {
-        if is_local_port_free(port) {
-            return port;
-        }
-        warn!(
-            "Desired port {} is unavailable, will try fallback port {}",
-            port, fallback_port
-        );
-
-        if is_local_port_free(fallback_port) {
-            return fallback_port;
-        }
-
-        error!("Fallback port {} is also unavailable", fallback_port);
-    }
-    panic!("Desired port [{port}], default port [{default_port}] and fallback port [{fallback_port}] are unavailable! Please specify another value for RSPLAYER_HTTP_PORT in rsplayer.service file")
-}
-
-fn is_local_port_free(port: u16) -> bool {
-    let ipv4 = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
-    TcpListener::bind(ipv4).is_ok()
+fn get_ports() -> (u16, u16) {
+    let http_port = env::var("RSPLAYER_HTTP_PORT")
+        .expect("RSPLAYER_HTTP_PORT is not set")
+        .parse::<u16>()
+        .expect("RSPLAYER_HTTP_PORT is not a valid port number");
+    let https_port = env::var("RSPLAYER_HTTPS_PORT")
+        .expect("RSPLAYER_HTTPS_PORT is not set")
+        .parse::<u16>()
+        .expect("RSPLAYER_HTTPS_PORT is not a valid port number");
+    (http_port, https_port)
 }
