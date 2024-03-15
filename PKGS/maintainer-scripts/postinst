@@ -15,7 +15,7 @@ if [ "$1" = "configure" ]; then
         echo "Previous version found: $2"
         VERSION_TO_COMPARE="0.9.1"
         if [ "$(printf '%s\n' "$VERSION_TO_COMPARE" "$2" | sort -V | head -n1)" = "$VERSION_TO_COMPARE" ]; then
-            echo "$2 is greater than $VERSION_TO_COMPARE"
+            echo "$2 is greater than $VERSION_TO_COMPARE migration not needed."
         else
             echo "$2 is not greater than $VERSION_TO_COMPARE"
             adduser --system --no-create-home --disabled-login rsplayer
