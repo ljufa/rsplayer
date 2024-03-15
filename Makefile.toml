@@ -78,7 +78,9 @@ args = [
     "--allow",
     "clippy::use_self",
     "--allow",
-    "clippy::significant-drop-tightening"
+    "clippy::significant-drop-tightening",
+    "--allow",
+    "clippy::similar_names",
 ]
 
 [tasks.clippy_in_cross]
@@ -110,7 +112,9 @@ args = [
     "--allow",
     "clippy::use_self",
     "--allow",
-    "clippy::significant-drop-tightening"
+    "clippy::significant-drop-tightening",
+    "--allow",
+    "clippy::similar_names",
 ]
 
 [tasks.test_in_cross]
