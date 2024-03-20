@@ -73,21 +73,11 @@ mod cpal {
 
             // Select proper playback routine based on sample format.
             match config.sample_format() {
-                cpal::SampleFormat::F32 => {
-                    CpalAudioOutputImpl::<f32>::try_open(spec, duration, &device, rsp_settings)
-                }
-                cpal::SampleFormat::I32 => {
-                    CpalAudioOutputImpl::<i32>::try_open(spec, duration, &device, rsp_settings)
-                }
-                cpal::SampleFormat::I16 => {
-                    CpalAudioOutputImpl::<i16>::try_open(spec, duration, &device, rsp_settings)
-                }
-                cpal::SampleFormat::U16 => {
-                    CpalAudioOutputImpl::<u16>::try_open(spec, duration, &device, rsp_settings)
-                }
-                cpal::SampleFormat::U32 => {
-                    CpalAudioOutputImpl::<u32>::try_open(spec, duration, &device, rsp_settings)
-                }
+                cpal::SampleFormat::F32 => CpalAudioOutputImpl::<f32>::try_open(spec, duration, &device, rsp_settings),
+                cpal::SampleFormat::I32 => CpalAudioOutputImpl::<i32>::try_open(spec, duration, &device, rsp_settings),
+                cpal::SampleFormat::I16 => CpalAudioOutputImpl::<i16>::try_open(spec, duration, &device, rsp_settings),
+                cpal::SampleFormat::U16 => CpalAudioOutputImpl::<u16>::try_open(spec, duration, &device, rsp_settings),
+                cpal::SampleFormat::U32 => CpalAudioOutputImpl::<u32>::try_open(spec, duration, &device, rsp_settings),
                 _ => panic!("Unsupported sample format!"),
             }
         }
@@ -210,12 +200,7 @@ pub fn try_open(
             "Failed to open audio output {}. Trying with plughw: prefix.",
             audio_device
         );
-        return cpal::CpalAudioOutput::try_open(
-            spec,
-            duration,
-            &audio_device.replace("hw:", "plughw:"),
-            rsp_settings,
-        );
+        return cpal::CpalAudioOutput::try_open(spec, duration, &audio_device.replace("hw:", "plughw:"), rsp_settings);
     }
     result
 }

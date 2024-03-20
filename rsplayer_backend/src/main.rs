@@ -2,7 +2,6 @@ extern crate env_logger;
 #[macro_use]
 extern crate log;
 
-
 use std::panic;
 use std::sync::Arc;
 #[cfg(debug_assertions)]

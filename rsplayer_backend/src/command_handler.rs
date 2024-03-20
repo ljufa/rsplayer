@@ -55,7 +55,7 @@ pub async fn handle_user_commands(
                 player_service.play_from_current_queue_song(sender);
             }
             Player(PlayItem(id)) => {
-                player_service.play_song(&id, sender).await;
+                player_service.play_song(&id, sender);
             }
             Player(Pause) => {
                 player_service.pause_current_song();
@@ -66,10 +66,10 @@ pub async fn handle_user_commands(
                     .unwrap();
             }
             Player(Next) => {
-                player_service.play_next_song(sender).await;
+                player_service.play_next_song(sender);
             }
             Player(Prev) => {
-                player_service.play_prev_song(sender).await;
+                player_service.play_prev_song(sender);
             }
             Player(Seek(sec)) => {
                 player_service.seek_current_song(sec);
@@ -151,14 +151,14 @@ pub async fn handle_user_commands(
                     .unwrap();
             }
             Queue(ClearQueue) => {
-                player_service.stop_current_song().await;
+                player_service.stop_current_song();
                 queue_service.clear();
             }
             Queue(RemoveItem(song_id)) => {
                 queue_service.remove_song(&song_id);
             }
             Queue(LoadPlaylistInQueue(pl_id)) => {
-                player_service.stop_current_song().await;
+                player_service.stop_current_song();
                 let pl_songs = playlist_service.get_playlist_page_by_name(&pl_id, 0, 20000).items;
                 queue_service.replace_all(pl_songs.into_iter());
                 player_service.play_from_current_queue_song(sender);
@@ -181,7 +181,7 @@ pub async fn handle_user_commands(
             }
             Queue(LoadAlbumInQueue(album_id)) => {
                 if let Some(album) = album_repository.find_by_id(&album_id) {
-                    player_service.stop_current_song().await;
+                    player_service.stop_current_song();
                     let songs = album.song_keys.iter().filter_map(|sk| song_repository.find_by_id(sk));
                     queue_service.replace_all(songs);
                     player_service.play_from_current_queue_song(sender);
@@ -193,7 +193,7 @@ pub async fn handle_user_commands(
                 };
             }
             Queue(LoadArtistInQueue(name)) => {
-                player_service.stop_current_song().await;
+                player_service.stop_current_song();
                 queue_service.clear();
                 album_repository
                     .find_by_artist(&name)
@@ -240,7 +240,7 @@ pub async fn handle_user_commands(
             }
 
             Queue(LoadSongToQueue(song_id)) => {
-                player_service.stop_current_song().await;
+                player_service.stop_current_song();
                 queue_service.clear();
                 queue_service.add_song_by_id(&song_id);
                 player_service.play_from_current_queue_song(sender);
@@ -272,7 +272,7 @@ pub async fn handle_user_commands(
                     .unwrap();
             }
             Queue(QueueCommand::LoadLocalLibDirectory(dir)) => {
-                player_service.stop_current_song().await;
+                player_service.stop_current_song();
                 queue_service.load_songs_from_dir(&dir);
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(format!(

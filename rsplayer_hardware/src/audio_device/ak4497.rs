@@ -103,7 +103,7 @@ impl DacAk4497 {
 
         // control 2
         // DEM[1:0] = 01 - De-emphasis Filter Control on 44.1 kHz
-        self.i2c_helper.write_register(1, 0b00000010);
+        self.i2c_helper.write_register(1, 0b0000_0010);
         // invert signal left and right channel
         self.i2c_helper.change_bit(5, 7, true);
         self.i2c_helper.change_bit(5, 6, true);

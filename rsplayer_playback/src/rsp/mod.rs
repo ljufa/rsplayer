@@ -73,21 +73,21 @@ impl PlayerService {
         this.paused.store(true, Ordering::SeqCst);
     }
 
-    pub async fn play_next_song(&self, changes_tx: &Sender<StateChangeEvent>) {
+    pub fn play_next_song(&self, changes_tx: &Sender<StateChangeEvent>) {
         if self.queue_service.move_current_to_next_song() {
-            self.stop_current_song().await;
+            self.stop_current_song();
             self.play_from_current_queue_song(changes_tx);
         }
     }
 
-    pub async fn play_prev_song(&self, changes_tx: &Sender<StateChangeEvent>) {
+    pub fn play_prev_song(&self, changes_tx: &Sender<StateChangeEvent>) {
         if self.queue_service.move_current_to_previous_song() {
-            self.stop_current_song().await;
+            self.stop_current_song();
             self.play_from_current_queue_song(changes_tx);
         }
     }
 
-    pub async fn stop_current_song(&self) {
+    pub fn stop_current_song(&self) {
         let this = self;
         this.running.store(false, Ordering::SeqCst);
         self.await_playing_song_to_finish();
@@ -98,9 +98,9 @@ impl PlayerService {
         self.skip_to_time.store(seconds, Ordering::SeqCst);
     }
 
-    pub async fn play_song(&self, song_id: &str, changes_tx: &Sender<StateChangeEvent>) {
+    pub fn play_song(&self, song_id: &str, changes_tx: &Sender<StateChangeEvent>) {
         if self.queue_service.move_current_to(song_id) {
-            self.stop_current_song().await;
+            self.stop_current_song();
             self.play_from_current_queue_song(changes_tx);
         }
     }
@@ -143,7 +143,7 @@ impl PlayerService {
                     warn!("Failed to set playback thread priority");
                 }
 
-                if let Some(Some(last_core)) = core_affinity::get_core_ids().map(|ids| ids.last().cloned()) {
+                if let Some(Some(last_core)) = core_affinity::get_core_ids().map(|ids| ids.last().copied()) {
                     if core_affinity::set_for_current(last_core) {
                         info!("Playback thread set to last core {:?}", last_core);
                     } else {
