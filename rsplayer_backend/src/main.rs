@@ -2,12 +2,14 @@ extern crate env_logger;
 #[macro_use]
 extern crate log;
 
+
 use std::panic;
 use std::sync::Arc;
 #[cfg(debug_assertions)]
 use std::time::Duration;
 
 use env_logger::Env;
+
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::{select, spawn};
@@ -152,7 +154,6 @@ async fn main() {
         }
 
         _ = spawn(http_server_future) => {}
-
         _ = spawn(https_server_future) => {}
 
         _ = spawn(websocket_future) => {

@@ -8,10 +8,11 @@ use api_models::{
         DacSettings, IRInputControlerSettings, MetadataStoreSettings, OLEDSettings, OutputSelectorSettings,
         RsPlayerSettings, Settings,
     },
+    validator::Validate,
 };
 use gloo_console::log;
 use gloo_net::{http::Request, Error};
-use seed::{attrs, button, div, h1, input, label, option, p, prelude::*, section, select, C, IF};
+use seed::{attrs, button, div, h1, i, input, label, option, prelude::*, section, select, span, style, C, IF};
 use strum::IntoEnumIterator;
 
 use crate::view_spinner_modal;
@@ -38,6 +39,7 @@ pub enum Msg {
     ToggleOutputSelectorEnabled,
     ToggleRotaryVolume,
     ToggleResumePlayback,
+    ToggleRspAlsaBufferSize,
     // ---- Input capture ----
     InputMetadataMusicDirectoryChanged(String),
     InputAlsaCardChange(i32),
@@ -47,7 +49,10 @@ pub enum Msg {
     InputRotaryEventDevicePathChanged(String),
     InputVolumeStepChanged(String),
     InputVolumeCtrlDeviceChanged(VolumeCrtlType),
-    InputRspBufferSizeChange(String),
+    InputRspInputBufferSizeChange(String),
+    InputRspAudioBufferSizeChange(String),
+    InputRspAlsaBufferSizeChange(String),
+    InputRspThreadPriorityChange(String),
     InputVolumeAlsaMixerChanged(String),
     InputDacAddressChanged(String),
     ClickRescanMetadataButton,
@@ -99,10 +104,13 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
 pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
         Msg::SaveSettingsAndRestart => {
-            // todo: show modal wait window while server is restarting. use ws status.
-            let settings = model.settings.clone();
-            orders.perform_cmd(async { Msg::SettingsSaved(save_settings(settings, "reload=true".to_string()).await) });
-            model.waiting_response = true;
+            if model.settings.validate().is_ok() {
+                let settings = model.settings.clone();
+                orders.perform_cmd(async {
+                    Msg::SettingsSaved(save_settings(settings, "reload=true".to_string()).await)
+                });
+                model.waiting_response = true;
+            }
         }
         Msg::ToggleDacEnabled => {
             model.settings.dac_settings.enabled = !model.settings.dac_settings.enabled;
@@ -121,6 +129,13 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::ToggleResumePlayback => {
             model.settings.auto_resume_playback = !model.settings.auto_resume_playback;
+        }
+        Msg::ToggleRspAlsaBufferSize => {
+            if model.settings.rs_player_settings.alsa_buffer_size.is_some() {
+                model.settings.rs_player_settings.alsa_buffer_size = None;
+            } else {
+                model.settings.rs_player_settings.alsa_buffer_size = Some(10000);
+            }
         }
 
         Msg::InputMetadataMusicDirectoryChanged(value) => {
@@ -166,9 +181,26 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::InputRotaryEventDevicePathChanged(path) => {
             model.settings.volume_ctrl_settings.rotary_event_device_path = path;
         }
-        Msg::InputRspBufferSizeChange(value) => {
+        Msg::InputRspInputBufferSizeChange(value) => {
             if let Ok(num) = value.parse::<usize>() {
-                model.settings.rs_player_settings.buffer_size_mb = num;
+                model.settings.rs_player_settings.input_stream_buffer_size_mb = num;
+            };
+        }
+        Msg::InputRspAudioBufferSizeChange(value) => {
+            if let Ok(num) = value.parse::<usize>() {
+                model.settings.rs_player_settings.ring_buffer_size_ms = num;
+            };
+        }
+        Msg::InputRspAlsaBufferSizeChange(value) => {
+            if let Ok(num) = value.parse::<u32>() {
+                model.settings.rs_player_settings.alsa_buffer_size = Some(num);
+            };
+        }
+        Msg::InputRspThreadPriorityChange(value) => {
+            if let Ok(num) = value.parse::<u8>() {
+                if num > 0 && num < 100 {
+                    model.settings.rs_player_settings.player_threads_priority = num;
+                }
             };
         }
         Msg::InputDacAddressChanged(value) => {
@@ -210,26 +242,6 @@ pub fn view(model: &Model) -> Node<Msg> {
         section![
             C!["section"],
             h1![C!["title","has-text-white"], "General"],
-            view_rsp(&settings.rs_player_settings),
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleResumePlayback),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "resume_playback_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.auto_resume_playback.as_at_value(),
-                    },
-                ],
-                label![
-                    C!["label","has-text-white"],
-                    "Auto resume playback on start",
-                    attrs! {
-                        At::For => "resume_playback_cb"
-                    }
-                ]
-            ],
             div![
                 C!["field", "is-grouped","is-grouped-multiline"],
                 div![C!["control"],
@@ -254,7 +266,6 @@ pub fn view(model: &Model) -> Node<Msg> {
                         }),
                     ],
                 ],
-                p![C!["control"],"->"],
                 div![C!["control"],
                     label!["PCM Device", C!["label","has-text-white"]],
                     div![
@@ -274,9 +285,28 @@ pub fn view(model: &Model) -> Node<Msg> {
                         input_ev(Ev::Change, Msg::InputAlsaPcmChange),
                     ],
             ]
-
             ],
+            view_rsp(&settings.rs_player_settings),
             view_metadata_storage(&model.settings.metadata_settings),
+            div![
+                C!["field", "mt-5"],
+                ev(Ev::Click, |_| Msg::ToggleResumePlayback),
+                input![
+                    C!["switch"],
+                    attrs! {
+                        At::Name => "resume_playback_cb"
+                        At::Type => "checkbox"
+                        At::Checked => settings.auto_resume_playback.as_at_value(),
+                    },
+                ],
+                label![
+                    C!["label","has-text-white"],
+                    "Auto resume playback on start",
+                    attrs! {
+                        At::For => "resume_playback_cb"
+                    }
+                ]
+            ],
         ],
         // volume control
         section![
@@ -386,31 +416,45 @@ pub fn view(model: &Model) -> Node<Msg> {
         div![
             C!["buttons"],
                 button![
-                    C!["button", "is-dark"],
+                    IF!(model.settings.validate().is_err() => attrs!{ At::Disabled => ""}),
+                    C!["button", "is-primary"],
                     "Save & restart player",
                     ev(Ev::Click, |_| Msg::SaveSettingsAndRestart)
                 ],
                 button![
-                    C!["button", "is-dark"],
+                    C!["button", "is-primary"],
                     "Restart player",
                     ev(Ev::Click, |_| Msg::SendSystemCommand(
                         SystemCommand::RestartRSPlayer
                     ))
                 ],
                 button![
-                    C!["button", "is-dark"],
+                    C!["button", "is-primary"],
                     "Restart system",
                     ev(Ev::Click, |_| Msg::SendSystemCommand(
                         SystemCommand::RestartSystem
                     ))
                 ],
                 button![
-                    C!["button", "is-dark"],
+                    C!["button", "is-primary"],
                     "Shutdown system",
                     ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::PowerOff))
                 ]
         ]
     ]
+}
+fn view_validation_icon<Ms>(val: &impl Validate, key: &str) -> Node<Ms> {
+    let class = if let Err(errors) = val.validate() {
+        if errors.errors().contains_key(key) {
+            "fa-exclamation-triangle"
+        } else {
+            "fa-check"
+        }
+    } else {
+        "fa-check"
+    };
+
+    span![C!["icon", "is-small", "is-right"], i![C!["fas", class]]]
 }
 
 // ------ sub view functions ------
@@ -602,10 +646,7 @@ fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
             label!["DAC I2C address:", C!["label", "has-text-white"]],
             div![
                 C!["control"],
-                input![
-                    C!["input"],
-                    attrs! {At::Value => dac_settings.i2c_address},
-                ],
+                input![C!["input"], attrs! {At::Value => dac_settings.i2c_address},],
                 input_ev(Ev::Input, move |value| { Msg::InputDacAddressChanged(value) }),
             ],
         ],
@@ -730,15 +771,74 @@ fn view_metadata_storage(metadata_settings: &MetadataStoreSettings) -> Node<Msg>
 fn view_rsp(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
     div![
         C!["field"],
-        label!["Input buffer size (in MB)", C!["label", "has-text-white"]],
+        label!["Input buffer size (MB) (1-200)", C!["label", "has-text-white", "mt-5"]],
         div![
-            C!["control"],
+            C!["control", "has-icons-right"],
+            style! {St::Width => "max-content"},
             input![
                 C!["input"],
-                attrs! {At::Value => rsp_settings.buffer_size_mb, At::Type => "number"},
-                input_ev(Ev::Input, move |value| { Msg::InputRspBufferSizeChange(value) }),
+                attrs! {At::Value => rsp_settings.input_stream_buffer_size_mb, At::Type => "number"},
+                input_ev(Ev::Input, move |value| { Msg::InputRspInputBufferSizeChange(value) }),
             ],
+            view_validation_icon(rsp_settings, "input_stream_buffer_size_mb")
         ],
+        label!["Ring buffer size (1-10000ms)", C!["label", "has-text-white", "mt-5"]],
+        div![
+            C!["control", "has-icons-right"],
+            style! {St::Width => "max-content"},
+            input![
+                C!["input"],
+                attrs! {At::Value => rsp_settings.ring_buffer_size_ms, At::Type => "number"},
+                input_ev(Ev::Input, move |value| { Msg::InputRspAudioBufferSizeChange(value) }),
+            ],
+            view_validation_icon(rsp_settings, "ring_buffer_size_ms")
+        ],
+        label!["Player thread priority (1-99)", C!["label", "has-text-white", "mt-5"]],
+        div![
+            C!["control", "has-icons-right"],
+            style! {St::Width => "max-content"},
+            input![
+                C!["input"],
+                attrs! {At::Value => rsp_settings.player_threads_priority, At::Type => "number"},
+                input_ev(Ev::Input, move |value| { Msg::InputRspThreadPriorityChange(value) }),
+            ],
+            view_validation_icon(rsp_settings, "player_threads_priority")
+        ],
+        div![
+            C!["field", "mt-5"],
+            ev(Ev::Click, |_| Msg::ToggleRspAlsaBufferSize),
+            input![
+                C!["switch"],
+                attrs! {
+                    At::Name => "alsabufsize_cb"
+                    At::Type => "checkbox"
+                    At::Checked => rsp_settings.alsa_buffer_size.is_some().as_at_value(),
+                },
+            ],
+            label![
+                C!["label", "has-text-white"],
+                "Set alsa buffer frame size (Experimental!)",
+                attrs! {
+                    At::For => "alsabufsize_cb"
+                }
+            ]
+        ],
+        IF!(rsp_settings.alsa_buffer_size.is_some()  =>
+            div![
+                C!["field"],
+                div![
+                    C!["control"],
+                    input![
+                        C!["input"],
+                        attrs! {
+                            At::Value => rsp_settings.alsa_buffer_size.unwrap_or(10000),
+                            At::Type => "number"
+                        },
+                        input_ev(Ev::Input, move |value| { Msg::InputRspAlsaBufferSizeChange(value) }),
+                    ],
+                ],
+            ]
+        )
     ]
 }
 

@@ -98,12 +98,15 @@ impl DacAk4497 {
         // control 1
         // ACKS = 1 (ignored when AFSD = 1)
         // AFSD = 1
-        // PCM mode normal, mode 3, 16-bit I2S Compatible
+        // PCM mode normal, mode 3, 16-bit I2S Compatible (this mode is required for FifoPiMa output, otherwise it works in default mode which is tested with WaveIO)
         self.i2c_helper.write_register(0, 0b1000_0111);
 
         // control 2
-        // DEM[1:0] = 00 - De-emphasis Filter Control on 44.1 kHz
-        // self.i2c_helper.write_register(1, 0b00100000);
+        // DEM[1:0] = 01 - De-emphasis Filter Control on 44.1 kHz
+        self.i2c_helper.write_register(1, 0b00000010);
+        // invert signal left and right channel
+        self.i2c_helper.change_bit(5, 7, true);
+        self.i2c_helper.change_bit(5, 6, true);
         self.set_vol(volume.current);
         self.filter(dac_settings.filter);
         self.set_gain(dac_settings.gain);

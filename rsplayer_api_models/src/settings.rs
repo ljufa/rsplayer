@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 
-use num_derive::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
-use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 use validator::Validate;
 
 use crate::common::{AudioCard, CardMixer, FilterType, GainLevel, PcmOutputDevice, VolumeCrtlType};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
 pub struct Settings {
     pub volume_ctrl_settings: VolumeControlSettings,
     pub output_selector_settings: OutputSelectorSettings,
@@ -22,20 +20,45 @@ pub struct Settings {
     #[serde(default)]
     pub playlist_settings: PlaylistSetting,
     #[serde(default)]
+    #[validate]
     pub rs_player_settings: RsPlayerSettings,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
 pub struct RsPlayerSettings {
     pub enabled: bool,
-    pub buffer_size_mb: usize,
+
+    #[serde(default = "input_stream_buffer_size_default_value")]
+    #[validate(range(min = 1, max = 200))]
+    pub input_stream_buffer_size_mb: usize,
+
+    #[serde(default = "ring_buffer_size_default_value")]
+    #[validate(range(min = 100, max = 10000))]
+    pub ring_buffer_size_ms: usize,
+
+    #[serde(default = "thread_priority_default_value")]
+    #[validate(range(min = 1, max = 99))]
+    pub player_threads_priority: u8,
+    pub alsa_buffer_size: Option<u32>,
+}
+const fn thread_priority_default_value() -> u8 {
+    1
+}
+const fn ring_buffer_size_default_value() -> usize {
+    200
+}
+const fn input_stream_buffer_size_default_value() -> usize {
+    10
 }
 
 impl Default for RsPlayerSettings {
     fn default() -> Self {
         Self {
             enabled: true,
-            buffer_size_mb: 10,
+            input_stream_buffer_size_mb: 10,
+            ring_buffer_size_ms: 200,
+            player_threads_priority: 1,
+            alsa_buffer_size: None,
         }
     }
 }
@@ -53,29 +76,6 @@ pub struct VolumeControlSettings {
     pub alsa_mixer: Option<CardMixer>,
     pub rotary_enabled: bool,
     pub rotary_event_device_path: String,
-}
-
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    FromPrimitive,
-    ToPrimitive,
-    EnumString,
-    EnumIter,
-    IntoStaticStr,
-)]
-pub enum AlsaDeviceFormat {
-    F64,
-    F32,
-    S32,
-    S24,
-    S24_3,
-    S16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]

@@ -16,6 +16,8 @@ env_logger.workspace = true
 anyhow.workspace = true
 symphonia.workspace = true
 tokio.workspace = true
+thread-priority = "0.16.0"
+core_affinity = "0.8.1"
 
 # symphonia
 cpal = "0.15.3"

@@ -644,7 +644,13 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
             C!["level", "is-mobile"],
             // image
             div![
-                C!["level-left", "is-flex-grow-1", "is-hidden-mobile", "is-clickable", "mr-2"],
+                C![
+                    "level-left",
+                    "is-flex-grow-1",
+                    "is-hidden-mobile",
+                    "is-clickable",
+                    "mr-2"
+                ],
                 div![
                     C!["level-item"],
                     figure![
@@ -660,7 +666,7 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
             div![
                 C!["level-left", "is-flex-grow-3", "is-clickable"],
                 div![
-                    C!["level-item","is-justify-content-flex-start", "available-width"],
+                    C!["level-item", "is-justify-content-flex-start", "available-width"],
                     div![
                         p![
                             C!["heading", "has-overflow-ellipsis-text"],

@@ -6,19 +6,20 @@ use std::thread::{self};
 use std::time::Duration;
 
 use anyhow::{format_err, Result};
-
-use api_models::state::{PlayerInfo, SongProgress, StateChangeEvent};
+use api_models::settings::RsPlayerSettings;
 use log::{debug, info, warn};
 use symphonia::core::audio::Channels;
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
-use symphonia::core::formats::{FormatOptions, FormatReader, Track};
+use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
 use symphonia::core::io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions, ReadOnlySource};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::{Time, TimeBase};
 use symphonia::default::{get_codecs, get_probe};
 use tokio::sync::broadcast::Sender;
+
+use api_models::state::{PlayerInfo, SongProgress, StateChangeEvent};
 
 use crate::rsp::output::AudioOutput;
 
@@ -30,7 +31,9 @@ pub enum PlaybackResult {
     SongFinished,
     PlaybackStopped,
 }
+
 unsafe impl Send for PlaybackResult {}
+
 #[allow(clippy::type_complexity, clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn play_file(
     path_str: &str,
@@ -38,7 +41,7 @@ pub fn play_file(
     paused: &Arc<AtomicBool>,
     skip_to_time: &Arc<AtomicU16>,
     audio_device: &str,
-    buffer_size_mb: usize,
+    rsp_settings: &RsPlayerSettings,
     music_dir: &str,
     changes_tx: &Sender<StateChangeEvent>,
 ) -> Result<PlaybackResult> {
@@ -52,7 +55,7 @@ pub fn play_file(
         MediaSourceStream::new(
             source,
             MediaSourceStreamOptions {
-                buffer_len: (buffer_size_mb * 1024 * 1024).next_power_of_two(),
+                buffer_len: (rsp_settings.input_stream_buffer_size_mb * 1024 * 1024).next_power_of_two(),
             },
         ),
         &FormatOptions::default(),
@@ -78,7 +81,7 @@ pub fn play_file(
     let rate = codec_parameters.sample_rate;
     let bps = codec_parameters.bits_per_sample;
     let chan_num = codec_parameters.channels.map(Channels::count);
-    let cd = symphonia::default::get_codecs().get_codec(codec_parameters.codec);
+    let cd = get_codecs().get_codec(codec_parameters.codec);
     changes_tx
         .send(StateChangeEvent::PlayerInfoEvent(PlayerInfo {
             audio_format_bit: bps,
@@ -99,7 +102,8 @@ pub fn play_file(
             debug!("Exit from play thread due to running flag change");
             break Ok(PlaybackResult::PlaybackStopped);
         }
-        if paused.load(Ordering::SeqCst) {
+        let paused = paused.load(Ordering::SeqCst);
+        if paused {
             debug!("Playing paused, going to sleep");
             thread::sleep(Duration::from_millis(300));
             paused_time += 300;
@@ -113,8 +117,8 @@ pub fn play_file(
             let skip_to = skip_to_time.swap(0, Ordering::SeqCst);
             debug!("Seeking to {}", skip_to);
             let seek_result = reader.seek(
-                symphonia::core::formats::SeekMode::Accurate,
-                symphonia::core::formats::SeekTo::Time {
+                SeekMode::Accurate,
+                SeekTo::Time {
                     time: Time::new(u64::from(skip_to), 0.0),
                     track_id: Some(track_id),
                 },
@@ -158,7 +162,7 @@ pub fn play_file(
                     let duration = decoded_buff.capacity() as u64;
 
                     // Try to open the audio output.
-                    let Ok(audio_out) = try_open(spec, duration, audio_device) else {
+                    let Ok(audio_out) = try_open(spec, duration, audio_device, rsp_settings) else {
                         break Err(format_err!("Failed to open audio output {}", audio_device));
                     };
                     debug!("Audio opened");

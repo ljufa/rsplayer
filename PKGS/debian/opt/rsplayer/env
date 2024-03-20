@@ -1,0 +1,7 @@
+PORT=80
+TLS_PORT=443
+TLS_CERT_PATH=/opt/rsplayer/self.crt
+TLS_CERT_KEY_PATH=/opt/rsplayer/self.key
+
+RUST_LOG=rsplayer=info,warp=info
+

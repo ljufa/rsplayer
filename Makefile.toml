@@ -6,7 +6,7 @@ RPI_HOST = "192.168.5.4"
 TARGET = "aarch64-unknown-linux-gnu"
 
 
-RELEASE_VERSION = "0.9.6"
+RELEASE_VERSION = "0.9.8"
 RELEASE_BRANCH = "main"
 
 [config]
@@ -22,6 +22,17 @@ args = [
     "--target",
     "${TARGET}",
     "--release",
+    "--package",
+    "rsplayer",
+    "--bin",
+    "rsplayer",
+]
+[tasks.build_debug]
+command = "cross"
+args = [
+    "build",
+    "--target",
+    "${TARGET}",
     "--package",
     "rsplayer",
     "--bin",
@@ -132,7 +143,7 @@ script = "sudo pkill -9 rsplayer || true"
 
 [tasks.run_local]
 dependencies = ["kill_local"]
-env = { "RUST_LOG" = "rsplayer=info,rsplayer_playback=info,warp=info", "RUST_BACKTRACE" = "full", "RSPLAYER_HTTP_PORT" = "8000", "RSPLAYER_HTTPS_PORT" = "8443" }
+env = { "RUST_LOG" = "rsplayer=info,rsplayer_playback=info,warp=info", "RUST_BACKTRACE" = "full", "PORT" = "8000", "TLS_PORT" = "8443", "TLS_CERT_PATH" = "self.crt", "TLS_CERT_KEY_PATH" = "self.key" }
 cwd = ".run"
 command = "cargo"
 args = ["run"]
@@ -141,6 +152,11 @@ args = ["run"]
 dependencies = ["build_release"]
 script = [
     "rsync -avvP --rsync-path=\"sudo rsync\" target/${TARGET}/release/rsplayer pi@${RPI_HOST}:/usr/bin",
+]
+[tasks.copy_remote_debug]
+dependencies = ["build_debug"]
+script = [
+    "rsync -avvP --rsync-path=\"sudo rsync\" target/${TARGET}/debug/rsplayer pi@${RPI_HOST}:/usr/bin",
 ]
 
 [tasks.package_deb_local]

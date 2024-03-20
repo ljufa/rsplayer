@@ -41,8 +41,8 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
 type Config = Arc<Configuration>;
 
-type UserCommandSender = tokio::sync::mpsc::Sender<UserCommand>;
-type SystemCommandSender = tokio::sync::mpsc::Sender<SystemCommand>;
+type UserCommandSender = mpsc::Sender<UserCommand>;
+type SystemCommandSender = mpsc::Sender<SystemCommand>;
 
 #[derive(RustEmbed)]
 #[folder = "../rsplayer_web_ui/public"]
@@ -133,12 +133,15 @@ pub fn start(
             }
         }
     };
-    let http_handle = warp::serve(routes.clone()).run(([0, 0, 0, 0], get_ports().0));
+    let ports = get_ports();
+    let http_handle = warp::serve(routes.clone()).run(([0, 0, 0, 0], ports.0));
+    let cert_path = env::var("TLS_CERT_PATH").expect("TLS_CERT_PATH is not set");
+    let key_path = env::var("TLS_CERT_KEY_PATH").expect("TLS_CERT_KEY_PATH is not set");
     let https_handle = warp::serve(routes)
         .tls()
-        .cert_path("self.crt")
-        .key_path("self.key")
-        .run(([0, 0, 0, 0], get_ports().1));
+        .cert_path(cert_path)
+        .key_path(key_path)
+        .run(([0, 0, 0, 0], ports.1));
     (http_handle, https_handle, ws_handle)
 }
 
@@ -306,13 +309,14 @@ async fn user_disconnected(my_id: usize, users: &Users) {
 }
 
 fn get_ports() -> (u16, u16) {
-    let http_port = env::var("RSPLAYER_HTTP_PORT")
-        .expect("RSPLAYER_HTTP_PORT is not set")
+    let http_port = env::var("PORT")
+        .expect("PORT is not set")
         .parse::<u16>()
-        .expect("RSPLAYER_HTTP_PORT is not a valid port number");
-    let https_port = env::var("RSPLAYER_HTTPS_PORT")
-        .expect("RSPLAYER_HTTPS_PORT is not set")
+        .expect("PORT is not a valid port number");
+
+    let https_port = env::var("TLS_PORT")
+        .expect("TLS_PORT is not set")
         .parse::<u16>()
-        .expect("RSPLAYER_HTTPS_PORT is not a valid port number");
+        .expect("TLS_PORT is not a valid port number");
     (http_port, https_port)
 }

@@ -2,13 +2,15 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU16, Ordering},
     Arc, Mutex,
 };
+use std::thread::JoinHandle;
 
 use log::{error, info, warn};
+use thread_priority::{ThreadBuilder, ThreadPriority};
 
-use tokio::{sync::broadcast::Sender, task::JoinHandle};
+use tokio::sync::broadcast::Sender;
 
 use api_models::{
-    settings::Settings,
+    settings::{RsPlayerSettings, Settings},
     state::{PlayerState, StateChangeEvent},
 };
 use rsplayer_metadata::metadata_service::MetadataService;
@@ -30,7 +32,7 @@ pub struct PlayerService {
     paused: Arc<AtomicBool>,
     skip_to_time: Arc<AtomicU16>,
     audio_device: String,
-    buffer_size_mb: usize,
+    rsp_settings: RsPlayerSettings,
     music_dir: String,
 }
 impl PlayerService {
@@ -44,7 +46,7 @@ impl PlayerService {
             paused: Arc::new(AtomicBool::new(false)),
             skip_to_time: Arc::new(AtomicU16::new(0)),
             audio_device: settings.alsa_settings.output_device.name.clone(),
-            buffer_size_mb: settings.rs_player_settings.buffer_size_mb,
+            rsp_settings: settings.rs_player_settings.clone(),
             music_dir: settings.metadata_settings.music_directory.clone(),
         }
     }
@@ -88,7 +90,7 @@ impl PlayerService {
     pub async fn stop_current_song(&self) {
         let this = self;
         this.running.store(false, Ordering::SeqCst);
-        self.await_playing_song_to_finish().await;
+        self.await_playing_song_to_finish();
     }
 
     #[allow(clippy::unused_self, clippy::missing_const_for_fn)]
@@ -103,12 +105,11 @@ impl PlayerService {
         }
     }
 
-    async fn await_playing_song_to_finish(&self) {
+    fn await_playing_song_to_finish(&self) {
         let Some(a) = self.play_handle.lock().unwrap().take() else {
             return;
         };
-        a.abort();
-        let _ = a.await;
+        _ = a.join();
     }
 
     fn is_playing(&self) -> bool {
@@ -126,65 +127,84 @@ impl PlayerService {
         let skip_to_time = self.skip_to_time.clone();
         let queue = self.queue_service.clone();
         let audio_device = self.audio_device.clone();
-        let buffer_size = self.buffer_size_mb;
+        let playback_thread_prio = self.rsp_settings.player_threads_priority;
         let music_dir = self.music_dir.clone();
         let queue_size = queue.get_all_songs().len();
         let changes_tx = changes_tx.clone();
-        tokio::task::spawn_blocking(move || {
-            let mut num_failed = 0;
-            loop {
-                let Some(song) = queue.get_current_song() else {
-                    running.store(false, Ordering::SeqCst);
-                    changes_tx
-                        .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
-                        .ok();
-                    break PlaybackResult::QueueFinished;
-                };
-                changes_tx
-                    .send(StateChangeEvent::CurrentSongEvent(song.clone()))
-                    .expect("msg send failed");
-                changes_tx
-                    .send(StateChangeEvent::PlaybackStateEvent(PlayerState::PLAYING))
-                    .expect("msg send failed");
-                match symphonia::play_file(
-                    &song.file,
-                    &running,
-                    &paused,
-                    &skip_to_time,
-                    &audio_device,
-                    buffer_size,
-                    &music_dir,
-                    &changes_tx,
-                ) {
-                    Ok(PlaybackResult::PlaybackStopped) => {
+        let rsp_settings = self.rsp_settings.clone();
+
+        ThreadBuilder::default()
+            .name("playback".to_string())
+            .priority(ThreadPriority::Crossplatform(playback_thread_prio.try_into().unwrap()))
+            .spawn(move |prio| {
+                if prio.is_ok() {
+                    info!("Playback thread started with priority {:?}", playback_thread_prio);
+                } else {
+                    warn!("Failed to set playback thread priority");
+                }
+
+                if let Some(Some(last_core)) = core_affinity::get_core_ids().map(|ids| ids.last().cloned()) {
+                    if core_affinity::set_for_current(last_core) {
+                        info!("Playback thread set to last core {:?}", last_core);
+                    } else {
+                        warn!("Failed to set playback thread to last core {:?}", last_core);
+                    }
+                }
+                let mut num_failed = 0;
+                loop {
+                    let Some(song) = queue.get_current_song() else {
                         running.store(false, Ordering::SeqCst);
                         changes_tx
                             .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
                             .ok();
-                        break PlaybackResult::PlaybackStopped;
-                    }
-                    Err(err) => {
-                        error!("Failed to play file {}. Error: {:?}", song.file, err);
-                        num_failed += 1;
-                        if num_failed == 10 || num_failed >= queue_size {
-                            warn!("Number of failed songs is greater than 10. Aborting.");
+                        break PlaybackResult::QueueFinished;
+                    };
+                    changes_tx
+                        .send(StateChangeEvent::CurrentSongEvent(song.clone()))
+                        .expect("msg send failed");
+                    changes_tx
+                        .send(StateChangeEvent::PlaybackStateEvent(PlayerState::PLAYING))
+                        .expect("msg send failed");
+                    match symphonia::play_file(
+                        &song.file,
+                        &running,
+                        &paused,
+                        &skip_to_time,
+                        &audio_device,
+                        &rsp_settings,
+                        &music_dir,
+                        &changes_tx,
+                    ) {
+                        Ok(PlaybackResult::PlaybackStopped) => {
                             running.store(false, Ordering::SeqCst);
                             changes_tx
                                 .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
                                 .ok();
-                            break PlaybackResult::QueueFinished;
+                            break PlaybackResult::PlaybackStopped;
+                        }
+                        Err(err) => {
+                            error!("Failed to play file {}. Error: {:?}", song.file, err);
+                            num_failed += 1;
+                            if num_failed == 10 || num_failed >= queue_size {
+                                warn!("Number of failed songs is greater than 10. Aborting.");
+                                running.store(false, Ordering::SeqCst);
+                                changes_tx
+                                    .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
+                                    .ok();
+                                break PlaybackResult::QueueFinished;
+                            }
+                        }
+                        res => {
+                            info!("Playback finished with result {:?}", res);
+                            num_failed = 0;
                         }
                     }
-                    res => {
-                        info!("Playback finished with result {:?}", res);
-                        num_failed = 0;
+
+                    if !queue.move_current_to_next_song() {
+                        break PlaybackResult::QueueFinished;
                     }
                 }
-
-                if !queue.move_current_to_next_song() {
-                    break PlaybackResult::QueueFinished;
-                }
-            }
-        })
+            })
+            .unwrap()
     }
 }

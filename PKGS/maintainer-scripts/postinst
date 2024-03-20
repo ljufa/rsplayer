@@ -1,29 +1,25 @@
 #!/usr/bin/env bash
 if [ "$1" = "configure" ]; then
     if [ -z $2 ]
-    # this is clean install
     then 
-        echo "No previous version found this is clean install"
+        # this is clean install
+        previous_version="0.0.0"
+    else
+        # this is upgrade
+        previous_version=$2
+    fi
+    if dpkg --compare-versions "$previous_version" lt "0.9.1"; then
+        echo "Upgrading from version $previous_version to 0.9.1"
         adduser --system --no-create-home --disabled-login rsplayer
         usermod -a -G audio rsplayer
         # optional for hardware access
-        usermod -a -G i2c,gpio,spi,input rsplayer || true
-        mkdir -p /opt/rsplayer
+        usermod -a -G i2c,gpio,spi,audio,input rsplayer || true
         chown -R rsplayer /opt/rsplayer
-    #this is upgrade
-    else
-        echo "Previous version found: $2"
-        VERSION_TO_COMPARE="0.9.1"
-        if [ "$(printf '%s\n' "$VERSION_TO_COMPARE" "$2" | sort -V | head -n1)" = "$VERSION_TO_COMPARE" ]; then
-            echo "$2 is greater than $VERSION_TO_COMPARE migration not needed."
-        else
-            echo "$2 is not greater than $VERSION_TO_COMPARE"
-            adduser --system --no-create-home --disabled-login rsplayer
-            usermod -a -G audio rsplayer
-            # optional for hardware access
-            usermod -a -G i2c,gpio,spi,audio,input rsplayer || true
-            chown -R rsplayer /opt/rsplayer
-        fi
+    fi
+    if dpkg --compare-versions "$previous_version" lt "0.9.7"; then
+        echo "Upgrading from version $previous_version to 0.9.7"
+        chown rsplayer /opt/rsplayer/env
+        chown rsplayer /opt/rsplayer/self.*
     fi
     systemctl daemon-reload
     systemctl enable rsplayer

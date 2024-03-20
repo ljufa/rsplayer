@@ -5,10 +5,7 @@ Wants=network.target sound.target
 After=remote-fs.target
 
 [Service]
-Environment=RUST_BACKTRACE=full
-Environment=RSPLAYER_HTTP_PORT=80
-Environment=RSPLAYER_HTTPS_PORT=443
-Environment=RUST_LOG=rsplayer=info,warp=info
+EnvironmentFile=/opt/rsplayer/env
 ExecStart=/usr/bin/rsplayer
 WorkingDirectory=/opt/rsplayer
 Restart=always
@@ -18,8 +15,11 @@ TimeoutStopSec=5
 User=rsplayer
 LimitRTPRIO=40
 LimitRTTIME=infinity
-AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_SYS_BOOT
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_SYS_BOOT
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_SYS_BOOT CAP_SYS_NICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_SYS_BOOT CAP_SYS_NICE
+
+CPUSchedulingPolicy=rr
+
 
 [Install]
 WantedBy=multi-user.target

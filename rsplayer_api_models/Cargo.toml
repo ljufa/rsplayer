@@ -10,7 +10,7 @@ chrono.workspace = true
 anyhow.workspace = true
 uuid.workspace = true
 
-validator = { version = "0.17.0", features = ["derive"] }
+validator = { version = "0.16.0", features = ["derive"] }
 regex = "1.10.3"
 
 strum = "0.25.0"
