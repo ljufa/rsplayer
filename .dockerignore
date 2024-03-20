@@ -1,4 +1,4 @@
 *
 .*
-# !./target/release/rsplayer
+!PKGS/debian/opt/rsplayer/self.*
 !rsplayer_amd64

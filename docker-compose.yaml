@@ -6,6 +6,11 @@ services:
       - /dev/snd
     ports:
       - 8000:80
+    environment:
+      - PORT=80
+      - TLS_PORT=443
+      - TLS_CERT_PATH=/self.crt
+      - TLS_CERT_KEY_PATH=/self.key
     volumes:
       - ${MUSIC_DIR}:/music:ro
       - 'rsplayer_volume:/opt/rsplayer'
