@@ -348,8 +348,8 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
             ]
         }
         PlaylistType::LatestRelease(album) | PlaylistType::RecentlyAdded(album) => {
-            let id = album.id.clone();
-            let id2 = album.id.clone();
+            let id = album.title.clone();
+            let id2 = album.title.clone();
             div![
                 C![format!("item-{id}")],
                 div![

@@ -3,9 +3,7 @@ extern crate api_models;
 use std::{rc::Rc, str::FromStr};
 
 use api_models::{
-    common::{MetadataCommand, PlayerCommand, QueueCommand, SystemCommand, UserCommand, Volume},
-    player::Song,
-    state::{AudioOut, PlayerInfo, PlayerState, SongProgress, StateChangeEvent, StreamerState},
+    common::{MetadataCommand, PlayerCommand, QueueCommand, SystemCommand, UserCommand, Volume}, player::Song, state::{AudioOut, PlayerInfo, PlayerState, SongProgress, StateChangeEvent, StreamerState}
 };
 use gloo_console::{error, log};
 use gloo_net::http::Request;
@@ -333,29 +331,26 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             )));
         }
         Msg::LikeMediaItemClick(MetadataCommand::LikeMediaItem(item_id)) => {
-            model
-                .player_model
-                .current_song
-                .as_mut()
-                .unwrap()
-                .statistics
-                .as_mut()
-                .unwrap()
-                .liked_count = 1;
+            // model.player_model
+            //     .current_song
+            //     .as_mut()
+            //     .unwrap()
+            //     .statistics.map(|&pis| pis.like_count = 1);
+
             orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
                 MetadataCommand::LikeMediaItem(item_id),
             )));
         }
         Msg::LikeMediaItemClick(MetadataCommand::DislikeMediaItem(item_id)) => {
-            model
-                .player_model
-                .current_song
-                .as_mut()
-                .unwrap()
-                .statistics
-                .as_mut()
-                .unwrap()
-                .liked_count = 0;
+            // model
+            //     .player_model
+            //     .current_song
+            //     .as_mut()
+            //     .unwrap()
+            //     .statistics
+            //     .as_mut()
+            //     .unwrap()
+            //     .liked_count = 0;
             orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
                 MetadataCommand::DislikeMediaItem(item_id),
             )));
@@ -610,10 +605,9 @@ fn view_metadata_scan_notification(model: &Model) -> Node<Msg> {
                 button![C!("delete")],
                 p!["Music directory scan is running..."],
                 p![
+                    C!["has-overflow-ellipsis-text"],
                     style! {
-                        St::Overflow => "hidden",
-                        St::TextOverflow => "ellipsis",
-                        St::OverflowWrap => "nowrap",
+                        St::MaxWidth => "95%"
                     },
                     info
                 ]

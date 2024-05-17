@@ -11,9 +11,9 @@ anyhow.workspace = true
 uuid.workspace = true
 
 validator = { version = "0.16.0", features = ["derive"] }
-regex = "1.10.3"
+regex = "1.10.4"
 
-strum = "0.25.0"
-strum_macros = "0.25.3"
-num-traits = { version = "0.2.18", default-features = false }
+strum = "0.26.2"
+strum_macros = "0.26.2"
+num-traits = { version = "0.2.19", default-features = false }
 num-derive = { version = "0.4.2", default-features = false }

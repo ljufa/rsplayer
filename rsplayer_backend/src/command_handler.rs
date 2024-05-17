@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use log::debug;
 use tokio::sync::broadcast::Sender;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use api_models::common::MetadataCommand::{QueryLocalFiles, RescanMetadata};
 use api_models::common::PlayerCommand::{
@@ -38,7 +39,7 @@ pub async fn handle_user_commands(
     album_repository: Arc<AlbumRepository>,
     song_repository: Arc<SongRepository>,
     _config_store: ArcConfiguration,
-    mut input_commands_rx: tokio::sync::mpsc::Receiver<UserCommand>,
+    mut input_commands_rx: UnboundedReceiver<UserCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) {
     loop {
@@ -381,7 +382,7 @@ pub async fn handle_system_commands(
     ai_service: ArcAudioInterfaceSvc,
     _metadata_service: Arc<MetadataService>,
     config_store: ArcConfiguration,
-    mut input_commands_rx: tokio::sync::mpsc::Receiver<SystemCommand>,
+    mut input_commands_rx: UnboundedReceiver<SystemCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) {
     loop {

@@ -10,6 +10,7 @@ pub struct Settings {
     pub volume_ctrl_settings: VolumeControlSettings,
     pub output_selector_settings: OutputSelectorSettings,
     pub dac_settings: DacSettings,
+    #[validate]
     pub alsa_settings: AlsaSettings,
     pub ir_control_settings: IRInputControlerSettings,
     pub oled_settings: OLEDSettings,
@@ -95,9 +96,10 @@ pub struct PlaylistSetting {
     pub db_path: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
 pub struct AlsaSettings {
     #[serde(default)]
+    #[validate]
     pub output_device: PcmOutputDevice,
     #[serde(default)]
     pub available_audio_cards: Vec<AudioCard>,

@@ -12,6 +12,10 @@ impl AlbumRepository {
         Self { albums_db: db }
     }
 
+    pub fn delete_all(&self) {
+        self.albums_db.clear().expect("Failed to clear albums db");
+    }
+
     pub fn find_all_album_artists(&self) -> Vec<String> {
         let mut result: Vec<String> = self
             .find_all()
@@ -40,7 +44,7 @@ impl AlbumRepository {
             .expect("Album DB error")
             .map(|bytes| {
                 let mut album = Album::from_bytes(&bytes);
-                album.id = album_id.to_owned();
+                album_id.clone_into(&mut album.id);
                 album
             })
     }
@@ -256,6 +260,24 @@ mod test {
         result = album_repository.find_by_artist("Artist 1");
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].title, "Album Two");
+    }
+
+    #[test]
+    fn test_delete_all() {
+        let album_repository = create_album_repo();
+        #[rustfmt::skip]
+        insert_albums!(
+            &album_repository,
+            "a1", "Album One", "RP and E Goldstein", Some("Classical"),
+            "a2", "Album Two", "Artist 1", Some("Club"),
+            "a3", "Album Three", "RP and E Goldstein", Some("Classical"),
+            "a4", "Album Four", "Artist 2", Some("Club"),
+            "a5", "Album Five", "RP and E Goldstein", Some("Classical"),
+            "a6", "Album Six", "Artist 3", Some("Club"),
+        );
+        album_repository.delete_all();
+        let result = album_repository.find_all();
+        assert_eq!(result.len(), 0);
     }
 
     fn create_album(

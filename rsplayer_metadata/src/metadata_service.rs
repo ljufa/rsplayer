@@ -167,6 +167,7 @@ impl MetadataService {
             .expect("msg send error");
         if full_scan {
             self.song_repository.delete_all();
+            self.album_repository.delete_all();
         }
 
         if !Path::new(ARTWORK_DIR).exists() {

@@ -9,18 +9,18 @@ crate-type = ["cdylib"]
 
 [dependencies]
 seed = { version = "0.10.0", features = ["routing"] }
-serde = "1.0.197"
-serde_json = "1.0.114"
+serde = "1.0.202"
+serde_json = "1.0.117"
 uuid = { version = "1.7.0" }
-indexmap = { version = "2.2.5", features = ["serde"] }
+indexmap = { version = "2.2.6", features = ["serde"] }
 enclose = "1.1.8"
-strum = "0.25.0"
-strum_macros = "0.25.2"
+strum = "0.26.2"
+strum_macros = "0.26.2"
 api_models = { path = "../rsplayer_api_models" }
 wasm-sockets = { version = "1" }
 gloo-console = { version = "0.3.0" }
 gloo-net = { version = "0.5.0" }
-indextree = "4.6.0"
+indextree = "4.6.1"
 
 
 [dev-dependencies]

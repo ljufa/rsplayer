@@ -41,8 +41,8 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
 type Config = Arc<Configuration>;
 
-type UserCommandSender = mpsc::Sender<UserCommand>;
-type SystemCommandSender = mpsc::Sender<SystemCommand>;
+type UserCommandSender = mpsc::UnboundedSender<UserCommand>;
+type SystemCommandSender = mpsc::UnboundedSender<SystemCommand>;
 
 #[derive(RustEmbed)]
 #[folder = "../rsplayer_web_ui/public"]
@@ -283,11 +283,11 @@ async fn user_connected(
         if let Ok(cmd) = msg.to_str() {
             let user_command: Option<UserCommand> = serde_json::from_str(cmd).ok();
             if let Some(pc) = user_command {
-                _ = user_commands_tx.send(pc).await;
+                _ = user_commands_tx.send(pc);
             } else {
                 let system_command: Option<SystemCommand> = serde_json::from_str(cmd).ok();
                 if let Some(sc) = system_command {
-                    _ = system_commands_tx.send(sc).await;
+                    _ = system_commands_tx.send(sc);
                 } else {
                     warn!("Unknown command received: [{}]", cmd);
                 }

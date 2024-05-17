@@ -312,8 +312,8 @@ mod metadata {
     fn should_incrementally_scan_music_dir_add_2_new_files() {
         let mut context = TestContext::new();
         std::fs::create_dir_all(&context.db_dir).expect("failed to create dir");
-        context.music_dir = context.db_dir.clone();
-        context.metadata_service.settings.music_directory = context.db_dir.clone();
+        context.music_dir.clone_from(&context.db_dir);
+        context.metadata_service.settings.music_directory.clone_from(&context.db_dir);
         std::fs::create_dir_all(&context.music_dir).expect("failed to create dir");
 
         // copy content of assets into /tmp

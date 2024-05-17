@@ -180,14 +180,8 @@ anyhow.workspace = true
 console-subscriber = "0.2.0"
 
 #warp
-warp = { version = "0.3.6", features = ["compression", "tls"] }
-rust-embed = { version = "8.3.0", features = ["warp-ex", "compression"] }
+warp = { version = "0.3.7", features = ["compression", "tls"] }
+rust-embed = { version = "8.4.0", features = ["warp-ex", "compression"] }
 warp-embed = "0.5.0"
 
 
-[profile.release]
-opt-level = 3
-debug = false
-debug-assertions = false
-codegen-units = 1
-strip = true

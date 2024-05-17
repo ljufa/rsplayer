@@ -1,12 +1,11 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicU16, Ordering},
-    Arc, Mutex,
+    Arc,
+    atomic::{AtomicBool, AtomicU16, Ordering}, Mutex,
 };
 use std::thread::JoinHandle;
 
 use log::{error, info, warn};
 use thread_priority::{ThreadBuilder, ThreadPriority};
-
 use tokio::sync::broadcast::Sender;
 
 use api_models::{

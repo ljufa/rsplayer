@@ -1,9 +1,10 @@
+use tokio::sync::mpsc::UnboundedSender;
+
 use api_models::common::SystemCommand;
 use rsplayer_config::ArcConfiguration;
-use tokio::sync::mpsc::Sender;
 
 // todo implement settings.is_enabled check
-pub async fn listen(system_commands_tx: Sender<SystemCommand>, config: ArcConfiguration) {
+pub async fn listen(system_commands_tx: UnboundedSender<SystemCommand>, config: ArcConfiguration) {
     let volume_settings = config.get_settings().volume_ctrl_settings;
     if volume_settings.rotary_enabled {
         hw_volume::listen(system_commands_tx, volume_settings).await;
@@ -13,13 +14,13 @@ pub async fn listen(system_commands_tx: Sender<SystemCommand>, config: ArcConfig
 }
 
 mod hw_volume {
-    use api_models::{common::SystemCommand, settings::VolumeControlSettings};
-    use log::{debug, error, info};
-    use tokio::sync::mpsc::Sender;
-
     use evdev::{Device, InputEventKind};
+    use log::{debug, error, info};
+    use tokio::sync::mpsc::{UnboundedSender};
 
-    pub async fn listen(system_commands_tx: Sender<SystemCommand>, volume_settings: VolumeControlSettings) {
+    use api_models::{common::SystemCommand, settings::VolumeControlSettings};
+
+    pub async fn listen(system_commands_tx: UnboundedSender<SystemCommand>, volume_settings: VolumeControlSettings) {
         if let Ok(device) = Device::open(volume_settings.rotary_event_device_path) {
             info!("Start Volume Control thread.");
             let mut events = device.into_event_stream().expect("Failed");
@@ -29,9 +30,9 @@ mod hw_volume {
                 if let InputEventKind::RelAxis(_) = ev.kind() {
                     debug!("Event: {:?}", ev);
                     if ev.value() == 1 {
-                        _ = system_commands_tx.send(SystemCommand::VolDown).await;
+                        _ = system_commands_tx.send(SystemCommand::VolDown);
                     } else {
-                        _ = system_commands_tx.send(SystemCommand::VolUp).await;
+                        _ = system_commands_tx.send(SystemCommand::VolUp);
                     }
                 }
             }

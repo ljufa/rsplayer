@@ -28,6 +28,7 @@ impl AudioInterfaceService {
                 AlsaMixer::new(
                     settings.alsa_settings.output_device.card_index,
                     settings.volume_ctrl_settings.alsa_mixer,
+                    &config.get_streamer_state().volume_state,
                 )
             };
         let line_handle = if settings.output_selector_settings.enabled {

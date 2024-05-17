@@ -107,13 +107,15 @@ impl AlsaPcmCard {
 const ALSA_MIXER_STEP: i64 = 1;
 
 impl AlsaMixer {
-    pub fn new(card_index: i32, mixer: Option<CardMixer>) -> Box<Self> {
+    pub fn new(card_index: i32, mixer: Option<CardMixer>, volume: &Volume) -> Box<Self> {
         let m = mixer.unwrap_or_default();
-        Box::new(AlsaMixer {
+        let mixer = AlsaMixer {
             card_name: format!("hw:{card_index}"),
             mixer_idx: m.index,
             mixer_name: m.name,
-        })
+        };
+        mixer.set_vol(volume.current);
+        Box::new(mixer)
     }
 }
 

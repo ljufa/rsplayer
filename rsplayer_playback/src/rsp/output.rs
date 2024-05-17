@@ -15,7 +15,7 @@ use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 pub trait AudioOutput {
     fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<()>;
     fn flush(&mut self);
-    fn pause(&mut self);
+
 }
 
 mod cpal {
@@ -182,9 +182,6 @@ mod cpal {
             _ = self.stream.pause();
         }
 
-        fn pause(&mut self) {
-            _ = self.stream.pause();
-        }
     }
 }
 

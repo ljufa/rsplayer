@@ -1,15 +1,14 @@
 use std::fs::File;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::thread::{self};
 use std::time::Duration;
 
 use anyhow::{format_err, Result};
-use api_models::settings::RsPlayerSettings;
 use log::{debug, info, warn};
 use symphonia::core::audio::Channels;
-use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
+use symphonia::core::codecs::{CODEC_TYPE_NULL, DecoderOptions};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
 use symphonia::core::io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions, ReadOnlySource};
@@ -19,6 +18,7 @@ use symphonia::core::units::{Time, TimeBase};
 use symphonia::default::{get_codecs, get_probe};
 use tokio::sync::broadcast::Sender;
 
+use api_models::settings::RsPlayerSettings;
 use api_models::state::{PlayerInfo, SongProgress, StateChangeEvent};
 
 use crate::rsp::output::AudioOutput;

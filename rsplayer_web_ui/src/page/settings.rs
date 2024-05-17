@@ -55,7 +55,7 @@ pub enum Msg {
     InputRspThreadPriorityChange(String),
     InputVolumeAlsaMixerChanged(String),
     InputDacAddressChanged(String),
-    ClickRescanMetadataButton,
+    ClickRescanMetadataButton(bool),
 
     InputAlsaDeviceChanged(String),
 
@@ -144,6 +144,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 
         Msg::InputAlsaCardChange(value) => {
             model.selected_audio_card_index = value;
+            model.settings.alsa_settings.output_device.card_index = value;
         }
         Msg::InputAlsaPcmChange(value) => {
             model
@@ -216,14 +217,14 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::SettingsSaved(_saved) => {
             model.waiting_response = false;
         }
-        Msg::ClickRescanMetadataButton => {
+        Msg::ClickRescanMetadataButton(full_scan) => {
             let settings = model.settings.clone();
             orders.perform_cmd(async move {
                 _ = save_settings(settings, "reload=false".to_string()).await;
             });
             orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(RescanMetadata(
                 model.settings.metadata_settings.music_directory.clone(),
-                false,
+                full_scan,
             ))));
         }
         _ => {}
@@ -760,8 +761,16 @@ fn view_metadata_storage(metadata_settings: &MetadataStoreSettings) -> Node<Msg>
                 C!["control"],
                 button![
                     C!["button", "is-primary"],
-                    ev(Ev::Click, move |_| Msg::ClickRescanMetadataButton),
+                    ev(Ev::Click, move |_| Msg::ClickRescanMetadataButton(false)),
                     "Update library"
+                ]
+            ],
+            div![
+                C!["control"],
+                button![
+                    C!["button", "is-warning"],
+                    ev(Ev::Click, move |_| Msg::ClickRescanMetadataButton(true)),
+                    "Full rescan"
                 ]
             ],
         ]

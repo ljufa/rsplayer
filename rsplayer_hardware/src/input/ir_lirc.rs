@@ -1,20 +1,20 @@
 use std::io;
 use std::str;
 
+use log::{debug, error, info};
+use log::warn;
+use tokio::net::UnixStream;
+use tokio::sync::mpsc::{UnboundedSender};
+
 use api_models::common::PlayerCommand::{Next, Pause, Play, Prev};
+use api_models::common::SystemCommand;
 use api_models::common::UserCommand;
 use api_models::common::UserCommand::Player;
-use log::warn;
-use log::{debug, error, info};
-
-use api_models::common::SystemCommand;
 use rsplayer_config::ArcConfiguration;
-use tokio::net::UnixStream;
-use tokio::sync::mpsc::Sender;
 
 pub async fn listen(
-    player_commands_tx: Sender<UserCommand>,
-    system_commands_tx: Sender<SystemCommand>,
+    player_commands_tx: UnboundedSender<UserCommand>,
+    system_commands_tx: UnboundedSender<SystemCommand>,
     config: ArcConfiguration,
 ) {
     let ir_settings = config.get_settings().ir_control_settings;
@@ -43,25 +43,25 @@ pub async fn listen(
                     debug!("Key is {}", key);
                     match key {
                         "00 KEY_KPMINUS" => {
-                            system_commands_tx.send(SystemCommand::VolDown).await.expect("Error");
+                            _ = system_commands_tx.send(SystemCommand::VolDown);
                         }
                         "00 KEY_KPPLUS" => {
-                            system_commands_tx.send(SystemCommand::VolUp).await.expect("Error");
+                            _ = system_commands_tx.send(SystemCommand::VolUp);
                         }
                         "00 KEY_FASTFORWARD" => {
-                            player_commands_tx.send(Player(Next)).await.expect("Error");
+                            _ = player_commands_tx.send(Player(Next));
                         }
                         "00 KEY_REWIND" => {
-                            player_commands_tx.send(Player(Prev)).await.expect("Error");
+                            _ = player_commands_tx.send(Player(Prev));
                         }
                         "00 KEY_PLAY" => {
-                            player_commands_tx.send(Player(Play)).await.expect("Error");
+                            _ = player_commands_tx.send(Player(Play));
                         }
                         "02 KEY_PLAY" => {
-                            player_commands_tx.send(Player(Pause)).await.expect("Error");
+                            _ = player_commands_tx.send(Player(Pause));
                         }
                         "02 KEY_MENU" => {
-                            system_commands_tx.send(SystemCommand::PowerOff).await.expect("Error");
+                            _ = system_commands_tx.send(SystemCommand::PowerOff);
                         }
                         _ => {}
                     }

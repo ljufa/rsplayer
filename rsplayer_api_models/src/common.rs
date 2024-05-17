@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use num_derive::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
+use validator::Validate;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
@@ -39,10 +40,12 @@ impl MetadataLibraryItem {
         matches!(self, MetadataLibraryItem::Directory { name: _ })
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, Validate)]
 pub struct PcmOutputDevice {
+    #[validate(length(min = 2))]
     pub name: String,
     pub description: String,
+    #[validate(range(min = 0, max = 100))]
     pub card_index: i32,
 }
 
