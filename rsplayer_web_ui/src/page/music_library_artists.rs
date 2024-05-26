@@ -246,7 +246,7 @@ fn get_tree_start_node(node_id: NodeId, arena: &Arena<MetadataLibraryItem>) -> N
             label = song.get_file_name_without_path();
         }
         MetadataLibraryItem::Artist { name } => {
-            label = name.clone();
+            label.clone_from(name);
             is_dir = true;
         }
         MetadataLibraryItem::Album { name, year: _ } => {

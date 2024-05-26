@@ -93,7 +93,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             });
         }
         Msg::ShowPlaylistItemsClicked(_is_dynamic, playlist_id, playlist_name) => {
-            model.selected_playlist_id = playlist_id.clone();
+            model.selected_playlist_id.clone_from(&playlist_id);
             model.selected_playlist_name = playlist_name;
             model.selected_playlist_is_album = false;
             orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
@@ -101,8 +101,8 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             )));
         }
         Msg::ShowAlbumItemsClicked(album_id) => {
-            model.selected_playlist_id = album_id.clone();
-            model.selected_playlist_name = album_id.clone();
+            model.selected_playlist_id.clone_from(&album_id);
+            model.selected_playlist_name.clone_from(&album_id);
             model.selected_playlist_is_album = true;
             orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
                 api_models::common::PlaylistCommand::QueryAlbumItems(album_id, 0),

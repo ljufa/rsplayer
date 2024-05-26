@@ -127,7 +127,7 @@ mod cpal {
                     data[written..].iter_mut().for_each(|s| *s = T::MID);
                 },
                 move |err| error!("audio output error: {}", err),
-                None,
+                Some(Duration::from_secs(30)),
             );
 
             if let Err(err) = stream_result {

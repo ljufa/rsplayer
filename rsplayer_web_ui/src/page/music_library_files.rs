@@ -232,7 +232,7 @@ fn get_tree_start_node(node_id: NodeId, arena: &Arena<MetadataLibraryItem>, is_s
             label = song.get_file_name_without_path();
         }
         MetadataLibraryItem::Directory { name } => {
-            label = name.clone();
+            label.clone_from(name);
             is_dir = true;
         }
         MetadataLibraryItem::Empty => {

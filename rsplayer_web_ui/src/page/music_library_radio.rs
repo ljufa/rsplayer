@@ -423,7 +423,7 @@ fn get_tree_start_node(
                 "{} (votes:{} / codec:{} / bitrate:{})",
                 station.name, station.votes, station.codec, station.bitrate
             );
-            favicon = station.favicon.clone();
+            favicon.clone_from(&station.favicon);
         }
         TreeNode::Root => {
             is_root = true;
