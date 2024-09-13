@@ -1,5 +1,4 @@
 use std::env;
-use std::u16;
 use std::{
     collections::HashMap,
     sync::atomic::{AtomicUsize, Ordering},

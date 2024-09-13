@@ -2203,7 +2203,7 @@ dependencies = [
 
 [[package]]
 name = "rsplayer"
-version = "0.9.9"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "api_models",
