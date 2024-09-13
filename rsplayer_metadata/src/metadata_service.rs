@@ -157,10 +157,10 @@ impl MetadataService {
     }
 
     pub fn scan_music_dir(&self, full_scan: bool, state_changes_sender: &Sender<StateChangeEvent>) {
-        if self.scan_running.load(Ordering::SeqCst) {
+        if self.scan_running.load(Ordering::Relaxed) {
             return;
         }
-        self.scan_running.store(true, Ordering::SeqCst);
+        self.scan_running.store(true, Ordering::Relaxed);
         let start_time = time::Instant::now();
         state_changes_sender
             .send(StateChangeEvent::MetadataSongScanStarted)
@@ -198,7 +198,7 @@ impl MetadataService {
             count,
             start_time.elapsed().as_secs()
         );
-        self.scan_running.store(false, Ordering::SeqCst);
+        self.scan_running.store(false, Ordering::Relaxed);
     }
 
     fn full_path_to_database_key(&self, input: &str) -> String {

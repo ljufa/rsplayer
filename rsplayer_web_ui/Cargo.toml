@@ -9,22 +9,22 @@ crate-type = ["cdylib"]
 
 [dependencies]
 seed = { version = "0.10.0", features = ["routing"] }
-serde = "1.0.202"
-serde_json = "1.0.117"
-uuid = { version = "1.7.0" }
-indexmap = { version = "2.2.6", features = ["serde"] }
-enclose = "1.1.8"
-strum = "0.26.2"
-strum_macros = "0.26.2"
+serde = "1.0.210"
+serde_json = "1.0.128"
+uuid = { version = "1.10.0" }
+indexmap = { version = "2.5.0", features = ["serde"] }
+enclose = "1.2.0"
+strum = "0.26.3"
+strum_macros = "0.26.4"
 api_models = { path = "../rsplayer_api_models" }
 wasm-sockets = { version = "1" }
 gloo-console = { version = "0.3.0" }
-gloo-net = { version = "0.5.0" }
-indextree = "4.6.1"
+gloo-net = { version = "0.6.0" }
+indextree = "4.7.2"
 
 
 [dev-dependencies]
-wasm-bindgen-test = "0.3.42"
+wasm-bindgen-test = "0.3.43"
 
 [features]
 remote = []

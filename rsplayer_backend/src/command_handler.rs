@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use log::debug;
 use tokio::sync::broadcast::Sender;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::Receiver;
 
 use api_models::common::MetadataCommand::{QueryLocalFiles, RescanMetadata};
 use api_models::common::PlayerCommand::{
@@ -39,11 +39,12 @@ pub async fn handle_user_commands(
     album_repository: Arc<AlbumRepository>,
     song_repository: Arc<SongRepository>,
     _config_store: ArcConfiguration,
-    mut input_commands_rx: UnboundedReceiver<UserCommand>,
+    mut input_commands_rx: Receiver<UserCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) {
     loop {
         let Some(cmd) = input_commands_rx.recv().await else {
+            debug!("Wait in loop");
             continue;
         };
         debug!("Received command {:?}", cmd);
@@ -54,6 +55,7 @@ pub async fn handle_user_commands(
              */
             Player(Play) => {
                 player_service.play_from_current_queue_song(sender);
+                debug!("Play from current song command processed");
             }
             Player(PlayItem(id)) => {
                 player_service.play_song(&id, sender);
@@ -71,6 +73,9 @@ pub async fn handle_user_commands(
             }
             Player(Prev) => {
                 player_service.play_prev_song(sender);
+            }
+            Player(api_models::common::PlayerCommand::Stop) => {
+                player_service.stop_current_song();
             }
             Player(Seek(sec)) => {
                 player_service.seek_current_song(sec);
@@ -382,7 +387,7 @@ pub async fn handle_system_commands(
     ai_service: ArcAudioInterfaceSvc,
     _metadata_service: Arc<MetadataService>,
     config_store: ArcConfiguration,
-    mut input_commands_rx: UnboundedReceiver<SystemCommand>,
+    mut input_commands_rx: Receiver<SystemCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) {
     loop {

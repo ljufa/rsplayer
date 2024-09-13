@@ -1,14 +1,14 @@
 use std::fs::File;
 use std::path::Path;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::Arc;
 use std::thread::{self};
 use std::time::Duration;
 
 use anyhow::{format_err, Result};
-use log::{debug, info, warn};
+use log::{debug, info, trace, warn};
 use symphonia::core::audio::Channels;
-use symphonia::core::codecs::{CODEC_TYPE_NULL, DecoderOptions};
+use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
 use symphonia::core::io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions, ReadOnlySource};
@@ -46,7 +46,7 @@ pub fn play_file(
     changes_tx: &Sender<StateChangeEvent>,
 ) -> Result<PlaybackResult> {
     debug!("Playing file {}", path_str);
-    running.store(true, Ordering::SeqCst);
+    running.store(true, Ordering::Relaxed);
     let mut hint = Hint::new();
     let source = get_source(music_dir, path_str, &mut hint)?;
     // Probe the media source stream for metadata and get the format reader.
@@ -98,11 +98,11 @@ pub fn play_file(
     let mut last_current_time = 0;
     // Decode and play the packets belonging to the selected track.
     let loop_result = loop {
-        if !running.load(Ordering::SeqCst) {
+        if !running.load(Ordering::Relaxed) {
             debug!("Exit from play thread due to running flag change");
             break Ok(PlaybackResult::PlaybackStopped);
         }
-        let paused = paused.load(Ordering::SeqCst);
+        let paused = paused.load(Ordering::Relaxed);
         if paused {
             debug!("Playing paused, going to sleep");
             thread::sleep(Duration::from_millis(300));
@@ -113,8 +113,8 @@ pub fn play_file(
             }
             continue;
         }
-        if skip_to_time.load(Ordering::SeqCst) > 0 {
-            let skip_to = skip_to_time.swap(0, Ordering::SeqCst);
+        if skip_to_time.load(Ordering::Relaxed) > 0 {
+            let skip_to = skip_to_time.swap(0, Ordering::Relaxed);
             debug!("Seeking to {}", skip_to);
             let seek_result = reader.seek(
                 SeekMode::Accurate,
@@ -138,7 +138,7 @@ pub fn play_file(
         };
 
         let current_time = tb.calc_time(packet.ts()).seconds;
-        if current_time != last_current_time {
+        if !path_str.starts_with("http") && current_time != last_current_time {
             last_current_time = current_time;
             changes_tx
                 .send(StateChangeEvent::SongTimeEvent(SongProgress {
@@ -176,7 +176,7 @@ pub fn play_file(
 
                 if packet.ts() > 0 {
                     if let Some(audio_output) = audio_output.as_mut() {
-                        debug!("Before audio write");
+                        trace!("Before audio write");
                         _ = audio_output.write(decoded_buff);
                     }
                 }

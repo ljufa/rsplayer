@@ -15,11 +15,11 @@ use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 pub trait AudioOutput {
     fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<()>;
     fn flush(&mut self);
-
 }
 
 mod cpal {
 
+    use std::process::exit;
     use std::time::Duration;
 
     use super::AudioOutput;
@@ -126,8 +126,11 @@ mod cpal {
                     // Mute any remaining samples.
                     data[written..].iter_mut().for_each(|s| *s = T::MID);
                 },
-                move |err| error!("audio output error: {}", err),
-                Some(Duration::from_secs(30)),
+                move |err| {
+                    error!("audio output error: {}", err);
+                    exit(299);
+                },
+                None,
             );
 
             if let Err(err) = stream_result {
@@ -181,7 +184,6 @@ mod cpal {
             // Flush is best-effort, ignore the returned result.
             _ = self.stream.pause();
         }
-
     }
 }
 

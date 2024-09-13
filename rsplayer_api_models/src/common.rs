@@ -95,6 +95,7 @@ pub enum PlayerCommand {
     Next,
     Prev,
     Pause,
+    Stop,
     Play,
     PlayItem(String),
     RandomToggle,

@@ -6,11 +6,6 @@ use api_models::settings::Settings;
 use api_models::state::{AudioOut, StreamerState};
 use sled::{Db, IVec};
 
-#[cfg(debug_assertions)]
-const EXEC_DIR_PATH: &str = "./";
-#[cfg(not(debug_assertions))]
-const EXEC_DIR_PATH: &str = "/usr/bin/";
-
 const SETTINGS_KEY: &str = "settings";
 const STATE_KEY: &str = "state";
 
@@ -66,10 +61,10 @@ impl Configuration {
     }
 
     pub fn save_audio_output(&self, selected_output: AudioOut) -> StreamerState {
-        let mut sstate = self.get_streamer_state();
-        sstate.selected_audio_output = selected_output;
-        self.save_streamer_state(&sstate);
-        sstate
+        let mut state = self.get_streamer_state();
+        state.selected_audio_output = selected_output;
+        self.save_streamer_state(&state);
+        state
     }
 
     pub fn save_volume_state(&self, volume: Volume) -> StreamerState {
@@ -78,15 +73,6 @@ impl Configuration {
         self.save_streamer_state(&ss);
         ss
     }
-}
-
-#[allow(dead_code)]
-pub fn get_squeezelite_player_path() -> String {
-    format!("{EXEC_DIR_PATH}squeezelite")
-}
-
-pub fn get_librespot_path() -> String {
-    format!("{EXEC_DIR_PATH}librespot")
 }
 
 pub fn get_static_dir_path() -> String {

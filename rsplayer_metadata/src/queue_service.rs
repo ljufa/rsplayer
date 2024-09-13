@@ -51,7 +51,7 @@ impl QueueService {
     pub fn toggle_random_next(&self) -> bool {
         let result = self
             .random_flag
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |existing| {
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |existing| {
                 let new = !existing;
                 if new {
                     _ = self.status_db.insert("random_next", "true");
@@ -64,7 +64,7 @@ impl QueueService {
     }
 
     pub fn get_random_next(&self) -> bool {
-        self.random_flag.load(Ordering::SeqCst)
+        self.random_flag.load(Ordering::Relaxed)
     }
 
     pub fn get_current_song(&self) -> Option<Song> {
@@ -91,7 +91,7 @@ impl QueueService {
                 return false;
             };
             _ = self.status_db.insert(CURRENT_SONG_KEY, &rand_key.0);
-            let ridx = self.random_history_index.fetch_add(1, Ordering::SeqCst) + 1;
+            let ridx = self.random_history_index.fetch_add(1, Ordering::Relaxed) + 1;
             _ = self.random_history_db.insert(ridx.to_ne_bytes(), rand_key.0);
             true
         } else {
@@ -108,13 +108,13 @@ impl QueueService {
     }
 
     pub fn move_current_to_previous_song(&self) -> bool {
-        let ridx = self.random_history_index.load(Ordering::SeqCst);
+        let ridx = self.random_history_index.load(Ordering::Relaxed);
         if self.get_random_next() && ridx > 0 {
             let ridx = ridx - 1;
             let Ok(Some(prev)) = self.random_history_db.get(ridx.to_ne_bytes()) else {
                 return false;
             };
-            self.random_history_index.store(ridx, Ordering::SeqCst);
+            self.random_history_index.store(ridx, Ordering::Relaxed);
             _ = self.status_db.insert(CURRENT_SONG_KEY, prev);
         } else {
             let Some(current_key) = self.get_current_or_first_song_key() else {

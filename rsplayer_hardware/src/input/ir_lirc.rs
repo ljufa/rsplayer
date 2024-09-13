@@ -1,10 +1,10 @@
 use std::io;
 use std::str;
 
-use log::{debug, error, info};
 use log::warn;
+use log::{debug, error, info};
 use tokio::net::UnixStream;
-use tokio::sync::mpsc::{UnboundedSender};
+use tokio::sync::mpsc::Sender;
 
 use api_models::common::PlayerCommand::{Next, Pause, Play, Prev};
 use api_models::common::SystemCommand;
@@ -13,8 +13,8 @@ use api_models::common::UserCommand::Player;
 use rsplayer_config::ArcConfiguration;
 
 pub async fn listen(
-    player_commands_tx: UnboundedSender<UserCommand>,
-    system_commands_tx: UnboundedSender<SystemCommand>,
+    player_commands_tx: Sender<UserCommand>,
+    system_commands_tx: Sender<SystemCommand>,
     config: ArcConfiguration,
 ) {
     let ir_settings = config.get_settings().ir_control_settings;

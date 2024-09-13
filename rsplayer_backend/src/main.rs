@@ -101,9 +101,9 @@ async fn main() {
     ));
     info!("Player service successfully created.");
 
-    let (player_commands_tx, player_commands_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (player_commands_tx, player_commands_rx) = tokio::sync::mpsc::channel(5);
 
-    let (system_commands_tx, system_commands_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (system_commands_tx, system_commands_rx) = tokio::sync::mpsc::channel(5);
 
     let (state_changes_tx, _) = broadcast::channel(20);
 
