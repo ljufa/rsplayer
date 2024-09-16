@@ -43,25 +43,25 @@ pub async fn listen(
                     debug!("Key is {}", key);
                     match key {
                         "00 KEY_KPMINUS" => {
-                            _ = system_commands_tx.send(SystemCommand::VolDown);
+                            system_commands_tx.send(SystemCommand::VolDown).await.expect("");
                         }
                         "00 KEY_KPPLUS" => {
-                            _ = system_commands_tx.send(SystemCommand::VolUp);
+                            system_commands_tx.send(SystemCommand::VolUp).await.expect("");
                         }
                         "00 KEY_FASTFORWARD" => {
-                            _ = player_commands_tx.send(Player(Next));
+                            player_commands_tx.send(Player(Next)).await.expect("");
                         }
                         "00 KEY_REWIND" => {
-                            _ = player_commands_tx.send(Player(Prev));
+                            player_commands_tx.send(Player(Prev)).await.expect("");
                         }
                         "00 KEY_PLAY" => {
-                            _ = player_commands_tx.send(Player(Play));
+                            player_commands_tx.send(Player(Play)).await.expect("");
                         }
                         "02 KEY_PLAY" => {
-                            _ = player_commands_tx.send(Player(Pause));
+                            player_commands_tx.send(Player(Pause)).await.expect("");
                         }
                         "02 KEY_MENU" => {
-                            _ = system_commands_tx.send(SystemCommand::PowerOff);
+                            system_commands_tx.send(SystemCommand::PowerOff).await.expect("");
                         }
                         _ => {}
                     }
