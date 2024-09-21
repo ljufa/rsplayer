@@ -25,7 +25,7 @@ use rsplayer_metadata::play_statistic_repository::PlayStatisticsRepository;
 use rsplayer_metadata::playlist_service::PlaylistService;
 use rsplayer_metadata::queue_service::QueueService;
 use rsplayer_metadata::song_repository::SongRepository;
-use rsplayer_playback::rsp::PlayerService;
+use rsplayer_playback::rsp::player_service::PlayerService;
 
 mod command_handler;
 mod server_warp;
@@ -94,18 +94,19 @@ async fn main() {
     let ai_service = Arc::new(ai_service.unwrap());
     info!("Audio interface service successfully created.");
 
-    let player_service = Arc::new(PlayerService::new(
-        &config.get_settings(),
-        metadata_service.clone(),
-        queue_service.clone(),
-    ));
-    info!("Player service successfully created.");
-
     let (player_commands_tx, player_commands_rx) = tokio::sync::mpsc::channel(5);
 
     let (system_commands_tx, system_commands_rx) = tokio::sync::mpsc::channel(5);
 
     let (state_changes_tx, _) = broadcast::channel(20);
+
+    let player_service = Arc::new(PlayerService::new(
+        &config.get_settings(),
+        metadata_service.clone(),
+        queue_service.clone(),
+        state_changes_tx.clone()
+    ));
+    info!("Player service successfully created.");
 
     let (http_server_future, https_server_future, websocket_future) = server_warp::start(
         state_changes_tx.subscribe(),
@@ -115,7 +116,7 @@ async fn main() {
     );
 
     if config.get_settings().auto_resume_playback {
-        player_service.play_from_current_queue_song(&state_changes_tx);
+        player_service.play_from_current_queue_song();
     }
 
     select! {

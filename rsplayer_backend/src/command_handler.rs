@@ -28,7 +28,7 @@ use rsplayer_metadata::metadata_service::MetadataService;
 use rsplayer_metadata::playlist_service::PlaylistService;
 use rsplayer_metadata::queue_service::QueueService;
 use rsplayer_metadata::song_repository::SongRepository;
-use rsplayer_playback::rsp::PlayerService;
+use rsplayer_playback::rsp::player_service::PlayerService;
 
 #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 pub async fn handle_user_commands(
@@ -54,11 +54,11 @@ pub async fn handle_user_commands(
              * Player commands
              */
             Player(Play) => {
-                player_service.play_from_current_queue_song(sender);
+                player_service.play_from_current_queue_song();
                 debug!("Play from current song command processed");
             }
             Player(PlayItem(id)) => {
-                player_service.play_song(&id, sender);
+                player_service.play_song(&id);
             }
             Player(Pause) => {
                 player_service.pause_current_song();
@@ -69,10 +69,10 @@ pub async fn handle_user_commands(
                     .unwrap();
             }
             Player(Next) => {
-                player_service.play_next_song(sender);
+                player_service.play_next_song();
             }
             Player(Prev) => {
-                player_service.play_prev_song(sender);
+                player_service.play_prev_song();
             }
             Player(api_models::common::PlayerCommand::Stop) => {
                 player_service.stop_current_song();
@@ -167,7 +167,7 @@ pub async fn handle_user_commands(
                 player_service.stop_current_song();
                 let pl_songs = playlist_service.get_playlist_page_by_name(&pl_id, 0, 20000).items;
                 queue_service.replace_all(pl_songs.into_iter());
-                player_service.play_from_current_queue_song(sender);
+                player_service.play_from_current_queue_song();
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(
                         "Playlist loaded into queue".to_string(),
@@ -190,7 +190,7 @@ pub async fn handle_user_commands(
                     player_service.stop_current_song();
                     let songs = album.song_keys.iter().filter_map(|sk| song_repository.find_by_id(sk));
                     queue_service.replace_all(songs);
-                    player_service.play_from_current_queue_song(sender);
+                    player_service.play_from_current_queue_song();
                     state_changes_sender
                         .send(StateChangeEvent::NotificationSuccess(
                             "Album loaded into queue".to_string(),
@@ -208,7 +208,7 @@ pub async fn handle_user_commands(
                     .for_each(|sk| {
                         queue_service.add_song_by_id(sk);
                     });
-                player_service.play_from_current_queue_song(sender);
+                player_service.play_from_current_queue_song();
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(
                         "All artist's albums loaded into queue".to_string(),
@@ -249,7 +249,7 @@ pub async fn handle_user_commands(
                 player_service.stop_current_song();
                 queue_service.clear();
                 queue_service.add_song_by_id(&song_id);
-                player_service.play_from_current_queue_song(sender);
+                player_service.play_from_current_queue_song();
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(
                         "Queue replaced with one song".to_string(),
@@ -285,7 +285,7 @@ pub async fn handle_user_commands(
                         "Dir {dir} loaded to queue"
                     )))
                     .unwrap();
-                player_service.play_from_current_queue_song(sender);
+                player_service.play_from_current_queue_song();
             }
 
             /*

@@ -18,6 +18,7 @@ symphonia.workspace = true
 tokio.workspace = true
 thread-priority = "1.1.0"
 core_affinity = "0.8.1"
+sled.workspace = true
 
 # symphonia
 cpal = "0.15.3"

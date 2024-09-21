@@ -2295,6 +2295,7 @@ dependencies = [
  "rb",
  "rsplayer_config",
  "rsplayer_metadata",
+ "sled",
  "symphonia",
  "thread-priority",
  "tokio",
