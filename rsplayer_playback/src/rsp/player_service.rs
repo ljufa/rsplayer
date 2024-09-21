@@ -52,7 +52,7 @@ impl PlayerService {
                     if i % 5 == 0 {
                         let lt = st.current_time.as_secs().to_string();
                         debug!("Save state: {lt}");
-                        _ = db2.insert("last_played_song_progress", lt.as_bytes())
+                        _ = db2.insert("last_played_song_progress", lt.as_bytes());
                     }
                 }
             }
@@ -251,8 +251,7 @@ impl PlayerService {
                 let v = lt.to_vec();
                 String::from_utf8(v).unwrap()
             }
-            Ok(None) => "0".to_string(),
-            Err(_) => "0".to_string(),
+            _ => "0".to_string(),
         };
         last_time.parse::<u16>().unwrap_or_default()
     }
