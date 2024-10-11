@@ -18,7 +18,7 @@ anyhow = "1.0.88"
 serde = {version = "1.0.210", features = ["derive"]}
 serde_json = "1.0.128"
 sled = "0.34.7"
-symphonia = { path = "/home/dlj/github/Symphonia/symphonia", features = ["all"] }
+symphonia = { git = "https://github.com/ljufa/Symphonia.git", branch = "master", features = ["all"] }
 cfg-if = "1.0.0"
 tokio = { version = "1.40.0", features = ["full", "tracing"] }
 futures = { version = "0.3.30", default-features = false }
