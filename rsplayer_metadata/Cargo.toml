@@ -15,6 +15,7 @@ sled.workspace = true
 symphonia.workspace = true
 chrono.workspace = true
 uuid.workspace = true
+ureq.workspace = true
 
 api_models = {path = "../rsplayer_api_models"}
 walkdir = "2.5.0"

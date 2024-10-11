@@ -1,3 +1,5 @@
+use std::vec;
+
 use api_models::common::{MetadataCommand, QueueCommand, UserCommand};
 use api_models::state::StateChangeEvent;
 use gloo_net::http::Request;
@@ -62,6 +64,7 @@ pub enum Msg {
     UnfavoriteRadioStation(NodeId),
     AddItemToQueue(NodeId),
     LoadItemToQueue(NodeId),
+    LoadAllItemsToQueue,
     CountriesFetched(Vec<Country>),
     LanguagesFetched(Vec<Language>),
     StationsFetched(Vec<Station>),
@@ -82,6 +85,7 @@ pub enum FilterType {
     Country,
     Language,
     Tag,
+    Search,
 }
 
 #[derive(Debug)]
@@ -143,6 +147,9 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                         MetadataCommand::QueryFavoriteRadioStations,
                     )));
                 }
+                FilterType::Search => {
+                    orders.send_msg(Msg::DoSearch);
+                }
             }
             model.wait_response = true;
             model.filter_type = filter_type;
@@ -173,9 +180,17 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 model.tree.current.append(node, &mut model.tree.arena);
             });
         }
-        Msg::StatusChangeEventReceived(StateChangeEvent::FavoriteRadioStations(event)) => {
+        StationsFetched(list) => {
             model.wait_response = false;
             model.tree = TreeModel::new();
+            list.into_iter().for_each(|item| {
+                let node = model.tree.arena.new_node(TreeNode::Station(item));
+                model.tree.current.append(node, &mut model.tree.arena);
+            });
+        }
+        Msg::StatusChangeEventReceived(StateChangeEvent::FavoriteRadioStations(event)) => {
+            model.wait_response = false;
+            // model.tree = TreeModel::new();
             orders.perform_cmd(async { StationsFetched(fetch_stations_by_uuid(event).await) });
         }
 
@@ -209,13 +224,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 c.remove_subtree(&mut model.tree.arena);
             }
         }
-        StationsFetched(list) => {
-            model.wait_response = false;
-            list.into_iter().for_each(|item| {
-                let node = model.tree.arena.new_node(TreeNode::Station(item));
-                model.tree.current.append(node, &mut model.tree.arena);
-            });
-        }
+
         AddItemToQueue(id) => {
             let node = model.tree.arena.get(id).unwrap().get();
             if let TreeNode::Station(station) = node {
@@ -231,6 +240,15 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     station.url.clone(),
                 ))));
             }
+        }
+        Msg::LoadAllItemsToQueue => {
+            model.tree.arena.iter().for_each(|node| {
+                if let TreeNode::Station(station) = node.get() {
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(QueueCommand::AddSongToQueue(
+                        station.url.clone(),
+                    ))));
+                }
+            });
         }
         Msg::FavoriteRadioStation(id) => {
             let node = model.tree.arena.get(id).unwrap().get();
@@ -255,7 +273,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::DoSearch => {
             model.wait_response = true;
-            model.tree = TreeModel::new();
+            model.filter_type = FilterType::Search;
             let search_term = model.search_input.clone();
             orders.perform_cmd(async move { StationsFetched(search_stations_by_name(&search_term).await) });
         }
@@ -278,12 +296,7 @@ pub fn view(model: &Model) -> Node<Msg> {
         view_search_input(model),
         ul![
             C!["wtree"],
-            get_tree_start_node(
-                model.tree.root,
-                &model.tree.arena,
-                &model.filter_type,
-                !model.search_input.is_empty()
-            )
+            view_tree(model.tree.root, &model.tree.arena, &model.filter_type)
         ]
     ]
 }
@@ -314,14 +327,25 @@ fn view_search_input(model: &Model) -> Node<Msg> {
         div![
             C!["control"],
             a![
+                C!["ml-2"],
                 attrs!(At::Title =>"Search"),
                 i![C!["material-icons", "is-large-icon", "white-icon"], "search"],
                 ev(Ev::Click, move |_| Msg::DoSearch)
             ],
             a![
-                attrs!(At::Title =>"Clear search / Show all songs"),
+                C!["ml-2"],
+                attrs!(At::Title =>"Clear search"),
                 i![C!["material-icons", "is-large-icon", "white-icon"], "backspace"],
                 ev(Ev::Click, move |_| Msg::ClearSearch)
+            ],
+            a![
+                C!["ml-4"],
+                attrs!(At::Title =>"Add all items to queue"),
+                i![
+                    C!["material-icons", "is-large-icon", "white-icon"],
+                    "playlist_add"
+                ],
+                ev(Ev::Click, move |_| Msg::LoadAllItemsToQueue)
             ],
         ],
     ]
@@ -382,12 +406,7 @@ fn view_filter(filter_type: &FilterType) -> Node<Msg> {
 }
 
 #[allow(clippy::collection_is_never_read)]
-fn get_tree_start_node(
-    node_id: NodeId,
-    arena: &Arena<TreeNode>,
-    filter_type: &FilterType,
-    is_search_mode: bool,
-) -> Node<Msg> {
+fn view_tree(node_id: NodeId, arena: &Arena<TreeNode>, filter_type: &FilterType) -> Node<Msg> {
     let Some(value) = arena.get(node_id) else {
         return empty!();
     };
@@ -434,7 +453,7 @@ fn get_tree_start_node(
         style! {
             St::Height => node_height,
         },
-        IF!(is_root && !is_search_mode => view_filter(filter_type)),
+        IF!(is_root => view_filter(filter_type)),
         IF!(is_root => style! { St::Padding => "5px" }),
     ];
 
@@ -521,7 +540,7 @@ fn get_tree_start_node(
     if !children.is_empty() {
         let mut ul: Node<Msg> = ul!();
         for c in children {
-            ul.add_child(get_tree_start_node(c, arena, filter_type, is_search_mode));
+            ul.add_child(view_tree(c, arena, filter_type));
         }
         li.add_child(ul);
     }
@@ -530,6 +549,7 @@ fn get_tree_start_node(
 
 const RADIO_BROWSER_URL: &str = "https://de1.api.radio-browser.info/json/";
 
+#[allow(clippy::future_not_send)]
 async fn search_stations_by_name(name: &str) -> Vec<Station> {
     let url = format!(
         "{}stations/search?name={}&limit=300&hidebroken=true",
@@ -543,65 +563,55 @@ async fn search_stations_by_name(name: &str) -> Vec<Station> {
         .await
         .unwrap()
 }
+
+#[allow(clippy::future_not_send)]
 async fn fetch_countries() -> Vec<Country> {
     let url = format!("{}countries?limit=200&hidebroken=true", RADIO_BROWSER_URL);
-    Request::get(&url)
-        .send()
-        .await
-        .unwrap()
-        .json::<Vec<Country>>()
-        .await
-        .unwrap()
+    let Ok(response) = Request::get(&url).send().await else {
+        return vec![];
+    };
+    response.json::<Vec<Country>>().await.unwrap()
 }
 
+#[allow(clippy::future_not_send)]
 async fn fetch_stations_by_uuid(uuids: Vec<String>) -> Vec<Station> {
     let url = format!("{}stations/byuuid?uuids={}", RADIO_BROWSER_URL, uuids.join(","));
-    Request::get(&url)
-        .send()
-        .await
-        .unwrap()
-        .json::<Vec<Station>>()
-        .await
-        .unwrap()
+    let Ok(response) = Request::get(&url).send().await else {
+        return vec![];
+    };
+    response.json::<Vec<Station>>().await.unwrap()
 }
 
+#[allow(clippy::future_not_send)]
 async fn fetch_stations(by: &str, value: &str) -> Vec<Station> {
     let url = format!(
         "{}stations/{by}/{}?limit=300&hidebroken=true&order=votes&reverse=true",
         RADIO_BROWSER_URL, value
     );
-    Request::get(&url)
-        .send()
-        .await
-        .unwrap()
-        .json::<Vec<Station>>()
-        .await
-        .unwrap()
+    let Ok(response) = Request::get(&url).send().await else {
+        return vec![];
+    };
+    response.json::<Vec<Station>>().await.unwrap()
 }
-
+#[allow(clippy::future_not_send)]
 async fn fetch_languages() -> Vec<Language> {
     let url = format!("{}languages?limit=500", RADIO_BROWSER_URL);
-    Request::get(&url)
-        .send()
-        .await
-        .unwrap()
-        .json::<Vec<Language>>()
-        .await
-        .unwrap()
+    let Ok(response) = Request::get(&url).send().await else {
+        return vec![];
+    };
+    response.json::<Vec<Language>>().await.unwrap()
 }
-
+#[allow(clippy::future_not_send)]
 async fn fetch_tags() -> Vec<Tag> {
     let url = format!(
         "{}tags?limit=500&order=stationcount&reverse=true&hidebroken=true",
         RADIO_BROWSER_URL
     );
-    Request::get(&url)
-        .send()
-        .await
-        .unwrap()
-        .json::<Vec<Tag>>()
-        .await
-        .unwrap()
+
+    let Ok(response) = Request::get(&url).send().await else {
+        return vec![];
+    };
+    response.json::<Vec<Tag>>().await.unwrap()
 }
 
 #[cfg(test)]

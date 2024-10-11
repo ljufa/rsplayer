@@ -1,3 +1,4 @@
+#[cfg(test)]
 mod queue {
     use std::sync::Arc;
 
@@ -391,6 +392,15 @@ mod metadata {
     }
 
     #[test]
+    fn test_favorite_radio_station(){
+        let ctx = TestContext::new();
+        ctx.metadata_service.like_media_item("radio_uuid_http://radioaparat.com");
+        let favs = ctx.metadata_service.get_favorite_radio_stations();
+        assert_eq!(favs.len(), 1);
+        assert_eq!(favs.get(0).unwrap(), "http://radioaparat.com");
+    }
+
+    #[test]
     fn test_increase_play_count() {
         let ctx = TestContext::new();
         ctx.metadata_service.scan_music_dir(true, &ctx.sender);
@@ -401,6 +411,7 @@ mod metadata {
     }
 }
 
+#[cfg(test)]
 mod playlist {
     use std::vec;
 

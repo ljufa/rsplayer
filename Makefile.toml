@@ -143,7 +143,7 @@ script = "sudo pkill -9 rsplayer || true"
 
 [tasks.run_local]
 dependencies = ["kill_local"]
-env = { "RUST_LOG" = "rsplayer=info,rsplayer_playback=info,warp=info", "RUST_BACKTRACE" = "full", "PORT" = "8000", "TLS_PORT" = "8443", "TLS_CERT_PATH" = "self.crt", "TLS_CERT_KEY_PATH" = "self.key" }
+env = { "RUST_LOG" = "rsplayer=info,rsplayer_playback=debug,warp=info", "RUST_BACKTRACE" = "full", "PORT" = "8000", "TLS_PORT" = "8443", "TLS_CERT_PATH" = "self.crt", "TLS_CERT_KEY_PATH" = "self.key" }
 cwd = ".run"
 command = "cargo"
 args = ["run"]

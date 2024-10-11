@@ -23,16 +23,17 @@ pub struct PlayerService {
     queue_service: Arc<QueueService>,
     #[allow(dead_code)]
     metadata_service: Arc<MetadataService>,
-    play_handle: Arc<Mutex<Option<JoinHandle<PlaybackResult>>>>,
-    running: Arc<AtomicBool>,
-    stopped: Arc<AtomicBool>,
-    paused: Arc<AtomicBool>,
+    playback_thread_handle: Arc<Mutex<Option<JoinHandle<PlaybackResult>>>>,
+    stop_signal: Arc<AtomicBool>,
     skip_to_time: Arc<AtomicU16>,
     audio_device: String,
     rsp_settings: RsPlayerSettings,
     music_dir: String,
     changes_tx: Sender<StateChangeEvent>,
 }
+const LAST_SONG_PAUSED_KEY: &str = "last_song_paused";
+const LAST_SONG_PROGRESS_KEY: &str = "last_played_song_progress";
+
 impl PlayerService {
     #[must_use]
     pub fn new(
@@ -42,18 +43,28 @@ impl PlayerService {
         state_changes_tx: Sender<StateChangeEvent>,
     ) -> Self {
         let db = sled::open("player_state").expect("Failed to open queue db");
-        let db2 = db.clone();
+        let state_db = db.clone();
         let mut rx = state_changes_tx.subscribe();
         tokio::task::spawn(async move {
             let mut i = 0;
             loop {
-                if let Ok(StateChangeEvent::SongTimeEvent(st)) = rx.recv().await {
-                    i += 1;
-                    if i % 5 == 0 {
-                        let lt = st.current_time.as_secs().to_string();
-                        debug!("Save state: {lt}");
-                        _ = db2.insert("last_played_song_progress", lt.as_bytes());
+                match rx.recv().await {
+                    Ok(StateChangeEvent::SongTimeEvent(st)) => {
+                        i += 1;
+                        if i % 2 == 0 {
+                            let lt = st.current_time.as_secs().to_string();
+                            debug!("Save time state: {lt}");
+                            _ = state_db.insert(LAST_SONG_PROGRESS_KEY, lt.as_bytes());
+                        }
                     }
+                    Ok(StateChangeEvent::PlaybackStateEvent(ps)) => {
+                        debug!("Save player state: {:?}", ps);
+                        _ = match ps {
+                            PlayerState::PLAYING => state_db.remove(LAST_SONG_PAUSED_KEY),
+                            PlayerState::PAUSED | PlayerState::STOPPED => state_db.insert(LAST_SONG_PAUSED_KEY, "true"),
+                        };
+                    }
+                    _ => (),
                 }
             }
         });
@@ -62,14 +73,12 @@ impl PlayerService {
             changes_tx: state_changes_tx,
             queue_service,
             metadata_service,
-            play_handle: Arc::new(Mutex::new(None)),
-            running: Arc::new(AtomicBool::new(false)),
-            paused: Arc::new(AtomicBool::new(false)),
+            playback_thread_handle: Arc::new(Mutex::new(None)),
+            stop_signal: Arc::new(AtomicBool::new(false)),
             skip_to_time: Arc::new(AtomicU16::new(0)),
             audio_device: settings.alsa_settings.output_device.name.clone(),
             rsp_settings: settings.rs_player_settings.clone(),
             music_dir: settings.metadata_settings.music_directory.clone(),
-            stopped: Arc::new(AtomicBool::new(true)),
         };
         let last_played_song_progress = ps.get_last_played_song_time();
         if last_played_song_progress > 0 {
@@ -79,10 +88,6 @@ impl PlayerService {
     }
 
     pub fn play_from_current_queue_song(&self) {
-        if self.is_paused() {
-            let this = self;
-            this.paused.store(false, Ordering::Relaxed);
-        }
         if self.is_playing() {
             self.changes_tx
                 .send(StateChangeEvent::PlaybackStateEvent(PlayerState::PLAYING))
@@ -92,27 +97,35 @@ impl PlayerService {
         if let Some(s) = self.queue_service.get_current_song() {
             self.metadata_service.increase_play_count(&s.file);
         }
+        if let Ok(Some(_)) = self.state_db.get(LAST_SONG_PAUSED_KEY) {
+            let last_song_time = self.get_last_played_song_time();
+            self.seek_current_song(last_song_time);
+        }
+
         *self.playback_thread_handle.lock().unwrap() = Some(self.play_all_in_queue());
     }
 
     pub fn play_next_song(&self) {
-        if self.queue_service.move_current_to_next_song() {
-            self.stop_current_song();
-            self.play_from_current_queue_song();
-        }
+        self.stop_current_song();
+        self.queue_service.move_current_to_next_song();
+        self.play_from_current_queue_song();
     }
 
     pub fn play_prev_song(&self) {
-        if self.queue_service.move_current_to_previous_song() {
-            self.stop_current_song();
-            self.play_from_current_queue_song();
-        }
+        self.stop_current_song();
+        self.queue_service.move_current_to_previous_song();
+        self.play_from_current_queue_song();
     }
 
     pub fn stop_current_song(&self) {
-        let this = self;
-        this.running.store(false, Ordering::Relaxed);
+        self.stop_signal.store(false, Ordering::Relaxed);
         self.await_playing_song_to_finish();
+    }
+
+    pub fn pause_current_song(&self) {
+        if self.is_playing() {
+            self.stop_current_song();
+        }
     }
 
     #[allow(clippy::unused_self, clippy::missing_const_for_fn)]
@@ -121,32 +134,31 @@ impl PlayerService {
     }
 
     pub fn play_song(&self, song_id: &str) {
-        if self.queue_service.move_current_to(song_id) {
-            self.stop_current_song();
-            self.play_from_current_queue_song();
-        }
+        self.stop_current_song();
+        self.queue_service.move_current_to(song_id);
+        self.play_from_current_queue_song();
     }
 
     fn await_playing_song_to_finish(&self) {
-        while !self.stopped.load(Ordering::Relaxed) {
+        while self.is_playing() {
             continue;
         }
         debug!("aWait finished");
     }
-
+    #[allow(clippy::significant_drop_tightening)]
     fn is_playing(&self) -> bool {
-        self.running.load(Ordering::Relaxed)
-    }
-
-    fn is_paused(&self) -> bool {
-        self.paused.load(Ordering::Relaxed)
+        let binding = self.playback_thread_handle.clone();
+        let mg = binding.lock().unwrap();
+        let handle = mg.as_ref();
+        handle.map_or(false, |f| {
+            let finished = f.is_finished();
+            !finished
+        })
     }
 
     fn play_all_in_queue(&self) -> JoinHandle<PlaybackResult> {
-        self.running.store(true, Ordering::Relaxed);
-        let running = self.running.clone();
-        let stopped = self.stopped.clone();
-        let paused = self.paused.clone();
+        self.stop_signal.store(true, Ordering::Relaxed);
+        let stop_signal = self.stop_signal.clone();
         let skip_to_time = self.skip_to_time.clone();
         let queue = self.queue_service.clone();
         let audio_device = self.audio_device.clone();
@@ -180,15 +192,15 @@ impl PlayerService {
                     }
                 }
                 let mut num_failed = 0;
-                let result = loop {
+
+                loop {
                     let Some(song) = queue.get_current_song() else {
-                        running.store(false, Ordering::Relaxed);
+                        stop_signal.store(false, Ordering::Relaxed);
                         changes_tx
                             .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
                             .ok();
                         break PlaybackResult::QueueFinished;
                     };
-                    stopped.store(false, Ordering::Relaxed);
                     changes_tx
                         .send(StateChangeEvent::CurrentSongEvent(song.clone()))
                         .expect("msg send failed");
@@ -197,8 +209,7 @@ impl PlayerService {
                         .expect("msg send failed");
                     match super::symphonia::play_file(
                         &song.file,
-                        &running,
-                        &paused,
+                        &stop_signal,
                         &skip_to_time,
                         &audio_device,
                         &rsp_settings,
@@ -206,7 +217,7 @@ impl PlayerService {
                         &changes_tx,
                     ) {
                         Ok(PlaybackResult::PlaybackStopped) => {
-                            running.store(false, Ordering::Relaxed);
+                            stop_signal.store(false, Ordering::Relaxed);
                             changes_tx
                                 .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
                                 .ok();
@@ -217,7 +228,7 @@ impl PlayerService {
                             num_failed += 1;
                             if song.file.starts_with("http") || num_failed == 10 || num_failed >= queue_size {
                                 warn!("Number of failed songs is greater than 10. Aborting.");
-                                running.store(false, Ordering::Relaxed);
+                                stop_signal.store(false, Ordering::Relaxed);
                                 changes_tx
                                     .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
                                     .ok();
@@ -233,15 +244,13 @@ impl PlayerService {
                     if !queue.move_current_to_next_song() {
                         break PlaybackResult::QueueFinished;
                     }
-                };
-                stopped.store(true, Ordering::Relaxed);
-                result
+                }
             })
             .unwrap()
     }
 
     fn get_last_played_song_time(&self) -> u16 {
-        let last_time = match self.state_db.get("last_played_song_progress") {
+        let last_time = match self.state_db.get(LAST_SONG_PROGRESS_KEY) {
             Ok(Some(lt)) => {
                 let v = lt.to_vec();
                 String::from_utf8(v).unwrap()

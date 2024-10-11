@@ -2,7 +2,6 @@ use std::fs::File;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::Arc;
-use std::thread::{self};
 use std::time::Duration;
 
 use anyhow::{format_err, Result};
@@ -37,8 +36,7 @@ unsafe impl Send for PlaybackResult {}
 #[allow(clippy::type_complexity, clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn play_file(
     path_str: &str,
-    running: &Arc<AtomicBool>,
-    paused: &Arc<AtomicBool>,
+    stop_signal: &Arc<AtomicBool>,
     skip_to_time: &Arc<AtomicU16>,
     audio_device: &str,
     rsp_settings: &RsPlayerSettings,
@@ -46,9 +44,10 @@ pub fn play_file(
     changes_tx: &Sender<StateChangeEvent>,
 ) -> Result<PlaybackResult> {
     debug!("Playing file {}", path_str);
-    running.store(true, Ordering::Relaxed);
     let mut hint = Hint::new();
+    
     let source = get_source(music_dir, path_str, &mut hint)?;
+    let is_seekable = source.is_seekable();
     // Probe the media source stream for metadata and get the format reader.
     let Ok(probed) = get_probe().format(
         &hint,
@@ -63,7 +62,7 @@ pub fn play_file(
     ) else {
         return Err(format_err!("Media source probe failed"));
     };
-
+    
     let mut reader: Box<dyn FormatReader> = probed.format;
 
     let tracks = reader.tracks();
@@ -94,26 +93,14 @@ pub fn play_file(
     let decode_opts = &DecoderOptions::default();
     let mut decoder = get_codecs().make(codec_parameters, decode_opts)?;
     let mut audio_output: Option<Box<dyn AudioOutput>> = None;
-    let mut paused_time = 0;
     let mut last_current_time = 0;
     // Decode and play the packets belonging to the selected track.
     let loop_result = loop {
-        if !running.load(Ordering::Relaxed) {
+        if !stop_signal.load(Ordering::Relaxed) {
             debug!("Exit from play thread due to running flag change");
             break Ok(PlaybackResult::PlaybackStopped);
         }
-        let paused = paused.load(Ordering::Relaxed);
-        if paused {
-            debug!("Playing paused, going to sleep");
-            thread::sleep(Duration::from_millis(300));
-            paused_time += 300;
-            if (paused_time / 1000 / 60) > 5 {
-                info!("Playing paused for too long, exiting");
-                break Ok(PlaybackResult::PlaybackStopped);
-            }
-            continue;
-        }
-        if skip_to_time.load(Ordering::Relaxed) > 0 {
+        if is_seekable && skip_to_time.load(Ordering::Relaxed) > 0 {
             let skip_to = skip_to_time.swap(0, Ordering::Relaxed);
             debug!("Seeking to {}", skip_to);
             let seek_result = reader.seek(
@@ -138,7 +125,7 @@ pub fn play_file(
         };
 
         let current_time = tb.calc_time(packet.ts()).seconds;
-        if !path_str.starts_with("http") && current_time != last_current_time {
+        if current_time != last_current_time {
             last_current_time = current_time;
             changes_tx
                 .send(StateChangeEvent::SongTimeEvent(SongProgress {
@@ -200,9 +187,9 @@ pub fn play_file(
 fn get_source(music_dir: &str, path_str: &str, hint: &mut Hint) -> Result<Box<dyn MediaSource>, anyhow::Error> {
     let source = if path_str.starts_with("http") {
         let agent = ureq::AgentBuilder::new()
-            .timeout_connect(Duration::from_secs(10))
-            .timeout_read(Duration::from_secs(10))
-            .timeout_write(Duration::from_secs(10))
+            .timeout_connect(Duration::from_secs(5))
+            .timeout_read(Duration::from_secs(5))
+            .timeout_write(Duration::from_secs(5))
             .build();
         let resp = agent.get(path_str).set("accept", "*/*").call()?;
         let status = resp.status();

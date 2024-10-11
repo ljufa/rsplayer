@@ -19,13 +19,13 @@ tokio.workspace = true
 thread-priority = "1.1.0"
 core_affinity = "0.8.1"
 sled.workspace = true
-
+ureq.workspace = true
 # symphonia
 cpal = "0.15.3"
 # cpal = { path = "/home/dlj/github/cpal" }
 rb = "0.4.1"
 # rubato = "0.12.0"
-ureq = "2.10.1"
+
 
 
 mockall_double = "0.3.1"
