@@ -92,12 +92,7 @@ impl PlayerService {
         if let Some(s) = self.queue_service.get_current_song() {
             self.metadata_service.increase_play_count(&s.file);
         }
-        *self.play_handle.lock().unwrap() = Some(self.play_all_in_queue());
-    }
-
-    pub fn pause_current_song(&self) {
-        let this = self;
-        this.paused.store(true, Ordering::Relaxed);
+        *self.playback_thread_handle.lock().unwrap() = Some(self.play_all_in_queue());
     }
 
     pub fn play_next_song(&self) {
