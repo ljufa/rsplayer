@@ -397,7 +397,7 @@ mod metadata {
         ctx.metadata_service.like_media_item("radio_uuid_http://radioaparat.com");
         let favs = ctx.metadata_service.get_favorite_radio_stations();
         assert_eq!(favs.len(), 1);
-        assert_eq!(favs.get(0).unwrap(), "http://radioaparat.com");
+        assert_eq!(favs.first().unwrap(), "http://radioaparat.com");
     }
 
     #[test]

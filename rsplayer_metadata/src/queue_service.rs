@@ -95,9 +95,9 @@ impl QueueService {
                             .filter(|h| h.starts_with("icy-"))
                             .for_each(|header_key| {
                                  match header_key.as_str() {
-                                    "icy-name" => song.title = resp.header(header_key).map(|s|s.to_owned()),
-                                    "icy-description" => song.artist = resp.header(header_key).map(|s|s.to_owned()),
-                                    "icy-genre" => song.genre = resp.header(header_key).map(|s|s.to_owned()),
+                                    "icy-name" => song.title = resp.header(header_key).map(std::borrow::ToOwned::to_owned),
+                                    "icy-description" => song.artist = resp.header(header_key).map(std::borrow::ToOwned::to_owned),
+                                    "icy-genre" => song.genre = resp.header(header_key).map(std::borrow::ToOwned::to_owned),
                                     _ => ()
                                  }
                             });
