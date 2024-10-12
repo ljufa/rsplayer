@@ -1,6 +1,6 @@
 [package]
 name = "rsplayer"
-version = "1.0.1"
+version = "1.0.2"
 authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
 edition = "2021"
 license-file = "../LICENSE"
