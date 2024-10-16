@@ -1,11 +1,11 @@
+use log::{debug, error, info, warn};
+use sled::Db;
 use std::sync::{
     atomic::{AtomicBool, AtomicU16, Ordering},
     Arc, Mutex,
 };
 use std::thread::JoinHandle;
-
-use log::{debug, error, info, warn};
-use sled::Db;
+use std::time::SystemTime;
 use thread_priority::{ThreadBuilder, ThreadPriority};
 use tokio::sync::broadcast::Sender;
 
@@ -45,6 +45,7 @@ impl PlayerService {
         let db = sled::open("player_state").expect("Failed to open queue db");
         let state_db = db.clone();
         let mut rx = state_changes_tx.subscribe();
+        let state_tx = state_changes_tx.clone();
         tokio::task::spawn(async move {
             let mut i = 0;
             loop {
@@ -59,9 +60,24 @@ impl PlayerService {
                     }
                     Ok(StateChangeEvent::PlaybackStateEvent(ps)) => {
                         debug!("Save player state: {:?}", ps);
-                        _ = match ps {
-                            PlayerState::PLAYING => state_db.remove(LAST_SONG_PAUSED_KEY),
-                            PlayerState::PAUSED | PlayerState::STOPPED => state_db.insert(LAST_SONG_PAUSED_KEY, "true"),
+                        match ps {
+                            PlayerState::PLAYING => {
+                                _ = state_db.remove(LAST_SONG_PAUSED_KEY);
+                                state_tx
+                                    .send(StateChangeEvent::NotificationSuccess("Playing".to_string()))
+                                    .ok();
+                            }
+                            PlayerState::PAUSED | PlayerState::STOPPED => {
+                                _ = state_db.insert(LAST_SONG_PAUSED_KEY, "true");
+                                state_tx
+                                    .send(StateChangeEvent::NotificationSuccess("Playback paused".to_string()))
+                                    .ok();
+                            }
+                            PlayerState::ERROR(msg) => {
+                                state_tx
+                                    .send(StateChangeEvent::NotificationError(format!("Failed to play {msg}")))
+                                    .ok();
+                            }
                         };
                     }
                     _ => (),
@@ -88,12 +104,6 @@ impl PlayerService {
     }
 
     pub fn play_from_current_queue_song(&self) {
-        if self.is_playing() {
-            self.changes_tx
-                .send(StateChangeEvent::PlaybackStateEvent(PlayerState::PLAYING))
-                .ok();
-            return;
-        }
         if let Some(s) = self.queue_service.get_current_song() {
             self.metadata_service.increase_play_count(&s.file);
         }
@@ -117,17 +127,21 @@ impl PlayerService {
         self.play_from_current_queue_song();
     }
 
-    pub fn stop_current_song(&self) {
-        self.stop_signal.store(false, Ordering::Relaxed);
-        self.await_playing_song_to_finish();
-    }
-
-    pub fn pause_current_song(&self) {
-        if self.is_playing() {
-            self.stop_current_song();
+    pub fn stop_current_song(&self) -> Option<PlaybackResult> {
+        let start = SystemTime::now();
+        self.stop_signal.store(true, Ordering::Relaxed);
+        let handle = self
+            .playback_thread_handle
+            .lock()
+            .unwrap()
+            .take();
+        let mut result = Option::<PlaybackResult>::None;
+        if let Some(h) = handle{
+            result = h.join().ok();
         }
+        debug!("Stop finished after [{}] ms with result: {:?}", SystemTime::now().duration_since(start).unwrap().as_millis(), result);
+        result
     }
-
     #[allow(clippy::unused_self, clippy::missing_const_for_fn)]
     pub fn seek_current_song(&self, seconds: u16) {
         self.skip_to_time.store(seconds, Ordering::Relaxed);
@@ -139,32 +153,15 @@ impl PlayerService {
         self.play_from_current_queue_song();
     }
 
-    fn await_playing_song_to_finish(&self) {
-        while self.is_playing() {
-            continue;
-        }
-        debug!("aWait finished");
-    }
-    #[allow(clippy::significant_drop_tightening)]
-    fn is_playing(&self) -> bool {
-        let binding = self.playback_thread_handle.clone();
-        let mg = binding.lock().unwrap();
-        let handle = mg.as_ref();
-        handle.map_or(false, |f| {
-            let finished = f.is_finished();
-            !finished
-        })
-    }
 
     fn play_all_in_queue(&self) -> JoinHandle<PlaybackResult> {
-        self.stop_signal.store(true, Ordering::Relaxed);
+        self.stop_signal.store(false, Ordering::Relaxed);
         let stop_signal = self.stop_signal.clone();
         let skip_to_time = self.skip_to_time.clone();
         let queue = self.queue_service.clone();
         let audio_device = self.audio_device.clone();
         let playback_thread_prio = self.rsp_settings.player_threads_priority;
         let music_dir = self.music_dir.clone();
-        let queue_size = queue.get_all_songs().len();
         let changes_tx = self.changes_tx.clone();
         let rsp_settings = self.rsp_settings.clone();
         let is_multi_core_platform = core_affinity::get_core_ids().map_or(false, |ids| ids.len() > 1);
@@ -191,11 +188,8 @@ impl PlayerService {
                         }
                     }
                 }
-                let mut num_failed = 0;
-
                 loop {
                     let Some(song) = queue.get_current_song() else {
-                        stop_signal.store(false, Ordering::Relaxed);
                         changes_tx
                             .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
                             .ok();
@@ -217,7 +211,6 @@ impl PlayerService {
                         &changes_tx,
                     ) {
                         Ok(PlaybackResult::PlaybackStopped) => {
-                            stop_signal.store(false, Ordering::Relaxed);
                             changes_tx
                                 .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
                                 .ok();
@@ -225,19 +218,13 @@ impl PlayerService {
                         }
                         Err(err) => {
                             error!("Failed to play file {}. Error: {:?}", song.file, err);
-                            num_failed += 1;
-                            if song.file.starts_with("http") || num_failed == 10 || num_failed >= queue_size {
-                                warn!("Number of failed songs is greater than 10. Aborting.");
-                                stop_signal.store(false, Ordering::Relaxed);
-                                changes_tx
-                                    .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
-                                    .ok();
-                                break PlaybackResult::QueueFinished;
-                            }
+                            changes_tx
+                                .send(StateChangeEvent::PlaybackStateEvent(PlayerState::ERROR(song.file)))
+                                .ok();
+                            break PlaybackResult::PlaybackFailed;
                         }
                         res => {
                             info!("Playback finished with result {:?}", res);
-                            num_failed = 0;
                         }
                     }
 

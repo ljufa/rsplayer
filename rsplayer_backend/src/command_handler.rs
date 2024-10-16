@@ -6,9 +6,7 @@ use tokio::sync::broadcast::Sender;
 use tokio::sync::mpsc::Receiver;
 
 use api_models::common::MetadataCommand::{QueryLocalFiles, RescanMetadata};
-use api_models::common::PlayerCommand::{
-    Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, RandomToggle, Seek,
-};
+use api_models::common::PlayerCommand::{Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, RandomToggle, Seek, Stop};
 use api_models::common::PlaylistCommand::{QueryAlbumItems, QueryPlaylist, QueryPlaylistItems, SaveQueueAsPlaylist};
 use api_models::common::QueueCommand::{
     self, AddLocalLibDirectory, AddSongToQueue, ClearQueue, LoadAlbumInQueue, LoadArtistInQueue, LoadPlaylistInQueue,
@@ -54,28 +52,21 @@ pub async fn handle_user_commands(
              * Player commands
              */
             Player(Play) => {
+                player_service.stop_current_song();
                 player_service.play_from_current_queue_song();
                 debug!("Play from current song command processed");
             }
             Player(PlayItem(id)) => {
                 player_service.play_song(&id);
             }
-            Player(Pause) => {
-                player_service.pause_current_song();
-                sender
-                    .send(StateChangeEvent::PlaybackStateEvent(
-                        api_models::state::PlayerState::PAUSED,
-                    ))
-                    .unwrap();
+            Player(Pause | Stop) => {
+                player_service.stop_current_song();
             }
             Player(Next) => {
                 player_service.play_next_song();
             }
             Player(Prev) => {
                 player_service.play_prev_song();
-            }
-            Player(api_models::common::PlayerCommand::Stop) => {
-                player_service.stop_current_song();
             }
             Player(Seek(sec)) => {
                 player_service.seek_current_song(sec);

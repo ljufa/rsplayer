@@ -5,6 +5,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{format_err, Result};
+
+use api_models::player::Song;
+use api_models::settings::RsPlayerSettings;
+use api_models::state::{PlayerInfo, SongProgress, StateChangeEvent};
 use log::{debug, info, trace, warn};
 use symphonia::core::audio::Channels;
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
@@ -17,9 +21,6 @@ use symphonia::core::units::{Time, TimeBase};
 use symphonia::default::{get_codecs, get_probe};
 use tokio::sync::broadcast::Sender;
 
-use api_models::settings::RsPlayerSettings;
-use api_models::state::{PlayerInfo, SongProgress, StateChangeEvent};
-
 use crate::rsp::output::AudioOutput;
 
 use super::output::try_open;
@@ -29,6 +30,14 @@ pub enum PlaybackResult {
     QueueFinished,
     SongFinished,
     PlaybackStopped,
+    PlaybackFailed,
+}
+
+struct RadioMeta {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub url: String,
+    genre: Option<String>,
 }
 
 unsafe impl Send for PlaybackResult {}
@@ -45,8 +54,21 @@ pub fn play_file(
 ) -> Result<PlaybackResult> {
     debug!("Playing file {}", path_str);
     let mut hint = Hint::new();
-    
-    let source = get_source(music_dir, path_str, &mut hint)?;
+    let (s, radio_meta) = get_source(music_dir, path_str, &mut hint);
+    let Ok(source) = s else {
+        return Err(format_err!("Failed to get source: {:?}", s.err()));
+    };
+    if let Some(radio_meta) = radio_meta {
+        changes_tx.send(StateChangeEvent::CurrentSongEvent(
+            Song {
+                title: radio_meta.name,
+                album: radio_meta.description,
+                genre: radio_meta.genre,
+                file: radio_meta.url,
+                ..Default::default()
+            }
+        )).ok();
+    }
     let is_seekable = source.is_seekable();
     // Probe the media source stream for metadata and get the format reader.
     let Ok(probed) = get_probe().format(
@@ -62,7 +84,7 @@ pub fn play_file(
     ) else {
         return Err(format_err!("Media source probe failed"));
     };
-    
+
     let mut reader: Box<dyn FormatReader> = probed.format;
 
     let tracks = reader.tracks();
@@ -76,7 +98,6 @@ pub fn play_file(
         .n_frames
         .map_or(1, |frames| codec_parameters.start_ts + frames);
     let dur = tb.calc_time(dur);
-
     let rate = codec_parameters.sample_rate;
     let bps = codec_parameters.bits_per_sample;
     let chan_num = codec_parameters.channels.map(Channels::count);
@@ -96,7 +117,7 @@ pub fn play_file(
     let mut last_current_time = 0;
     // Decode and play the packets belonging to the selected track.
     let loop_result = loop {
-        if !stop_signal.load(Ordering::Relaxed) {
+        if stop_signal.load(Ordering::Relaxed) {
             debug!("Exit from play thread due to running flag change");
             break Ok(PlaybackResult::PlaybackStopped);
         }
@@ -184,23 +205,32 @@ pub fn play_file(
     loop_result
 }
 
-fn get_source(music_dir: &str, path_str: &str, hint: &mut Hint) -> Result<Box<dyn MediaSource>, anyhow::Error> {
+fn get_source(music_dir: &str, path_str: &str, hint: &mut Hint) -> (Result<Box<dyn MediaSource>, anyhow::Error>, Option<RadioMeta>) {
+    let mut radio_meta = None;
     let source = if path_str.starts_with("http") {
         let agent = ureq::AgentBuilder::new()
             .timeout_connect(Duration::from_secs(5))
             .timeout_read(Duration::from_secs(5))
             .timeout_write(Duration::from_secs(5))
             .build();
-        let resp = agent.get(path_str).set("accept", "*/*").call()?;
+        let Ok(resp) = agent.get(path_str).set("accept", "*/*").call() else {
+            return (Err(format_err!("Failed to get url {path_str}")), None);
+        };
         let status = resp.status();
         info!("response status code:{status} / status text:{}", resp.status_text());
         resp.headers_names()
             .iter()
             .for_each(|header| debug!("{header} = {:?}", resp.header(header).unwrap_or("")));
+        radio_meta = Some(RadioMeta {
+            name: resp.header("icy-name").map(ToString::to_string),
+            description: resp.header("icy-description").map(ToString::to_string),
+            genre: resp.header("icy-genre").map(ToString::to_string),
+            url: path_str.to_string(),
+        });
         if status == 200 {
             Box::new(ReadOnlySource::new(resp.into_reader())) as Box<dyn MediaSource>
         } else {
-            return Err(format_err!("Invalid streaming url {path_str}"));
+            return (Err(format_err!("Invalid streaming url {path_str}")), None);
         }
     } else {
         let path = Path::new(music_dir).join(path_str);
@@ -209,9 +239,13 @@ fn get_source(music_dir: &str, path_str: &str, hint: &mut Hint) -> Result<Box<dy
                 hint.with_extension(extension_str);
             }
         }
-        Box::new(File::open(path)?)
+        if let Ok(p) = File::open(path) {
+            Box::new(p)
+        } else {
+            return (Err(format_err!("Unable to open file: {}", path_str)), None);
+        }
     };
-    Ok(source)
+    (Ok(source), radio_meta)
 }
 
 fn first_supported_track(tracks: &[Track]) -> Option<&Track> {

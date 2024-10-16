@@ -1,12 +1,8 @@
-use std::{
-    sync::{
-        atomic::{AtomicBool, AtomicU16, Ordering},
-        Arc,
-    },
-    time::Duration,
+use std::sync::{
+    atomic::{AtomicBool, AtomicU16, Ordering},
+    Arc,
 };
 
-use log::info;
 use rand::Rng;
 use sled::{Db, IVec, Tree};
 
@@ -76,35 +72,6 @@ impl QueueService {
             if let Ok(Some(value)) = self.queue_db.get(current_key) {
                 let mut song = Song::bytes_to_song(&value).expect("Failed to parse song");
                 song.statistics = self.statistics_repository.find_by_id(song.file.as_str());
-                if song.file.starts_with("http") {
-                    let agent = ureq::AgentBuilder::new()
-                        .timeout_connect(Duration::from_secs(5))
-                        .timeout_read(Duration::from_secs(5))
-                        .timeout_write(Duration::from_secs(5))
-                        .build();
-                    let Ok(resp) = agent.get(&song.file).set("accept", "*/*").call() else {
-                        return None;
-                    };
-
-                    let status = resp.status();
-                    info!("response status code:{status} / status text:{}", resp.status_text());
-                    if status == 200 {
-                        
-                        resp.headers_names()
-                            .iter()
-                            .filter(|h| h.starts_with("icy-"))
-                            .for_each(|header_key| {
-                                 match header_key.as_str() {
-                                    "icy-name" => song.title = resp.header(header_key).map(std::borrow::ToOwned::to_owned),
-                                    "icy-description" => song.artist = resp.header(header_key).map(std::borrow::ToOwned::to_owned),
-                                    "icy-genre" => song.genre = resp.header(header_key).map(std::borrow::ToOwned::to_owned),
-                                    _ => ()
-                                 }
-                            });
-                    } else {
-                        return None
-                    }
-                }
                 return Some(song);
             }
         }

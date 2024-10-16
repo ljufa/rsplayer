@@ -77,6 +77,7 @@ pub enum PlayerState {
     PLAYING,
     PAUSED,
     STOPPED,
+    ERROR(String)
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash, Copy, ToPrimitive, Serialize, Deserialize)]
