@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 seed = { version = "0.10.0", features = ["routing"] }
 serde = "1.0.210"
 serde_json = "1.0.128"
-uuid = { version = "1.10.0" }
+uuid = { version = "1.18.1", features = ["js"] }
 indexmap = { version = "2.5.0", features = ["serde"] }
 enclose = "1.2.0"
 strum = "0.26.3"
