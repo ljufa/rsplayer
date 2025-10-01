@@ -23,7 +23,7 @@ gloo-net = { version = "0.6.0" }
 indextree = "4.7.2"
 
 
-[dev-dependencies]
+[dev-dependenciwes]
 wasm-bindgen-test = "0.3.43"
 
 [features]

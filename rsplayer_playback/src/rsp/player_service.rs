@@ -130,18 +130,27 @@ impl PlayerService {
     pub fn stop_current_song(&self) -> Option<PlaybackResult> {
         let start = SystemTime::now();
         self.stop_signal.store(true, Ordering::Relaxed);
-        let handle = self
-            .playback_thread_handle
-            .lock()
-            .unwrap()
-            .take();
+        let handle = self.playback_thread_handle.lock().unwrap().take();
         let mut result = Option::<PlaybackResult>::None;
-        if let Some(h) = handle{
+        if let Some(h) = handle {
             result = h.join().ok();
         }
-        debug!("Stop finished after [{}] ms with result: {:?}", SystemTime::now().duration_since(start).unwrap().as_millis(), result);
+        debug!(
+            "Stop finished after [{}] ms with result: {:?}",
+            SystemTime::now().duration_since(start).unwrap().as_millis(),
+            result
+        );
         result
     }
+
+    pub fn toggle_play_pause(&self) {
+        if self.stop_signal.load(Ordering::Relaxed) {
+            self.play_from_current_queue_song();
+        } else {
+            self.stop_current_song();
+        }
+    }
+
     #[allow(clippy::unused_self, clippy::missing_const_for_fn)]
     pub fn seek_current_song(&self, seconds: u16) {
         self.skip_to_time.store(seconds, Ordering::Relaxed);
@@ -153,7 +162,6 @@ impl PlayerService {
         self.play_from_current_queue_song();
     }
 
-
     fn play_all_in_queue(&self) -> JoinHandle<PlaybackResult> {
         self.stop_signal.store(false, Ordering::Relaxed);
         let stop_signal = self.stop_signal.clone();
@@ -164,7 +172,7 @@ impl PlayerService {
         let music_dir = self.music_dir.clone();
         let changes_tx = self.changes_tx.clone();
         let rsp_settings = self.rsp_settings.clone();
-        let is_multi_core_platform = core_affinity::get_core_ids().map_or(false, |ids| ids.len() > 1);
+        let is_multi_core_platform = core_affinity::get_core_ids().is_some_and(|ids| ids.len() > 1);
         let prio = if is_multi_core_platform {
             ThreadPriority::Crossplatform(playback_thread_prio.try_into().unwrap())
         } else {

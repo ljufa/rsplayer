@@ -66,7 +66,7 @@ impl AlbumRepository {
             .iter()
             .filter_map(std::result::Result::ok)
             .map_while(|s| Some(Album::from_bytes(&s.1)))
-            .filter(|a| a.artist.as_ref().map_or(false, |a| a == artist))
+            .filter(|a| a.artist.as_ref().is_some_and(|a| a == artist))
             .collect()
     }
 

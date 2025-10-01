@@ -3,7 +3,7 @@ use std::sync::Arc;
 use api_models::common::Volume;
 
 use api_models::settings::Settings;
-use api_models::state::{AudioOut, StreamerState};
+use api_models::state::StreamerState;
 use sled::{Db, IVec};
 
 const SETTINGS_KEY: &str = "settings";
@@ -34,15 +34,7 @@ impl Configuration {
 
     pub fn get_settings(&self) -> Settings {
         let sett = self.db.get(SETTINGS_KEY).unwrap().unwrap();
-        let mut result: Settings = serde_json::from_slice(&sett).unwrap();
-        result
-            .dac_settings
-            .available_dac_chips
-            .insert(String::from("AK4497"), String::from("AK4497"));
-        result
-            .dac_settings
-            .available_dac_chips
-            .insert(String::from("AK4490"), String::from("AK4490"));
+        let result: Settings = serde_json::from_slice(&sett).unwrap();
         result
     }
 
@@ -58,13 +50,6 @@ impl Configuration {
     pub fn get_streamer_state(&self) -> StreamerState {
         let state = self.db.get(STATE_KEY).unwrap().unwrap();
         serde_json::from_slice(&state).unwrap()
-    }
-
-    pub fn save_audio_output(&self, selected_output: AudioOut) -> StreamerState {
-        let mut state = self.get_streamer_state();
-        state.selected_audio_output = selected_output;
-        self.save_streamer_state(&state);
-        state
     }
 
     pub fn save_volume_state(&self, volume: Volume) -> StreamerState {

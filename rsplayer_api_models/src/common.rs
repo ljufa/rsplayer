@@ -69,16 +69,16 @@ pub struct AudioCard {
     Debug, Hash, Serialize, Clone, Copy, PartialEq, Eq, ToPrimitive, Deserialize, EnumString, EnumIter, IntoStaticStr,
 )]
 pub enum VolumeCrtlType {
-    Dac,
+    Off,
     Alsa,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Volume {
-    pub step: i64,
-    pub min: i64,
-    pub max: i64,
-    pub current: i64,
+    pub step: u8,
+    pub min: u8,
+    pub max: u8,
+    pub current: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -89,7 +89,7 @@ pub enum UserCommand {
     Metadata(MetadataCommand),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, EnumString, EnumIter, IntoStaticStr)]
 pub enum PlayerCommand {
     // Player commands
     Next,
@@ -101,6 +101,7 @@ pub enum PlayerCommand {
     RandomToggle,
     Seek(u16),
     QueryCurrentPlayerInfo,
+    TogglePlay,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -152,26 +153,7 @@ pub enum SystemCommand {
     PowerOff,
     RestartSystem,
     RestartRSPlayer,
-    ChangeAudioOutput,
     QueryCurrentStreamerState,
-}
-
-#[derive(
-    Debug, Hash, Serialize, Clone, Copy, PartialEq, Eq, ToPrimitive, Deserialize, EnumString, EnumIter, IntoStaticStr,
-)]
-pub enum FilterType {
-    SharpRollOff,
-    SlowRollOff,
-    ShortDelaySharpRollOff,
-    ShortDelaySlowRollOff,
-    SuperSlow,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumString, EnumIter, IntoStaticStr)]
-pub enum GainLevel {
-    V25,
-    V28,
-    V375,
 }
 
 #[must_use]

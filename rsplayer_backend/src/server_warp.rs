@@ -196,7 +196,10 @@ mod handlers {
     use warp::hyper::StatusCode;
 
     use api_models::settings::Settings;
-    use rsplayer_hardware::audio_device::alsa::{self};
+    use rsplayer_hardware::{
+        audio_device::alsa::{self},
+        uart,
+    };
 
     use super::Config;
 
@@ -220,9 +223,8 @@ mod handlers {
     pub async fn get_settings(config: Config) -> Result<impl warp::Reply, Infallible> {
         let settings = &mut config.get_settings();
         let cards = alsa::get_all_cards();
-
         settings.alsa_settings.available_audio_cards = cards;
-
+        settings.uart_settings.available_serial_devices = uart::io::get_all_serial_devices();
         Ok(warp::reply::json(settings))
     }
 }

@@ -6,7 +6,7 @@ use tokio::sync::broadcast::Receiver;
 #[allow(dead_code)]
 pub async fn no_op_future() {
     loop {
-        tokio::time::sleep(Duration::from_secs(50)).await;
+        tokio::time::sleep(Duration::from_secs(500)).await;
     }
 }
 

@@ -3,7 +3,7 @@ extern crate api_models;
 use std::{rc::Rc, str::FromStr};
 
 use api_models::{
-    common::{MetadataCommand, PlayerCommand, QueueCommand, SystemCommand, UserCommand, Volume}, player::Song, state::{AudioOut, PlayerInfo, PlayerState, SongProgress, StateChangeEvent, StreamerState}
+    common::{MetadataCommand, PlayerCommand, QueueCommand, SystemCommand, UserCommand, Volume}, player::Song, state::{PlayerInfo, PlayerState, SongProgress, StateChangeEvent, StreamerState}
 };
 use gloo_console::{error, log};
 use gloo_net::http::Request;
@@ -194,7 +194,6 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
         startup_error: None,
         player_model: PlayerModel {
             streamer_status: StreamerState {
-                selected_audio_output: AudioOut::SPKR,
                 volume_state: Volume::default(),
             },
             player_info: None,
@@ -324,7 +323,7 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             orders.skip();
         }
         Msg::SetVolume(volstr) => {
-            let vol = i64::from_str(volstr.as_str()).unwrap_or_default();
+            let vol = u8::from_str(volstr.as_str()).unwrap_or_default();
             model.player_model.streamer_status.volume_state.current = vol;
             orders.send_msg(Msg::SendSystemCommand(SystemCommand::SetVol(
                 u8::from_str(volstr.as_str()).unwrap_or_default(),
@@ -518,7 +517,7 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             _ = model.web_socket.send_string(&serde_json::to_string(&cmd).unwrap());
             log!(format!("lib {:?}", cmd));
             if let SystemCommand::SetVol(vol) = cmd {
-                model.player_model.streamer_status.volume_state.current = i64::from(vol);
+                model.player_model.streamer_status.volume_state.current = vol;
             }
             orders.skip();
         }
@@ -585,7 +584,7 @@ fn view_notification(model: &Model) -> Node<Msg> {
         },
         model.notification.as_ref().map_or(empty!(), |not| match not {
             StateChangeEvent::NotificationSuccess(info) => {
-                div![C!["notification", "is-success", "is-light"], info]
+                div![C!["notification", "is-primary", "is-light"], info]
             }
             StateChangeEvent::NotificationError(error) => {
                 div![C!["notification", "is-error", "is-light"], error]
@@ -699,7 +698,7 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
                             player_model.progress.format_time()
                         ],
                         progress![
-                            C!["progress", "is-small", "is-success"],
+                            C!["progress", "is-small"],
                             attrs! {"value"=> player_model.progress.current_time.as_secs()},
                             attrs! {"max"=> player_model.progress.total_time.as_secs()},
                             player_model.progress.current_time.as_secs()
@@ -742,7 +741,7 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
                             ],
                         ],
                         div![input![
-                            C!["slider", "is-success"],
+                            C!["slider"],
                             attrs! {"value"=> player_model.streamer_status.volume_state.current},
                             // attrs! {"step"=> player_model.streamer_status.volume_state.step},
                             attrs! {"max"=> player_model.streamer_status.volume_state.max},
@@ -812,10 +811,7 @@ fn view_content(main_model: &Model, base_url: &Url) -> Node<Msg> {
 fn view_navigation_tabs(page: &Page) -> Node<Msg> {
     let page_name: &str = page.into();
     div![
-        style! {
-            St::Background => "rgba(86, 92, 86, 0.507)",
-        },
-        C!["tabs", "is-toggle", "is-centered", "is-fullwidth"],
+        C!["tabs", "is-toggle", "is-centered", "is-fullwidth", "has-background-dark-transparent"],
         ul![
             li![
                 IF!(page_name == "Player" => C!["is-active"]),
@@ -863,6 +859,7 @@ fn view_music_lib_tabs(page: &Page) -> Node<Msg> {
         C!["tabs", "is-boxed", "is-centered", "is-toggle", "pt-3"],
         ul![
             li![
+                C!["has-background-dark-transparent"],
                 IF!(page_name == "MusicLibraryStaticPlaylist" => C!["is-active"]),
                 a![
                     attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_PL_STATIC)},
@@ -870,6 +867,7 @@ fn view_music_lib_tabs(page: &Page) -> Node<Msg> {
                 ]
             ],
             li![
+                C!["has-background-dark-transparent"],
                 IF!(page_name == "MusicLibraryFiles" => C!["is-active"]),
                 a![
                     attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_FILES)},
@@ -877,6 +875,7 @@ fn view_music_lib_tabs(page: &Page) -> Node<Msg> {
                 ],
             ],
             li![
+                C!["has-background-dark-transparent"],
                 IF!(page_name == "MusicLibraryRadio" => C!["is-active"]),
                 a![
                     attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_RADIO)},
@@ -884,6 +883,7 @@ fn view_music_lib_tabs(page: &Page) -> Node<Msg> {
                 ]
             ],
             li![
+                C!["has-background-dark-transparent"],
                 IF!(page_name == "MusicLibraryArtists" => C!["is-active"]),
                 a![
                     attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_ARTISTS)},
@@ -891,6 +891,7 @@ fn view_music_lib_tabs(page: &Page) -> Node<Msg> {
                 ],
             ],
             li![
+                C!["has-background-dark-transparent"],
                 IF!(page_name == "MusicLibraryDynamicPlaylist" => C!["is-active"]),
                 a![attrs! {At::Href => ""}, span!("Discover")]
             ],

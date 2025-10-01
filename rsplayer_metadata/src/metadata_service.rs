@@ -339,38 +339,88 @@ fn build_song(probed: &mut ProbeResult) -> (Song, Option<Visual>) {
             }
         }
     }
-    if let Some(metadata_rev) = probed.format.metadata().current() {
+
+    let mut fill_song_from_metadata = |metadata_rev: &symphonia::core::meta::MetadataRevision| {
         let tags = metadata_rev.tags();
         for known_tag in tags.iter().filter(|t| t.is_known()) {
             match known_tag.std_key.unwrap_or(StandardTagKey::Version) {
-                StandardTagKey::Album => song.album = from_tag_value_to_option(known_tag),
-                StandardTagKey::AlbumArtist => {
-                    song.album_artist = from_tag_value_to_option(known_tag);
+                StandardTagKey::Album => {
+                    if song.album.is_none() {
+                        song.album = from_tag_value_to_option(known_tag)
+                    }
                 }
-                StandardTagKey::Artist => song.artist = from_tag_value_to_option(known_tag),
-                StandardTagKey::Composer => song.composer = from_tag_value_to_option(known_tag),
-                StandardTagKey::Date => song.date = from_tag_value_to_option(known_tag),
-                StandardTagKey::DiscNumber => song.disc = from_tag_value_to_option(known_tag),
-                StandardTagKey::Genre => song.genre = from_tag_value_to_option(known_tag),
-                StandardTagKey::Label => song.label = from_tag_value_to_option(known_tag),
-                StandardTagKey::Performer => song.performer = from_tag_value_to_option(known_tag),
-                StandardTagKey::TrackNumber => song.track = from_tag_value_to_option(known_tag),
+                StandardTagKey::AlbumArtist => {
+                    if song.album_artist.is_none() {
+                        song.album_artist = from_tag_value_to_option(known_tag);
+                    }
+                }
+                StandardTagKey::Artist => {
+                    if song.artist.is_none() {
+                        song.artist = from_tag_value_to_option(known_tag)
+                    }
+                }
+                StandardTagKey::Composer => {
+                    if song.composer.is_none() {
+                        song.composer = from_tag_value_to_option(known_tag)
+                    }
+                }
+                StandardTagKey::Date => {
+                    if song.date.is_none() {
+                        song.date = from_tag_value_to_option(known_tag)
+                    }
+                }
+                StandardTagKey::DiscNumber => {
+                    if song.disc.is_none() {
+                        song.disc = from_tag_value_to_option(known_tag)
+                    }
+                }
+                StandardTagKey::Genre => {
+                    if song.genre.is_none() {
+                        song.genre = from_tag_value_to_option(known_tag)
+                    }
+                }
+                StandardTagKey::Label => {
+                    if song.label.is_none() {
+                        song.label = from_tag_value_to_option(known_tag)
+                    }
+                }
+                StandardTagKey::Performer => {
+                    if song.performer.is_none() {
+                        song.performer = from_tag_value_to_option(known_tag)
+                    }
+                }
+                StandardTagKey::TrackNumber => {
+                    if song.track.is_none() {
+                        song.track = from_tag_value_to_option(known_tag)
+                    }
+                }
                 StandardTagKey::TrackTitle => {
-                    song.title = from_tag_value_to_option(known_tag);
+                    if song.title.is_none() {
+                        song.title = from_tag_value_to_option(known_tag);
+                    }
                 }
                 _ => {}
             }
         }
         for unknown_tag in tags.iter().filter(|t| !t.is_known()) {
-            song.tags.insert(
-                unknown_tag.key.clone(),
-                from_tag_value_to_option(unknown_tag).unwrap_or_default(),
-            );
+            song.tags
+                .entry(unknown_tag.key.clone())
+                .or_insert_with(|| from_tag_value_to_option(unknown_tag).unwrap_or_default());
         }
-        if let Some(v) = metadata_rev.visuals().iter().next() {
-            image_data = Some(v.clone());
+        if image_data.is_none() {
+            if let Some(v) = metadata_rev.visuals().iter().next() {
+                image_data = Some(v.clone());
+            }
         }
+    };
+
+    if let Some(metadata_rev) = probed.format.metadata().skip_to_latest() {
+        fill_song_from_metadata(metadata_rev);
     }
+    if let Some(metadata_rev) = probed.metadata.get() {
+        fill_song_from_metadata(metadata_rev.current().unwrap());
+    }
+
     (song, image_data)
 }
 

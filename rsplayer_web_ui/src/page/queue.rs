@@ -424,7 +424,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                         iter.map(|it| { view_queue_item(it, model)  })
                     ],
                     button![
-                        C!["button","is-fullwidth", "is-outlined", "is-success"],
+                        C!["button","is-fullwidth", "is-outlined", "is-primary"],
                         "Load more", 
                         ev(Ev::Click, move |_| Msg::LoadMoreItems(offset))
                     ]

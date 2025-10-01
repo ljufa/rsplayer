@@ -8,6 +8,7 @@ use alsa::pcm::State;
 
 use anyhow::Result;
 use api_models::common::{AudioCard, CardMixer, PcmOutputDevice, Volume};
+use api_models::num_traits::ToPrimitive;
 use log::debug;
 
 use super::VolumeControlDevice;
@@ -104,7 +105,7 @@ impl AlsaPcmCard {
         alsa::PCM::new(self.device_name.as_str(), alsa::Direction::Playback, false).is_err()
     }
 }
-const ALSA_MIXER_STEP: i64 = 1;
+const ALSA_MIXER_STEP: u8 = 1;
 
 impl AlsaMixer {
     pub fn new(card_index: i32, mixer: Option<CardMixer>, volume: &Volume) -> Box<Self> {
@@ -154,28 +155,30 @@ impl VolumeControlDevice for AlsaMixer {
                 let old: i64 = selem.get_playback_volume(channel).unwrap();
                 return Volume {
                     step: ALSA_MIXER_STEP,
-                    min: rmin,
-                    max: rmax,
-                    current: old,
+                    min: rmin.to_u8().unwrap_or(0),
+                    max: rmax.to_u8().unwrap_or(0),
+                    current: old.to_u8().unwrap_or(0),
                 };
             }
         }
         Volume::default()
     }
 
-    fn set_vol(&self, level: i64) -> Volume {
+    fn set_vol(&self, level: u8) -> Volume {
         if let Ok(mixer) = Mixer::new(self.card_name.as_str(), false) {
             if let Some(selem) = mixer.find_selem(&SelemId::new(&self.mixer_name, self.mixer_idx)) {
                 let (rmin, rmax) = selem.get_playback_volume_range();
                 for c in SelemChannelId::all() {
                     if selem.has_playback_channel(*c) {
-                        selem.set_playback_volume(*c, level).unwrap();
+                        selem
+                            .set_playback_volume(*c, level.to_i64().unwrap_or_default())
+                            .unwrap();
                     }
                 }
                 return Volume {
                     step: ALSA_MIXER_STEP,
-                    min: rmin,
-                    max: rmax,
+                    min: rmin.to_u8().unwrap_or_default(),
+                    max: rmax.to_u8().unwrap_or_default(),
                     current: level,
                 };
             }

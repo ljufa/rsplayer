@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use env_logger::Env;
 
+use rsplayer_hardware::uart;
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::{select, spawn};
@@ -16,9 +17,6 @@ use tokio::{select, spawn};
 use album_repository::AlbumRepository;
 use rsplayer_config::Configuration;
 use rsplayer_hardware::audio_device::audio_service::AudioInterfaceService;
-use rsplayer_hardware::input::ir_lirc;
-use rsplayer_hardware::input::volume_rotary;
-use rsplayer_hardware::oled::st7920;
 use rsplayer_metadata::album_repository;
 use rsplayer_metadata::metadata_service::MetadataService;
 use rsplayer_metadata::play_statistic_repository::PlayStatisticsRepository;
@@ -42,7 +40,7 @@ async fn main() {
     let version = env!("CARGO_PKG_VERSION");
     info!("Starting RSPlayer {version}.");
     info!(
-        r#" 
+        r" 
         -------------------------------------------------------------------------
 
             ██████╗ ███████╗██████╗ ██╗      █████╗ ██╗   ██╗███████╗██████╗
@@ -55,7 +53,7 @@ async fn main() {
             by https://github.com/ljufa/rsplayer
         
         -------------------------------------------------------------------------
-    "#
+    "
     );
 
     let config = Arc::new(Configuration::new());
@@ -104,7 +102,7 @@ async fn main() {
         &config.get_settings(),
         metadata_service.clone(),
         queue_service.clone(),
-        state_changes_tx.clone()
+        state_changes_tx.clone(),
     ));
     info!("Player service successfully created.");
 
@@ -118,40 +116,54 @@ async fn main() {
     if config.get_settings().auto_resume_playback {
         player_service.play_from_current_queue_song();
     }
-
+    let uart_settings = config.get_settings().uart_settings.clone();
     select! {
-        _ = spawn(ir_lirc::listen(player_commands_tx.clone(), system_commands_tx.clone(), config.clone())) => {
-            error!("Exit from IR Command thread.");
-        }
-
-        _ = spawn(volume_rotary::listen(system_commands_tx.clone(), config.clone())) => {
-            error!("Exit from Volume control thread.");
-        }
-
-        _ = spawn(st7920::write(state_changes_tx.subscribe(), config.clone())) => {
-            error!("Exit from OLED writer thread.");
-        }
-
         _ = spawn(command_handler::handle_user_commands(
-                player_service.clone(),
-                metadata_service.clone(),
-                playlist_service.clone(),
-                queue_service.clone(),
-                album_repository.clone(),
-                song_repository.clone(),
-                config.clone(),
-                player_commands_rx,
-                state_changes_tx.clone())) => {
-            error!("Exit from command handler thread.");
-        }
+                    player_service.clone(),
+                    metadata_service.clone(),
+                    playlist_service.clone(),
+                    queue_service.clone(),
+                    album_repository.clone(),
+                    song_repository.clone(),
+                    config.clone(),
+                    player_commands_rx,
+                    state_changes_tx.clone()))
+            => {
+                error!("Exit from command handler thread.");
+            }
+        _ = if config.get_settings().uart_settings.enabled {
+                spawn(uart::io::send_state_events(state_changes_tx.subscribe(), uart_settings.clone()))
+            } else {
+                spawn(rsplayer_hardware::common::no_op_future())
+            }
+            => {
+                let mut settings = config.get_settings();
+                settings.uart_settings.enabled = false;
+                config.save_settings(&settings);
+                error!("Exit from tx UART thread. UART disabled.");
+            }
+
+        _ = if config.get_settings().uart_settings.enabled {
+                spawn(rsplayer_hardware::uart::io::receive_commands(player_commands_tx.clone(), system_commands_tx.clone(), uart_settings))
+            } else {
+                spawn(rsplayer_hardware::common::no_op_future())
+
+            }
+            => {
+                let mut settings = config.get_settings();
+                settings.uart_settings.enabled = false;
+                config.save_settings(&settings);
+                error!("Exit from rx UART thread. UART disabled.");
+            }
+
         _ = spawn(command_handler::handle_system_commands(
                 ai_service,
-                metadata_service,
                 config.clone(),
                 system_commands_rx,
-                state_changes_tx.clone())) => {
-            error!("Exit from command handler thread.");
-        }
+                state_changes_tx.clone()))
+            => {
+                error!("Exit from command handler thread.");
+            }
 
         _ = spawn(http_server_future) => {}
         _ = spawn(https_server_future) => {}

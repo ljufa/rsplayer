@@ -232,6 +232,8 @@ sudo cp dplayd.lircd.conf /etc/lirc/lircd.conf.d
 
 ## Install build tools
 ```bash
+sudo apt install build-essential
+
 cargo install cargo-binstall
 cargo binstall cargo-make
 cargo make install_tools
@@ -269,14 +271,4 @@ cargo make copy_remote
 `cargo make build_release`
 * build and copy to rpi device 
 `cargo make copy_remote`  
-
-# My DIY streamer implementation
-
-## Architecture
-![Diagram](dev/architecture-2022-09-05-1620.png)
-## My Audio Streamer Implementation
-**[KiCad files](docs/kicad/)** could be found here
-![front](dev/my_streamer_front_small.jpg)
-![back](dev/my_streamer_back_small.jpg)
-![inside](dev/my_streamer_inside_small.jpg)
 

@@ -6,14 +6,16 @@ use tokio::sync::broadcast::Sender;
 use tokio::sync::mpsc::Receiver;
 
 use api_models::common::MetadataCommand::{QueryLocalFiles, RescanMetadata};
-use api_models::common::PlayerCommand::{Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, RandomToggle, Seek, Stop};
+use api_models::common::PlayerCommand::{
+    Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, RandomToggle, Seek, Stop, TogglePlay,
+};
 use api_models::common::PlaylistCommand::{QueryAlbumItems, QueryPlaylist, QueryPlaylistItems, SaveQueueAsPlaylist};
 use api_models::common::QueueCommand::{
     self, AddLocalLibDirectory, AddSongToQueue, ClearQueue, LoadAlbumInQueue, LoadArtistInQueue, LoadPlaylistInQueue,
     LoadSongToQueue, QueryCurrentQueue, QueryCurrentSong, RemoveItem,
 };
 use api_models::common::SystemCommand::{
-    ChangeAudioOutput, PowerOff, QueryCurrentStreamerState, RestartRSPlayer, RestartSystem, SetVol, VolDown, VolUp,
+    PowerOff, QueryCurrentStreamerState, RestartRSPlayer, RestartSystem, SetVol, VolDown, VolUp,
 };
 use api_models::common::UserCommand::{Metadata, Player, Playlist, Queue};
 use api_models::common::{MetadataCommand, MetadataLibraryItem, SystemCommand, UserCommand};
@@ -62,6 +64,10 @@ pub async fn handle_user_commands(
             Player(Pause | Stop) => {
                 player_service.stop_current_song();
             }
+            Player(TogglePlay) => {
+                player_service.toggle_play_pause();
+            }
+
             Player(Next) => {
                 player_service.play_next_song();
             }
@@ -376,7 +382,6 @@ pub async fn handle_user_commands(
 
 pub async fn handle_system_commands(
     ai_service: ArcAudioInterfaceSvc,
-    _metadata_service: Arc<MetadataService>,
     config_store: ArcConfiguration,
     mut input_commands_rx: Receiver<SystemCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
@@ -386,7 +391,7 @@ pub async fn handle_system_commands(
             debug!("Received command {:?}", cmd);
             match cmd {
                 SetVol(val) => {
-                    let nv = ai_service.set_volume(i64::from(val));
+                    let nv = ai_service.set_volume(val);
                     let new_state = config_store.save_volume_state(nv);
                     state_changes_sender
                         .send(StateChangeEvent::StreamerStateEvent(new_state))
@@ -406,25 +411,19 @@ pub async fn handle_system_commands(
                         .send(StateChangeEvent::StreamerStateEvent(new_state))
                         .expect("Send event failed.");
                 }
-                ChangeAudioOutput => {
-                    if let Some(out) = ai_service.toggle_output() {
-                        let new_state = config_store.save_audio_output(out);
-                        state_changes_sender
-                            .send(StateChangeEvent::StreamerStateEvent(new_state))
-                            .unwrap();
-                    };
-                }
                 PowerOff => {
                     info!("Shutting down system");
-                    std::process::Command::new("/usr/sbin/poweroff")
+                    _ = std::process::Command::new("/usr/sbin/poweroff")
                         .spawn()
-                        .expect("halt command failed");
+                        .expect("halt command failed")
+                        .wait();
                 }
                 RestartSystem => {
                     info!("Restarting system");
-                    std::process::Command::new("/usr/sbin/reboot")
+                    _ = std::process::Command::new("/usr/sbin/reboot")
                         .spawn()
-                        .expect("halt command failed");
+                        .expect("halt command failed")
+                        .wait();
                 }
                 RestartRSPlayer => {
                     info!("Restarting RSPlayer");

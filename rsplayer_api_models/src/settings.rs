@@ -1,19 +1,13 @@
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::common::{AudioCard, CardMixer, FilterType, GainLevel, PcmOutputDevice, VolumeCrtlType};
+use crate::common::{AudioCard, CardMixer, PcmOutputDevice, VolumeCrtlType};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
 pub struct Settings {
     pub volume_ctrl_settings: VolumeControlSettings,
-    pub output_selector_settings: OutputSelectorSettings,
-    pub dac_settings: DacSettings,
     #[validate]
     pub alsa_settings: AlsaSettings,
-    pub ir_control_settings: IRInputControlerSettings,
-    pub oled_settings: OLEDSettings,
     #[serde(default)]
     pub auto_resume_playback: bool,
     pub metadata_settings: MetadataStoreSettings,
@@ -23,6 +17,12 @@ pub struct Settings {
     #[serde(default)]
     #[validate]
     pub rs_player_settings: RsPlayerSettings,
+    #[serde(default)]
+    #[validate]
+    pub uart_settings: UartCmdChannelSettings,
+    #[serde(default)]
+    #[validate]
+    pub mqtt_settings: MqttCmdChannelSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
@@ -41,6 +41,26 @@ pub struct RsPlayerSettings {
     #[validate(range(min = 1, max = 99))]
     pub player_threads_priority: u8,
     pub alsa_buffer_size: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+pub struct UartCmdChannelSettings {
+    pub enabled: bool,
+    pub uart_path: String,
+    pub baud_rate: u32,
+    #[serde(default)]
+    pub available_serial_devices: Vec<String>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+
+pub struct MqttCmdChannelSettings {
+    pub enabled: bool,
+    pub mqtt_broker: String,
+    pub mqtt_port: u16,
+    pub mqtt_user: String,
+    pub mqtt_password: String,
+    pub mqtt_out_topic: String,
+    pub mqtt_in_topic: String,
 }
 const fn thread_priority_default_value() -> u8 {
     1
@@ -65,18 +85,11 @@ impl Default for RsPlayerSettings {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct OutputSelectorSettings {
-    pub enabled: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VolumeControlSettings {
     pub volume_step: u8,
     pub ctrl_device: VolumeCrtlType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alsa_mixer: Option<CardMixer>,
-    pub rotary_enabled: bool,
-    pub rotary_event_device_path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
@@ -131,32 +144,6 @@ impl AlsaSettings {
             .unwrap_or_default()
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DacSettings {
-    pub enabled: bool,
-    pub chip_id: String,
-    pub i2c_address: u16,
-    pub volume_step: u8,
-    pub filter: FilterType,
-    pub sound_sett: u8,
-    pub gain: GainLevel,
-    pub heavy_load: bool,
-    #[serde(skip_deserializing)]
-    pub available_dac_chips: HashMap<String, String>,
-}
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IRInputControlerSettings {
-    pub enabled: bool,
-    pub remote_maker: String,
-    pub input_socket_path: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct OLEDSettings {
-    pub enabled: bool,
-    pub display_model: String,
-    pub spi_device_path: String,
-}
 
 impl Default for MetadataStoreSettings {
     fn default() -> Self {
@@ -185,6 +172,31 @@ impl Default for PlaylistSetting {
         }
     }
 }
+
+impl Default for UartCmdChannelSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            uart_path: "/dev/ttyAMA0".to_string(),
+            baud_rate: 115_200,
+            available_serial_devices: vec![],
+        }
+    }
+}
+impl Default for MqttCmdChannelSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            mqtt_broker: "localhost".to_string(),
+            mqtt_port: 1883,
+            mqtt_user: "".to_string(),
+            mqtt_password: "".to_string(),
+            mqtt_out_topic: "rsplayer/out".to_string(),
+            mqtt_in_topic: "rsplayer/in".to_string(),
+        }
+    }
+}
+
 pub const DEFAULT_ALSA_PCM_DEVICE: &str = "hw:0";
 pub const DEFAULT_ALSA_MIXER: &str = "0,Master";
 
@@ -192,24 +204,10 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             auto_resume_playback: false,
-            output_selector_settings: OutputSelectorSettings { enabled: false },
             volume_ctrl_settings: VolumeControlSettings {
-                rotary_enabled: false,
                 alsa_mixer: None,
                 volume_step: 2,
                 ctrl_device: VolumeCrtlType::Alsa,
-                rotary_event_device_path: "/dev/input/by-path/platform-rotary@f-event".to_string(),
-            },
-            dac_settings: DacSettings {
-                enabled: false,
-                chip_id: String::from("AK4497"),
-                i2c_address: 0x13,
-                volume_step: 2,
-                filter: FilterType::SharpRollOff,
-                gain: GainLevel::V375,
-                heavy_load: false,
-                sound_sett: 5,
-                available_dac_chips: HashMap::new(),
             },
             metadata_settings: MetadataStoreSettings::default(),
             playback_queue_settings: PlaybackQueueSetting::default(),
@@ -217,18 +215,10 @@ impl Default for Settings {
                 output_device: PcmOutputDevice::default(),
                 available_audio_cards: vec![],
             },
-            ir_control_settings: IRInputControlerSettings {
-                enabled: false,
-                remote_maker: "Apple_A1156".to_string(),
-                input_socket_path: String::from("/var/run/lirc/lircd"),
-            },
-            oled_settings: OLEDSettings {
-                enabled: false,
-                display_model: "ST7920 - 128x64".to_string(),
-                spi_device_path: "/dev/spidev0.0".to_string(),
-            },
             playlist_settings: PlaylistSetting::default(),
             rs_player_settings: RsPlayerSettings::default(),
+            uart_settings: UartCmdChannelSettings::default(),
+            mqtt_settings: MqttCmdChannelSettings::default(),
         }
     }
 }

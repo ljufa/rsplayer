@@ -2,11 +2,11 @@ use std::str::FromStr;
 
 use api_models::{
     common::{
-        CardMixer, FilterType, GainLevel, MetadataCommand::RescanMetadata, SystemCommand, UserCommand, VolumeCrtlType,
+        CardMixer,  MetadataCommand::RescanMetadata, SystemCommand, UserCommand, VolumeCrtlType,
     },
     settings::{
-        DacSettings, IRInputControlerSettings, MetadataStoreSettings, OLEDSettings, OutputSelectorSettings,
-        RsPlayerSettings, Settings,
+         MetadataStoreSettings, 
+        RsPlayerSettings, Settings, UartCmdChannelSettings,
     },
     validator::Validate,
 };
@@ -33,7 +33,7 @@ pub struct Model {
 #[allow(clippy::large_enum_variant)]
 pub enum Msg {
     // ---- on off toggles ----
-    ToggleDacEnabled,
+    ToggleUartEnabled,
     ToggleIrEnabled,
     ToggleOledEnabled,
     ToggleOutputSelectorEnabled,
@@ -43,6 +43,7 @@ pub enum Msg {
     // ---- Input capture ----
     InputMetadataMusicDirectoryChanged(String),
     InputAlsaCardChange(i32),
+    InputUartDeviceChange(String),
     InputAlsaPcmChange(String),
     InputLircInputSocketPathChanged(String),
     InputLircRemoteMakerChanged(String),
@@ -59,9 +60,6 @@ pub enum Msg {
 
     InputAlsaDeviceChanged(String),
 
-    InputDacFilterChanged(FilterType),
-    InputDacGainLevelChanged(GainLevel),
-    InputDacSoundSettingsChanged(String),
 
     // --- Buttons ----
     SaveSettingsAndRestart,
@@ -112,21 +110,10 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 model.waiting_response = true;
             }
         }
-        Msg::ToggleDacEnabled => {
-            model.settings.dac_settings.enabled = !model.settings.dac_settings.enabled;
+        Msg::ToggleUartEnabled => {
+            model.settings.uart_settings.enabled = !model.settings.uart_settings.enabled;
         }
-        Msg::ToggleIrEnabled => {
-            model.settings.ir_control_settings.enabled = !model.settings.ir_control_settings.enabled;
-        }
-        Msg::ToggleOledEnabled => {
-            model.settings.oled_settings.enabled = !model.settings.oled_settings.enabled;
-        }
-        Msg::ToggleOutputSelectorEnabled => {
-            model.settings.output_selector_settings.enabled = !model.settings.output_selector_settings.enabled;
-        }
-        Msg::ToggleRotaryVolume => {
-            model.settings.volume_ctrl_settings.rotary_enabled = !model.settings.volume_ctrl_settings.rotary_enabled;
-        }
+
         Msg::ToggleResumePlayback => {
             model.settings.auto_resume_playback = !model.settings.auto_resume_playback;
         }
@@ -142,6 +129,9 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.settings.metadata_settings.music_directory = value;
         }
 
+        Msg::InputUartDeviceChange(value) => {
+            model.settings.uart_settings.uart_path = value;
+        }
         Msg::InputAlsaCardChange(value) => {
             model.selected_audio_card_index = value;
             model.settings.alsa_settings.output_device.card_index = value;
@@ -151,18 +141,6 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 .settings
                 .alsa_settings
                 .set_output_device(model.selected_audio_card_index, &value);
-        }
-        Msg::InputDacFilterChanged(f) => {
-            model.settings.dac_settings.filter = f;
-        }
-        Msg::InputDacGainLevelChanged(g) => {
-            model.settings.dac_settings.gain = g;
-        }
-        Msg::InputLircInputSocketPathChanged(path) => {
-            model.settings.ir_control_settings.input_socket_path = path;
-        }
-        Msg::InputLircRemoteMakerChanged(maker) => {
-            model.settings.ir_control_settings.remote_maker = maker;
         }
         Msg::InputVolumeCtrlDeviceChanged(device) => {
             model.settings.volume_ctrl_settings.ctrl_device = device;
@@ -179,9 +157,6 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             });
         }
 
-        Msg::InputRotaryEventDevicePathChanged(path) => {
-            model.settings.volume_ctrl_settings.rotary_event_device_path = path;
-        }
         Msg::InputRspInputBufferSizeChange(value) => {
             if let Ok(num) = value.parse::<usize>() {
                 model.settings.rs_player_settings.input_stream_buffer_size_mb = num;
@@ -202,11 +177,6 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 if num > 0 && num < 100 {
                     model.settings.rs_player_settings.player_threads_priority = num;
                 }
-            };
-        }
-        Msg::InputDacAddressChanged(value) => {
-            if let Ok(num) = value.parse::<u16>() {
-                model.settings.dac_settings.i2c_address = num;
             };
         }
         Msg::SettingsFetched(sett) => {
@@ -315,129 +285,57 @@ pub fn view(model: &Model) -> Node<Msg> {
             h1![C!["title","has-text-white"], "Volume control"],
             view_volume_control(model)
         ],
-        // dac
+        // uart
         section![
             C!["section"],
-            h1![C!["title","has-text-white"], "Dac"],
+            h1![C!["title","has-text-white"], "UART"],
             div![
                 C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleDacEnabled),
+                ev(Ev::Click, |_| Msg::ToggleUartEnabled),
                 input![
                     C!["switch"],
                     attrs! {
-                        At::Name => "dac_cb"
+                        At::Name => "uart_cb"
                         At::Type => "checkbox"
-                        At::Checked => settings.dac_settings.enabled.as_at_value(),
+                        At::Checked => settings.uart_settings.enabled.as_at_value(),
                     },
                 ],
                 label![
                     C!["label","has-text-white"],
-                    "Enable DAC chip control?",
+                    "Enable UART channel communication?",
                     attrs! {
-                        At::For => "dac_cb"
+                        At::For => "uart_cb"
                     }
                 ]
             ],
-            IF!(settings.dac_settings.enabled => view_dac(&settings.dac_settings))
+            IF!(settings.uart_settings.enabled => view_uart(&settings.uart_settings))
         ],
-        // IR control
-        section![
-            C!["section"],
-            h1![C!["title","has-text-white"], "IR Control (Lirc)"],
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleIrEnabled),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "ir_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.ir_control_settings.enabled.as_at_value(),
-                    },
-                ],
-                label![
-                    C!["label","has-text-white"],
-                    "Enable Infra Red control with LIRC?",
-                    attrs! {
-                        At::For => "ir_cb"
-                    }
-                ]
-            ],
-            IF!(settings.ir_control_settings.enabled => view_ir_control(&settings.ir_control_settings))
-        ],
-        // oled display
-        section![
-            C!["section"],
-            h1![C!["title","has-text-white"], "OLED Display"],
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleOledEnabled),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "oled_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.oled_settings.enabled.as_at_value(),
-                    },
-                ],
-                label![C!["label","has-text-white"],
-                    "Enable Oled Display?",
-                    attrs! {
-                        At::For => "oled_cb"
-                    }
-                ]
-            ],
-            IF!(settings.oled_settings.enabled => view_oled_display(&settings.oled_settings))
-        ],
-        // audio selector
-        section![
-            C!["section"],
-            h1![C!["title","has-text-white"], "Audio output selector"],
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleOutputSelectorEnabled),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "outsel_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.output_selector_settings.enabled.as_at_value(),
-                    },
-                ],
-                label![C!["label","has-text-white"],
-                    "Enable audio output selector (Headphone/Speakers)?",
-                    attrs! {
-                        At::For => "outsel_cb"
-                    }
-                ]
-            ],
-            IF!(settings.output_selector_settings.enabled => view_output_selector(&settings.output_selector_settings))
-        ],
+        
         // buttons
         div![
             C!["buttons"],
                 button![
                     IF!(model.settings.validate().is_err() => attrs!{ At::Disabled => ""}),
-                    C!["button", "is-primary"],
+                    C!["button"],
                     "Save & restart player",
                     ev(Ev::Click, |_| Msg::SaveSettingsAndRestart)
                 ],
                 button![
-                    C!["button", "is-primary"],
+                    C!["button", "is-warning"],
                     "Restart player",
                     ev(Ev::Click, |_| Msg::SendSystemCommand(
                         SystemCommand::RestartRSPlayer
                     ))
                 ],
                 button![
-                    C!["button", "is-primary"],
+                    C!["button", "is-danger"],
                     "Restart system",
                     ev(Ev::Click, |_| Msg::SendSystemCommand(
                         SystemCommand::RestartSystem
                     ))
                 ],
                 button![
-                    C!["button", "is-primary"],
+                    C!["button", "is-danger"],
                     "Shutdown system",
                     ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::PowerOff))
                 ]
@@ -459,37 +357,7 @@ fn view_validation_icon<Ms>(val: &impl Validate, key: &str) -> Node<Ms> {
 }
 
 // ------ sub view functions ------
-fn view_ir_control(ir_settings: &IRInputControlerSettings) -> Node<Msg> {
-    div![
-        div![
-            C!["field"],
-            label!["Remote maker", C!["label", "has-text-white"]],
-            div![
-                C!["control"],
-                div![
-                    C!["select"],
-                    select![option![attrs!( At::Value => "Apple_A1156"), "Apple - A1156"]]
-                ],
-            ],
-        ],
-        div![
-            C!["field"],
-            label!["LIRC socket path", C!["label", "has-text-white"]],
-            div![
-                C!["control"],
-                input![
-                    C!["input"],
-                    attrs! {
-                        At::Value => ir_settings.input_socket_path
-                    },
-                    input_ev(Ev::Input, move |value| { Msg::InputLircInputSocketPathChanged(value) }),
-                ],
-            ],
-        ],
-    ]
-}
 
-// use strum::IntoEnumIterator;
 #[allow(clippy::too_many_lines)]
 fn view_volume_control(model: &Model) -> Node<Msg> {
     let volume_settings = &model.settings.volume_ctrl_settings;
@@ -532,7 +400,7 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
                                .iter()
                                .map(|pcmd|
                                    option![
-                                       IF!(volume_settings.alsa_mixer.as_ref().map_or(false, |f| pcmd.index == f.index && pcmd.name == f.name) => attrs!(At::Selected => "")),
+                                       IF!(volume_settings.alsa_mixer.as_ref().is_some_and(|f| pcmd.index == f.index && pcmd.name == f.name) => attrs!(At::Selected => "")),
                                        attrs! {At::Value => format!("{},{}", pcmd.index, pcmd.name )},
                                        pcmd.name.clone()
                                    ]
@@ -558,185 +426,37 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
                 ],
             ],
         ],
-        div![
-            C!["field"],
-            ev(Ev::Click, |_| Msg::ToggleRotaryVolume),
-            input![
-                C!["switch"],
-                attrs! {
-                    At::Name => "rotary_cb"
-                    At::Type => "checkbox"
-                    At::Checked => volume_settings.rotary_enabled.as_at_value(),
-                },
-            ],
-            label![
-                C!["label", "has-text-white"],
-                "Enable rotary encoder volume control",
-                attrs! {
-                    At::For => "rotary_cb"
-                }
-            ],
-        ],
-        IF!(volume_settings.rotary_enabled =>
-            div![
-                div![
-                    C!["field"],
-                    label!["Rotary encoder event device path", C!["label","has-text-white"]],
-                    div![
-                        C!["control"],
-                        input![
-                            C!["input"],
-                            attrs! {
-                                At::Value => volume_settings.rotary_event_device_path
-                            },
-                            input_ev(Ev::Input, move |value| {
-                                Msg::InputRotaryEventDevicePathChanged(value)
-                            }),
-                        ],
-                    ],
-                ],
-            ]
-        )
     ]
-}
-
-fn view_oled_display(oled_settings: &OLEDSettings) -> Node<Msg> {
-    div![
-        div![
-            C!["field"],
-            label!["Display Model:", C!["label", "has-text-white"]],
-            div![
-                C!["control"],
-                div![
-                    C!["select"],
-                    select![option![attrs!( At::Value => "ST7920"), "ST7920 - 128x64"],],
-                ],
-            ],
-        ],
-        div![
-            C!["field"],
-            label!["SPI Device path:", C!["label", "has-text-white"]],
-            div![
-                C!["control"],
-                input![C!["input"], attrs! {At::Value => oled_settings.spi_device_path},],
-            ],
-        ],
-    ]
-}
-
-fn view_output_selector(_out_settings: &OutputSelectorSettings) -> Node<Msg> {
-    div![]
 }
 
 #[allow(clippy::too_many_lines)]
-fn view_dac(dac_settings: &DacSettings) -> Node<Msg> {
+fn view_uart(uart_settings: &UartCmdChannelSettings) -> Node<Msg> {
     div![
         div![
             C!["field"],
-            label!["DAC Chip:", C!["label", "has-text-white"]],
-            div![
-                C!["control"],
-                div![
-                    C!["select"],
-                    select![option![attrs!( At::Value => "AK4497"), "AK4497"],],
-                ],
-            ],
-        ],
-        div![
-            C!["field"],
-            label!["DAC I2C address:", C!["label", "has-text-white"]],
-            div![
-                C!["control"],
-                input![C!["input"], attrs! {At::Value => dac_settings.i2c_address},],
-                input_ev(Ev::Input, move |value| { Msg::InputDacAddressChanged(value) }),
-            ],
-        ],
-        div![
-            C!["field"],
-            label!["Digital filter:", C!["label", "has-text-white"]],
+            label!["Serial device:", C!["label", "has-text-white"]],
             div![
                 C!["control"],
                 div![
                     C!["select"],
                     select![
-                        FilterType::iter().map(|fs| {
-                            let v: &str = fs.into();
-                            option![
-                                attrs!( At::Value => v),
-                                IF!(dac_settings.filter == fs => attrs!(At::Selected => "")),
-                                v
-                            ]
-                        }),
-                        input_ev(Ev::Change, move |v| Msg::InputDacFilterChanged(
-                            FilterType::from_str(v.as_str()).expect("msg")
-                        )),
-                    ],
+                        option!["-- Select serial device --"],
+                        uart_settings
+                        .available_serial_devices
+                        .iter()
+                        .map(|dev| option![
+                            IF!(uart_settings.uart_path == *dev => attrs!(At::Selected => "")),
+                            attrs! {At::Value => dev},
+                            dev.clone()
+                        ])],
+                    input_ev(Ev::Change, |v| {
+                        Msg::InputUartDeviceChange(v)
+                    }),
+
                 ],
             ],
         ],
-        // gain level
-        div![
-            C!["field"],
-            label!["Gain Level:", C!["label", "has-text-white"]],
-            div![
-                C!["control"],
-                div![
-                    C!["select"],
-                    select![
-                        GainLevel::iter().map(|fs| {
-                            let v: &str = fs.into();
-                            option![
-                                attrs!( At::Value => v),
-                                IF!(dac_settings.gain == fs => attrs!(At::Selected => "")),
-                                v
-                            ]
-                        }),
-                        input_ev(Ev::Change, move |v| Msg::InputDacGainLevelChanged(
-                            GainLevel::from_str(v.as_str()).expect("msg")
-                        )),
-                    ],
-                ],
-            ],
-        ],
-        // sound settings
-        div![
-            C!["field"],
-            label!["Sound settings:", C!["label", "has-text-white"]],
-            div![
-                C!["control"],
-                div![
-                    C!["select"],
-                    select![
-                        option![
-                            attrs!( At::Value => "1"),
-                            IF!(dac_settings.sound_sett == 1 => attrs!(At::Selected => "")),
-                            "Analog internal current, maximum (Setting1)"
-                        ],
-                        option![
-                            attrs!( At::Value => "2"),
-                            IF!(dac_settings.sound_sett == 2 => attrs!(At::Selected => "")),
-                            " Analog internal current, minimum (Setting2)"
-                        ],
-                        option![
-                            attrs!( At::Value => "3"),
-                            IF!(dac_settings.sound_sett == 3 => attrs!(At::Selected => "")),
-                            "Analog internal current, medium (Setting3)"
-                        ],
-                        option![
-                            attrs!( At::Value => "4"),
-                            IF!(dac_settings.sound_sett == 4 => attrs!(At::Selected => "")),
-                            "Default (Setting 4)"
-                        ],
-                        option![
-                            attrs!( At::Value => "5"),
-                            IF!(dac_settings.sound_sett == 5 => attrs!(At::Selected => "")),
-                            "High Sound Quality Mode (Setting 5)"
-                        ],
-                        input_ev(Ev::Change, Msg::InputDacSoundSettingsChanged),
-                    ],
-                ],
-            ],
-        ]
+
     ]
 }
 
@@ -760,7 +480,7 @@ fn view_metadata_storage(metadata_settings: &MetadataStoreSettings) -> Node<Msg>
             div![
                 C!["control"],
                 button![
-                    C!["button", "is-primary"],
+                    C!["button"],
                     ev(Ev::Click, move |_| Msg::ClickRescanMetadataButton(false)),
                     "Update library"
                 ]

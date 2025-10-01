@@ -3,7 +3,6 @@ use core::option::Option;
 
 use core::time::Duration;
 
-use num_derive::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumProperty;
 
@@ -37,9 +36,8 @@ pub struct PlayerInfo {
     pub codec: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct StreamerState {
-    pub selected_audio_output: AudioOut,
     pub volume_state: Volume,
 }
 
@@ -77,13 +75,7 @@ pub enum PlayerState {
     PLAYING,
     PAUSED,
     STOPPED,
-    ERROR(String)
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, Hash, Copy, ToPrimitive, Serialize, Deserialize)]
-pub enum AudioOut {
-    SPKR,
-    HEAD,
+    ERROR(String),
 }
 
 impl SongProgress {
@@ -95,13 +87,9 @@ impl SongProgress {
             crate::common::dur_to_string(&self.total_time)
         )
     }
-}
 
-impl Default for StreamerState {
-    fn default() -> Self {
-        Self {
-            selected_audio_output: AudioOut::SPKR,
-            volume_state: Volume::default(),
-        }
+    #[must_use]
+    pub fn format_total_time(&self) -> String {
+        crate::common::dur_to_string(&self.total_time)
     }
 }

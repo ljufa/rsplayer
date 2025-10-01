@@ -1,5 +1,5 @@
 mod output;
-mod symphonia;
 pub mod player_service;
+mod symphonia;
 // #[cfg(test)]
 // mod test;

@@ -11,7 +11,7 @@ description = "RSPlayer - Music Player"
 name = "rsplayer"
 maintainer = "Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"
 copyright = "2021, Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"
-suggests = "mpd (>= 0.22), lirc (>= 0.10.1-6.3), nfs-common (>= 1:1.3.4-6)"
+suggests = "nfs-common (>= 1:1.3.4-6)"
 depends = "libasound2 (>= 1.2.4-1.1)"
 section = "Sound"
 priority = "optional"
@@ -57,11 +57,6 @@ assets = [
         "755",
     ],
     [
-        "../PKGS/aarch64-unknown-linux-gnu/etc/lirc/lirc_options.conf",
-        "etc/lirc/",
-        "644",
-    ],
-    [
         "../PKGS/debian/etc/systemd/system/rsplayer.service",
         "etc/systemd/system/rsplayer.service",
         "644",
@@ -80,12 +75,7 @@ assets = [
         "../PKGS/debian/opt/rsplayer/env",
         "opt/rsplayer/",
         "644",
-    ],
-    [
-        "../PKGS/debian/etc/lirc/lircd.conf.d/*",
-        "etc/lirc/lircd.conf.d",
-        "644",
-    ],
+    ]
 ]
 
 [package.metadata.deb.variants.armv7-unknown-linux-gnueabihf]
@@ -97,11 +87,6 @@ assets = [
         "755",
     ],
     [
-        "../PKGS/armv7-unknown-linux-gnueabihf/etc/lirc/lirc_options.conf",
-        "etc/lirc/",
-        "644",
-    ],
-    [
         "../PKGS/debian/etc/systemd/system/rsplayer.service",
         "etc/systemd/system/rsplayer.service",
         "644",
@@ -119,11 +104,6 @@ assets = [
     [
         "../PKGS/debian/opt/rsplayer/env",
         "opt/rsplayer/",
-        "644",
-    ],
-    [
-        "../PKGS/debian/etc/lirc/lircd.conf.d/*",
-        "etc/lirc/lircd.conf.d",
         "644",
     ],
 ]
@@ -154,12 +134,7 @@ assets = [
         "../PKGS/debian/opt/rsplayer/env",
         "opt/rsplayer/",
         "644",
-    ],
-    [
-        "../PKGS/debian/etc/lirc/lircd.conf.d/*",
-        "etc/lirc/lircd.conf.d",
-        "644",
-    ],
+    ]
 ]
 
 [dependencies]

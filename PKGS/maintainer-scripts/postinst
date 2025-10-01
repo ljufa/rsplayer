@@ -11,7 +11,7 @@ if [ "$1" = "configure" ]; then
     if dpkg --compare-versions "$previous_version" lt "0.9.1"; then
         echo "Upgrading from version $previous_version to 0.9.1"
         adduser --system --no-create-home --disabled-login rsplayer
-        usermod -a -G audio rsplayer
+        usermod -a -G audio,dialout rsplayer || true
         # optional for hardware access
         usermod -a -G i2c,gpio,spi,audio,input rsplayer || true
         chown -R rsplayer /opt/rsplayer

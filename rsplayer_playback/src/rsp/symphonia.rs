@@ -59,15 +59,15 @@ pub fn play_file(
         return Err(format_err!("Failed to get source: {:?}", s.err()));
     };
     if let Some(radio_meta) = radio_meta {
-        changes_tx.send(StateChangeEvent::CurrentSongEvent(
-            Song {
+        changes_tx
+            .send(StateChangeEvent::CurrentSongEvent(Song {
                 title: radio_meta.name,
                 album: radio_meta.description,
                 genre: radio_meta.genre,
                 file: radio_meta.url,
                 ..Default::default()
-            }
-        )).ok();
+            }))
+            .ok();
     }
     let is_seekable = source.is_seekable();
     // Probe the media source stream for metadata and get the format reader.
@@ -205,7 +205,11 @@ pub fn play_file(
     loop_result
 }
 
-fn get_source(music_dir: &str, path_str: &str, hint: &mut Hint) -> (Result<Box<dyn MediaSource>, anyhow::Error>, Option<RadioMeta>) {
+fn get_source(
+    music_dir: &str,
+    path_str: &str,
+    hint: &mut Hint,
+) -> (Result<Box<dyn MediaSource>, anyhow::Error>, Option<RadioMeta>) {
     let mut radio_meta = None;
     let source = if path_str.starts_with("http") {
         let agent = ureq::AgentBuilder::new()

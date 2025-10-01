@@ -10,7 +10,6 @@ mod queue {
         queue_service::QueueService,
         test::test_shared::{create_song, create_song_with_title, Context},
     };
-
     #[test]
     fn should_replace_queue_with_new_songs() {
         let queue = create_queue();
@@ -370,6 +369,20 @@ mod metadata {
     }
 
     #[test]
+    fn test_mp3_metadata_tags() {
+        let ctx = TestContext::new();
+        ctx.metadata_service.scan_music_dir(true, &ctx.sender);
+        if let Some(song) = ctx.song_repository.find_by_id("ab/music.mp3") {
+            debug_assert_eq!(song.album, Some("Album One".to_string()));
+            debug_assert_eq!(song.title, Some("Corelli Trio Sonata 11, m1".to_string()));
+            debug_assert_eq!(song.date, Some("2000".to_string()));
+            debug_assert_eq!(song.genre, Some("(32)".to_string()));
+        } else {
+            panic!("Assert failed");
+        }
+    }
+
+    #[test]
     fn test_like_media_item() {
         let ctx = TestContext::new();
         ctx.metadata_service.scan_music_dir(true, &ctx.sender);
@@ -392,9 +405,10 @@ mod metadata {
     }
 
     #[test]
-    fn test_favorite_radio_station(){
+    fn test_favorite_radio_station() {
         let ctx = TestContext::new();
-        ctx.metadata_service.like_media_item("radio_uuid_http://radioaparat.com");
+        ctx.metadata_service
+            .like_media_item("radio_uuid_http://radioaparat.com");
         let favs = ctx.metadata_service.get_favorite_radio_stations();
         assert_eq!(favs.len(), 1);
         assert_eq!(favs.first().unwrap(), "http://radioaparat.com");
@@ -493,7 +507,7 @@ pub mod test_shared {
 
     pub struct Context {
         pub db_dir: String,
-        pub music_dir: String,
+        pub _music_dir: String,
     }
 
     impl Default for Context {
@@ -502,7 +516,7 @@ pub mod test_shared {
 
             Self {
                 db_dir: format!("/tmp/rsptest_{rnd}"),
-                music_dir: "assets".to_owned(),
+                _music_dir: "assets".to_owned(),
             }
         }
     }
@@ -521,7 +535,7 @@ pub mod test_shared {
         pub sender: Sender<StateChangeEvent>,
         pub receiver: Receiver<StateChangeEvent>,
         pub song_repository: Arc<SongRepository>,
-        pub album_repository: Arc<AlbumRepository>,
+        pub _album_repository: Arc<AlbumRepository>,
         pub stat_repository: Arc<PlayStatisticsRepository>,
         pub music_dir: String,
         pub db_dir: String,
@@ -530,7 +544,7 @@ pub mod test_shared {
         pub fn new() -> Self {
             let rnd = random_string::generate(25, "utf8");
             let db_dir = format!("/tmp/rsptest_{rnd}");
-            let music_dir = "assets".to_owned();
+            let music_dir = "/home/dlj/myworkspace/rsplayer/rsplayer_metadata/assets".to_owned();
             let path = &format!("{db_dir}_ams");
             if Path::new(path).exists() {
                 _ = std::fs::remove_dir_all(path);
@@ -557,7 +571,7 @@ pub mod test_shared {
                 sender,
                 receiver,
                 song_repository,
-                album_repository,
+                _album_repository: album_repository,
                 stat_repository,
                 music_dir,
                 db_dir,

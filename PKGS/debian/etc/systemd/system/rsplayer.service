@@ -2,7 +2,7 @@
 Description=RSPlayer backend server
 Documentation=https://github.com/ljufa/rsplayer
 Wants=network.target sound.target
-After=remote-fs.target
+After=remote-fs.target sound.target alsa-restore.service
 
 [Service]
 EnvironmentFile=/opt/rsplayer/env

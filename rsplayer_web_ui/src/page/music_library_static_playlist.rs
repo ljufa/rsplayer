@@ -250,7 +250,7 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
             footer![
                 C!["modal-card-foot"],
                 button![
-                    C!["button", "is-fullwidth", "is-outlined", "is-success"],
+                    C!["button", "is-fullwidth", "is-outlined", "is-primary"],
                     "Load more",
                     ev(Ev::Click, move |_| Msg::LoadMorePlaylistItems)
                 ]
