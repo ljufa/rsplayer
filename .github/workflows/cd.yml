@@ -13,10 +13,10 @@ jobs:
     runs-on: rsplayer-self-hosted
     steps:
     - uses: actions/checkout@v3
-    - uses: davidB/rust-cargo-make@v1
-    - uses: taiki-e/install-action@v2
-      with:
-        tool: wasm-pack
+    # - uses: davidB/rust-cargo-make@v1
+    # - uses: taiki-e/install-action@v2
+    #   with:
+    #     tool: wasm-pack
     - name: Build release
       run: cargo make build_ui_release
     - name: Upload pkg dir
@@ -42,10 +42,10 @@ jobs:
         name: web_ui
         path: rsplayer_web_ui/public/pkg
     # !!! Do not use binstall because it does not work well for cross compilation and libc dependency
-    - name: Install tools
-      run: |
-        cargo install cross
-        cargo install cargo-deb
+    # - name: Install tools
+    #   run: |
+    #     cargo install cross
+    #     cargo install cargo-deb
     - name: Build Backend
       run: cargo make --env TARGET=${{ matrix.target }} build_release
     - name: Create deb package

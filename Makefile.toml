@@ -6,8 +6,8 @@ RPI_HOST = "192.168.5.4"
 TARGET = "aarch64-unknown-linux-gnu"
 
 
-RELEASE_VERSION = "1.2.0"
-RELEASE_BRANCH = "main"
+RELEASE_VERSION = "1.2.1"
+RELEASE_BRANCH = "main_public"
 
 [config]
 default_to_workspace = false
@@ -51,7 +51,6 @@ args = [
     "-p",
     "rsplayer",
     "--target=${TARGET}",
-    "--variant=${TARGET}",
     "--deb-version",
     "${RELEASE_VERSION}",
 ]

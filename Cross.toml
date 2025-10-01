@@ -1,4 +1,5 @@
 [target.armv7-unknown-linux-gnueabihf]
+image = "ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:main"
 pre-build = [
     "dpkg --add-architecture armhf",
     "apt-get update",
@@ -10,6 +11,7 @@ pre-build = [
 image = "ljufa/rsplayer_cross_armhf:0.0.1"
 
 [target.aarch64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main"
 pre-build = [
     "dpkg --add-architecture arm64",
     "apt-get update",
@@ -19,4 +21,5 @@ pre-build = [
 ]
 
 [target.x86_64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
 pre-build = ["apt-get update && apt-get install --assume-yes --no-install-recommends wget libssl-dev libasound-dev libasound2-dev"]

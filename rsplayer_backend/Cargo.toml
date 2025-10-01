@@ -17,42 +17,9 @@ section = "Sound"
 priority = "optional"
 maintainer-scripts = "../PKGS/maintainer-scripts"
 
-[package.metadata.deb.variants.x86_64-unknown-linux-gnu]
-name = "rsplayer_x86_64"
 assets = [
     [
-        "../target/x86_64-unknown-linux-gnu/release/rsplayer",
-        "usr/bin/",
-        "755",
-    ],
-    [
-        "../PKGS/debian/etc/systemd/system/rsplayer.service",
-        "etc/systemd/system/rsplayer.service",
-        "644",
-    ],
-    [
-        "../PKGS/debian/etc/polkit-1/rules.d/99-rsplayer.rules",
-        "etc/polkit-1/rules.d/",
-        "644",
-    ],
-    [
-        "../PKGS/debian/opt/rsplayer/self.*",
-        "opt/rsplayer/",
-        "644",
-    ],
-    [
-        "../PKGS/debian/opt/rsplayer/env",
-        "opt/rsplayer/",
-        "644",
-    ],
-
-]
-
-[package.metadata.deb.variants.aarch64-unknown-linux-gnu]
-name = "rsplayer_aarch64"
-assets = [
-    [
-        "../target/aarch64-unknown-linux-gnu/release/rsplayer",
+        "target/release/rsplayer",
         "usr/bin/",
         "755",
     ],
@@ -78,64 +45,6 @@ assets = [
     ]
 ]
 
-[package.metadata.deb.variants.armv7-unknown-linux-gnueabihf]
-name = "rsplayer_armv7l"
-assets = [
-    [
-        "../target/armv7-unknown-linux-gnueabihf/release/rsplayer",
-        "usr/bin/",
-        "755",
-    ],
-    [
-        "../PKGS/debian/etc/systemd/system/rsplayer.service",
-        "etc/systemd/system/rsplayer.service",
-        "644",
-    ],
-    [
-        "../PKGS/debian/etc/polkit-1/rules.d/99-rsplayer.rules",
-        "etc/polkit-1/rules.d/",
-        "644",
-    ],
-    [
-        "../PKGS/debian/opt/rsplayer/self.*",
-        "opt/rsplayer/",
-        "644",
-    ],
-    [
-        "../PKGS/debian/opt/rsplayer/env",
-        "opt/rsplayer/",
-        "644",
-    ],
-]
-[package.metadata.deb.variants.arm-unknown-linux-gnueabihf]
-name = "rsplayer_armv6l"
-assets = [
-    [
-        "../target/arm-unknown-linux-gnueabihf/release/rsplayer",
-        "usr/bin/",
-        "755",
-    ],
-    [
-        "../PKGS/debian/etc/systemd/system/rsplayer.service",
-        "etc/systemd/system/rsplayer.service",
-        "644",
-    ],
-    [
-        "../PKGS/debian/etc/polkit-1/rules.d/99-rsplayer.rules",
-        "etc/polkit-1/rules.d/",
-        "644",
-    ],
-    [
-        "../PKGS/debian/opt/rsplayer/self.*",
-        "opt/rsplayer/",
-        "644",
-    ],
-    [
-        "../PKGS/debian/opt/rsplayer/env",
-        "opt/rsplayer/",
-        "644",
-    ]
-]
 
 [dependencies]
 api_models = { path = "../rsplayer_api_models" }
