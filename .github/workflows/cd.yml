@@ -63,7 +63,7 @@ jobs:
   publish:
     needs: build_backend
     name: Create release
-    runs-on: rsplayer-self-hoste5
+    runs-on: rsplayer-self-hosted
     steps:
     - name: Download files
       uses: actions/download-artifact@v5
@@ -76,7 +76,7 @@ jobs:
         mv rsplayer-x86_64-unknown-linux-gnu/rsplayer rsplayer_amd64
     - name: Display new structure of downloaded files
       run: ls -R
-    - uses: softprops/action-gh-release@v1
+    - uses: softprops/action-gh-release@v2.3.3
       if: startsWith(github.ref, 'refs/tags/')
       with:
         draft: true

@@ -20,13 +20,5 @@ unidecode = "0.3.0"
 alsa = "0.9.1"
 url = "2.5.0"
 
-#gpio, i2c
-gpio-cdev = { version = "0.6.0" }
+# uart for serial communication with rsplayer_firmware
 rpi_embedded = { version = "0.1.0" }
-linux-embedded-hal = { version = "0.4.0" }
-embedded-hal = { version = "1.0.0" }
-evdev = { version = "0.12.2", features = ["tokio"] }
-
-#oled
-embedded-graphics = { version = "0.8.1" }
-st7920 = { version = "0.4.0" }
