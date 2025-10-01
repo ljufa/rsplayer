@@ -171,7 +171,7 @@ impl MetadataService {
         }
 
         if !Path::new(ARTWORK_DIR).exists() {
-            std::fs::create_dir(ARTWORK_DIR).expect("Failed to create artwork directory");
+            _ = std::fs::create_dir(ARTWORK_DIR);
         }
         let (new_files, deleted_db_keys) = self.get_diff();
         let count = self.add_songs_to_db(new_files, state_changes_sender);

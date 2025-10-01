@@ -17,7 +17,6 @@ jobs:
     runs-on: rsplayer-self-hosted
     steps:
     - uses: actions/checkout@v3
-    - uses: davidB/rust-cargo-make@v1
     - name: Clippy lint
       run: cargo make clippy
     - name: Run tests
