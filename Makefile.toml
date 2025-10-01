@@ -6,7 +6,7 @@ RPI_HOST = "192.168.5.4"
 TARGET = "aarch64-unknown-linux-gnu"
 
 
-RELEASE_VERSION = "1.0.3"
+RELEASE_VERSION = "1.2.0"
 RELEASE_BRANCH = "main"
 
 [config]
@@ -164,8 +164,7 @@ dependencies = ["build_ui_release", "build_release", "package_deb_release"]
 script = "rsync -avvP target/${TARGET}/debian/*.deb pi@${RPI_HOST}:~"
 
 [tasks.tag]
-dependencies = ["clippy_in_cross"]
 script = [
     "git tag ${RELEASE_VERSION} ${RELEASE_BRANCH}",
-    "git push origin ${RELEASE_VERSION}",
+    "git push originpublic ${RELEASE_VERSION}",
 ]

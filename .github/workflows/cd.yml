@@ -10,7 +10,7 @@ jobs:
       
   build_ui:
     name: Build UI
-    runs-on: ubuntu-latest
+    runs-on: rsplayer-self-hosted
     steps:
     - uses: actions/checkout@v3
     - uses: davidB/rust-cargo-make@v1
@@ -20,7 +20,7 @@ jobs:
     - name: Build release
       run: cargo make build_ui_release
     - name: Upload pkg dir
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: web_ui
         path: rsplayer_web_ui/public/pkg
@@ -32,16 +32,12 @@ jobs:
         target: ["arm-unknown-linux-gnueabihf", "armv7-unknown-linux-gnueabihf","aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
     name: Release
     # make it use older libc version
-    runs-on: ubuntu-latest
+    runs-on: rsplayer-self-hosted
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v5
     # remove cache if you get random libc errors, target based key should help
-    - uses: Swatinem/rust-cache@v2
-      with:
-        key: ${{ matrix.target }}
-    - uses: davidB/rust-cargo-make@v1
     - name: Download web_ui
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v5
       with:
         name: web_ui
         path: rsplayer_web_ui/public/pkg
@@ -55,22 +51,22 @@ jobs:
     - name: Create deb package
       run: cargo make --env RELEASE_VERSION=${GITHUB_REF_NAME} --env TARGET=${{ matrix.target }} package_deb_release
     - name: Upload deb package
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: deb-${{ matrix.target }}
         path: target/${{ matrix.target }}/debian/*.deb
     - name: Upload binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: rsplayer-${{ matrix.target }}
         path: target/${{ matrix.target }}/release/rsplayer
   publish:
     needs: build_backend
     name: Create release
-    runs-on: ubuntu-latest
+    runs-on: rsplayer-self-hoste5
     steps:
     - name: Download files
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v5
     # todo: make rename as generic script
     - name: Rename binary files
       run: |
