@@ -14,17 +14,14 @@ jobs:
     
   build_backend:
     name: Build and test
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
     - uses: Swatinem/rust-cache@v2
       with:
         key: build_and_test
     - uses: davidB/rust-cargo-make@v1
-    - uses: taiki-e/install-action@v2
-      with:
-        tool: cross
     - name: Clippy lint
-      run: cargo make clippy_in_cross
+      run: cargo make clippy
     - name: Run tests
-      run: cargo make test_in_cross
+      run: cargo make test
