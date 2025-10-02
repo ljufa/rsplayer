@@ -88,27 +88,17 @@ For minimal working configuration it is required to select *Audio interface*, *P
 * Rpi Zero WH - RpiOS bookworm and bullseye
 * Various x86_64 laptop/pc with ubuntu and debian based distros
 
-## With additional hardware devices it provides additional features
-* Hardware volume control by DAC chip
-* Infrared remote control: Play, Pause, Next, Prev, Volume Up/Down, Poweroff
-* Volume control using rotary encoder
-* Oled display for song and player info
-* Switch audio output between speakers and headphones
-* Change DAC settings: digital filter, gain, sound profile
+## DIY Hardware
+For DIY enthusiasts, `rsplayer` offers the flexibility to integrate with custom hardware components.
+All KiCad files and hardware documentation are now located in the [rsplayer_hardware](https://github.com/ljufa/rsplayer_hardware) repository.
+The firmware for hardware control has been moved to the [rsplayer_firmware](https://github.com/ljufa/rsplayer_firmware) repository.
 
-#### Example hardware list for DIY streamer implementation:
-* Diy friendly AK44xx DAC board i.e. [Diyinhk](https://www.diyinhk.com/shop/audio-kits/), [JLSounds](http://jlsounds.com/products.html) ...
-* USB to I2S converter board. i.e. [WaveIO](https://luckit.biz/), [Amanero](https://amanero.com/), [JLSounds](http://jlsounds.com/products.html) ...
-* Infrared Receiver TSOP312xx. i.e. [TSOP31238](https://eu.mouser.com/ProductDetail/Vishay-Semiconductors/TSOP31238?qs=5rGgbCH0pB1jaK4I0GvRsw%3D%3D)
-* A1156 Apple Remote Control
-* Oled display ST7920 128x64 (from Amazon, Ebay ...)
-* Rotary Encoder (from Amazon, Ebay ...)
-* Headphone Amp board i.e. [Whammy](https://diyaudiostore.com/products/whammy-completion-kit?_pos=3&_sid=bf6542f23&_ss=r)
-* Power Supply
-* Metal Case
+This separation allows for more focused development and easier maintenance of both the software and hardware aspects of the project.
 
 ## Contributing
 If you would like to contribute to RSPlayer, please submit a pull request or open an issue on the GitHub repository.
+
+For instructions on how to build the project from source, please see the [BUILD.md](BUILD.md) file.
 
 ## License
 RSPlayer is licensed under the MIT license. See the LICENSE file for more information.
