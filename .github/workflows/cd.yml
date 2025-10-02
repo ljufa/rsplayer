@@ -75,6 +75,12 @@ jobs:
         mv rsplayer-armv7-unknown-linux-gnueabihf/rsplayer rsplayer_armhfv7
         mv rsplayer-arm-unknown-linux-gnueabihf/rsplayer rsplayer_armhfv6
         mv rsplayer-x86_64-unknown-linux-gnu/rsplayer rsplayer_amd64
+    - name: Rename deb files for release
+      run: |
+        mv deb-arm-unknown-linux-gnueabihf/*.deb deb-arm-unknown-linux-gnueabihf/rsplayer_${{ github.ref_name }}_armhfv6.deb
+        mv deb-armv7-unknown-linux-gnueabihf/*.deb deb-armv7-unknown-linux-gnueabihf/rsplayer_${{ github.ref_name }}_armhfv7.deb
+        mv deb-aarch64-unknown-linux-gnu/*.deb deb-aarch64-unknown-linux-gnu/rsplayer_${{ github.ref_name }}_arm64.deb
+        mv deb-x86_64-unknown-linux-gnu/*.deb deb-x86_64-unknown-linux-gnu/rsplayer_${{ github.ref_name }}_amd64.deb
     - name: Display new structure of downloaded files
       run: ls -R
     - uses: ncipollo/release-action@v1
