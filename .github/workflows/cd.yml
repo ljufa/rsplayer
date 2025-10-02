@@ -75,19 +75,19 @@ jobs:
         mv rsplayer-armv7-unknown-linux-gnueabihf/rsplayer rsplayer_armhfv7
         mv rsplayer-arm-unknown-linux-gnueabihf/rsplayer rsplayer_armhfv6
         mv rsplayer-x86_64-unknown-linux-gnu/rsplayer rsplayer_amd64
-    - name: Rename deb files for release
+    - name: Prepare debs for release
       run: |
-        mv deb-arm-unknown-linux-gnueabihf/*.deb deb-arm-unknown-linux-gnueabihf/rsplayer_${{ github.ref_name }}_armhfv6.deb
-        mv deb-armv7-unknown-linux-gnueabihf/*.deb deb-armv7-unknown-linux-gnueabihf/rsplayer_${{ github.ref_name }}_armhfv7.deb
-        mv deb-aarch64-unknown-linux-gnu/*.deb deb-aarch64-unknown-linux-gnu/rsplayer_${{ github.ref_name }}_arm64.deb
-        mv deb-x86_64-unknown-linux-gnu/*.deb deb-x86_64-unknown-linux-gnu/rsplayer_${{ github.ref_name }}_amd64.deb
+        find deb-arm-unknown-linux-gnueabihf -name "*.deb" -exec mv {} ./rsplayer_${{ github.ref_name }}_armhfv6.deb \;
+        find deb-armv7-unknown-linux-gnueabihf -name "*.deb" -exec mv {} ./rsplayer_${{ github.ref_name }}_armhfv7.deb \;
+        find deb-aarch64-unknown-linux-gnu -name "*.deb" -exec mv {} ./rsplayer_${{ github.ref_name }}_arm64.deb \;
+        find deb-x86_64-unknown-linux-gnu -name "*.deb" -exec mv {} ./rsplayer_${{ github.ref_name }}_amd64.deb \;
     - name: Display new structure of downloaded files
       run: ls -R
     - uses: ncipollo/release-action@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
         artifacts: |
-          deb-*/*.deb
+          *.deb
           rsplayer_*
         draft: true
         prerelease: true
