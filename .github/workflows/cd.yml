@@ -76,7 +76,7 @@ jobs:
         mv rsplayer-x86_64-unknown-linux-gnu/rsplayer rsplayer_amd64
     - name: Display new structure of downloaded files
       run: ls -R
-    - uses: softprops/action-gh-release@v2.3.3
+    - uses: softprops/action-gh-release@v2
       if: startsWith(github.ref, 'refs/tags/')
       with:
         draft: true
@@ -84,5 +84,5 @@ jobs:
         generate_release_notes: true
         fail_on_unmatched_files: true
         files: |
-          **/*.deb
+          deb-*/*.deb
           rsplayer_*
