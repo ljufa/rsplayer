@@ -11,7 +11,7 @@ Before you begin, ensure you have the following prerequisites installed on your 
 ### 1. Rust and dev tools
 Install linux build tools:
 ```
-sudo apt install build-essintials pkg-config libasound2-dev
+sudo apt install build-essential pkg-config libasound2-dev
 ```
 Install Rust using `rustup`:
 ```bash

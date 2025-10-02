@@ -544,7 +544,8 @@ pub mod test_shared {
         pub fn new() -> Self {
             let rnd = random_string::generate(25, "utf8");
             let db_dir = format!("/tmp/rsptest_{rnd}");
-            let music_dir = "/home/dlj/myworkspace/rsplayer/rsplayer_metadata/assets".to_owned();
+            let mdir=  env!("CARGO_MANIFEST_DIR");
+            let music_dir = format!("{mdir}/assets");
             let path = &format!("{db_dir}_ams");
             if Path::new(path).exists() {
                 _ = std::fs::remove_dir_all(path);
