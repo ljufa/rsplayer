@@ -1,16 +1,23 @@
 #!/usr/bin/env bash
 set -e
 device_arch=$(arch)
+deb_arch_suffix=""
+
 if [ "$device_arch" = "x86_64" ]; then
-    device_arch="amd64"
+    deb_arch_suffix="amd64"
 elif [ "$device_arch" = "aarch64" ]; then
-    device_arch="arm64"
-elif [ "$device_arch" = "armv7l" ] || [ "$device_arch" = "armv6l" ]; then
-    device_arch="armhf"
+    deb_arch_suffix="arm64"
+elif [ "$device_arch" = "armv7l" ]; then
+    deb_arch_suffix="armhfv7"
+elif [ "$device_arch" = "armv6l" ]; then
+    deb_arch_suffix="armhfv6"
+else
+    deb_arch_suffix=$device_arch
 fi
-echo "Using architecture:${device_arch}"
-deb_file_name="rsplayer_${device_arch}"
-URL=$(curl -s https://api.github.com/repos/ljufa/rsplayer/releases/latest | grep browser_download_url | cut -d '"' -f 4 | grep "_${device_arch}.deb" | head -n 1)
+
+echo "Using architecture suffix:${deb_arch_suffix}"
+deb_file_name="rsplayer_${deb_arch_suffix}"
+URL=$(curl -s https://api.github.com/repos/ljufa/rsplayer/releases/latest | grep browser_download_url | cut -d '"' -f 4 | grep "_${deb_arch_suffix}.deb" | head -n 1)
 echo Downloading installation package from "$URL" ...
 curl -L -o "${deb_file_name}".deb  "$URL"
 sudo dpkg -i --force-overwrite "${deb_file_name}".deb
