@@ -73,7 +73,19 @@ pub struct Model {
 }
 
 #[allow(clippy::needless_pass_by_value)]
-pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
+pub fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
+    if let Some(search_term) = url.search().get("search").and_then(|v| v.get(0).cloned()) {
+        if !search_term.is_empty() {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+                api_models::common::MetadataCommand::SearchLocalFiles(search_term.clone(), 100),
+            )));
+            return Model {
+                tree: TreeModel::new(),
+                wait_response: true,
+                search_input: search_term,
+            };
+        }
+    }
     orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
         api_models::common::MetadataCommand::QueryLocalFiles(String::new(), 0),
     )));
