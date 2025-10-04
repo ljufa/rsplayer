@@ -41,6 +41,8 @@ pub struct RsPlayerSettings {
     #[validate(range(min = 1, max = 99))]
     pub player_threads_priority: u8,
     pub alsa_buffer_size: Option<u32>,
+    #[serde(default = "player_state_db_path_default_value")]
+    pub db_path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
@@ -72,6 +74,10 @@ const fn input_stream_buffer_size_default_value() -> usize {
     10
 }
 
+fn player_state_db_path_default_value() -> String {
+    "player_state".to_string()
+}
+
 impl Default for RsPlayerSettings {
     fn default() -> Self {
         Self {
@@ -80,6 +86,7 @@ impl Default for RsPlayerSettings {
             ring_buffer_size_ms: 200,
             player_threads_priority: 1,
             alsa_buffer_size: None,
+            db_path: player_state_db_path_default_value(),
         }
     }
 }

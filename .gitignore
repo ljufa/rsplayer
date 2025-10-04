@@ -12,3 +12,6 @@ PKGS/devrpi/etc/wpa_supplicant/wpa_supplicant.conf
 .env
 rsplayer_metadata/artwork
 .zed
+*.db
+player_state/
+configuration.db/

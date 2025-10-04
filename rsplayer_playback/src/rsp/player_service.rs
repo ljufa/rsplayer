@@ -8,6 +8,7 @@ use std::thread::JoinHandle;
 use std::time::SystemTime;
 use thread_priority::{ThreadBuilder, ThreadPriority};
 use tokio::sync::broadcast::Sender;
+use tokio::task::JoinHandle as TokioJoinHandle;
 
 use api_models::{
     settings::{RsPlayerSettings, Settings},
@@ -30,6 +31,7 @@ pub struct PlayerService {
     rsp_settings: RsPlayerSettings,
     music_dir: String,
     changes_tx: Sender<StateChangeEvent>,
+    state_persist_handle: TokioJoinHandle<()>,
 }
 const LAST_SONG_PAUSED_KEY: &str = "last_song_paused";
 const LAST_SONG_PROGRESS_KEY: &str = "last_played_song_progress";
@@ -42,11 +44,11 @@ impl PlayerService {
         queue_service: Arc<QueueService>,
         state_changes_tx: Sender<StateChangeEvent>,
     ) -> Self {
-        let db = sled::open("player_state").expect("Failed to open queue db");
+        let db = sled::open(&settings.rs_player_settings.db_path).expect("Failed to open queue db");
         let state_db = db.clone();
         let mut rx = state_changes_tx.subscribe();
         let state_tx = state_changes_tx.clone();
-        tokio::task::spawn(async move {
+        let state_persist_handle = tokio::task::spawn(async move {
             let mut i = 0;
             loop {
                 match rx.recv().await {
@@ -95,6 +97,7 @@ impl PlayerService {
             audio_device: settings.alsa_settings.output_device.name.clone(),
             rsp_settings: settings.rs_player_settings.clone(),
             music_dir: settings.metadata_settings.music_directory.clone(),
+            state_persist_handle,
         };
         let last_played_song_progress = ps.get_last_played_song_time();
         if last_played_song_progress > 0 {
@@ -154,6 +157,12 @@ impl PlayerService {
     #[allow(clippy::unused_self, clippy::missing_const_for_fn)]
     pub fn seek_current_song(&self, seconds: u16) {
         self.skip_to_time.store(seconds, Ordering::Relaxed);
+    }
+
+    pub fn reset_progress(&self) {
+        self.stop_current_song();
+        self.seek_current_song(0);
+        _ = self.state_db.insert(LAST_SONG_PROGRESS_KEY, "0".as_bytes());
     }
 
     pub fn play_song(&self, song_id: &str) {
@@ -253,5 +262,9 @@ impl PlayerService {
             _ => "0".to_string(),
         };
         last_time.parse::<u16>().unwrap_or_default()
+    }
+
+    pub fn shutdown(&self) {
+        self.state_persist_handle.abort();
     }
 }

@@ -192,7 +192,7 @@ mod filters {
 mod handlers {
     use std::{collections::HashMap, convert::Infallible, process::exit};
 
-    use log::{debug, error};
+    use log::{debug, error, info};
     use warp::hyper::StatusCode;
 
     use api_models::settings::Settings;

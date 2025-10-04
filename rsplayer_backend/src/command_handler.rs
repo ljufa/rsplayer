@@ -1,7 +1,7 @@
 use std::process::exit;
 use std::sync::Arc;
 
-use log::debug;
+use log::{debug, info};
 use tokio::sync::broadcast::Sender;
 use tokio::sync::mpsc::Receiver;
 
@@ -42,11 +42,7 @@ pub async fn handle_user_commands(
     mut input_commands_rx: Receiver<UserCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) {
-    loop {
-        let Some(cmd) = input_commands_rx.recv().await else {
-            debug!("Wait in loop");
-            continue;
-        };
+    while let Some(cmd) = input_commands_rx.recv().await {
         debug!("Received command {:?}", cmd);
         let sender = &state_changes_sender.clone();
         match cmd {
@@ -61,8 +57,11 @@ pub async fn handle_user_commands(
             Player(PlayItem(id)) => {
                 player_service.play_song(&id);
             }
-            Player(Pause | Stop) => {
+            Player(Pause) => {
                 player_service.stop_current_song();
+            }
+            Player(Stop) => {
+                player_service.reset_progress();
             }
             Player(TogglePlay) => {
                 player_service.toggle_play_pause();
@@ -386,8 +385,7 @@ pub async fn handle_system_commands(
     mut input_commands_rx: Receiver<SystemCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) {
-    loop {
-        if let Some(cmd) = input_commands_rx.recv().await {
+    while let Some(cmd) = input_commands_rx.recv().await {
             debug!("Received command {:?}", cmd);
             match cmd {
                 SetVol(val) => {
@@ -436,6 +434,5 @@ pub async fn handle_system_commands(
                         .unwrap();
                 }
             }
-        }
     }
 }

@@ -25,8 +25,8 @@ use rsplayer_metadata::queue_service::QueueService;
 use rsplayer_metadata::song_repository::SongRepository;
 use rsplayer_playback::rsp::player_service::PlayerService;
 
-mod command_handler;
-mod server_warp;
+use rsplayer::command_handler;
+use rsplayer::server_warp;
 
 #[allow(clippy::redundant_pub_crate, clippy::too_many_lines)]
 #[tokio::main(flavor = "current_thread")]

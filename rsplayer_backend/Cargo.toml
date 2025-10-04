@@ -68,4 +68,7 @@ warp = { version = "0.3.7", features = ["compression", "tls"] }
 rust-embed = { version = "8.5.0", features = ["warp-ex", "compression"] }
 warp-embed = "0.5.0"
 
+[dev-dependencies]
+tempfile = "3.10.1"
+sled = { workspace = true }
 
