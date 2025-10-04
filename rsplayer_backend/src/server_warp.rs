@@ -221,11 +221,11 @@ mod handlers {
     }
 
     pub async fn get_settings(config: Config) -> Result<impl warp::Reply, Infallible> {
-        let settings = &mut config.get_settings();
+        let mut settings = config.get_settings_mut();
         let cards = alsa::get_all_cards();
         settings.alsa_settings.available_audio_cards = cards;
         settings.uart_settings.available_serial_devices = uart::io::get_all_serial_devices();
-        Ok(warp::reply::json(settings))
+        Ok(warp::reply::json(&*settings))
     }
 }
 
