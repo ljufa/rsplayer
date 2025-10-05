@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use api_models::common::Volume;
 
@@ -13,33 +13,42 @@ pub type ArcConfiguration = Arc<Configuration>;
 
 pub struct Configuration {
     db: Db,
+    settings: RwLock<Settings>,
 }
 
 impl Configuration {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let db = sled::open("configuration.db").expect("Failed to open configuration db");
-        _ = db.compare_and_swap(
-            SETTINGS_KEY,
-            None as Option<IVec>,
-            Some(IVec::from(serde_json::to_vec(&Settings::default()).unwrap())),
-        );
+        let settings = if let Ok(Some(data)) = db.get(SETTINGS_KEY) {
+            serde_json::from_slice(&data).unwrap_or_default()
+        } else {
+            let s = Settings::default();
+            _ = db.insert(SETTINGS_KEY, IVec::from(serde_json::to_vec(&s).unwrap()));
+            s
+        };
         _ = db.compare_and_swap(
             STATE_KEY,
             None as Option<IVec>,
             Some(IVec::from(serde_json::to_vec(&StreamerState::default()).unwrap())),
         );
-        Self { db }
+        Self {
+            db,
+            settings: RwLock::new(settings),
+        }
     }
 
     pub fn get_settings(&self) -> Settings {
-        let sett = self.db.get(SETTINGS_KEY).unwrap().unwrap();
-        let result: Settings = serde_json::from_slice(&sett).unwrap();
-        result
+        self.settings.read().unwrap().clone()
+    }
+
+    pub fn get_settings_mut(&self) -> std::sync::RwLockWriteGuard<Settings> {
+        self.settings.write().unwrap()
     }
 
     pub fn save_settings(&self, settings: &Settings) {
-        _ = self.db.insert(SETTINGS_KEY, serde_json::to_vec(&settings).unwrap());
+        *self.settings.write().unwrap() = settings.clone();
+        _ = self.db.insert(SETTINGS_KEY, serde_json::to_vec(settings).unwrap());
         _ = self.db.flush();
     }
 
