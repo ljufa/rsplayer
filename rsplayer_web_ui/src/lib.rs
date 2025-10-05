@@ -123,7 +123,8 @@ impl Page {
     fn new(url: Url, orders: &mut impl Orders<Msg>) -> Self {
         let mut iter = url.hash_path().iter();
         let first_level = iter.next().map_or("", |v| v.as_str());
-        let second_level = iter.next().map_or("", |v| v.as_str());
+        let second_level_raw = iter.next().map_or("", |v| v.as_str());
+        let second_level = second_level_raw.split('?').next().unwrap_or(second_level_raw);
         match first_level {
             FIRST_SETUP => Self::Home,
             SETTINGS => Self::Settings(page::settings::init(url, &mut orders.proxy(Msg::Settings))),
@@ -228,6 +229,18 @@ impl<'a> Urls<'a> {
     }
     fn library_abs() -> Url {
         Url::new().add_hash_path_part(MUSIC_LIBRARY)
+    }
+    fn get_search_term(url: &Url) -> Option<String> {
+        url.hash_path().iter().find_map(|p| {
+            log!("p", p);
+            if p.contains("?search=") {
+                let term = p.split_once("?search=").map(|(_, term)| term.to_string()).unwrap_or(p.to_string());
+                log!("term", &term);
+                Some(term)
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -1050,4 +1063,21 @@ fn get_background_image(model: &PlayerModel) -> Option<String> {
         return ps.image_url.clone();
     }
     None
+}
+
+
+#[cfg(test)]
+mod test{
+    
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    use crate::Urls;
+
+
+    #[wasm_bindgen_test]
+    async fn test_get_search_term() {
+        let url = Urls::library_abs().add_hash_path_part("artist?search=abc");
+        assert_eq!(Urls::get_search_term(&url).unwrap(), "abc");
+    }
+
 }

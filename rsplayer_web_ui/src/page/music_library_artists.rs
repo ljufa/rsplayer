@@ -9,7 +9,7 @@ use seed::{
     section, span, style, ul, C, IF,
 };
 
-use crate::view_spinner_modal;
+use crate::{view_spinner_modal, Urls};
 
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
@@ -53,7 +53,20 @@ pub struct Model {
 }
 
 #[allow(clippy::needless_pass_by_value)]
-pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
+pub fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
+    let search_term = Urls::get_search_term(&url);
+
+    if let Some(term) = search_term {
+        orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+            api_models::common::MetadataCommand::SearchArtists(term.clone()),
+        )));
+        Model {
+            tree: TreeModel::new(),
+            wait_response: true,
+            search_input: term,
+        }
+    }else{
+
     orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
         api_models::common::MetadataCommand::QueryArtists,
     )));
@@ -62,6 +75,7 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
         wait_response: true,
         search_input: String::new(),
     }
+}
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -142,9 +156,11 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             }
         }
         Msg::WebSocketOpen => {
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
-                api_models::common::MetadataCommand::QueryArtists,
-            )));
+            if model.search_input.is_empty() {
+                orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+                    api_models::common::MetadataCommand::QueryArtists,
+                )));
+            }
         }
         Msg::SearchInputChanged(term) => {
             model.search_input = term;

@@ -13,7 +13,7 @@ use seed::{
     section, span, style, ul, C, IF,
 };
 
-use crate::view_spinner_modal;
+use crate::{view_spinner_modal, Urls};
 
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
@@ -73,14 +73,26 @@ pub struct Model {
 }
 
 #[allow(clippy::needless_pass_by_value)]
-pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
-    orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
-        api_models::common::MetadataCommand::QueryLocalFiles(String::new(), 0),
-    )));
-    Model {
-        tree: TreeModel::new(),
-        wait_response: true,
-        search_input: String::new(),
+pub fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
+    let search_term = Urls::get_search_term(&url);
+    if let Some(term) = search_term {
+        orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+            api_models::common::MetadataCommand::SearchLocalFiles(term.clone(), 100),
+        )));
+        Model {
+            tree: TreeModel::new(),
+            wait_response: true,
+            search_input: term,
+        }
+    } else {
+        orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+            api_models::common::MetadataCommand::QueryLocalFiles(String::new(), 0),
+        )));
+        Model {
+            tree: TreeModel::new(),
+            wait_response: true,
+            search_input: String::new(),
+        }
     }
 }
 
@@ -145,9 +157,11 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
 
         Msg::WebSocketOpen => {
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
-                api_models::common::MetadataCommand::QueryLocalFiles(String::new(), 0),
-            )));
+            if model.search_input.is_empty() {
+                orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+                    api_models::common::MetadataCommand::QueryLocalFiles(String::new(), 0),
+                )));
+            }
         }
         _ => {
             orders.skip();
