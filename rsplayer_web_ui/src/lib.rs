@@ -123,7 +123,8 @@ impl Page {
     fn new(url: Url, orders: &mut impl Orders<Msg>) -> Self {
         let mut iter = url.hash_path().iter();
         let first_level = iter.next().map_or("", |v| v.as_str());
-        let second_level = iter.next().map_or("", |v| v.as_str());
+        let second_level_raw = iter.next().map_or("", |v| v.as_str());
+        let second_level = second_level_raw.split('?').next().unwrap_or(second_level_raw);
         match first_level {
             FIRST_SETUP => Self::Home,
             SETTINGS => Self::Settings(page::settings::init(url, &mut orders.proxy(Msg::Settings))),
