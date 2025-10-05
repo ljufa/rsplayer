@@ -36,6 +36,7 @@ fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Nod
                 ps.artist.as_ref().map_or_else(
                     || h2![C!["subtitle", "is-3", "has-text-light"], "NA"],
                     |artist| a![
+                        style! { St::TextDecoration => "underline" },
                         attrs!{At::Href => format!("#/library/artists?search={}", artist)},
                         h2![C!["subtitle", "is-3", "has-text-light"], artist]
                     ]
@@ -43,6 +44,7 @@ fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Nod
                 ps.album.as_ref().map_or_else(
                     || h3![C!["subtitle", "is-5", "has-text-grey-light"], "NA"],
                     |album| a![
+                        style! { St::TextDecoration => "underline" },
                         attrs!{At::Href => format!("#/library/files?search={}", album)},
                         h3![C!["subtitle", "is-5", "has-text-grey-light"], album]
                     ]

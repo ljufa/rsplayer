@@ -154,9 +154,11 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             }
         }
         Msg::WebSocketOpen => {
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
-                api_models::common::MetadataCommand::QueryArtists,
-            )));
+            if model.search_input.is_empty() {
+                orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+                    api_models::common::MetadataCommand::QueryArtists,
+                )));
+            }
         }
         Msg::SearchInputChanged(term) => {
             model.search_input = term;

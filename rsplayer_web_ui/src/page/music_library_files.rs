@@ -157,9 +157,11 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
 
         Msg::WebSocketOpen => {
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
-                api_models::common::MetadataCommand::QueryLocalFiles(String::new(), 0),
-            )));
+            if model.search_input.is_empty() {
+                orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+                    api_models::common::MetadataCommand::QueryLocalFiles(String::new(), 0),
+                )));
+            }
         }
         _ => {
             orders.skip();
