@@ -54,18 +54,26 @@ pub struct Model {
 
 #[allow(clippy::needless_pass_by_value)]
 pub fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
-    if let Some(search_term) = url.search().get("search").and_then(|v| v.get(0).cloned()) {
-        if !search_term.is_empty() {
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
-                api_models::common::MetadataCommand::SearchArtists(search_term.clone()),
-            )));
-            return Model {
-                tree: TreeModel::new(),
-                wait_response: true,
-                search_input: search_term,
-            };
-        }
+    let search_term = url
+        .hash()
+        .split_once("?search=")
+        .map(|(_, term)| term.to_string())
+        .filter(|term| !term.is_empty());
+
+    if let Some(term) = search_term {
+        let decoded_term = percent_encoding::percent_decode_str(&term)
+            .decode_utf8_lossy()
+            .to_string();
+        orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+            api_models::common::MetadataCommand::SearchArtists(decoded_term.clone()),
+        )));
+        return Model {
+            tree: TreeModel::new(),
+            wait_response: true,
+            search_input: decoded_term,
+        };
     }
+
     orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
         api_models::common::MetadataCommand::QueryArtists,
     )));
