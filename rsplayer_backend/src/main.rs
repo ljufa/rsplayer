@@ -9,7 +9,8 @@ use std::time::Duration;
 
 use env_logger::Env;
 
-use rsplayer_hardware::uart;
+
+use rsplayer_hardware::uart::service::UartService;
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::{select, spawn};
@@ -84,7 +85,15 @@ async fn main() {
     ));
     info!("Queue service successfully created.");
 
-    let ai_service = AudioInterfaceService::new(&config);
+    let uart_settings = config.get_settings().uart_settings.clone();
+    let uart_service = if uart_settings.enabled {
+        Some(Arc::new(UartService::new(&uart_settings.uart_path, uart_settings.baud_rate)))
+    } else {
+
+        None
+    };
+
+    let ai_service = AudioInterfaceService::new(&config, uart_service.clone());
     if let Err(e) = &ai_service {
         error!("Audio service interface can't be created. error: {}", e);
         start_degraded(&mut term_signal, e, &config).await;
@@ -116,7 +125,6 @@ async fn main() {
     if config.get_settings().auto_resume_playback {
         player_service.play_from_current_queue_song();
     }
-    let uart_settings = config.get_settings().uart_settings.clone();
     select! {
         _ = spawn(command_handler::handle_user_commands(
                     player_service.clone(),
@@ -132,22 +140,9 @@ async fn main() {
                 error!("Exit from command handler thread.");
             }
         _ = if config.get_settings().uart_settings.enabled {
-                spawn(uart::io::send_state_events(state_changes_tx.subscribe(), uart_settings.clone()))
+                spawn(rsplayer_hardware::uart::io::receive_commands(player_commands_tx.clone(), system_commands_tx.clone(), state_changes_tx.clone(), uart_settings))
             } else {
                 spawn(rsplayer_hardware::common::no_op_future())
-            }
-            => {
-                let mut settings = config.get_settings();
-                settings.uart_settings.enabled = false;
-                config.save_settings(&settings);
-                error!("Exit from tx UART thread. UART disabled.");
-            }
-
-        _ = if config.get_settings().uart_settings.enabled {
-                spawn(rsplayer_hardware::uart::io::receive_commands(player_commands_tx.clone(), system_commands_tx.clone(), uart_settings))
-            } else {
-                spawn(rsplayer_hardware::common::no_op_future())
-
             }
             => {
                 let mut settings = config.get_settings();
@@ -158,7 +153,6 @@ async fn main() {
 
         _ = spawn(command_handler::handle_system_commands(
                 ai_service,
-                config.clone(),
                 system_commands_rx,
                 state_changes_tx.clone()))
             => {

@@ -106,7 +106,7 @@ TODO
 # Roadmap
  
 ## Features
-* [ ] Make artist/album/song as a link on playback page
+* [x] Make artist/album/song as a link on playback page
 * [ ] Implement MQTT or other homeassistant friendly communication channel 
 * [x] Show files as a tree
 * [x] Show media library (artist/album) as a tree

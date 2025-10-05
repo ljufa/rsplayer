@@ -108,20 +108,18 @@ impl AlsaPcmCard {
 const ALSA_MIXER_STEP: u8 = 1;
 
 impl AlsaMixer {
-    pub fn new(card_index: i32, mixer: Option<CardMixer>, volume: &Volume) -> Box<Self> {
+    pub fn new(card_index: i32, mixer: Option<CardMixer>) -> Box<Self> {
         let m = mixer.unwrap_or_default();
-        let mixer = AlsaMixer {
+        Box::new(AlsaMixer {
             card_name: format!("hw:{card_index}"),
             mixer_idx: m.index,
             mixer_name: m.name,
-        };
-        mixer.set_vol(volume.current);
-        Box::new(mixer)
+        })
     }
 }
 
 impl VolumeControlDevice for AlsaMixer {
-    fn vol_up(&self) -> Volume {
+    fn vol_up(&mut self) -> Volume {
         let ev = self.get_vol();
         let nv = ev.current + ev.step;
         if nv <= ev.max {
@@ -131,7 +129,7 @@ impl VolumeControlDevice for AlsaMixer {
         }
     }
 
-    fn vol_down(&self) -> Volume {
+    fn vol_down(&mut self) -> Volume {
         let ev = self.get_vol();
         let nv = ev.current - ev.step;
         if nv >= ev.min {
@@ -141,7 +139,7 @@ impl VolumeControlDevice for AlsaMixer {
         }
     }
 
-    fn get_vol(&self) -> Volume {
+    fn get_vol(&mut self) -> Volume {
         if let Ok(mixer) = Mixer::new(self.card_name.as_str(), false) {
             if let Some(selem) = mixer.find_selem(&SelemId::new(&self.mixer_name, self.mixer_idx)) {
                 let (rmin, rmax) = selem.get_playback_volume_range();
@@ -164,7 +162,7 @@ impl VolumeControlDevice for AlsaMixer {
         Volume::default()
     }
 
-    fn set_vol(&self, level: u8) -> Volume {
+    fn set_vol(&mut self, level: u8) -> Volume {
         if let Ok(mixer) = Mixer::new(self.card_name.as_str(), false) {
             if let Some(selem) = mixer.find_selem(&SelemId::new(&self.mixer_name, self.mixer_idx)) {
                 let (rmin, rmax) = selem.get_playback_volume_range();

@@ -71,14 +71,21 @@ pub struct AudioCard {
 pub enum VolumeCrtlType {
     Off,
     Alsa,
+    RSPlayerFirmware,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Volume {
     pub step: u8,
     pub min: u8,
     pub max: u8,
     pub current: u8,
+}
+impl Default for Volume {
+    fn default() -> Self {
+        Self { step: 3, min: 0, max: 255, current: 0 }
+    }
+    
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -153,7 +160,7 @@ pub enum SystemCommand {
     PowerOff,
     RestartSystem,
     RestartRSPlayer,
-    QueryCurrentStreamerState,
+    QueryCurrentVolume,
 }
 
 #[must_use]

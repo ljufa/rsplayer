@@ -68,7 +68,7 @@ fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Nod
 
 fn view_controls(model: &PlayerModel) -> Node<Msg> {
     let playing = model.player_state == PlayerState::PLAYING;
-    let shuffle_class = if model.random { "is-active" } else { "" };
+    let shuffle_class = if model.random { "fa-shuffle" } else { "fa-list-ol" };
 
     div![
         C!["player-controls", "has-text-centered"],
@@ -78,8 +78,8 @@ fn view_controls(model: &PlayerModel) -> Node<Msg> {
             div![
                 C!["level-item"],
                 button![
-                    C!["button", "is-ghost", "is-medium", shuffle_class],
-                    span![C!["icon"], i![C!["fas", "fa-shuffle"]]],
+                    C!["button", "is-ghost", "is-medium"],
+                    span![C!["icon"], i![C!["fas", shuffle_class]]],
                     ev(Ev::Click, |_| Msg::SendUserCommand(Player(PlayerCommand::RandomToggle))),
                 ],
             ],
@@ -134,7 +134,7 @@ fn view_controls(model: &PlayerModel) -> Node<Msg> {
             ],
         ],
         view_track_progress_bar(&model.progress),
-        view_volume_slider(&model.streamer_status.volume_state),
+        view_volume_slider(&model.volume_state),
     ]
 }
 
