@@ -21,4 +21,4 @@ alsa = "0.9.1"
 url = "2.5.0"
 
 # uart for serial communication with rsplayer_firmware
-rpi_embedded = { version = "0.1.0" }
+rpi_embedded = "0.1.0"

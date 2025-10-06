@@ -14,9 +14,7 @@ use api_models::common::QueueCommand::{
     self, AddLocalLibDirectory, AddSongToQueue, ClearQueue, LoadAlbumInQueue, LoadArtistInQueue, LoadPlaylistInQueue,
     LoadSongToQueue, QueryCurrentQueue, QueryCurrentSong, RemoveItem,
 };
-use api_models::common::SystemCommand::{
-    PowerOff, QueryCurrentStreamerState, RestartRSPlayer, RestartSystem, SetVol, VolDown, VolUp,
-};
+use api_models::common::SystemCommand::{PowerOff, RestartRSPlayer, RestartSystem, SetVol, VolDown, VolUp};
 use api_models::common::UserCommand::{Metadata, Player, Playlist, Queue};
 use api_models::common::{MetadataCommand, MetadataLibraryItem, SystemCommand, UserCommand};
 use api_models::playlist::PlaylistType;
@@ -382,7 +380,6 @@ pub async fn handle_user_commands(
 
 pub async fn handle_system_commands(
     ai_service: ArcAudioInterfaceSvc,
-    config_store: ArcConfiguration,
     mut input_commands_rx: Receiver<SystemCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) {
@@ -392,24 +389,25 @@ pub async fn handle_system_commands(
             match cmd {
                 SetVol(val) => {
                     let nv = ai_service.set_volume(val);
-                    let new_state = config_store.save_volume_state(nv);
                     state_changes_sender
-                        .send(StateChangeEvent::StreamerStateEvent(new_state))
+                        .send(StateChangeEvent::VolumeChangeEvent(nv))
                         .expect("Send event failed.");
                 }
                 VolUp => {
                     let nv = ai_service.volume_up();
-                    let new_state = config_store.save_volume_state(nv);
-                    state_changes_sender
-                        .send(StateChangeEvent::StreamerStateEvent(new_state))
-                        .expect("Send event failed.");
+                    if nv.current > 0 {
+                        state_changes_sender
+                            .send(StateChangeEvent::VolumeChangeEvent(nv))
+                            .expect("Send event failed.");
+                    }
                 }
                 VolDown => {
                     let nv = ai_service.volume_down();
-                    let new_state = config_store.save_volume_state(nv);
-                    state_changes_sender
-                        .send(StateChangeEvent::StreamerStateEvent(new_state))
-                        .expect("Send event failed.");
+                    if nv.current > 0{
+                        state_changes_sender
+                            .send(StateChangeEvent::VolumeChangeEvent(nv))
+                            .expect("Send event failed.");
+                    }
                 }
                 PowerOff => {
                     info!("Shutting down system");
@@ -429,10 +427,10 @@ pub async fn handle_system_commands(
                     info!("Restarting RSPlayer");
                     exit(1);
                 }
-                QueryCurrentStreamerState => {
-                    let ss = config_store.get_streamer_state();
+                SystemCommand::QueryCurrentVolume => {
+                    let vol = ai_service.get_volume();
                     state_changes_sender
-                        .send(StateChangeEvent::StreamerStateEvent(ss))
+                        .send(StateChangeEvent::VolumeChangeEvent(vol))
                         .unwrap();
                 }
             }

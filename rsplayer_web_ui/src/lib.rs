@@ -3,7 +3,7 @@ extern crate api_models;
 use std::{rc::Rc, str::FromStr};
 
 use api_models::{
-    common::{MetadataCommand, PlayerCommand, QueueCommand, SystemCommand, UserCommand, Volume}, player::Song, state::{PlayerInfo, PlayerState, SongProgress, StateChangeEvent, StreamerState}
+    common::{MetadataCommand, PlayerCommand, QueueCommand, SystemCommand, UserCommand, Volume}, player::Song, state::{PlayerInfo, PlayerState, SongProgress, StateChangeEvent}
 };
 use gloo_console::{error, log};
 use gloo_net::http::Request;
@@ -33,7 +33,7 @@ const MUSIC_LIBRARY_PL_STATIC: &str = "playlists";
 // ------ ------
 #[derive(Debug)]
 pub struct PlayerModel {
-    streamer_status: StreamerState,
+    volume_state: Volume,
     player_info: Option<PlayerInfo>,
     current_song: Option<Song>,
     progress: SongProgress,
@@ -194,9 +194,7 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
         web_socket_reconnector: None,
         startup_error: None,
         player_model: PlayerModel {
-            streamer_status: StreamerState {
-                volume_state: Volume::default(),
-            },
+            volume_state: Volume::default(),
             player_info: None,
             current_song: None,
             progress: SongProgress::default(),
@@ -255,7 +253,7 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             log!("WebSocket connection is open now");
             orders.send_msg(Msg::SendUserCommand(Queue(QueueCommand::QueryCurrentSong)));
             orders.send_msg(Msg::SendUserCommand(Player(PlayerCommand::QueryCurrentPlayerInfo)));
-            orders.send_msg(Msg::SendSystemCommand(SystemCommand::QueryCurrentStreamerState));
+            orders.send_msg(Msg::SendSystemCommand(SystemCommand::QueryCurrentVolume));
             if let Page::Queue(model) = &mut model.page {
                 page::queue::update(page::queue::Msg::WebSocketOpen, model, &mut orders.proxy(Msg::Queue));
             }
@@ -336,8 +334,6 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             orders.skip();
         }
         Msg::SetVolume(volstr) => {
-            let vol = u8::from_str(volstr.as_str()).unwrap_or_default();
-            model.player_model.streamer_status.volume_state.current = vol;
             orders.send_msg(Msg::SendSystemCommand(SystemCommand::SetVol(
                 u8::from_str(volstr.as_str()).unwrap_or_default(),
             )));
@@ -382,8 +378,8 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     }
                     model.player_model.current_song = Some(song.clone());
                 }
-                StateChangeEvent::StreamerStateEvent(sst) => {
-                    model.player_model.streamer_status = sst.clone();
+                StateChangeEvent::VolumeChangeEvent(vol) => {
+                    model.player_model.volume_state = vol.clone();
                 }
                 StateChangeEvent::PlayerInfoEvent(pi) => {
                     model.player_model.player_info = Some(pi.clone());
@@ -528,10 +524,6 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::SendSystemCommand(cmd) => {
             _ = model.web_socket.send_string(&serde_json::to_string(&cmd).unwrap());
-            log!(format!("lib {:?}", cmd));
-            if let SystemCommand::SetVol(vol) = cmd {
-                model.player_model.streamer_status.volume_state.current = vol;
-            }
             orders.skip();
         }
         Msg::ReloadApp => {
@@ -755,10 +747,10 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
                         ],
                         div![input![
                             C!["slider"],
-                            attrs! {"value"=> player_model.streamer_status.volume_state.current},
-                            // attrs! {"step"=> player_model.streamer_status.volume_state.step},
-                            attrs! {"max"=> player_model.streamer_status.volume_state.max},
-                            attrs! {"min"=> player_model.streamer_status.volume_state.min},
+                            attrs! {"value"=> player_model.volume_state.current},
+                            // attrs! {"step"=> player_model.volume_state.step},
+                            attrs! {"max"=> player_model.volume_state.max},
+                            attrs! {"min"=> player_model.volume_state.min},
                             attrs! {"type"=> "range"},
                             input_ev(Ev::Change, Msg::SetVolume),
                         ],],

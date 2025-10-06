@@ -1,37 +1,16 @@
 use std::{io::Read, str::FromStr};
 
 use api_models::{
-    common::{PlayerCommand, SystemCommand, UserCommand},
+    common::{PlayerCommand, SystemCommand, UserCommand, Volume},
     state::StateChangeEvent,
 };
 use log::{debug, error, info};
-use rpi_embedded::uart::Uart;
-use tokio::sync::{broadcast::Receiver, mpsc::Sender};
-
-pub async fn send_state_events(
-    mut state_changes_rx: Receiver<StateChangeEvent>,
-    uart_settings: api_models::settings::UartCmdChannelSettings,
-) {
-    let mut uart = Uart::with_path(
-        uart_settings.uart_path.clone(),
-        uart_settings.baud_rate,
-        rpi_embedded::uart::Parity::None,
-        8,
-        1,
-    )
-    .unwrap();
-    loop {
-        if let Ok(StateChangeEvent::StreamerStateEvent(streamer_state)) = state_changes_rx.recv().await {
-            let current_volume = streamer_state.volume_state.current;
-            let message = format!("{:<16}", format!("SetVol({})", current_volume));
-            uart.write(message).unwrap();
-        }
-    }
-}
+use tokio::sync::mpsc::Sender;
 
 pub async fn receive_commands(
     player_commands_tx: Sender<UserCommand>,
     system_commands_tx: Sender<SystemCommand>,
+    state_changes_tx: tokio::sync::broadcast::Sender<StateChangeEvent>,
     uart_settings: api_models::settings::UartCmdChannelSettings,
 ) {
     use std::fs::OpenOptions;
@@ -57,12 +36,21 @@ pub async fn receive_commands(
         match guard.get_inner().read(&mut buffer) {
             Ok(_n) => {
                 let msg = core::str::from_utf8(&buffer).unwrap().trim();
-                info!("Received: {}", msg);
+                info!("Uart Received: {}", msg);
                 match msg {
                     "PowerOff" => {
                         system_commands_tx.send(SystemCommand::PowerOff).await.expect("");
                     }
                     _ => {
+                        if msg.starts_with("CurVolume="){
+                            if let Some((_, vol_str)) = msg.split_once('=') {
+                                if let Ok(vol) = vol_str.parse::<u8>() {
+                                    info!("Parsed volume: {}", vol);
+                                    let volume = Volume { current: vol, ..Volume::default() };
+                                    _ = state_changes_tx.send(StateChangeEvent::VolumeChangeEvent(volume)).unwrap();
+                                }
+                            }
+                        }
                         if let Ok(pc) = PlayerCommand::from_str(msg) {
                             debug!("Parsed command: {:?}", pc);
                             player_commands_tx

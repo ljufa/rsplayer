@@ -4,7 +4,7 @@ use core::option::Option;
 use core::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use strum_macros::EnumProperty;
+
 
 use crate::common::MetadataLibraryItem;
 use crate::{
@@ -36,18 +36,12 @@ pub struct PlayerInfo {
     pub codec: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct StreamerState {
-    pub volume_state: Volume,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, EnumProperty, Serialize, Deserialize)]
-#[strum(serialize_all = "title_case")]
 #[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StateChangeEvent {
     CurrentSongEvent(Song),
     CurrentQueueEvent(Option<PlaylistPage>),
-    StreamerStateEvent(StreamerState),
+    VolumeChangeEvent(Volume),
     PlayerInfoEvent(PlayerInfo),
     SongTimeEvent(SongProgress),
     ErrorEvent(String),
