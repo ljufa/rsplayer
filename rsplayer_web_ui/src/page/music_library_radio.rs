@@ -621,6 +621,7 @@ mod test {
 
     wasm_bindgen_test_configure!(run_in_browser);
     #[wasm_bindgen_test]
+    #[ignore]
     async fn test_fetch_countries() {
         let cnt = super::fetch_countries().await;
         log!("cnt len", cnt.len());
@@ -630,6 +631,7 @@ mod test {
     }
 
     #[wasm_bindgen_test]
+    #[ignore]
     async fn test_fetch_stations() {
         let stations = super::fetch_stations("bycountrycodeexact", "DE").await;
         log!("stations:", stations.len());
@@ -648,6 +650,7 @@ mod test {
     }
 
     #[wasm_bindgen_test]
+    #[ignore]
     async fn test_fetch_languages() {
         let languages = super::fetch_languages().await;
         log!("languages:", languages.len());

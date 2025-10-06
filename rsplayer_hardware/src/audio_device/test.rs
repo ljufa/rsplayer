@@ -22,18 +22,18 @@ mod test_alsa {
     #[test]
     #[allow(unused)]
     fn test_new() {
-        let mut mixer = Some(CardMixer{card_index: 0, index: 0, name: "Master".to_string()});
-        let mut mix = AlsaMixer::new(0, mixer);
+        let mut mixer = Some(CardMixer{card_id: "0".to_string(), index: 0, name: "Master".to_string()});
+        let mut mix = AlsaMixer::new("0", mixer);
         assert_eq!(&mix.card_name, "hw:0");
         assert_eq!(mix.mixer_idx, 0u32);
         assert_eq!(&mix.mixer_name, "Master");
         
-        mixer = Some(CardMixer{card_index: 1, index: 0, name: "Master".to_string()});
-        mix = AlsaMixer::new(1, mixer);
+        mixer = Some(CardMixer{card_id: "1".to_string(), index: 0, name: "Master".to_string()});
+        mix = AlsaMixer::new("1", mixer);
         assert_eq!(&mix.card_name, "hw:1");
         
-        mixer = Some(CardMixer{card_index: 10, index: 3, name: "Headphone L+R".to_string()});
-        mix = AlsaMixer::new(10, mixer);
+        mixer = Some(CardMixer{card_id: "10".to_string(), index: 3, name: "Headphone L+R".to_string()});
+        mix = AlsaMixer::new("10", mixer);
         assert_eq!(&mix.card_name, "hw:10");
         assert_eq!(mix.mixer_idx, 3u32);
         assert_eq!(&mix.mixer_name, "Headphone L+R");
@@ -42,7 +42,7 @@ mod test_alsa {
     #[test]
     #[allow(unused)]
     fn get_and_set_playback_volume() {
-        let mix = AlsaMixer::new(0, Some(CardMixer { index: 0, name: "Master".to_string(), card_index: 0 }));
+        let mix = AlsaMixer::new("0", Some(CardMixer { index: 0, name: "Master".to_string(), card_id: "0".to_string() }));
         let original_vol = mix.get_vol();
         assert_eq!(mix.set_vol(31).current, 31);
         assert_eq!(mix.get_vol().current, 31);
@@ -52,5 +52,4 @@ mod test_alsa {
         );
         assert_eq!(mix.get_vol().current, original_vol.current);
     }
-
 }

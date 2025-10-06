@@ -33,26 +33,27 @@ pub fn get_all_cards() -> Vec<AudioCard> {
     for card in card::Iter::new().map(std::result::Result::unwrap) {
         let it = HintIter::new(Some(&card), &CString::new("pcm").unwrap()).unwrap();
         let mut pcm_devices = vec![];
+        let card_name = card.get_name().unwrap_or_default();
         for hint in it {
             pcm_devices.push(PcmOutputDevice {
                 name: hint.name.unwrap_or_default(),
                 description: hint.desc.map_or(String::new(), |dsc| dsc.replace('\n', " ")),
-                card_index: card.get_index(),
+                card_id: card_name.clone(),
             });
         }
         result.push(AudioCard {
-            index: card.get_index(),
-            name: card.get_name().unwrap_or_default(),
+            id: card_name.clone(),
+            name: card_name.clone(),
             description: card.get_longname().unwrap_or_default(),
             pcm_devices,
-            mixers: get_card_mixers(card.get_index()),
+            mixers: get_card_mixers(&card_name),
         });
     }
     result
 }
 
-fn get_card_mixers(card_index: i32) -> Vec<CardMixer> {
-    let mixer_card_name = format!("hw:{card_index}");
+fn get_card_mixers(card_id: &str) -> Vec<CardMixer> {
+    let mixer_card_name = format!("hw:{card_id}");
     let mut result = vec![];
     let Ok(mixer) = Mixer::new(&mixer_card_name, false) else {
         return result;
@@ -63,7 +64,7 @@ fn get_card_mixers(card_index: i32) -> Vec<CardMixer> {
             result.push(CardMixer {
                 index: sid.get_index(),
                 name: sid.get_name().unwrap_or("").to_owned(),
-                card_index,
+                card_id: card_id.to_string(),
             });
         }
     }
@@ -108,10 +109,10 @@ impl AlsaPcmCard {
 const ALSA_MIXER_STEP: u8 = 1;
 
 impl AlsaMixer {
-    pub fn new(card_index: i32, mixer: Option<CardMixer>) -> Box<Self> {
+    pub fn new(card_id: &str, mixer: Option<CardMixer>) -> Box<Self> {
         let m = mixer.unwrap_or_default();
         Box::new(AlsaMixer {
-            card_name: format!("hw:{card_index}"),
+            card_name: format!("hw:{card_id}"),
             mixer_idx: m.index,
             mixer_name: m.name,
         })

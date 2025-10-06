@@ -151,6 +151,7 @@ args = ["run"]
 dependencies = ["build_release"]
 script = [
     "rsync -avvP --rsync-path=\"sudo rsync\" target/${TARGET}/release/rsplayer pi@${RPI_HOST}:/usr/bin",
+    "ssh -x pi@${RPI_HOST} \"sudo systemctl restart rsplayer\""
 ]
 [tasks.copy_remote_debug]
 dependencies = ["build_debug"]

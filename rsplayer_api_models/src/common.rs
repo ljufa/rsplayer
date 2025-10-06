@@ -45,20 +45,19 @@ pub struct PcmOutputDevice {
     #[validate(length(min = 2))]
     pub name: String,
     pub description: String,
-    #[validate(range(min = 0, max = 100))]
-    pub card_index: i32,
+    pub card_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct CardMixer {
     pub index: u32,
     pub name: String,
-    pub card_index: i32,
+    pub card_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct AudioCard {
-    pub index: i32,
+    pub id: String,
     pub name: String,
     pub description: String,
     pub pcm_devices: Vec<PcmOutputDevice>,

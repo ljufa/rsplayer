@@ -118,17 +118,17 @@ pub struct AlsaSettings {
     pub available_audio_cards: Vec<AudioCard>,
 }
 impl AlsaSettings {
-    pub fn find_pcms_by_card_index(&self, card_index: i32) -> Vec<PcmOutputDevice> {
+    pub fn find_pcms_by_card_id(&self, card_id: &str) -> Vec<PcmOutputDevice> {
         self.available_audio_cards
             .iter()
-            .find(|card| card.index == card_index)
+            .find(|card| card.id == card_id)
             .map(|c| c.pcm_devices.clone())
             .unwrap_or_default()
     }
 
-    pub fn set_output_device(&mut self, card_index: i32, pcm_name: &str) {
+    pub fn set_output_device(&mut self, card_id: &str, pcm_name: &str) {
         if let Some(pcm) = self
-            .find_pcms_by_card_index(card_index)
+            .find_pcms_by_card_id(card_id)
             .iter()
             .find(|pcm| pcm.name == pcm_name)
         {
@@ -136,10 +136,10 @@ impl AlsaSettings {
         }
     }
 
-    pub fn find_mixers_by_card_index(&self, card_index: i32) -> Vec<CardMixer> {
+    pub fn find_mixers_by_card_id(&self, card_id: &str) -> Vec<CardMixer> {
         self.available_audio_cards
             .iter()
-            .find(|card| card.index == card_index)
+            .find(|card| card.id == card_id)
             .map(|mix| mix.mixers.clone())
             .unwrap_or_default()
     }

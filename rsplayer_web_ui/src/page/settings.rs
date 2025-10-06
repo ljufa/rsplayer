@@ -25,7 +25,7 @@ const API_SETTINGS_PATH: &str = "/api/settings";
 #[derive(Debug)]
 pub struct Model {
     settings: Settings,
-    selected_audio_card_index: i32,
+    selected_audio_card_id: String,
     waiting_response: bool,
 }
 
@@ -42,7 +42,7 @@ pub enum Msg {
     ToggleRspAlsaBufferSize,
     // ---- Input capture ----
     InputMetadataMusicDirectoryChanged(String),
-    InputAlsaCardChange(i32),
+    InputAlsaCardChange(String),
     InputUartDeviceChange(String),
     InputAlsaPcmChange(String),
     InputLircInputSocketPathChanged(String),
@@ -90,7 +90,7 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     });
     Model {
         settings: Settings::default(),
-        selected_audio_card_index: -1,
+        selected_audio_card_id: String::new(),
         waiting_response: true,
     }
 }
@@ -133,14 +133,14 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.settings.uart_settings.uart_path = value;
         }
         Msg::InputAlsaCardChange(value) => {
-            model.selected_audio_card_index = value;
-            model.settings.alsa_settings.output_device.card_index = value;
+            model.selected_audio_card_id = value.clone();
+            model.settings.alsa_settings.output_device.card_id = value;
         }
         Msg::InputAlsaPcmChange(value) => {
             model
                 .settings
                 .alsa_settings
-                .set_output_device(model.selected_audio_card_index, &value);
+                .set_output_device(&model.selected_audio_card_id, &value);
         }
         Msg::InputVolumeCtrlDeviceChanged(device) => {
             model.settings.volume_ctrl_settings.ctrl_device = device;
@@ -151,7 +151,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::InputVolumeAlsaMixerChanged(mixer) => {
             let pair: Vec<&str> = mixer.split(',').collect();
             model.settings.volume_ctrl_settings.alsa_mixer = Some(CardMixer {
-                card_index: model.selected_audio_card_index,
+                card_id: model.selected_audio_card_id.clone(),
                 index: pair[0].parse().unwrap_or_default(),
                 name: pair[1].to_owned(),
             });
@@ -182,7 +182,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::SettingsFetched(sett) => {
             model.waiting_response = false;
             model.settings = sett;
-            model.selected_audio_card_index = model.settings.alsa_settings.output_device.card_index;
+            model.selected_audio_card_id = model.settings.alsa_settings.output_device.card_id.clone();
         }
         Msg::SettingsSaved(_saved) => {
             model.waiting_response = false;
@@ -227,13 +227,12 @@ pub fn view(model: &Model) -> Node<Msg> {
                             .available_audio_cards
                             .iter()
                             .map(|card| option![
-                                IF!(model.settings.alsa_settings.output_device.card_index == card.index => attrs!(At::Selected => "")),
-                                attrs! {At::Value => card.index},
+                                IF!(model.settings.alsa_settings.output_device.card_id == card.id => attrs!(At::Selected => "")),
+                                attrs! {At::Value => card.id},
                                 card.name.clone()
                             ])],
                         input_ev(Ev::Change, |v| {
-                            let value = v.parse::<i32>().unwrap_or_default();
-                            Msg::InputAlsaCardChange(value)
+                            Msg::InputAlsaCardChange(v)
                         }),
                     ],
                 ],
@@ -243,7 +242,7 @@ pub fn view(model: &Model) -> Node<Msg> {
                         C!["select"],
                         select![
                             option!["-- Select pcm device --"],
-                            model.settings.alsa_settings.find_pcms_by_card_index(model.selected_audio_card_index)
+                            model.settings.alsa_settings.find_pcms_by_card_id(&model.selected_audio_card_id)
                             .iter()
                             .map(|pcmd|
                                 option![
@@ -396,7 +395,7 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
                        C!["select"],
                            select![
                                option!["-- Select mixer --"],
-                               alsa_settings.find_mixers_by_card_index(model.selected_audio_card_index)
+                               alsa_settings.find_mixers_by_card_id(&model.selected_audio_card_id)
                                .iter()
                                .map(|pcmd|
                                    option![

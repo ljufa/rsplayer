@@ -27,7 +27,7 @@ impl AudioInterfaceService {
         let settings = config.get_settings();
         let volume_ctrl_device: Box<dyn VolumeControlDevice + Send + Sync> = match settings.volume_ctrl_settings.ctrl_device {
             VolumeCrtlType::Alsa => AlsaMixer::new(
-                settings.alsa_settings.output_device.card_index,
+                &settings.alsa_settings.output_device.card_id,
                 settings.volume_ctrl_settings.alsa_mixer,
             ),
             VolumeCrtlType::RSPlayerFirmware => {
