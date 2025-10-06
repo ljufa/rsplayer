@@ -189,8 +189,8 @@ impl Default for MqttCmdChannelSettings {
             enabled: false,
             mqtt_broker: "localhost".to_string(),
             mqtt_port: 1883,
-            mqtt_user: "".to_string(),
-            mqtt_password: "".to_string(),
+            mqtt_user: String::new(),
+            mqtt_password: String::new(),
             mqtt_out_topic: "rsplayer/out".to_string(),
             mqtt_in_topic: "rsplayer/in".to_string(),
         }

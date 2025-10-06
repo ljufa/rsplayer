@@ -8,7 +8,7 @@ pub struct RSPlayerFirmwareVolumeControlDevice {
 }
 
 impl RSPlayerFirmwareVolumeControlDevice {
-    pub fn new(uart_service: ArcUartService) -> Self {
+    pub const fn new(uart_service: ArcUartService) -> Self {
         Self { uart_service }
     }
 }
@@ -27,7 +27,7 @@ impl VolumeControlDevice for RSPlayerFirmwareVolumeControlDevice {
         Volume::default()
     }
     fn set_vol(&mut self, level: u8) -> Volume {
-        self.uart_service.send_command(&format!("SetVol({})", level));
+        self.uart_service.send_command(&format!("SetVol({level})"));
         Volume::default()
     }
 }

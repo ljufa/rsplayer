@@ -134,7 +134,7 @@ pub fn play_file(
             if let Err(err) = seek_result {
                 warn!("Seek failed: {}", err);
             }
-        };
+        }
 
         //  Get the next packet from the format reader.
         let packet = match reader.next_packet() {

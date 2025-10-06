@@ -3,7 +3,7 @@ use api_models::common::{MetadataCommand, PlayerCommand, SystemCommand, Volume};
 use api_models::player::Song;
 use api_models::state::{PlayerInfo, PlayerState, SongProgress};
 
-use seed::{a, attrs, button, div, empty, h1, h2, h3, i, input, nav, nodes, p, prelude::*, span, style, C, IF};
+use seed::{a, attrs, button, div, empty, h1, h2, h3, i, input, prelude::*, span, style, C};
 
 use std::str::FromStr;
 

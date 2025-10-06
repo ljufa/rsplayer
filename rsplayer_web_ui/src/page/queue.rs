@@ -439,10 +439,10 @@ fn view_queue_item(song: &Song, model: &Model) -> Node<Msg> {
     let id1 = song.file.clone();
     let id2 = song.file.clone();
     div![
-        IF!(model.current_song_id.as_ref().map_or(false,|cur| *cur == id ) => id!("current")),
+        IF!(model.current_song_id.as_ref().is_some_and(|cur| *cur == id ) => id!("current")),
         C![
             "list-item",
-            IF!(model.current_song_id.as_ref().map_or(false,|cur| *cur == id ) => "current")
+            IF!(model.current_song_id.as_ref().is_some_and(|cur| *cur == id ) => "current")
         ],
         div![
             C!["list-item-content", "has-background-dark-transparent"],

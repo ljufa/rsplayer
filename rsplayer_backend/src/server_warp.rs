@@ -123,7 +123,7 @@ pub fn start(
             match state_changes_rx.recv().await {
                 Err(_e) => {
                     sleep(Duration::from_millis(100)).await;
-                    continue;
+                    
                 }
                 Ok(ev) => {
                     debug!("Received state changed event {:?}", ev);

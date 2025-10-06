@@ -37,27 +37,24 @@ pub async fn receive_commands(
             Ok(_n) => {
                 let msg = core::str::from_utf8(&buffer).unwrap().trim();
                 info!("Uart Received: {}", msg);
-                match msg {
-                    "PowerOff" => {
-                        system_commands_tx.send(SystemCommand::PowerOff).await.expect("");
-                    }
-                    _ => {
-                        if msg.starts_with("CurVolume="){
-                            if let Some((_, vol_str)) = msg.split_once('=') {
-                                if let Ok(vol) = vol_str.parse::<u8>() {
-                                    info!("Parsed volume: {}", vol);
-                                    let volume = Volume { current: vol, ..Volume::default() };
-                                    _ = state_changes_tx.send(StateChangeEvent::VolumeChangeEvent(volume)).unwrap();
-                                }
+                if msg == "PowerOff" {
+                    system_commands_tx.send(SystemCommand::PowerOff).await.expect("");
+                } else {
+                    if msg.starts_with("CurVolume="){
+                        if let Some((_, vol_str)) = msg.split_once('=') {
+                            if let Ok(vol) = vol_str.parse::<u8>() {
+                                info!("Parsed volume: {}", vol);
+                                let volume = Volume { current: vol, ..Volume::default() };
+                                _ = state_changes_tx.send(StateChangeEvent::VolumeChangeEvent(volume)).unwrap();
                             }
                         }
-                        if let Ok(pc) = PlayerCommand::from_str(msg) {
-                            debug!("Parsed command: {:?}", pc);
-                            player_commands_tx
-                                .send(UserCommand::Player(pc))
-                                .await
-                                .expect("Unable to send command");
-                        }
+                    }
+                    if let Ok(pc) = PlayerCommand::from_str(msg) {
+                        debug!("Parsed command: {:?}", pc);
+                        player_commands_tx
+                            .send(UserCommand::Player(pc))
+                            .await
+                            .expect("Unable to send command");
                     }
                 }
             }

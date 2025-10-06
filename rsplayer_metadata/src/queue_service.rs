@@ -175,7 +175,7 @@ impl QueueService {
     fn get_current_or_first_song_key(&self) -> Option<IVec> {
         if let Ok(Some(result)) = self.status_db.get(CURRENT_SONG_KEY) {
             return Some(result);
-        };
+        }
         let Ok(Some(first)) = self.queue_db.first() else {
             return None;
         };

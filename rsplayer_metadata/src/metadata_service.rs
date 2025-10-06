@@ -102,7 +102,7 @@ impl MetadataService {
             };
             job(&mut stat);
             self.statistic_repository.save(&stat);
-        };
+        }
     }
 
     pub fn search_local_files_by_dir(&self, dir: &str) -> Vec<MetadataLibraryItem> {
@@ -225,7 +225,7 @@ impl MetadataService {
                 let ext = de
                     .path()
                     .extension()
-                    .map_or("no_ext".to_string(), |ex| ex.to_str().unwrap().to_lowercase());
+                    .map_or_else(|| "no_ext".to_string(), |ex| ex.to_str().unwrap().to_lowercase());
                 self.settings.supported_extensions.contains(&ext)
             })
             .map(|de| {
@@ -309,7 +309,7 @@ impl MetadataService {
                     } else {
                         song.image_id = Some(image_id.to_string());
                     }
-                };
+                }
 
                 song.file = file_p.to_string();
                 song.file_date = file_modification_date;
@@ -346,7 +346,7 @@ fn build_song(probed: &mut ProbeResult) -> (Song, Option<Visual>) {
             match known_tag.std_key.unwrap_or(StandardTagKey::Version) {
                 StandardTagKey::Album => {
                     if song.album.is_none() {
-                        song.album = from_tag_value_to_option(known_tag)
+                        song.album = from_tag_value_to_option(known_tag);
                     }
                 }
                 StandardTagKey::AlbumArtist => {
@@ -356,42 +356,42 @@ fn build_song(probed: &mut ProbeResult) -> (Song, Option<Visual>) {
                 }
                 StandardTagKey::Artist => {
                     if song.artist.is_none() {
-                        song.artist = from_tag_value_to_option(known_tag)
+                        song.artist = from_tag_value_to_option(known_tag);
                     }
                 }
                 StandardTagKey::Composer => {
                     if song.composer.is_none() {
-                        song.composer = from_tag_value_to_option(known_tag)
+                        song.composer = from_tag_value_to_option(known_tag);
                     }
                 }
                 StandardTagKey::Date => {
                     if song.date.is_none() {
-                        song.date = from_tag_value_to_option(known_tag)
+                        song.date = from_tag_value_to_option(known_tag);
                     }
                 }
                 StandardTagKey::DiscNumber => {
                     if song.disc.is_none() {
-                        song.disc = from_tag_value_to_option(known_tag)
+                        song.disc = from_tag_value_to_option(known_tag);
                     }
                 }
                 StandardTagKey::Genre => {
                     if song.genre.is_none() {
-                        song.genre = from_tag_value_to_option(known_tag)
+                        song.genre = from_tag_value_to_option(known_tag);
                     }
                 }
                 StandardTagKey::Label => {
                     if song.label.is_none() {
-                        song.label = from_tag_value_to_option(known_tag)
+                        song.label = from_tag_value_to_option(known_tag);
                     }
                 }
                 StandardTagKey::Performer => {
                     if song.performer.is_none() {
-                        song.performer = from_tag_value_to_option(known_tag)
+                        song.performer = from_tag_value_to_option(known_tag);
                     }
                 }
                 StandardTagKey::TrackNumber => {
                     if song.track.is_none() {
-                        song.track = from_tag_value_to_option(known_tag)
+                        song.track = from_tag_value_to_option(known_tag);
                     }
                 }
                 StandardTagKey::TrackTitle => {

@@ -12,7 +12,7 @@ impl UartClient {
     }
 
     pub fn send_command(&mut self, command: &str) -> io::Result<()> {
-        let message = format!("{:<16}", command);
+        let message = format!("{command:<16}");
         self.uart.write(message).map_err(io::Error::other)?;
         Ok(())
     }

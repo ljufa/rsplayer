@@ -191,7 +191,7 @@ pub async fn handle_user_commands(
                             "Album loaded into queue".to_string(),
                         ))
                         .unwrap();
-                };
+                }
             }
             Queue(LoadArtistInQueue(name)) => {
                 player_service.stop_current_song();
@@ -223,7 +223,7 @@ pub async fn handle_user_commands(
                             "Album added to queue".to_string(),
                         ))
                         .unwrap();
-                };
+                }
             }
             Queue(QueueCommand::AddArtistToQueue(name)) => {
                 album_repository.find_by_artist(&name).iter().for_each(|alb| {

@@ -36,7 +36,7 @@ impl AudioInterfaceService {
                 }
                 Box::new(RSPlayerFirmwareVolumeControlDevice::new(uart_service.unwrap()))
             },
-            _ => Box::new(NoOpVolumeControlDevice),
+            VolumeCrtlType::Off => Box::new(NoOpVolumeControlDevice),
         };
 
         Ok(Self { volume_ctrl_device: Mutex::new(volume_ctrl_device) })

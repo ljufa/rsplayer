@@ -78,7 +78,7 @@ impl PlayerService {
                                     .send(StateChangeEvent::NotificationError(format!("Failed to play {msg}")))
                                     .ok();
                             }
-                        };
+                        }
                     }
                     _ => (),
                 }
@@ -131,10 +131,7 @@ impl PlayerService {
         let start = SystemTime::now();
         self.stop_signal.store(true, Ordering::Relaxed);
         let handle = self.playback_thread_handle.lock().unwrap().take();
-        let mut result = Option::<PlaybackResult>::None;
-        if let Some(h) = handle {
-            result = h.join().ok();
-        }
+        let result = handle.and_then(|h| h.join().ok());
         debug!(
             "Stop finished after [{}] ms with result: {:?}",
             SystemTime::now().duration_since(start).unwrap().as_millis(),
