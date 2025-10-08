@@ -1,6 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use crate::uart::client::UartClient;
+use anyhow::Result;
+use serialport::SerialPort;
 
 pub struct UartService {
     client: Mutex<UartClient>,
@@ -14,6 +16,10 @@ impl UartService {
 
     pub fn send_command(&self, command: &str) {
         self.client.lock().unwrap().send_command(command).unwrap();
+    }
+
+    pub fn try_clone_port(&self) -> Result<Box<dyn SerialPort>> {
+        self.client.lock().unwrap().try_clone_port()
     }
 }
 

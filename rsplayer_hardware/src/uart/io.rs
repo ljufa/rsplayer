@@ -1,4 +1,4 @@
-use std::{io::Read, str::FromStr};
+use std::str::FromStr;
 
 use api_models::{
     common::{PlayerCommand, SystemCommand, UserCommand, Volume},
@@ -11,64 +11,68 @@ pub async fn receive_commands(
     player_commands_tx: Sender<UserCommand>,
     system_commands_tx: Sender<SystemCommand>,
     state_changes_tx: tokio::sync::broadcast::Sender<StateChangeEvent>,
-    uart_settings: api_models::settings::UartCmdChannelSettings,
+    port: Box<dyn serialport::SerialPort>,
 ) {
-    use std::fs::OpenOptions;
-    use tokio::io::unix::AsyncFd;
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(10);
 
-    // Open UART device
-    let Ok(uart) = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(uart_settings.uart_path.clone())
-    else {
-        error!("Failed to open UART device at {}", uart_settings.uart_path);
-        return;
-    };
-
-    // Wrap it in AsyncFd to make it non-blocking
-    let async_uart = AsyncFd::new(uart).unwrap();
-
-    let mut buffer = [0u8; 16];
-
-    loop {
-        let mut guard = async_uart.readable().await.unwrap();
-        match guard.get_inner().read(&mut buffer) {
-            Ok(_n) => {
-                let msg = core::str::from_utf8(&buffer).unwrap().trim();
-                info!("Uart Received: {}", msg);
-                if msg == "PowerOff" {
-                    system_commands_tx.send(SystemCommand::PowerOff).await.expect("");
-                } else {
-                    if msg.starts_with("CurVolume="){
-                        if let Some((_, vol_str)) = msg.split_once('=') {
-                            if let Ok(vol) = vol_str.parse::<u8>() {
-                                info!("Parsed volume: {}", vol);
-                                let volume = Volume { current: vol, ..Volume::default() };
-                                _ = state_changes_tx.send(StateChangeEvent::VolumeChangeEvent(volume)).unwrap();
-                            }
-                        }
+    tokio::task::spawn_blocking(move || {
+        use std::io::{BufRead, BufReader};
+        let mut reader = BufReader::new(port);
+        let mut line_buffer = String::new();
+        info!("UART reading thread started.");
+        loop {
+            info!("Reading line from UART...");
+            match reader.read_line(&mut line_buffer) {
+                Ok(0) => { // EOF
+                    info!("UART stream ended.");
+                    break;
+                }
+                Ok(bytes_read) => {
+                    info!("Read {} bytes from UART: {}", bytes_read, line_buffer.trim());
+                    if tx.blocking_send(line_buffer.clone()).is_err() {
+                        error!("Failed to send received UART message to processing task.");
+                        break;
                     }
-                    if let Ok(pc) = PlayerCommand::from_str(msg) {
-                        debug!("Parsed command: {:?}", pc);
-                        player_commands_tx
-                            .send(UserCommand::Player(pc))
-                            .await
-                            .expect("Unable to send command");
+                    line_buffer.clear();
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                    info!("UART read timed out.");
+                    continue;
+                }
+                Err(e) => {
+                    error!("Error reading from UART: {}", e);
+                    break;
+                }
+            }
+        }
+    });
+
+    while let Some(msg) = rx.recv().await {
+        let msg = msg.trim();
+        if msg.is_empty() {
+            continue;
+        }
+        info!("Uart Received: {}", msg);
+        if msg == "PowerOff" {
+            system_commands_tx.send(SystemCommand::PowerOff).await.expect("");
+        } else {
+            if msg.starts_with("CurVolume="){
+                if let Some((_, vol_str)) = msg.split_once('=') {
+                    if let Ok(vol) = vol_str.parse::<u8>() {
+                        info!("Parsed volume: {}", vol);
+                        let volume = Volume { current: vol, ..Volume::default() };
+                        _ = state_changes_tx.send(StateChangeEvent::VolumeChangeEvent(volume)).unwrap();
                     }
                 }
             }
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                // UART buffer is empty, continue
-                info!("UART buffer is empty");
-                continue;
-            }
-            Err(e) => {
-                error!("Error reading from UART: {}", e);
-                break;
+            if let Ok(pc) = PlayerCommand::from_str(msg) {
+                debug!("Parsed command: {:?}", pc);
+                player_commands_tx
+                    .send(UserCommand::Player(pc))
+                    .await
+                    .expect("Unable to send command");
             }
         }
-        guard.clear_ready();
     }
 }
 

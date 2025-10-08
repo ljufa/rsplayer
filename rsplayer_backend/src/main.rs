@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use env_logger::Env;
 
-
+use rsplayer_hardware::common;
 use rsplayer_hardware::uart::service::UartService;
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio::sync::broadcast;
@@ -87,9 +87,17 @@ async fn main() {
 
     let uart_settings = config.get_settings().uart_settings.clone();
     let uart_service = if uart_settings.enabled {
-        Some(Arc::new(UartService::new(&uart_settings.uart_path, uart_settings.baud_rate)))
+        Some(Arc::new(UartService::new(
+            &uart_settings.uart_path,
+            uart_settings.baud_rate,
+        )))
     } else {
+        None
+    };
 
+    let uart_rx_port = if let Some(us) = &uart_service {
+        Some(us.try_clone_port().expect("Failed to clone UART port"))
+    } else {
         None
     };
 
@@ -139,10 +147,10 @@ async fn main() {
             => {
                 error!("Exit from command handler thread.");
             }
-        _ = if config.get_settings().uart_settings.enabled {
-                spawn(rsplayer_hardware::uart::io::receive_commands(player_commands_tx.clone(), system_commands_tx.clone(), state_changes_tx.clone(), uart_settings))
+        _ = if let Some(port) = uart_rx_port {
+                spawn(rsplayer_hardware::uart::io::receive_commands(player_commands_tx.clone(), system_commands_tx.clone(), state_changes_tx.clone(), port))
             } else {
-                spawn(rsplayer_hardware::common::no_op_future())
+                spawn(common::no_op_future())
             }
             => {
                 let mut settings = config.get_settings();

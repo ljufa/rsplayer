@@ -1,20 +1,33 @@
+use anyhow::{Ok, Result};
+use log::info;
 use rpi_embedded::uart::Uart;
-use std::io;
+use serialport::{SerialPort, StopBits};
+use std::{io, time::Duration};
 
 pub struct UartClient {
-    uart: Uart,
+    // uart: Uart,
+    port: Box<dyn SerialPort>,
 }
 
 impl UartClient {
-    pub fn new(path: &str, baud_rate: u32) -> io::Result<Self> {
-        let uart = Uart::with_path(path, baud_rate, rpi_embedded::uart::Parity::None, 8, 1).map_err(io::Error::other)?;
-        Ok(Self { uart })
+    pub fn new(path: &str, baud_rate: u32) -> Result<Self> {
+        let port = serialport::new(path, baud_rate)
+            // .dtr_on_open(true)
+            .timeout(Duration::from_secs(1))
+            .open()
+            .expect("Failed to open port");
+        Ok(Self { port })
     }
 
-    pub fn send_command(&mut self, command: &str) -> io::Result<()> {
-        let message = format!("{command:<16}");
-        self.uart.write(message).map_err(io::Error::other)?;
+    pub fn send_command(&mut self, command: &str) -> Result<()> {
+        let message = format!("{}\n", command);
+        self.port.write_all(message.as_bytes()).unwrap();
+        info!("Written command: {}", command);
+        self.port.flush().unwrap();
         Ok(())
     }
 
+    pub fn try_clone_port(&self) -> Result<Box<dyn SerialPort>> {
+        self.port.try_clone().map_err(anyhow::Error::from)
+    }
 }

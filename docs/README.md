@@ -4,6 +4,7 @@ RSPlayer can be installed on Linux systems with the following CPU architectures:
 * [x] Linux amd64(x86_64-unknown-linux-gnu) - x86 intel and amd cpus 
 * [x] Linux aarch64(aarch64-unknown-linux-gnu) - arm 64bit cpus: RPI4 and other arm8 cpu based boards ...
 * [x] Linux armv7(armv7-unknown-linux-gnueabihf) - arm 32bit cpus: RP4(32bit), RPI3, RPI2, RPI zero ...
+* [ ] Android
 * [ ] Windows x84_64
 * [ ] Windows aarch64
 * [ ] MacOS
@@ -107,6 +108,7 @@ TODO
  
 ## Features
 * [x] Make artist/album/song as a link on playback page
+* [ ] Replace UART communication with rsplayer_firmware with USB
 * [ ] Implement MQTT or other homeassistant friendly communication channel 
 * [x] Show files as a tree
 * [x] Show media library (artist/album) as a tree
@@ -127,7 +129,6 @@ TODO
 * [ ] use more information about the song based on last.fm response, update id tags on local files?
 * [ ] streaming to local device (i.e. phone) for i.e. preview
 * [ ] Add all settings to settings page
- 
 ## Code improvements
 * [ ] replace sled with native_db or redb (high memory usage)
 * [ ] get rid of `.unwrap()` calls

@@ -22,3 +22,4 @@ url = "2.5.0"
 
 # uart for serial communication with rsplayer_firmware
 rpi_embedded = "0.1.0"
+serialport = { version = "4.8.1", default-features = false }
