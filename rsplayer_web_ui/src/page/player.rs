@@ -3,7 +3,7 @@ use api_models::common::{MetadataCommand, PlayerCommand, SystemCommand, Volume};
 use api_models::player::Song;
 use api_models::state::{PlayerInfo, PlayerState, SongProgress};
 
-use seed::{a, attrs, button, div, empty, h1, h2, h3, i, input, prelude::*, span, style, C};
+use seed::{a, attrs, button, div, empty, h1, h2, h3, i, input, p, prelude::*, span, style, C, IF};
 
 use std::str::FromStr;
 
@@ -34,27 +34,37 @@ fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Nod
                     ps.title.as_ref().map_or("NA", |f| f)
                 ],
                 ps.artist.as_ref().map_or_else(
-                    || h2![C!["subtitle", "is-3", "has-text-light"], "NA"],
+                    || empty!(),
                     |artist| a![
                         style! { St::TextDecoration => "underline" },
-                        attrs!{At::Href => format!("#/library/artists?search={}", artist)},
+                        attrs! {At::Href => format!("#/library/artists?search={}", artist)},
                         h2![C!["subtitle", "is-3", "has-text-light"], artist]
                     ]
                 ),
                 ps.album.as_ref().map_or_else(
-                    || h3![C!["subtitle", "is-5", "has-text-grey-light"], "NA"],
+                    || empty!(),
                     |album| a![
                         style! { St::TextDecoration => "underline" },
-                        attrs!{At::Href => format!("#/library/files?search={}", album)},
+                        attrs! {At::Href => format!("#/library/files?search={}", album)},
                         h3![C!["subtitle", "is-5", "has-text-grey-light"], album]
                     ]
+                ),
+                ps.genre.as_ref().map_or_else(
+                    || empty!(),
+                    |genre| 
+                    h3![C!["subtitle", "is-5", "has-text-grey-light"], genre],
+                ),
+                ps.date.as_ref().map_or_else(
+                    || empty!(),
+                    |date| 
+                    h3![C!["subtitle", "is-5", "has-text-grey-light"], date],
                 ),
                 h3![
                     C!["subtitle", "is-5", "has-text-grey-light"],
                     format!(
                         "{}",
                         player_info.map_or("NA".to_owned(), |pi| format!(
-                            "{} - {} bit / {} Hz",
+                            "{} - {} / {} Hz",
                             pi.codec.as_ref().map_or("", |c| c),
                             pi.audio_format_bit.map_or(0, |af| af),
                             pi.audio_format_rate.map_or(0, |r| r)

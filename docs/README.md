@@ -56,10 +56,10 @@ To configure `rsplayer`, navigate to the settings page in the web UI. Here is an
 -   **Alsa mixer:** If "Alsa" is chosen, this selects the specific mixer control.
 -   **Volume step:** The amount to increase or decrease the volume with each step.
 
-## UART
+## USB
 
--   **Enable UART channel communication?:** Enables communication over a UART serial connection.
--   **Serial device:** The device path for the UART serial connection (e.g., `/dev/ttyAMA0`).
+-   **Enable USB channel communication?:** Enables communication over a USB serial connection.
+-   **Serial device:** The device path for the USB serial connection (e.g., `/dev/ttyAMA0`).
 
 # Hardware Integration
 

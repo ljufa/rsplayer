@@ -276,7 +276,7 @@ impl MetadataService {
     }
 
     fn scan_single_file(&self, file_path: &Path) -> Result<()> {
-        info!("Scanning file:\t{:?}", file_path);
+        info!("Scanning file:\t{file_path:?}");
 
         let file = Box::new(File::open(file_path).unwrap());
         let file_modification_date: DateTime<Utc> = file.as_ref().metadata()?.modified()?.into();
@@ -296,7 +296,7 @@ impl MetadataService {
         let metadata_opts = MetadataOptions::default();
         let file_p = &self.full_path_to_database_key(file_path.to_str().unwrap());
 
-        info!("Scanning file:\t{}", file_p);
+        info!("Scanning file:\t{file_p}");
         match symphonia::default::get_probe().format(&hint, mss, &format_opts, &metadata_opts) {
             Ok(mut probed) => {
                 let (mut song, image_data) = build_song(&mut probed);
@@ -305,22 +305,22 @@ impl MetadataService {
                     let image_id = uuid::Uuid::new_v4();
                     if let Err(e) = std::fs::write(Path::new(ARTWORK_DIR).join(image_id.to_string()), &image_data.data)
                     {
-                        warn!("Error writing image file: {}", e);
+                        warn!("Error writing image file: {e}");
                     } else {
                         song.image_id = Some(image_id.to_string());
                     }
                 }
 
-                song.file = file_p.to_string();
+                song.file = file_p.clone();
                 song.file_date = file_modification_date;
-                log::debug!("Add/update song in database: {:?}", song);
+                log::debug!("Add/update song in database: {song:?}");
                 self.song_repository.save(&song);
                 self.album_repository.update_from_song(song);
 
                 Ok(())
             }
             Err(err) => {
-                warn!("Error:{} {}", file_p, err);
+                warn!("Error:{file_p} {err}");
                 Err(Error::msg(format!("Error:{file_p} {err}")))
             }
         }

@@ -19,7 +19,7 @@ pub struct Settings {
     pub rs_player_settings: RsPlayerSettings,
     #[serde(default)]
     #[validate]
-    pub uart_settings: UartCmdChannelSettings,
+    pub usb_settings: UsbCmdChannelSettings,
     #[serde(default)]
     #[validate]
     pub mqtt_settings: MqttCmdChannelSettings,
@@ -44,12 +44,9 @@ pub struct RsPlayerSettings {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
-pub struct UartCmdChannelSettings {
+pub struct UsbCmdChannelSettings {
     pub enabled: bool,
-    pub uart_path: String,
     pub baud_rate: u32,
-    #[serde(default)]
-    pub available_serial_devices: Vec<String>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
 
@@ -84,11 +81,13 @@ impl Default for RsPlayerSettings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct VolumeControlSettings {
     pub volume_step: u8,
     pub ctrl_device: VolumeCrtlType,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub alsa_mixer_name: Option<String>,
+    #[serde(skip)]
     pub alsa_mixer: Option<CardMixer>,
 }
 
@@ -150,7 +149,7 @@ impl Default for MetadataStoreSettings {
         Self {
             music_directory: "/music".into(),
             follow_links: true,
-            supported_extensions: vec!["flac", "wav", "mp3", "m4a", "aac", "aiff", "alac", "ogg", "wma", "mp4"]
+            supported_extensions: vec!["flac", "wav", "mp3", "m4a", "aac", "aiff", "alac", "ogg", "wma", "mp4","dsd","dsf"]
                 .into_iter()
                 .map(std::borrow::ToOwned::to_owned)
                 .collect(),
@@ -173,13 +172,11 @@ impl Default for PlaylistSetting {
     }
 }
 
-impl Default for UartCmdChannelSettings {
+impl Default for UsbCmdChannelSettings {
     fn default() -> Self {
         Self {
             enabled: false,
-            uart_path: "/dev/ttyAMA0".to_string(),
             baud_rate: 115_200,
-            available_serial_devices: vec![],
         }
     }
 }
@@ -204,11 +201,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             auto_resume_playback: false,
-            volume_ctrl_settings: VolumeControlSettings {
-                alsa_mixer: None,
-                volume_step: 2,
-                ctrl_device: VolumeCrtlType::Alsa,
-            },
+            volume_ctrl_settings: VolumeControlSettings::default(),
             metadata_settings: MetadataStoreSettings::default(),
             playback_queue_settings: PlaybackQueueSetting::default(),
             alsa_settings: AlsaSettings {
@@ -217,7 +210,7 @@ impl Default for Settings {
             },
             playlist_settings: PlaylistSetting::default(),
             rs_player_settings: RsPlayerSettings::default(),
-            uart_settings: UartCmdChannelSettings::default(),
+            usb_settings: UsbCmdChannelSettings::default(),
             mqtt_settings: MqttCmdChannelSettings::default(),
         }
     }

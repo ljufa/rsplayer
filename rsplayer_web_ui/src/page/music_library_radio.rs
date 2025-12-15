@@ -547,7 +547,7 @@ fn view_tree(node_id: NodeId, arena: &Arena<TreeNode>, filter_type: &FilterType)
     li
 }
 
-const RADIO_BROWSER_URL: &str = "https://de1.api.radio-browser.info/json/";
+const RADIO_BROWSER_URL: &str = "https://de2.api.radio-browser.info/json/";
 
 #[allow(clippy::future_not_send)]
 async fn search_stations_by_name(name: &str) -> Vec<Station> {

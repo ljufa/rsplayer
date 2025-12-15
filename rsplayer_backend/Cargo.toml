@@ -45,6 +45,9 @@ assets = [
     ]
 ]
 
+[features]
+# default = ["lirc"]
+lirc = ["rsplayer_hardware/lirc"]
 
 [dependencies]
 api_models = { path = "../rsplayer_api_models" }

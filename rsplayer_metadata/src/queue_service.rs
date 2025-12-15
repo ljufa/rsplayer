@@ -85,8 +85,8 @@ impl QueueService {
             return false;
         }
         if self.get_random_next() {
-            let mut rnd = rand::thread_rng();
-            let rand_position = rnd.gen_range(0..queue_len - 1);
+            let mut rnd = rand::rng();
+            let rand_position = rnd.random_range(0..queue_len - 1);
             let Some(Ok(rand_key)) = self.queue_db.iter().nth(rand_position) else {
                 return false;
             };

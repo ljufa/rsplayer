@@ -9,8 +9,7 @@ use std::time::Duration;
 
 use env_logger::Env;
 
-use rsplayer_hardware::common;
-use rsplayer_hardware::uart::service::UartService;
+use rsplayer_hardware::usb::{self, UsbService};
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::{select, spawn};
@@ -30,7 +29,7 @@ mod command_handler;
 mod server_warp;
 
 #[allow(clippy::redundant_pub_crate, clippy::too_many_lines)]
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     #[cfg(debug_assertions)]
@@ -85,25 +84,27 @@ async fn main() {
     ));
     info!("Queue service successfully created.");
 
-    let uart_settings = config.get_settings().uart_settings.clone();
-    let uart_service = if uart_settings.enabled {
-        Some(Arc::new(UartService::new(
-            &uart_settings.uart_path,
-            uart_settings.baud_rate,
-        )))
+    let usb_settings = config.get_settings().usb_settings;
+    let usb_service = if usb_settings.enabled {
+        if let Some(device) = rsplayer_hardware::usb::get_rsplayer_firmware_usb_link() {
+            match UsbService::new(&device, usb_settings.baud_rate) {
+                Ok(service) => Some(Arc::new(service)),
+                Err(e) => {
+                    error!("Failed to create USB service: {e}");
+                    None
+                }
+            }
+        } else {
+            error!("No USB device found");
+            None
+        }
     } else {
         None
     };
 
-    let uart_rx_port = if let Some(us) = &uart_service {
-        Some(us.try_clone_port().expect("Failed to clone UART port"))
-    } else {
-        None
-    };
-
-    let ai_service = AudioInterfaceService::new(&config, uart_service.clone());
+    let ai_service = AudioInterfaceService::new(&config, usb_service.clone());
     if let Err(e) = &ai_service {
-        error!("Audio service interface can't be created. error: {}", e);
+        error!("Audio service interface can't be created. error: {e}");
         start_degraded(&mut term_signal, e, &config).await;
     }
     let ai_service = Arc::new(ai_service.unwrap());
@@ -133,6 +134,36 @@ async fn main() {
     if config.get_settings().auto_resume_playback {
         player_service.play_from_current_queue_song();
     }
+
+    if let Some(service) = usb_service {
+        usb::start_listening(
+            service.clone(),
+            player_commands_tx.clone(),
+            system_commands_tx.clone(),
+            state_changes_tx.clone(),
+        );
+        usb::start_state_sync(service, state_changes_tx.clone());
+    }
+
+    #[cfg(feature = "lirc")]
+    {
+        let player_commands_tx_clone = player_commands_tx.clone();
+        let system_commands_tx_clone = system_commands_tx.clone();
+        tokio::spawn(async move {
+            match rsplayer_hardware::ir_service::IrService::new(player_commands_tx_clone, system_commands_tx_clone)
+                .await
+            {
+                Ok(mut ir_service) => {
+                    info!("LIRC service successfully created.");
+                    ir_service.run().await;
+                }
+                Err(e) => {
+                    error!("Failed to create LIRC service: {e}");
+                }
+            }
+        });
+    }
+
     select! {
         _ = spawn(command_handler::handle_user_commands(
                     player_service.clone(),
@@ -146,17 +177,6 @@ async fn main() {
                     state_changes_tx.clone()))
             => {
                 error!("Exit from command handler thread.");
-            }
-        _ = if let Some(port) = uart_rx_port {
-                spawn(rsplayer_hardware::uart::io::receive_commands(player_commands_tx.clone(), system_commands_tx.clone(), state_changes_tx.clone(), port))
-            } else {
-                spawn(common::no_op_future())
-            }
-            => {
-                let mut settings = config.get_settings();
-                settings.uart_settings.enabled = false;
-                config.save_settings(&settings);
-                error!("Exit from rx UART thread. UART disabled.");
             }
 
         _ = spawn(command_handler::handle_system_commands(

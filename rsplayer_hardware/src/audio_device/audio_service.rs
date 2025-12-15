@@ -20,26 +20,51 @@ use super::rsp_firmware::RSPlayerFirmwareVolumeControlDevice;
 use super::NoOpVolumeControlDevice;
 use api_models::common::VolumeCrtlType;
 
-use crate::uart::service::ArcUartService;
+use crate::usb::ArcUsbService;
 
 impl AudioInterfaceService {
-    pub fn new(config: &ArcConfiguration, uart_service: Option<ArcUartService>) -> Result<Self> {
-        let settings = config.get_settings();
-        let volume_ctrl_device: Box<dyn VolumeControlDevice + Send + Sync> = match settings.volume_ctrl_settings.ctrl_device {
-            VolumeCrtlType::Alsa => AlsaMixer::new(
-                &settings.alsa_settings.output_device.card_id,
-                settings.volume_ctrl_settings.alsa_mixer,
-            ),
-            VolumeCrtlType::RSPlayerFirmware => {
-                if uart_service.is_none() {
-                    return Err(anyhow::anyhow!("UART service is required for RSPlayerFirmware volume control."));
-                }
-                Box::new(RSPlayerFirmwareVolumeControlDevice::new(uart_service.unwrap()))
-            },
-            VolumeCrtlType::Off => Box::new(NoOpVolumeControlDevice),
-        };
+    pub fn new(config: &ArcConfiguration, usb_service: Option<ArcUsbService>) -> Result<Self> {
+        let mut settings = config.get_settings();
+        let cards = crate::audio_device::alsa::get_all_cards();
+        let mut card_index = 0;
+        if let Some(card) = cards
+            .iter()
+            .find(|c| c.id == settings.alsa_settings.output_device.card_id)
+        {
+            card_index = card.index;
+        }
 
-        Ok(Self { volume_ctrl_device: Mutex::new(volume_ctrl_device) })
+        if let Some(mixer_name) = &settings.volume_ctrl_settings.alsa_mixer_name {
+            for card in &cards {
+                if let Some(mixer) = card.mixers.iter().find(|m| &m.name == mixer_name) {
+                    settings.volume_ctrl_settings.alsa_mixer = Some(mixer.clone());
+                    break;
+                }
+            }
+        }
+        let volume_ctrl_device: Box<dyn VolumeControlDevice + Send + Sync> =
+            if settings.usb_settings.enabled {
+                if usb_service.is_none() {
+                    return Err(anyhow::anyhow!(
+                        "USB service is required for RSPlayerFirmware volume control."
+                    ));
+                }
+                Box::new(RSPlayerFirmwareVolumeControlDevice::new(
+                    usb_service.unwrap(),
+                ))
+            } else {
+                match settings.volume_ctrl_settings.ctrl_device {
+                    VolumeCrtlType::Alsa => AlsaMixer::new(
+                        card_index,
+                        settings.volume_ctrl_settings.alsa_mixer,
+                    ),
+                    VolumeCrtlType::Off => Box::new(NoOpVolumeControlDevice),
+                }
+            };
+
+        Ok(Self {
+            volume_ctrl_device: Mutex::new(volume_ctrl_device),
+        })
     }
 
     pub fn get_volume(&self) -> Volume {

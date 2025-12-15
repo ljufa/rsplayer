@@ -1,19 +1,12 @@
-use std::str::FromStr;
 
 use api_models::{
-    common::{
-        CardMixer,  MetadataCommand::RescanMetadata, SystemCommand, UserCommand, VolumeCrtlType,
-    },
-    settings::{
-         MetadataStoreSettings, 
-        RsPlayerSettings, Settings, UartCmdChannelSettings,
-    },
+    common::{MetadataCommand::RescanMetadata, SystemCommand, UserCommand, VolumeCrtlType},
+    settings::{MetadataStoreSettings, RsPlayerSettings, Settings},
     validator::Validate,
 };
 use gloo_console::log;
 use gloo_net::{http::Request, Error};
 use seed::{attrs, button, div, h1, i, input, label, option, prelude::*, section, select, span, style, C, IF};
-use strum::IntoEnumIterator;
 
 use crate::view_spinner_modal;
 
@@ -33,33 +26,23 @@ pub struct Model {
 #[allow(clippy::large_enum_variant)]
 pub enum Msg {
     // ---- on off toggles ----
-    ToggleUartEnabled,
-    ToggleIrEnabled,
-    ToggleOledEnabled,
-    ToggleOutputSelectorEnabled,
-    ToggleRotaryVolume,
+    ToggleUsbEnabled,
     ToggleResumePlayback,
     ToggleRspAlsaBufferSize,
     // ---- Input capture ----
     InputMetadataMusicDirectoryChanged(String),
     InputAlsaCardChange(String),
-    InputUartDeviceChange(String),
     InputAlsaPcmChange(String),
-    InputLircInputSocketPathChanged(String),
-    InputLircRemoteMakerChanged(String),
-    InputRotaryEventDevicePathChanged(String),
     InputVolumeStepChanged(String),
-    InputVolumeCtrlDeviceChanged(VolumeCrtlType),
+
     InputRspInputBufferSizeChange(String),
     InputRspAudioBufferSizeChange(String),
     InputRspAlsaBufferSizeChange(String),
     InputRspThreadPriorityChange(String),
     InputVolumeAlsaMixerChanged(String),
-    InputDacAddressChanged(String),
     ClickRescanMetadataButton(bool),
 
     InputAlsaDeviceChanged(String),
-
 
     // --- Buttons ----
     SaveSettingsAndRestart,
@@ -110,8 +93,8 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 model.waiting_response = true;
             }
         }
-        Msg::ToggleUartEnabled => {
-            model.settings.uart_settings.enabled = !model.settings.uart_settings.enabled;
+        Msg::ToggleUsbEnabled => {
+            model.settings.usb_settings.enabled = !model.settings.usb_settings.enabled;
         }
 
         Msg::ToggleResumePlayback => {
@@ -129,9 +112,6 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.settings.metadata_settings.music_directory = value;
         }
 
-        Msg::InputUartDeviceChange(value) => {
-            model.settings.uart_settings.uart_path = value;
-        }
         Msg::InputAlsaCardChange(value) => {
             model.selected_audio_card_id = value.clone();
             model.settings.alsa_settings.output_device.card_id = value;
@@ -142,19 +122,12 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 .alsa_settings
                 .set_output_device(&model.selected_audio_card_id, &value);
         }
-        Msg::InputVolumeCtrlDeviceChanged(device) => {
-            model.settings.volume_ctrl_settings.ctrl_device = device;
-        }
+
         Msg::InputVolumeStepChanged(step) => {
             model.settings.volume_ctrl_settings.volume_step = step.parse::<u8>().unwrap_or_default();
         }
-        Msg::InputVolumeAlsaMixerChanged(mixer) => {
-            let pair: Vec<&str> = mixer.split(',').collect();
-            model.settings.volume_ctrl_settings.alsa_mixer = Some(CardMixer {
-                card_id: model.selected_audio_card_id.clone(),
-                index: pair[0].parse().unwrap_or_default(),
-                name: pair[1].to_owned(),
-            });
+        Msg::InputVolumeAlsaMixerChanged(mixer_name) => {
+            model.settings.volume_ctrl_settings.alsa_mixer_name = Some(mixer_name);
         }
 
         Msg::InputRspInputBufferSizeChange(value) => {
@@ -181,8 +154,8 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::SettingsFetched(sett) => {
             model.waiting_response = false;
+            model.selected_audio_card_id = sett.alsa_settings.output_device.card_id.clone();
             model.settings = sett;
-            model.selected_audio_card_id = model.settings.alsa_settings.output_device.card_id.clone();
         }
         Msg::SettingsSaved(_saved) => {
             model.waiting_response = false;
@@ -278,38 +251,40 @@ pub fn view(model: &Model) -> Node<Msg> {
                 ]
             ],
         ],
-        // volume control
+        // usb
         section![
             C!["section"],
-            h1![C!["title","has-text-white"], "Volume control"],
-            view_volume_control(model)
-        ],
-        // uart
-        section![
-            C!["section"],
-            h1![C!["title","has-text-white"], "UART"],
+            h1![C!["title","has-text-white"], "RSPlayer firmware(control board) USB link"],
             div![
                 C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleUartEnabled),
+                ev(Ev::Click, |_| Msg::ToggleUsbEnabled),
                 input![
                     C!["switch"],
                     attrs! {
-                        At::Name => "uart_cb"
+                        At::Name => "usb_cb"
                         At::Type => "checkbox"
-                        At::Checked => settings.uart_settings.enabled.as_at_value(),
+                        At::Checked => settings.usb_settings.enabled.as_at_value(),
                     },
                 ],
                 label![
                     C!["label","has-text-white"],
-                    "Enable UART channel communication?",
+                    "Enable link with rsplayer firmware",
                     attrs! {
-                        At::For => "uart_cb"
+                        At::For => "usb_cb"
                     }
                 ]
             ],
-            IF!(settings.uart_settings.enabled => view_uart(&settings.uart_settings))
         ],
-        
+
+        // volume control
+        IF!(!settings.usb_settings.enabled =>
+            section![
+                C!["section"],
+                h1![C!["title","has-text-white"], "Volume control"],
+                view_volume_control(model)
+            ]
+        ),
+
         // buttons
         div![
             C!["buttons"],
@@ -362,29 +337,6 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
     let volume_settings = &model.settings.volume_ctrl_settings;
     let alsa_settings = &model.settings.alsa_settings;
     div![
-        div![
-            C!["field"],
-            label!["Volume control device:", C!["label", "has-text-white"]],
-            div![
-                C!["control"],
-                div![
-                    C!["select"],
-                    select![
-                        VolumeCrtlType::iter().map(|fs| {
-                            let v: &str = fs.into();
-                            option![
-                                attrs!( At::Value => v),
-                                IF!(volume_settings.ctrl_device == fs => attrs!(At::Selected => "")),
-                                v
-                            ]
-                        }),
-                        input_ev(Ev::Change, move |v| Msg::InputVolumeCtrlDeviceChanged(
-                            VolumeCrtlType::from_str(v.as_str()).expect("msg")
-                        )),
-                    ],
-                ],
-            ],
-        ],
         IF!(volume_settings.ctrl_device == VolumeCrtlType::Alsa =>
            div![
                C!["field"],
@@ -399,8 +351,8 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
                                .iter()
                                .map(|pcmd|
                                    option![
-                                       IF!(volume_settings.alsa_mixer.as_ref().is_some_and(|f| pcmd.index == f.index && pcmd.name == f.name) => attrs!(At::Selected => "")),
-                                       attrs! {At::Value => format!("{},{}", pcmd.index, pcmd.name )},
+                                       IF!(volume_settings.alsa_mixer_name.as_ref().is_some_and(|name| &pcmd.name == name) => attrs!(At::Selected => "")),
+                                       attrs! {At::Value => pcmd.name.clone()},
                                        pcmd.name.clone()
                                    ]
                                ),
@@ -425,37 +377,6 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
                 ],
             ],
         ],
-    ]
-}
-
-#[allow(clippy::too_many_lines)]
-fn view_uart(uart_settings: &UartCmdChannelSettings) -> Node<Msg> {
-    div![
-        div![
-            C!["field"],
-            label!["Serial device:", C!["label", "has-text-white"]],
-            div![
-                C!["control"],
-                div![
-                    C!["select"],
-                    select![
-                        option!["-- Select serial device --"],
-                        uart_settings
-                        .available_serial_devices
-                        .iter()
-                        .map(|dev| option![
-                            IF!(uart_settings.uart_path == *dev => attrs!(At::Selected => "")),
-                            attrs! {At::Value => dev},
-                            dev.clone()
-                        ])],
-                    input_ev(Ev::Change, |v| {
-                        Msg::InputUartDeviceChange(v)
-                    }),
-
-                ],
-            ],
-        ],
-
     ]
 }
 

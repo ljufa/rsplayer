@@ -21,10 +21,10 @@ impl MetadataLibraryItem {
     pub fn get_title(&self) -> String {
         match self {
             MetadataLibraryItem::SongItem(song) => song.get_title(),
-            MetadataLibraryItem::Directory { name } | MetadataLibraryItem::Artist { name } => name.to_string(),
+            MetadataLibraryItem::Directory { name } | MetadataLibraryItem::Artist { name } => name.clone(),
             MetadataLibraryItem::Album { name, year } => year
                 .as_ref()
-                .map_or_else(|| name.to_string(), |year| format!("{name} ({year})")),
+                .map_or_else(|| name.clone(), |year| format!("{name} ({year})")),
             MetadataLibraryItem::Empty => String::new(),
         }
     }
@@ -58,6 +58,7 @@ pub struct CardMixer {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct AudioCard {
     pub id: String,
+    pub index: i32,
     pub name: String,
     pub description: String,
     pub pcm_devices: Vec<PcmOutputDevice>,
@@ -67,11 +68,13 @@ pub struct AudioCard {
 #[derive(
     Debug, Hash, Serialize, Clone, Copy, PartialEq, Eq, ToPrimitive, Deserialize, EnumString, EnumIter, IntoStaticStr,
 )]
+#[derive(Default)]
 pub enum VolumeCrtlType {
     Off,
+    #[default]
     Alsa,
-    RSPlayerFirmware,
 }
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Volume {

@@ -10,8 +10,9 @@ use api_models::player::Song;
 use api_models::settings::RsPlayerSettings;
 use api_models::state::{PlayerInfo, SongProgress, StateChangeEvent};
 use log::{debug, info, trace, warn};
+use rsplayer_metadata::radio_meta::{self, RadioMeta};
 use symphonia::core::audio::Channels;
-use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
+use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL, CODEC_TYPE_DSD_LSBF, CODEC_TYPE_DSD_MSBF};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
 use symphonia::core::io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions, ReadOnlySource};
@@ -33,16 +34,8 @@ pub enum PlaybackResult {
     PlaybackFailed,
 }
 
-struct RadioMeta {
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub url: String,
-    genre: Option<String>,
-}
-
 unsafe impl Send for PlaybackResult {}
 
-#[allow(clippy::type_complexity, clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn play_file(
     path_str: &str,
     stop_signal: &Arc<AtomicBool>,
@@ -52,23 +45,25 @@ pub fn play_file(
     music_dir: &str,
     changes_tx: &Sender<StateChangeEvent>,
 ) -> Result<PlaybackResult> {
-    debug!("Playing file {}", path_str);
+    debug!("Playing file {path_str}");
     let mut hint = Hint::new();
-    let (s, radio_meta) = get_source(music_dir, path_str, &mut hint);
-    let Ok(source) = s else {
-        return Err(format_err!("Failed to get source: {:?}", s.err()));
+    let (media_source, radio_meta) = get_source(music_dir, path_str, &mut hint, changes_tx);
+    let Ok(source) = media_source else {
+        return Err(format_err!("Failed to get source: {:?}", media_source.err()));
     };
-    if let Some(radio_meta) = radio_meta {
+    if let Some(radio_meta) = &radio_meta {
         changes_tx
             .send(StateChangeEvent::CurrentSongEvent(Song {
-                title: radio_meta.name,
-                album: radio_meta.description,
-                genre: radio_meta.genre,
-                file: radio_meta.url,
+                title: radio_meta.name.clone(),
+                album: radio_meta.description.clone(),
+                genre: radio_meta.genre.clone(),
+                file: radio_meta.url.clone(),
+                image_url: radio_meta.image_url.clone(),
                 ..Default::default()
             }))
             .ok();
     }
+
     let is_seekable = source.is_seekable();
     // Probe the media source stream for metadata and get the format reader.
     let Ok(probed) = get_probe().format(
@@ -98,9 +93,14 @@ pub fn play_file(
         .n_frames
         .map_or(1, |frames| codec_parameters.start_ts + frames);
     let dur = tb.calc_time(dur);
-    let rate = codec_parameters.sample_rate;
-    let bps = codec_parameters.bits_per_sample;
-    let chan_num = codec_parameters.channels.map(Channels::count);
+    let mut rate = codec_parameters.sample_rate;
+    let mut bps = codec_parameters.bits_per_sample;
+    let mut chan_num = codec_parameters.channels.map(Channels::count);
+    if let Some(radio_meta) = &radio_meta {
+        rate = radio_meta.samplerate;
+        chan_num = radio_meta.channels;
+        bps = radio_meta.bitrate;
+    }
     let cd = get_codecs().get_codec(codec_parameters.codec);
     changes_tx
         .send(StateChangeEvent::PlayerInfoEvent(PlayerInfo {
@@ -110,6 +110,8 @@ pub fn play_file(
             codec: cd.map(|c| c.long_name.to_string()),
         }))
         .expect("msg send failed");
+
+    let is_dsd = codec_parameters.codec == CODEC_TYPE_DSD_LSBF || codec_parameters.codec == CODEC_TYPE_DSD_MSBF;
 
     let decode_opts = &DecoderOptions::default();
     let mut decoder = get_codecs().make(codec_parameters, decode_opts)?;
@@ -123,7 +125,7 @@ pub fn play_file(
         }
         if is_seekable && skip_to_time.load(Ordering::Relaxed) > 0 {
             let skip_to = skip_to_time.swap(0, Ordering::Relaxed);
-            debug!("Seeking to {}", skip_to);
+            debug!("Seeking to {skip_to}");
             let seek_result = reader.seek(
                 SeekMode::Accurate,
                 SeekTo::Time {
@@ -132,7 +134,7 @@ pub fn play_file(
                 },
             );
             if let Err(err) = seek_result {
-                warn!("Seek failed: {}", err);
+                warn!("Seek failed: {err}");
             }
         }
 
@@ -170,8 +172,8 @@ pub fn play_file(
                     let duration = decoded_buff.capacity() as u64;
 
                     // Try to open the audio output.
-                    let Ok(audio_out) = try_open(spec, duration, audio_device, rsp_settings) else {
-                        break Err(format_err!("Failed to open audio output {}", audio_device));
+                    let Ok(audio_out) = try_open(spec, duration, audio_device, rsp_settings, is_dsd) else {
+                        break Err(format_err!("Failed to open audio output {audio_device}"));
                     };
                     debug!("Audio opened");
 
@@ -182,17 +184,24 @@ pub fn play_file(
                 // Write the decoded audio samples to the audio output if the presentation timestamp
                 // for the packet is >= the seeked position (0 if not seeking).
 
+                let mut write_failed = false;
                 if packet.ts() > 0 {
-                    if let Some(audio_output) = audio_output.as_mut() {
+                    if let Some(output) = audio_output.as_mut() {
                         trace!("Before audio write");
-                        _ = audio_output.write(decoded_buff);
+                        if let Err(e) = output.write(decoded_buff) {
+                            warn!("Audio output write error: {e}");
+                            write_failed = true;
+                        }
                     }
+                }
+                if write_failed {
+                    audio_output = None;
                 }
             }
             Err(Error::DecodeError(err)) => {
                 // Decode errors are not fatal. Print the error message and try to decode the next
                 // packet as usual.
-                warn!("decode error: {}", err);
+                warn!("decode error: {err}");
             }
             Err(err) => break Err(err.into()),
         }
@@ -201,7 +210,7 @@ pub fn play_file(
     if let Some(audio_output) = audio_output.as_mut() {
         audio_output.flush();
     }
-    debug!("Play finished with result {:?}", loop_result);
+    debug!("Play finished with result {loop_result:?}");
     loop_result
 }
 
@@ -209,6 +218,7 @@ fn get_source(
     music_dir: &str,
     path_str: &str,
     hint: &mut Hint,
+    changes_tx: &Sender<StateChangeEvent>,
 ) -> (Result<Box<dyn MediaSource>, anyhow::Error>, Option<RadioMeta>) {
     let mut radio_meta = None;
     let source = if path_str.starts_with("http") {
@@ -217,22 +227,33 @@ fn get_source(
             .timeout_read(Duration::from_secs(5))
             .timeout_write(Duration::from_secs(5))
             .build();
-        let Ok(resp) = agent.get(path_str).set("accept", "*/*").call() else {
+        let Ok(resp) = agent.get(path_str).set("accept", "*/*").set("Icy-Metadata", "1").call() else {
             return (Err(format_err!("Failed to get url {path_str}")), None);
         };
+
         let status = resp.status();
         info!("response status code:{status} / status text:{}", resp.status_text());
         resp.headers_names()
             .iter()
-            .for_each(|header| debug!("{header} = {:?}", resp.header(header).unwrap_or("")));
-        radio_meta = Some(RadioMeta {
-            name: resp.header("icy-name").map(ToString::to_string),
-            description: resp.header("icy-description").map(ToString::to_string),
-            genre: resp.header("icy-genre").map(ToString::to_string),
-            url: path_str.to_string(),
-        });
+            .for_each(|header| info!("{header} = {:?}", resp.header(header).unwrap_or("")));
+
+        radio_meta = radio_meta::get_external_radio_meta(&agent, &resp);
+
         if status == 200 {
-            Box::new(ReadOnlySource::new(resp.into_reader())) as Box<dyn MediaSource>
+            let metaint_str = resp.header("icy-metaint");
+            if let Some(metaint_val) = metaint_str.and_then(|s| s.parse::<usize>().ok()) {
+                info!("ICY stream detected with metaint={metaint_val}");
+                let reader = resp.into_reader();
+                let icy_reader = radio_meta::IcyMetadataReader::new(
+                    reader,
+                    metaint_val,
+                    changes_tx.clone(),
+                    radio_meta.clone().unwrap(),
+                );
+                Box::new(ReadOnlySource::new(Box::new(icy_reader))) as Box<dyn MediaSource>
+            } else {
+                Box::new(ReadOnlySource::new(resp.into_reader())) as Box<dyn MediaSource>
+            }
         } else {
             return (Err(format_err!("Invalid streaming url {path_str}")), None);
         }
@@ -246,7 +267,7 @@ fn get_source(
         if let Ok(p) = File::open(path) {
             Box::new(p)
         } else {
-            return (Err(format_err!("Unable to open file: {}", path_str)), None);
+            return (Err(format_err!("Unable to open file: {path_str}")), None);
         }
     };
     (Ok(source), radio_meta)

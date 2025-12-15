@@ -1,33 +1,33 @@
-use crate::uart::service::ArcUartService;
+use crate::usb::ArcUsbService;
 use api_models::common::Volume;
 
 use crate::audio_device::VolumeControlDevice;
 
 pub struct RSPlayerFirmwareVolumeControlDevice {
-    uart_service: ArcUartService,
+    usb_service: ArcUsbService,
 }
 
 impl RSPlayerFirmwareVolumeControlDevice {
-    pub const fn new(uart_service: ArcUartService) -> Self {
-        Self { uart_service }
+    pub const fn new(usb_service: ArcUsbService) -> Self {
+        Self { usb_service }
     }
 }
 
 impl VolumeControlDevice for RSPlayerFirmwareVolumeControlDevice {
     fn vol_up(&mut self) -> Volume {
-        self.uart_service.send_command("VolUp");
+        let _ = self.usb_service.send_command("VolUp");
         Volume::default()
     }
     fn vol_down(&mut self) -> Volume {
-        self.uart_service.send_command("VolDown");
+        let _ = self.usb_service.send_command("VolDown");
         Volume::default()
     }
     fn get_vol(&mut self) -> Volume {
-        self.uart_service.send_command("QueryCurVolume");
+        let _ = self.usb_service.send_command("QueryCurVolume");
         Volume::default()
     }
     fn set_vol(&mut self, level: u8) -> Volume {
-        self.uart_service.send_command(&format!("SetVol({level})"));
+        let _ = self.usb_service.send_command(&format!("SetVol({level})"));
         Volume::default()
     }
 }

@@ -5,7 +5,6 @@ use std::sync::{
     Arc, Mutex,
 };
 use std::thread::JoinHandle;
-use std::time::SystemTime;
 use thread_priority::{ThreadBuilder, ThreadPriority};
 use tokio::sync::broadcast::Sender;
 
@@ -59,7 +58,7 @@ impl PlayerService {
                         }
                     }
                     Ok(StateChangeEvent::PlaybackStateEvent(ps)) => {
-                        debug!("Save player state: {:?}", ps);
+                        debug!("Save player state: {ps:?}");
                         match ps {
                             PlayerState::PLAYING => {
                                 _ = state_db.remove(LAST_SONG_PAUSED_KEY);
@@ -118,26 +117,21 @@ impl PlayerService {
     pub fn play_next_song(&self) {
         self.stop_current_song();
         self.queue_service.move_current_to_next_song();
+        _ = self.state_db.remove(LAST_SONG_PAUSED_KEY);
         self.play_from_current_queue_song();
     }
 
     pub fn play_prev_song(&self) {
         self.stop_current_song();
         self.queue_service.move_current_to_previous_song();
+        _ = self.state_db.remove(LAST_SONG_PAUSED_KEY);
         self.play_from_current_queue_song();
     }
 
     pub fn stop_current_song(&self) -> Option<PlaybackResult> {
-        let start = SystemTime::now();
         self.stop_signal.store(true, Ordering::Relaxed);
         let handle = self.playback_thread_handle.lock().unwrap().take();
-        let result = handle.and_then(|h| h.join().ok());
-        debug!(
-            "Stop finished after [{}] ms with result: {:?}",
-            SystemTime::now().duration_since(start).unwrap().as_millis(),
-            result
-        );
-        result
+        handle.and_then(|h| h.join().ok())
     }
 
     pub fn toggle_play_pause(&self) {
@@ -180,16 +174,16 @@ impl PlayerService {
             .priority(prio)
             .spawn(move |prio| {
                 if prio.is_ok() {
-                    info!("Playback thread started with priority {:?}", playback_thread_prio);
+                    info!("Playback thread started with priority {playback_thread_prio:?}");
                 } else {
                     warn!("Failed to set playback thread priority");
                 }
                 if is_multi_core_platform {
                     if let Some(Some(last_core)) = core_affinity::get_core_ids().map(|ids| ids.last().copied()) {
                         if core_affinity::set_for_current(last_core) {
-                            info!("Playback thread set to last core {:?}", last_core);
+                            info!("Playback thread set to last core {last_core:?}");
                         } else {
-                            warn!("Failed to set playback thread to last core {:?}", last_core);
+                            warn!("Failed to set playback thread to last core {last_core:?}");
                         }
                     }
                 }
@@ -229,7 +223,7 @@ impl PlayerService {
                             break PlaybackResult::PlaybackFailed;
                         }
                         res => {
-                            info!("Playback finished with result {:?}", res);
+                            info!("Playback finished with result {res:?}");
                         }
                     }
 

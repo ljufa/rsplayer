@@ -34,6 +34,7 @@ pub fn get_all_cards() -> Vec<AudioCard> {
         let it = HintIter::new(Some(&card), &CString::new("pcm").unwrap()).unwrap();
         let mut pcm_devices = vec![];
         let card_name = card.get_name().unwrap_or_default();
+        let card_index = card.get_index();
         for hint in it {
             pcm_devices.push(PcmOutputDevice {
                 name: hint.name.unwrap_or_default(),
@@ -43,17 +44,18 @@ pub fn get_all_cards() -> Vec<AudioCard> {
         }
         result.push(AudioCard {
             id: card_name.clone(),
+            index: card_index,
             name: card_name.clone(),
             description: card.get_longname().unwrap_or_default(),
             pcm_devices,
-            mixers: get_card_mixers(&card_name),
+            mixers: get_card_mixers(&card_name, &card.get_index()),
         });
     }
     result
 }
 
-fn get_card_mixers(card_id: &str) -> Vec<CardMixer> {
-    let mixer_card_name = format!("hw:{card_id}");
+fn get_card_mixers(card_id: &str, card_idx: &i32) -> Vec<CardMixer> {
+    let mixer_card_name = format!("hw:{card_idx}");
     let mut result = vec![];
     let Ok(mixer) = Mixer::new(&mixer_card_name, false) else {
         return result;
@@ -109,10 +111,10 @@ impl AlsaPcmCard {
 const ALSA_MIXER_STEP: u8 = 1;
 
 impl AlsaMixer {
-    pub fn new(card_id: &str, mixer: Option<CardMixer>) -> Box<Self> {
+    pub fn new(card_idx: i32, mixer: Option<CardMixer>) -> Box<Self> {
         let m = mixer.unwrap_or_default();
         Box::new(AlsaMixer {
-            card_name: format!("hw:{card_id}"),
+            card_name: format!("hw:{card_idx}"),
             mixer_idx: m.index,
             mixer_name: m.name,
         })

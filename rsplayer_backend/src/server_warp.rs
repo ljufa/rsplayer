@@ -126,7 +126,7 @@ pub fn start(
                     
                 }
                 Ok(ev) => {
-                    debug!("Received state changed event {:?}", ev);
+                    debug!("Received state changed event {ev:?}");
                     notify_users(&users_notify, ev).await;
                 }
             }
@@ -174,7 +174,7 @@ mod filters {
         let error_msg = error.to_string();
         warp::get()
             .and(warp::path!("api" / "start_error"))
-            .map(move || error_msg.to_string())
+            .map(move || error_msg.clone())
     }
 
     fn with_config(config: Config) -> impl Filter<Extract = (Config,), Error = std::convert::Infallible> + Clone {
@@ -198,7 +198,7 @@ mod handlers {
     use api_models::settings::Settings;
     use rsplayer_hardware::{
         audio_device::alsa::{self},
-        uart,
+        usb,
     };
 
     use super::Config;
@@ -208,7 +208,7 @@ mod handlers {
         config: Config,
         query: HashMap<String, String>,
     ) -> Result<impl warp::Reply, Infallible> {
-        debug!("Settings to save {:?} and reload {:?}", settings, query);
+        debug!("Settings to save {settings:?} and reload {query:?}");
         config.save_settings(&settings);
         let param = query.get("reload").unwrap();
         if param == "true" {
@@ -223,8 +223,16 @@ mod handlers {
     pub async fn get_settings(config: Config) -> Result<impl warp::Reply, Infallible> {
         let mut settings = config.get_settings_mut();
         let cards = alsa::get_all_cards();
+        if let Some(mixer_name) = &settings.volume_ctrl_settings.alsa_mixer_name {
+            for card in &cards {
+                if let Some(mixer) = card.mixers.iter().find(|m| &m.name == mixer_name) {
+                    settings.volume_ctrl_settings.alsa_mixer = Some(mixer.clone());
+                    break;
+                }
+            }
+        }
         settings.alsa_settings.available_audio_cards = cards;
-        settings.uart_settings.available_serial_devices = uart::io::get_all_serial_devices();
+
         Ok(warp::reply::json(&*settings))
     }
 }
@@ -251,7 +259,7 @@ async fn user_connected(
     // Use a counter to assign a new unique ID for this user.
     let user_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
 
-    debug!("new websocket client: {}", user_id);
+    debug!("new websocket client: {user_id}");
 
     // Split the socket into a sender and receive of messages.
     let (to_user_ws, mut from_user_ws) = ws.split();
@@ -264,7 +272,7 @@ async fn user_connected(
         .name(&format!("Websocket thread for user:{user_id}"))
         .spawn(rx.forward(to_user_ws).map(|result| {
             if let Err(e) = result {
-                debug!("websocket send error: {}", e);
+                debug!("websocket send error: {e}");
             }
         }));
 
@@ -276,11 +284,11 @@ async fn user_connected(
         let msg = match result {
             Ok(msg) => msg,
             Err(e) => {
-                debug!("websocket error(uid={}): {}", user_id, e);
+                debug!("websocket error(uid={user_id}): {e}");
                 break;
             }
         };
-        info!("Got command from user {:?}", msg);
+        info!("Got command from user {msg:?}");
         if let Ok(cmd) = msg.to_str() {
             let user_command: Option<UserCommand> = serde_json::from_str(cmd).ok();
             if let Some(pc) = user_command {
@@ -293,7 +301,7 @@ async fn user_connected(
                         .await
                         .expect("failed to send system message");
                 } else {
-                    warn!("Unknown command received: [{}]", cmd);
+                    warn!("Unknown command received: [{cmd}]");
                 }
             }
         }
@@ -306,7 +314,7 @@ async fn user_connected(
 }
 
 async fn user_disconnected(my_id: usize, users: &Users) {
-    info!("good bye user: {}", my_id);
+    info!("good bye user: {my_id}");
     // Stream closed up, so remove from the user list
     users.write().await.remove(&my_id);
     info!("Number of active websockets is: {}", users.read().await.len());

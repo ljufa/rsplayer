@@ -45,7 +45,7 @@ pub async fn handle_user_commands(
             debug!("Wait in loop");
             continue;
         };
-        debug!("Received command {:?}", cmd);
+        debug!("Received command {cmd:?}");
         let sender = &state_changes_sender.clone();
         match cmd {
             /*
@@ -385,7 +385,7 @@ pub async fn handle_system_commands(
 ) {
     loop {
         if let Some(cmd) = input_commands_rx.recv().await {
-            debug!("Received command {:?}", cmd);
+            debug!("Received command {cmd:?}");
             match cmd {
                 SetVol(val) => {
                     let nv = ai_service.set_volume(val);

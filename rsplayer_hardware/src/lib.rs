@@ -1,3 +1,5 @@
 pub mod audio_device;
 pub mod common;
-pub mod uart;
+pub mod usb;
+#[cfg(feature = "lirc")]
+pub mod ir_service;

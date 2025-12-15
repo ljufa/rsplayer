@@ -15,18 +15,14 @@ log.workspace = true
 env_logger.workspace = true
 anyhow.workspace = true
 symphonia.workspace = true
+cpal.workspace = true
 tokio.workspace = true
 thread-priority = "1.1.0"
 core_affinity = "0.8.1"
 sled.workspace = true
 ureq.workspace = true
-# symphonia
-cpal = "0.15.3"
-# cpal = { path = "/home/dlj/github/cpal" }
+serde_json.workspace = true
 rb = "0.4.1"
-# rubato = "0.12.0"
-
-
 
 mockall_double = "0.3.1"
 

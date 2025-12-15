@@ -17,7 +17,16 @@ impl Configuration {
     pub fn new() -> Self {
         let db = sled::open("configuration.db").expect("Failed to open configuration db");
         let settings = if let Ok(Some(data)) = db.get(SETTINGS_KEY) {
-            serde_json::from_slice(&data).unwrap_or_default()
+            let mut settings: Settings = serde_json::from_slice(&data).unwrap_or_default();
+            let value: serde_json::Value = serde_json::from_slice(&data).unwrap();
+            if let Some(mixer_val) = value.get("volume_ctrl_settings").and_then(|v| v.get("alsa_mixer")) {
+                if mixer_val.is_object() {
+                    if let Some(name) = mixer_val.get("name").and_then(|n| n.as_str()) {
+                        settings.volume_ctrl_settings.alsa_mixer_name = Some(name.to_string());
+                    }
+                }
+            }
+            settings
         } else {
             let s = Settings::default();
             _ = db.insert(SETTINGS_KEY, IVec::from(serde_json::to_vec(&s).unwrap()));
