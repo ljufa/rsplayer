@@ -21,6 +21,12 @@ if [ "$1" = "configure" ]; then
         chown rsplayer /opt/rsplayer/env
         chown rsplayer /opt/rsplayer/self.*
     fi
+    if dpkg --compare-versions "$previous_version" lt "1.5.0"; then
+        echo "Upgrading from version $previous_version to 1.5.0"
+        echo "Moving configuration.db to configuration.db.backup_1"
+        mv /opt/rsplayer/configuration.db /opt/rsplayer/configuration.db.backup_1
+        echo "Go to player Settings page, configure it again and update library to scan dsd and dsf files"
+    fi
     systemctl daemon-reload
     systemctl enable rsplayer
     systemctl start rsplayer
