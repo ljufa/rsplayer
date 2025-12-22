@@ -558,7 +558,6 @@ dependencies = [
 [[package]]
 name = "cpal"
 version = "0.16.0"
-source = "git+https://github.com/ljufa/cpal.git?branch=master#8d142977acf209299d6842b0d4a119e9a089214b"
 dependencies = [
  "alsa 0.10.0",
  "coreaudio-rs",
@@ -2734,7 +2733,6 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "symphonia"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "lazy_static",
  "symphonia-bundle-dsd",
@@ -2757,7 +2755,6 @@ dependencies = [
 [[package]]
 name = "symphonia-bundle-dsd"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "log",
  "symphonia-core",
@@ -2767,7 +2764,6 @@ dependencies = [
 [[package]]
 name = "symphonia-bundle-flac"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "log",
  "symphonia-core",
@@ -2778,7 +2774,6 @@ dependencies = [
 [[package]]
 name = "symphonia-bundle-mp3"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "lazy_static",
  "log",
@@ -2789,7 +2784,6 @@ dependencies = [
 [[package]]
 name = "symphonia-codec-aac"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "lazy_static",
  "log",
@@ -2799,7 +2793,6 @@ dependencies = [
 [[package]]
 name = "symphonia-codec-adpcm"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "log",
  "symphonia-core",
@@ -2808,7 +2801,6 @@ dependencies = [
 [[package]]
 name = "symphonia-codec-alac"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "log",
  "symphonia-core",
@@ -2817,7 +2809,6 @@ dependencies = [
 [[package]]
 name = "symphonia-codec-pcm"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "log",
  "symphonia-core",
@@ -2826,7 +2817,6 @@ dependencies = [
 [[package]]
 name = "symphonia-codec-vorbis"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "log",
  "symphonia-core",
@@ -2836,7 +2826,6 @@ dependencies = [
 [[package]]
 name = "symphonia-core"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "arrayvec",
  "bitflags 1.3.2",
@@ -2848,7 +2837,6 @@ dependencies = [
 [[package]]
 name = "symphonia-format-caf"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "log",
  "symphonia-core",
@@ -2858,7 +2846,6 @@ dependencies = [
 [[package]]
 name = "symphonia-format-isomp4"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "encoding_rs",
  "log",
@@ -2870,7 +2857,6 @@ dependencies = [
 [[package]]
 name = "symphonia-format-mkv"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "lazy_static",
  "log",
@@ -2882,7 +2868,6 @@ dependencies = [
 [[package]]
 name = "symphonia-format-ogg"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "log",
  "symphonia-core",
@@ -2893,7 +2878,6 @@ dependencies = [
 [[package]]
 name = "symphonia-format-riff"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "extended",
  "log",
@@ -2904,7 +2888,6 @@ dependencies = [
 [[package]]
 name = "symphonia-metadata"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "encoding_rs",
  "lazy_static",
@@ -2915,7 +2898,6 @@ dependencies = [
 [[package]]
 name = "symphonia-utils-xiph"
 version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=native_dsd#c36fae050d97494ad43f31952a926d8e5710b1d7"
 dependencies = [
  "symphonia-core",
  "symphonia-metadata",

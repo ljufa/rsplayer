@@ -21,14 +21,11 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - **Dedicated CPU Core for Playback**: By default, the playback thread is pinned to a single CPU core for optimized performance.
 - **Web UI Remote Control**: Manage your playback remotely with an intuitive web interface.
 - **Flexible Volume Control**: Control the volume using software (alsa mixer) or hardware control (Dac chip instuctions via GPIO).
-- **Infrared Remote Control**: Use LIRC for convenient control with an infrared remote.
 - **Written in Rust**: Enjoy the benefits of minimal dependencies and high performance, thanks to the Rust native implementation.
 - **Comprehensive Music Library Management**: Scan, search, and browse your music library and online radio stations with ease.
 - **Dynamic Playlists**: Automaticaly create dynamic playlists for personalized listening experiences.
 
 ### Planed features
-
-- **DSD and DoP Playback**: Implement support for Direct Stream Digital (DSD) and Digital over PCM (DoP) playback for high-quality audio.
 - **Expanded Audio Codec Support**: Compatibility with a wider range of audio codecs.
 - **Intelligent Dynamic Playlists**: Advanced dynamic playlists that adapt based on user likes or playback counts for a personalized listening experience.
 - **Windows Compatibility**: Development of a Windows build to extend platform support.
@@ -56,7 +53,6 @@ docker run -p 8000:80 -v ${MUSIC_DIR}:/music -v rsplayer_data:/opt/rsplayer --de
 ```
 or [docker compose](docker-compose.yaml)
 ```yaml
-version: "3"
 services:
   rsplayer:
     image: ljufa/rsplayer:latest
@@ -71,7 +67,6 @@ services:
 volumes:
   rsplayer_volume:
     driver: local
-
 ```
 
 ## Usage

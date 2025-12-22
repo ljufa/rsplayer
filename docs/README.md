@@ -108,7 +108,7 @@ TODO
  
 ## Features
 * [x] Make artist/album/song as a link on playback page
-* [ ] Replace UART communication with rsplayer_firmware with USB
+* [x] Replace UART communication with rsplayer_firmware with USB
 * [ ] Implement MQTT or other homeassistant friendly communication channel 
 * [x] Show files as a tree
 * [x] Show media library (artist/album) as a tree
@@ -125,7 +125,7 @@ TODO
 * [x] Keep last N songs in *history* when random mode is enabled
 * [ ] Windows support
 * [ ] MacOS support
-* [ ] DSD/DoP playback support
+* [x] DSD/DoP playback support
 * [ ] use more information about the song based on last.fm response, update id tags on local files?
 * [ ] streaming to local device (i.e. phone) for i.e. preview
 * [ ] Add all settings to settings page
