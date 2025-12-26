@@ -12,11 +12,12 @@ use std::{
     sync::{Arc, Mutex},
     thread::sleep,
 };
-use tokio::sync::mpsc::Sender;
+use tokio::sync::{broadcast::error::{RecvError, TryRecvError}, mpsc::Sender};
 
 pub struct UsbService {
     port: Mutex<Box<dyn SerialPort>>,
     baud_rate: u32,
+    last_song_cache: Mutex<Option<(String, String, String)>>,
 }
 
 impl UsbService {
@@ -28,29 +29,16 @@ impl UsbService {
         Ok(Self {
             port: Mutex::new(port),
             baud_rate,
+            last_song_cache: Mutex::new(None),
         })
     }
 
     pub fn send_command(&self, command: &str) -> Result<()> {
         let message = format!("{command}\n");
 
-        let result = {
-            let mut port = self.port.lock().unwrap();
-            port.write_all(message.as_bytes()).and_then(|()| port.flush())
-        };
-
-        if result.is_ok() {
-            debug!("Written command: {command}");
-            return Ok(());
-        }
-
-        error!("Write failed, attempting recovery...");
-        self.try_reconnect()?;
-
         let mut port = self.port.lock().unwrap();
-        port.write_all(message.as_bytes())?;
-        port.flush()?;
-        debug!("Written command after reconnect: {command}");
+        port.write_all(message.as_bytes()).and_then(|()| port.flush())?;
+        debug!("Written command: {command}");
         Ok(())
     }
 
@@ -62,8 +50,13 @@ impl UsbService {
             {
                 Ok(new_port) => {
                     info!("Reconnected to USB device at {new_path}");
-                    let mut port_guard = self.port.lock().unwrap();
-                    *port_guard = new_port;
+                    {
+                        let mut port_guard = self.port.lock().unwrap();
+                        *port_guard = new_port;
+                    }
+                    if let Some((t, a, al)) = self.last_song_cache.lock().unwrap().clone() {
+                        let _ = self.send_track_info(&t, &a, &al);
+                    }
                     Ok(())
                 }
                 Err(e) => {
@@ -78,11 +71,16 @@ impl UsbService {
     }
 
     pub fn send_track_info(&self, title: &str, artist: &str, album: &str) -> Result<()> {
+        *self.last_song_cache.lock().unwrap() = Some((title.to_string(), artist.to_string(), album.to_string()));
         self.send_command(&format!("SetTrack({title}|{artist}|{album})"))
     }
 
     pub fn send_progress(&self, current: &str, total: &str, percent: u8) -> Result<()> {
         self.send_command(&format!("SetProgress({current}|{total}|{percent})"))
+    }
+
+    pub fn send_vu_level(&self, left: u8, right: u8) -> Result<()> {
+        self.send_command(&format!("SetVU({left}|{right})"))
     }
 }
 
@@ -185,28 +183,78 @@ pub fn start_state_sync(service: Arc<UsbService>, state_changes_tx: tokio::sync:
     let mut rx = state_changes_tx.subscribe();
 
     tokio::spawn(async move {
-        while let Ok(event) = rx.recv().await {
-            match event {
-                StateChangeEvent::CurrentSongEvent(song) => {
-                    let _ = service.send_track_info(
-                        song.title.as_deref().unwrap_or(""),
-                        song.artist.as_deref().unwrap_or(""),
-                        song.album.as_deref().unwrap_or(""),
-                    );
+        loop {
+            // Blocking wait for the first event
+            let first_event = match rx.recv().await {
+                Ok(e) => e,
+                Err(RecvError::Lagged(count)) => {
+                    error!("USB state sync channel lagged by {count} messages");
+                    continue;
                 }
-                StateChangeEvent::SongTimeEvent(progress) => {
-                    let current = api_models::common::dur_to_string(&progress.current_time);
-                    let total = api_models::common::dur_to_string(&progress.total_time);
-                    let percent = if progress.total_time.as_secs() > 0 {
-                        ((progress.current_time.as_secs_f32() / progress.total_time.as_secs_f32()) * 100.0) as u8
-                    } else {
-                        0
-                    };
-                    let _ = service.send_progress(&current, &total, percent);
+                Err(RecvError::Closed) => {
+                    error!("USB state sync channel closed");
+                    break;
                 }
-                _ => {}
+            };
+
+            let mut events = vec![first_event];
+
+            // Drain any other pending events
+            loop {
+                match rx.try_recv() {
+                    Ok(e) => events.push(e),
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Lagged(count)) => {
+                        error!("USB state sync channel lagged by {count} messages during drain");
+                        continue;
+                    }
+                    Err(TryRecvError::Closed) => break,
+                }
+                if events.len() > 100 {
+                    break;
+                }
+            }
+
+            let mut last_vu: Option<(u8, u8)> = None;
+
+            for event in events {
+                match event {
+                    StateChangeEvent::VUEvent(l, r) => {
+                        last_vu = Some((l, r));
+                    }
+                    _ => {
+                        process_event(&service, event);
+                    }
+                }
+            }
+
+            if let Some((l, r)) = last_vu {
+                let _ = service.send_vu_level(l, r);
             }
         }
     });
+}
+
+fn process_event(service: &UsbService, event: StateChangeEvent) {
+    match event {
+        StateChangeEvent::CurrentSongEvent(song) => {
+            let _ = service.send_track_info(
+                song.title.as_deref().unwrap_or(""),
+                song.artist.as_deref().unwrap_or(""),
+                song.album.as_deref().unwrap_or(""),
+            );
+        }
+        StateChangeEvent::SongTimeEvent(progress) => {
+            let current = api_models::common::dur_to_string(&progress.current_time);
+            let total = api_models::common::dur_to_string(&progress.total_time);
+            let percent = if progress.total_time.as_secs() > 0 {
+                ((progress.current_time.as_secs_f32() / progress.total_time.as_secs_f32()) * 100.0) as u8
+            } else {
+                0
+            };
+            let _ = service.send_progress(&current, &total, percent);
+        }
+        _ => {}
+    }
 }
 pub type ArcUsbService = Arc<UsbService>;

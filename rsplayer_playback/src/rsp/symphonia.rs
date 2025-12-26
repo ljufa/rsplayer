@@ -172,7 +172,7 @@ pub fn play_file(
                     let duration = decoded_buff.capacity() as u64;
 
                     // Try to open the audio output.
-                    let Ok(audio_out) = try_open(spec, duration, audio_device, rsp_settings, is_dsd) else {
+                    let Ok(audio_out) = try_open(spec, duration, audio_device, rsp_settings, is_dsd, changes_tx.clone()) else {
                         break Err(format_err!("Failed to open audio output {audio_device}"));
                     };
                     debug!("Audio opened");

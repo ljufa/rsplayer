@@ -9,8 +9,10 @@
 
 use anyhow::Result;
 use api_models::settings::RsPlayerSettings;
+use api_models::state::StateChangeEvent;
 use log::info;
 use symphonia::core::audio::{AudioBufferRef, SignalSpec};
+use tokio::sync::broadcast::Sender;
 
 pub trait AudioOutput {
     fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<()>;
@@ -28,8 +30,10 @@ mod cpal {
 
     use anyhow::{Error, Result};
     use api_models::settings::RsPlayerSettings;
+    use api_models::state::StateChangeEvent;
     use symphonia::core::audio::{AudioBufferRef, RawSample, SampleBuffer, SignalSpec};
     use symphonia::core::conv::ConvertibleSample;
+    use tokio::sync::broadcast::Sender;
 
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
@@ -42,7 +46,7 @@ mod cpal {
     pub struct CpalAudioOutput;
 
     trait AudioOutputSample:
-        cpal::Sample + cpal::SizedSample + ConvertibleSample + RawSample + std::marker::Send + 'static
+        cpal::Sample + cpal::SizedSample + ConvertibleSample + RawSample + IntoSample<f32> + std::marker::Send + 'static
     {
     }
 
@@ -137,7 +141,9 @@ mod cpal {
     // Explicit IntoSample<f32> for DsdU32 required by AudioOutputSample trait bound
     impl IntoSample<f32> for DsdU32 {
         fn into_sample(self) -> f32 {
-            0.0
+            let ones = self.0.count_ones();
+            let centered = (ones as i32) - 16;
+            centered as f32 / 16.0
         }
     }
 
@@ -176,6 +182,7 @@ mod cpal {
             audio_device: &str,
             rsp_settings: &RsPlayerSettings,
             is_dsd: bool,
+            changes_tx: Sender<StateChangeEvent>,
         ) -> Result<Box<dyn AudioOutput>> {
             // Get default host.
             let host = cpal::default_host();
@@ -222,12 +229,12 @@ mod cpal {
 
             // Select proper playback routine based on sample format.
             match sample_format {
-                cpal::SampleFormat::F32 => CpalAudioOutputImpl::<f32>::try_open(spec, duration, &device, rsp_settings),
-                cpal::SampleFormat::I32 => CpalAudioOutputImpl::<i32>::try_open(spec, duration, &device, rsp_settings),
-                cpal::SampleFormat::I16 => CpalAudioOutputImpl::<i16>::try_open(spec, duration, &device, rsp_settings),
-                cpal::SampleFormat::U16 => CpalAudioOutputImpl::<u16>::try_open(spec, duration, &device, rsp_settings),
-                cpal::SampleFormat::U32 => CpalAudioOutputImpl::<u32>::try_open(spec, duration, &device, rsp_settings),
-                cpal::SampleFormat::DsdU32 => CpalAudioOutputImpl::<DsdU32>::try_open(spec, duration, &device, rsp_settings),
+                cpal::SampleFormat::F32 => CpalAudioOutputImpl::<f32>::try_open(spec, duration, &device, rsp_settings, changes_tx),
+                cpal::SampleFormat::I32 => CpalAudioOutputImpl::<i32>::try_open(spec, duration, &device, rsp_settings, changes_tx),
+                cpal::SampleFormat::I16 => CpalAudioOutputImpl::<i16>::try_open(spec, duration, &device, rsp_settings, changes_tx),
+                cpal::SampleFormat::U16 => CpalAudioOutputImpl::<u16>::try_open(spec, duration, &device, rsp_settings, changes_tx),
+                cpal::SampleFormat::U32 => CpalAudioOutputImpl::<u32>::try_open(spec, duration, &device, rsp_settings, changes_tx),
+                cpal::SampleFormat::DsdU32 => CpalAudioOutputImpl::<DsdU32>::try_open(spec, duration, &device, rsp_settings, changes_tx),
                 _ => panic!("Unsupported sample format!"),
             }
         }
@@ -241,6 +248,10 @@ mod cpal {
         sample_buf: SampleBuffer<T>,
         stream: cpal::Stream,
         error_flag: Arc<AtomicBool>,
+        changes_tx: Sender<StateChangeEvent>,
+        last_vu_update: std::time::Instant,
+        current_max_l: f32,
+        current_max_r: f32,
     }
 
     impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
@@ -249,6 +260,7 @@ mod cpal {
             duration: u64,
             device: &cpal::Device,
             rsp_settings: &RsPlayerSettings,
+            changes_tx: Sender<StateChangeEvent>,
         ) -> Result<Box<dyn AudioOutput>> {
             let num_channels = spec.channels.count();
 
@@ -308,6 +320,10 @@ mod cpal {
                 sample_buf,
                 stream,
                 error_flag,
+                changes_tx,
+                last_vu_update: std::time::Instant::now(),
+                current_max_l: 0.0,
+                current_max_r: 0.0,
             }))
         }
     }
@@ -322,9 +338,48 @@ mod cpal {
                 return Ok(());
             }
 
+            let channels = decoded.spec().channels.count();
+
             // Audio samples must be interleaved for cpal. Interleave the samples in the audio
             // buffer into the sample buffer.
             self.sample_buf.copy_interleaved_ref(decoded);
+
+            {
+                let samples = self.sample_buf.samples();
+
+                if channels >= 2 {
+                    for chunk in samples.chunks(channels) {
+                        if chunk.len() >= 2 {
+                            let val_l: f32 = chunk[0].into_sample();
+                            let val_r: f32 = chunk[1].into_sample();
+                            if val_l.abs() > self.current_max_l {
+                                self.current_max_l = val_l.abs();
+                            }
+                            if val_r.abs() > self.current_max_r {
+                                self.current_max_r = val_r.abs();
+                            }
+                        }
+                    }
+                } else if channels == 1 {
+                    for s in samples {
+                        let val: f32 = (*s).into_sample();
+                        if val.abs() > self.current_max_l {
+                            self.current_max_l = val.abs();
+                        }
+                    }
+                    self.current_max_r = self.current_max_l;
+                }
+            }
+
+            if self.last_vu_update.elapsed() > Duration::from_millis(50) {
+                let vu_l = (self.current_max_l * 255.0).min(255.0) as u8;
+                let vu_r = (self.current_max_r * 255.0).min(255.0) as u8;
+
+                _ = self.changes_tx.send(StateChangeEvent::VUEvent(vu_l, vu_r));
+                self.last_vu_update = std::time::Instant::now();
+                self.current_max_l = 0.0;
+                self.current_max_r = 0.0;
+            }
 
             // Write all the interleaved samples to the ring buffer.
             let mut samples = self.sample_buf.samples();
@@ -355,13 +410,14 @@ pub fn try_open(
     audio_device: &str,
     rsp_settings: &RsPlayerSettings,
     is_dsd: bool,
+    changes_tx: Sender<StateChangeEvent>,
 ) -> Result<Box<dyn AudioOutput>> {
-    let result = cpal::CpalAudioOutput::try_open(spec, duration, audio_device, rsp_settings, is_dsd);
+    let result = cpal::CpalAudioOutput::try_open(spec, duration, audio_device, rsp_settings, is_dsd, changes_tx.clone());
     if result.is_err() && audio_device.starts_with("hw:") {
         info!(
             "Failed to open audio output {audio_device}. Trying with plughw: prefix."
         );
-        return cpal::CpalAudioOutput::try_open(spec, duration, &audio_device.replace("hw:", "plughw:"), rsp_settings, is_dsd);
+        return cpal::CpalAudioOutput::try_open(spec, duration, &audio_device.replace("hw:", "plughw:"), rsp_settings, is_dsd, changes_tx);
     }
     result
 }

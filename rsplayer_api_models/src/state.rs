@@ -56,6 +56,7 @@ pub enum StateChangeEvent {
     FavoriteRadioStations(Vec<String>),
     PlaybackStateEvent(PlayerState),
     RandomToggleEvent(bool),
+    VUEvent(u8, u8),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
