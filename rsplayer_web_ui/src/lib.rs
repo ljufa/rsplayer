@@ -3,7 +3,7 @@ extern crate api_models;
 use std::{rc::Rc, str::FromStr};
 
 use api_models::{
-    common::{MetadataCommand, PlayerCommand, QueueCommand, SystemCommand, UserCommand, Volume}, player::Song, state::{PlayerInfo, PlayerState, SongProgress, StateChangeEvent}
+    common::{MetadataCommand, PlaybackMode, PlayerCommand, QueueCommand, SystemCommand, UserCommand, Volume}, player::Song, state::{PlayerInfo, PlayerState, SongProgress, StateChangeEvent}
 };
 use gloo_console::{error, log};
 use gloo_net::http::Request;
@@ -12,7 +12,7 @@ use serde::Deserialize;
 use strum_macros::IntoStaticStr;
 use wasm_sockets::{self, ConnectionStatus, EventClient, Message, WebSocketError};
 use web_sys::CloseEvent;
-use PlayerCommand::{Next, Pause, Play, Prev, RandomToggle};
+use PlayerCommand::{CyclePlaybackMode, Next, Pause, Play, Prev};
 use UserCommand::{Player, Queue};
 
 mod page;
@@ -37,7 +37,7 @@ pub struct PlayerModel {
     player_info: Option<PlayerInfo>,
     current_song: Option<Song>,
     progress: SongProgress,
-    random: bool,
+    playback_mode: PlaybackMode,
     player_state: PlayerState,
     stop_progress_updates: bool,
 }
@@ -198,7 +198,7 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
             player_info: None,
             current_song: None,
             progress: SongProgress::default(),
-            random: false,
+            playback_mode: PlaybackMode::default(),
             player_state: PlayerState::STOPPED,
             stop_progress_updates: false,
         },
@@ -384,8 +384,8 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 StateChangeEvent::PlayerInfoEvent(pi) => {
                     model.player_model.player_info = Some(pi.clone());
                 }
-                StateChangeEvent::RandomToggleEvent(random) => {
-                    model.player_model.random = *random;
+                StateChangeEvent::PlaybackModeChangedEvent(mode) => {
+                    model.player_model.playback_mode = *mode;
                 }
                 StateChangeEvent::PlaybackStateEvent(ps) => {
                     model.player_model.player_state = ps.clone();
@@ -627,10 +627,11 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
     };
     let playing = player_model.player_state == PlayerState::PLAYING;
 
-    let shuffle_class = if player_model.random {
-        "fa-shuffle"
-    } else {
-        "fa-list-ol"
+    let (shuffle_class, shuffle_title) = match player_model.playback_mode {
+        PlaybackMode::Sequential => ("fa-list-ol", "Sequential Playback"),
+        PlaybackMode::Random => ("fa-shuffle", "Random Playback"),
+        PlaybackMode::LoopSingle => ("fa-repeat", "Loop Single Song"),
+        PlaybackMode::LoopQueue => ("fa-arrows-rotate", "Loop Queue"),
     };
 
     div![
@@ -720,7 +721,8 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
                         div![
                             i![
                                 C!["fas", "is-clickable", "small-button-footer", shuffle_class],
-                                ev(Ev::Click, |_| Msg::SendUserCommand(Player(RandomToggle))),
+                                attrs!{At::Title => shuffle_title},
+                                ev(Ev::Click, |_| Msg::SendUserCommand(Player(CyclePlaybackMode))),
                             ],
                             i![
                                 C!["fas", "is-clickable", "fa-backward", "small-button-footer"],

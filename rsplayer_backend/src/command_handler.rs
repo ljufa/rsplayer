@@ -7,7 +7,7 @@ use tokio::sync::mpsc::Receiver;
 
 use api_models::common::MetadataCommand::{QueryLocalFiles, RescanMetadata};
 use api_models::common::PlayerCommand::{
-    Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, RandomToggle, Seek, Stop, TogglePlay,
+    CyclePlaybackMode, Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, Seek, Stop, TogglePlay,
 };
 use api_models::common::PlaylistCommand::{QueryAlbumItems, QueryPlaylist, QueryPlaylistItems, SaveQueueAsPlaylist};
 use api_models::common::QueueCommand::{
@@ -75,15 +75,17 @@ pub async fn handle_user_commands(
             Player(Seek(sec)) => {
                 player_service.seek_current_song(sec);
             }
-            Player(RandomToggle) => {
+            Player(CyclePlaybackMode) => {
                 sender
-                    .send(StateChangeEvent::RandomToggleEvent(queue_service.toggle_random_next()))
+                    .send(StateChangeEvent::PlaybackModeChangedEvent(
+                        queue_service.cycle_playback_mode(),
+                    ))
                     .unwrap();
             }
             Player(QueryCurrentPlayerInfo) => {
-                let is_random = queue_service.get_random_next();
+                let mode = queue_service.get_playback_mode();
                 state_changes_sender
-                    .send(StateChangeEvent::RandomToggleEvent(is_random))
+                    .send(StateChangeEvent::PlaybackModeChangedEvent(mode))
                     .unwrap();
             }
 

@@ -1,9 +1,9 @@
 use api_models::common::UserCommand::Player;
-use api_models::common::{MetadataCommand, PlayerCommand, SystemCommand, Volume};
+use api_models::common::{MetadataCommand, PlaybackMode, PlayerCommand, SystemCommand, Volume};
 use api_models::player::Song;
 use api_models::state::{PlayerInfo, PlayerState, SongProgress};
 
-use seed::{a, attrs, button, div, empty, h1, h2, h3, i, input, p, prelude::*, span, style, C, IF};
+use seed::{a, attrs, button, div, empty, h1, h2, h3, i, input, prelude::*, span, style, C};
 
 use std::str::FromStr;
 
@@ -78,7 +78,12 @@ fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Nod
 
 fn view_controls(model: &PlayerModel) -> Node<Msg> {
     let playing = model.player_state == PlayerState::PLAYING;
-    let shuffle_class = if model.random { "fa-shuffle" } else { "fa-list-ol" };
+    let (shuffle_class, shuffle_title) = match model.playback_mode {
+        PlaybackMode::Sequential => ("fa-list-ol", "Sequential Playback"),
+        PlaybackMode::Random => ("fa-shuffle", "Random Playback"),
+        PlaybackMode::LoopSingle => ("fa-repeat", "Loop Single Song"),
+        PlaybackMode::LoopQueue => ("fa-arrows-rotate", "Loop Queue"),
+    };
 
     div![
         C!["player-controls", "has-text-centered"],
@@ -89,8 +94,9 @@ fn view_controls(model: &PlayerModel) -> Node<Msg> {
                 C!["level-item"],
                 button![
                     C!["button", "is-ghost", "is-medium"],
+                    attrs!{At::Title => shuffle_title},
                     span![C!["icon"], i![C!["fas", shuffle_class]]],
-                    ev(Ev::Click, |_| Msg::SendUserCommand(Player(PlayerCommand::RandomToggle))),
+                    ev(Ev::Click, |_| Msg::SendUserCommand(Player(PlayerCommand::CyclePlaybackMode))),
                 ],
             ],
             // Main controls

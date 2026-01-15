@@ -2,6 +2,7 @@
 mod queue {
     use std::sync::Arc;
 
+    use api_models::common::PlaybackMode;
     use api_models::settings::PlaybackQueueSetting;
 
     use crate::play_statistic_repository::PlayStatisticsRepository;
@@ -81,7 +82,7 @@ mod queue {
         for ext in 0..150 {
             queue.add_song(&create_song(format!("{ext}_song").as_str()));
         }
-        assert!(queue.toggle_random_next());
+        assert!(queue.cycle_playback_mode() == PlaybackMode::Random);
 
         queue.move_current_to_next_song();
         let first_next = queue.get_current_song().unwrap().file;
@@ -232,7 +233,7 @@ mod queue {
         for ext in 0..5000 {
             queue.add_song(&create_song(format!("{ext}").as_str()));
         }
-        queue.toggle_random_next();
+        queue.cycle_playback_mode();
         queue.move_current_to_next_song();
         assert_ne!(queue.get_current_song().unwrap().file, "assets/music.1");
     }
@@ -240,7 +241,7 @@ mod queue {
     #[test]
     fn should_not_return_song_when_random_next_and_only_one_song() {
         let queue = create_queue();
-        queue.toggle_random_next();
+        queue.cycle_playback_mode();
         queue.add_song(&create_song("mp3"));
         assert!(!queue.move_current_to_next_song());
         assert!(!queue.move_current_to_previous_song());
@@ -261,6 +262,59 @@ mod queue {
         let queue = create_queue_with_ctx(&ctx);
         assert_eq!(queue.get_all_songs().len(), 0);
         assert_eq!(queue.get_current_song(), None);
+    }
+
+    #[test]
+    fn should_keep_current_song_when_loop_single_mode_is_on() {
+        let queue = create_queue();
+        queue.add_song(&create_song("mp3"));
+        queue.add_song(&create_song("flac"));
+        assert_eq!(queue.get_current_song().unwrap().file, "assets/music.mp3");
+        
+        while queue.get_playback_mode() != PlaybackMode::LoopSingle {
+            queue.cycle_playback_mode();
+        }
+
+        assert!(queue.move_current_to_next_song());
+        assert_eq!(queue.get_current_song().unwrap().file, "assets/music.mp3");
+        assert!(queue.move_current_to_next_song());
+        assert_eq!(queue.get_current_song().unwrap().file, "assets/music.mp3");
+    }
+
+    #[test]
+    fn should_loop_queue_when_loop_queue_mode_is_on_next() {
+        let queue = create_queue();
+        queue.add_song(&create_song("mp3"));
+        queue.add_song(&create_song("flac"));
+        assert_eq!(queue.get_current_song().unwrap().file, "assets/music.mp3");
+
+        while queue.get_playback_mode() != PlaybackMode::LoopQueue {
+            queue.cycle_playback_mode();
+        }
+
+        assert!(queue.move_current_to_next_song());
+        assert_eq!(queue.get_current_song().unwrap().file, "assets/music.flac");
+        assert!(queue.move_current_to_next_song());
+        assert_eq!(queue.get_current_song().unwrap().file, "assets/music.mp3");
+        assert!(queue.move_current_to_next_song());
+        assert_eq!(queue.get_current_song().unwrap().file, "assets/music.flac");
+    }
+
+    #[test]
+    fn should_loop_queue_when_loop_queue_mode_is_on_prev() {
+        let queue = create_queue();
+        queue.add_song(&create_song("mp3"));
+        queue.add_song(&create_song("flac"));
+        assert_eq!(queue.get_current_song().unwrap().file, "assets/music.mp3");
+
+        while queue.get_playback_mode() != PlaybackMode::LoopQueue {
+            queue.cycle_playback_mode();
+        }
+
+        assert!(queue.move_current_to_previous_song());
+        assert_eq!(queue.get_current_song().unwrap().file, "assets/music.flac");
+        assert!(queue.move_current_to_previous_song());
+        assert_eq!(queue.get_current_song().unwrap().file, "assets/music.mp3");
     }
 
     fn create_queue() -> QueueService {

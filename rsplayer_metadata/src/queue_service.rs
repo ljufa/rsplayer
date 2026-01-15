@@ -1,19 +1,20 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicU16, Ordering},
-    Arc,
+    atomic::{AtomicU16, Ordering},
+    Arc, RwLock,
 };
+use std::str::FromStr;
 
 use rand::Rng;
 use sled::{Db, IVec, Tree};
 
-use api_models::{player::Song, playlist::PlaylistPage, settings::PlaybackQueueSetting, state::CurrentQueueQuery};
+use api_models::{common::PlaybackMode, player::Song, playlist::PlaylistPage, settings::PlaybackQueueSetting, state::CurrentQueueQuery};
 
 use crate::{play_statistic_repository::PlayStatisticsRepository, song_repository::SongRepository};
 
 pub struct QueueService {
     queue_db: Db,
     status_db: Tree,
-    random_flag: AtomicBool,
+    playback_mode: RwLock<PlaybackMode>,
     random_history_db: Tree,
     random_history_index: AtomicU16,
     song_repository: Arc<SongRepository>,
@@ -36,11 +37,17 @@ impl QueueService {
             .expect("Failed to open random_history tree");
         random_history_db.clear().expect("Failed to clear random history");
         random_history_db.flush().expect("Failed to flush random history");
-        let random_flag = status_db.contains_key("random_next").unwrap_or(false);
+        
+        let playback_mode = if let Ok(Some(mode_str)) = status_db.get("playback_mode") {
+             PlaybackMode::from_str(std::str::from_utf8(&mode_str).unwrap_or("Sequential")).unwrap_or_default()
+        } else {
+             PlaybackMode::Sequential
+        };
+
         Self {
             queue_db: db,
             status_db,
-            random_flag: AtomicBool::new(random_flag),
+            playback_mode: RwLock::new(playback_mode),
             random_history_db,
             random_history_index: AtomicU16::new(0),
             song_repository,
@@ -48,23 +55,21 @@ impl QueueService {
         }
     }
 
-    pub fn toggle_random_next(&self) -> bool {
-        let result = self
-            .random_flag
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |existing| {
-                let new = !existing;
-                if new {
-                    _ = self.status_db.insert("random_next", "true");
-                } else {
-                    _ = self.status_db.remove("random_next");
-                }
-                Some(new)
-            });
-        !result.expect("msg")
+    pub fn cycle_playback_mode(&self) -> PlaybackMode {
+        let mut mode_lock = self.playback_mode.write().unwrap();
+        
+        let modes: Vec<_> = PlaybackMode::all();
+        let current_index = modes.iter().position(|&m| m == *mode_lock).unwrap_or(0);
+        let next_mode = modes[(current_index + 1) % modes.len()];
+        *mode_lock = next_mode;
+
+        let mode_str: &'static str = next_mode.into();
+        _ = self.status_db.insert("playback_mode", mode_str);
+       next_mode
     }
 
-    pub fn get_random_next(&self) -> bool {
-        self.random_flag.load(Ordering::Relaxed)
+    pub fn get_playback_mode(&self) -> PlaybackMode {
+        *self.playback_mode.read().unwrap()
     }
 
     pub fn get_current_song(&self) -> Option<Song> {
@@ -81,51 +86,98 @@ impl QueueService {
     #[allow(clippy::branches_sharing_code)]
     pub fn move_current_to_next_song(&self) -> bool {
         let queue_len = self.queue_db.len();
-        if queue_len < 2 {
+        if queue_len == 0 {
             return false;
         }
-        if self.get_random_next() {
-            let mut rnd = rand::rng();
-            let rand_position = rnd.random_range(0..queue_len - 1);
-            let Some(Ok(rand_key)) = self.queue_db.iter().nth(rand_position) else {
-                return false;
-            };
-            _ = self.status_db.insert(CURRENT_SONG_KEY, &rand_key.0);
-            let ridx = self.random_history_index.fetch_add(1, Ordering::Relaxed) + 1;
-            _ = self.random_history_db.insert(ridx.to_ne_bytes(), rand_key.0);
-            true
-        } else {
-            let Some(current_key) = self.get_current_or_first_song_key() else {
-                return false;
-            };
+        
+        let mode = self.get_playback_mode();
+        match mode {
+            PlaybackMode::LoopSingle => {
+                // Keep current song
+                self.get_current_or_first_song_key().is_some()
+            }
+            PlaybackMode::Random => {
+                if queue_len < 2 {
+                    return false;
+                }
+                let mut rnd = rand::rng();
+                let rand_position = rnd.random_range(0..queue_len - 1);
+                let Some(Ok(rand_key)) = self.queue_db.iter().nth(rand_position) else {
+                    return false;
+                };
+                _ = self.status_db.insert(CURRENT_SONG_KEY, &rand_key.0);
+                let ridx = self.random_history_index.fetch_add(1, Ordering::Relaxed) + 1;
+                _ = self.random_history_db.insert(ridx.to_ne_bytes(), rand_key.0);
+                true
+            }
+            PlaybackMode::LoopQueue => {
+                 let Some(current_key) = self.get_current_or_first_song_key() else {
+                    return false;
+                };
 
-            let Ok(Some(next)) = self.queue_db.get_gt(current_key) else {
-                return false;
-            };
-            _ = self.status_db.insert(CURRENT_SONG_KEY, next.0);
-            true
+                if let Ok(Some(next)) = self.queue_db.get_gt(&current_key) {
+                    _ = self.status_db.insert(CURRENT_SONG_KEY, next.0);
+                    true
+                } else if let Ok(Some(first)) = self.queue_db.first() {
+                     // Wrap around
+                    _ = self.status_db.insert(CURRENT_SONG_KEY, first.0);
+                    true
+                } else {
+                    false
+                }
+            }
+            PlaybackMode::Sequential => {
+                let Some(current_key) = self.get_current_or_first_song_key() else {
+                    return false;
+                };
+
+                if let Ok(Some(next)) = self.queue_db.get_gt(current_key) {
+                    _ = self.status_db.insert(CURRENT_SONG_KEY, next.0);
+                    true
+                } else {
+                    false
+                }
+            }
         }
     }
 
     pub fn move_current_to_previous_song(&self) -> bool {
-        let ridx = self.random_history_index.load(Ordering::Relaxed);
-        if self.get_random_next() && ridx > 0 {
-            let ridx = ridx - 1;
-            let Ok(Some(prev)) = self.random_history_db.get(ridx.to_ne_bytes()) else {
-                return false;
-            };
-            self.random_history_index.store(ridx, Ordering::Relaxed);
-            _ = self.status_db.insert(CURRENT_SONG_KEY, prev);
-        } else {
-            let Some(current_key) = self.get_current_or_first_song_key() else {
-                return false;
-            };
-            let Ok(Some(prev_entry)) = self.queue_db.get_lt(current_key) else {
-                return false;
-            };
-            _ = self.status_db.insert(CURRENT_SONG_KEY, prev_entry.0);
+        let mode = self.get_playback_mode();
+        
+        // If Random, use history if available
+        if mode == PlaybackMode::Random {
+            let ridx = self.random_history_index.load(Ordering::Relaxed);
+            if ridx > 0 {
+                let ridx = ridx - 1;
+                let Ok(Some(prev)) = self.random_history_db.get(ridx.to_ne_bytes()) else {
+                    return false;
+                };
+                self.random_history_index.store(ridx, Ordering::Relaxed);
+                _ = self.status_db.insert(CURRENT_SONG_KEY, prev);
+                return true;
+            }
         }
-        true
+
+        // For all other modes (or if random history is empty), move to previous in queue
+        // Or should LoopSingle/LoopQueue behave differently? 
+        // Typically "Previous" button moves to previous song in list even in Loop mode.
+        
+        let Some(current_key) = self.get_current_or_first_song_key() else {
+            return false;
+        };
+        
+        if let Ok(Some(prev_entry)) = self.queue_db.get_lt(&current_key) {
+            _ = self.status_db.insert(CURRENT_SONG_KEY, prev_entry.0);
+            return true;
+        } else if mode == PlaybackMode::LoopQueue {
+             // Wrap around to last
+             if let Ok(Some(last)) = self.queue_db.last() {
+                 _ = self.status_db.insert(CURRENT_SONG_KEY, last.0);
+                 return true;
+             }
+        }
+        
+        false
     }
 
     pub fn move_current_to(&self, song_id: &str) -> bool {

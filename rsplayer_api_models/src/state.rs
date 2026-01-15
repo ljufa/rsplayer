@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::common::MetadataLibraryItem;
 use crate::{
-    common::Volume,
+    common::{PlaybackMode, Volume},
     player::Song,
     playlist::{PlaylistPage, Playlists},
 };
@@ -55,7 +55,7 @@ pub enum StateChangeEvent {
     NotificationError(String),
     FavoriteRadioStations(Vec<String>),
     PlaybackStateEvent(PlayerState),
-    RandomToggleEvent(bool),
+    PlaybackModeChangedEvent(PlaybackMode),
     VUEvent(u8, u8),
 }
 

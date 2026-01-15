@@ -107,10 +107,25 @@ pub enum PlayerCommand {
     Stop,
     Play,
     PlayItem(String),
-    RandomToggle,
+    CyclePlaybackMode,
     Seek(u16),
     QueryCurrentPlayerInfo,
     TogglePlay,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, EnumString, EnumIter, IntoStaticStr)]
+pub enum PlaybackMode {
+    #[default]
+    Sequential,
+    Random,
+    LoopSingle,
+    LoopQueue,
+}
+impl PlaybackMode{
+    pub fn all()-> Vec<PlaybackMode>{
+        use strum::IntoEnumIterator;
+        PlaybackMode::iter().collect()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
