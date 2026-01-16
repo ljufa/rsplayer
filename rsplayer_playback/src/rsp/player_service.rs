@@ -103,9 +103,6 @@ impl PlayerService {
     }
 
     pub fn play_from_current_queue_song(&self) {
-        if let Some(s) = self.queue_service.get_current_song() {
-            self.metadata_service.increase_play_count(&s.file);
-        }
         if let Ok(Some(_)) = self.state_db.get(LAST_SONG_PAUSED_KEY) {
             let last_song_time = self.get_last_played_song_time();
             self.seek_current_song(last_song_time);
@@ -163,6 +160,7 @@ impl PlayerService {
         let music_dir = self.music_dir.clone();
         let changes_tx = self.changes_tx.clone();
         let rsp_settings = self.rsp_settings.clone();
+        let metadata_service = self.metadata_service.clone();
         let is_multi_core_platform = core_affinity::get_core_ids().is_some_and(|ids| ids.len() > 1);
         let prio = if is_multi_core_platform {
             ThreadPriority::Crossplatform(playback_thread_prio.try_into().unwrap())
@@ -196,6 +194,11 @@ impl PlayerService {
                             .ok();
                         break PlaybackResult::QueueFinished;
                     };
+                    
+                    if skip_to_time.load(Ordering::Relaxed) == 0 {
+                        metadata_service.increase_play_count(&song.file);
+                    }
+
                     changes_tx
                         .send(StateChangeEvent::CurrentSongEvent(song.clone()))
                         .expect("msg send failed");

@@ -90,6 +90,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 attachCarousel("#featured-pl");
                 attachCarousel("#saved-pl");
                 attachCarousel("#newreleases-pl");
+                attachCarousel("#favorites-pl");
             });
         }
         Msg::ShowPlaylistItemsClicked(_is_dynamic, playlist_id, playlist_name) => {
@@ -313,13 +314,31 @@ fn view_static_playlists(model: &Model) -> Node<Msg> {
                         .map(view_static_playlist_carousel_item)
                 ],
             ]]),
+            IF!(model.static_playlists.has_most_played() || model.static_playlists.has_liked() => nodes![
+            span![C!["title is-3 has-text-light has-background-dark-transparent"], "Favorites"],
+            section![
+                C!["section"],
+                div![
+                    C!["carousel"],
+                    id!("favorites-pl"),
+                    model
+                        .static_playlists
+                        .items
+                        .iter()
+                        .filter(|it| it.is_most_played() || it.is_liked())
+                        .map(view_static_playlist_carousel_item)
+                ],
+            ]]),
         ]
     ]
 }
 
 fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
     match playlist {
-        PlaylistType::Featured(pl) | PlaylistType::Saved(pl) => {
+        PlaylistType::Featured(pl)
+        | PlaylistType::Saved(pl)
+        | PlaylistType::MostPlayed(pl)
+        | PlaylistType::Liked(pl) => {
             let id = pl.id.clone();
             let id2 = pl.id.clone();
             let name = pl.name.clone();

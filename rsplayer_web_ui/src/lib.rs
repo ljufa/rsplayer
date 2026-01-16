@@ -339,26 +339,28 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             )));
         }
         Msg::LikeMediaItemClick(MetadataCommand::LikeMediaItem(item_id)) => {
-            // model.player_model
-            //     .current_song
-            //     .as_mut()
-            //     .unwrap()
-            //     .statistics.map(|&pis| pis.like_count = 1);
+            if let Some(song) = model.player_model.current_song.as_mut() {
+                if let Some(stats) = song.statistics.as_mut() {
+                    stats.liked_count = 1;
+                } else {
+                    song.statistics = Some(api_models::stat::PlayItemStatistics {
+                        play_item_id: item_id.clone(),
+                        liked_count: 1,
+                        ..Default::default()
+                    });
+                }
+            }
 
             orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
                 MetadataCommand::LikeMediaItem(item_id),
             )));
         }
         Msg::LikeMediaItemClick(MetadataCommand::DislikeMediaItem(item_id)) => {
-            // model
-            //     .player_model
-            //     .current_song
-            //     .as_mut()
-            //     .unwrap()
-            //     .statistics
-            //     .as_mut()
-            //     .unwrap()
-            //     .liked_count = 0;
+             if let Some(song) = model.player_model.current_song.as_mut() {
+                 if let Some(stats) = song.statistics.as_mut() {
+                     stats.liked_count = 0;
+                 }
+             }
             orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
                 MetadataCommand::DislikeMediaItem(item_id),
             )));

@@ -46,6 +46,8 @@ pub enum PlaylistType {
     Featured(Playlist),
     LatestRelease(Album),
     RecentlyAdded(Album),
+    MostPlayed(Playlist),
+    Liked(Playlist),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
@@ -80,6 +82,12 @@ impl Playlists {
     pub fn has_recently_added(&self) -> bool {
         self.items.iter().any(PlaylistType::is_recently_added)
     }
+    pub fn has_most_played(&self) -> bool {
+        self.items.iter().any(PlaylistType::is_most_played)
+    }
+    pub fn has_liked(&self) -> bool {
+        self.items.iter().any(PlaylistType::is_liked)
+    }
 }
 
 impl PlaylistType {
@@ -98,5 +106,13 @@ impl PlaylistType {
     #[must_use]
     pub const fn is_recently_added(&self) -> bool {
         matches!(*self, Self::RecentlyAdded(_))
+    }
+    #[must_use]
+    pub const fn is_most_played(&self) -> bool {
+        matches!(*self, Self::MostPlayed(_))
+    }
+    #[must_use]
+    pub const fn is_liked(&self) -> bool {
+        matches!(*self, Self::Liked(_))
     }
 }

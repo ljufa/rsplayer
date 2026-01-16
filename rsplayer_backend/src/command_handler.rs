@@ -101,9 +101,17 @@ pub async fn handle_user_commands(
                     .unwrap();
             }
             Playlist(QueryPlaylistItems(playlist_id, page_no)) => {
-                let songs = playlist_service
-                    .get_playlist_page_by_name(&playlist_id, page_no * 20, 20)
-                    .items;
+                let songs = if playlist_id == "most_played" {
+                    let all = metadata_service.get_most_played_songs(100);
+                    all.into_iter().skip(page_no * 20).take(20).collect()
+                } else if playlist_id == "liked" {
+                    let all = metadata_service.get_liked_songs(100);
+                    all.into_iter().skip(page_no * 20).take(20).collect()
+                } else {
+                    playlist_service
+                        .get_playlist_page_by_name(&playlist_id, page_no * 20, 20)
+                        .items
+                };
                 state_changes_sender
                     .send(StateChangeEvent::PlaylistItemsEvent(songs, page_no))
                     .unwrap();
@@ -137,6 +145,31 @@ pub async fn handle_user_commands(
                     .for_each(|alb| {
                         pls.items.push(PlaylistType::LatestRelease(alb));
                     });
+                if let Some(first_most_played) = metadata_service.get_most_played_songs(1).first() {
+                    let pl = api_models::playlist::Playlist {
+                        id: "most_played".to_string(),
+                        name: "Most Played".to_string(),
+                        description: Some("Your most played tracks".to_string()),
+                        image: first_most_played
+                            .image_id
+                            .clone()
+                            .map(|id| format!("/artwork/{id}")),
+                        owner_name: None,
+                    };
+                    pls.items.push(PlaylistType::MostPlayed(pl));
+                }
+
+                if let Some(first_liked) = metadata_service.get_liked_songs(1).first() {
+                    let pl = api_models::playlist::Playlist {
+                        id: "liked".to_string(),
+                        name: "Liked".to_string(),
+                        description: Some("Songs you liked".to_string()),
+                        image: first_liked.image_id.clone().map(|id| format!("/artwork/{id}")),
+                        owner_name: None,
+                    };
+                    pls.items.push(PlaylistType::Liked(pl));
+                }
+
                 state_changes_sender
                     .send(StateChangeEvent::PlaylistsEvent(pls))
                     .unwrap();

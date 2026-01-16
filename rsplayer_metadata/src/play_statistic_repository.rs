@@ -32,6 +32,18 @@ impl PlayStatisticsRepository {
         play_item_statistics
     }
 
+    pub fn get_all(&self) -> Vec<PlayItemStatistics> {
+        self.db
+            .iter()
+            .filter_map(Result::ok)
+            .map(|(_, value)| {
+                let json = String::from_utf8(value.to_vec()).unwrap_or_default();
+                serde_json::from_str::<PlayItemStatistics>(&json).ok()
+            })
+            .flatten()
+            .collect()
+    }
+
     pub fn save(&self, play_item_statistics: &PlayItemStatistics) {
         let play_item_id = play_item_statistics.play_item_id.clone();
         let play_item_statistics_json = serde_json::to_string(play_item_statistics).unwrap();

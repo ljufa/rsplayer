@@ -76,6 +76,30 @@ impl MetadataService {
             .collect()
     }
 
+    pub fn get_most_played_songs(&self, limit: usize) -> Vec<Song> {
+        let mut stats = self.statistic_repository.get_all();
+        stats.sort_by(|a, b| b.play_count.cmp(&a.play_count));
+        stats
+            .into_iter()
+            .filter(|stat| !stat.play_item_id.starts_with("radio_uuid_"))
+            .filter(|stat| stat.play_count > 0)
+            .filter_map(|stat| self.song_repository.find_by_id(&stat.play_item_id))
+            .take(limit)
+            .collect()
+    }
+
+    pub fn get_liked_songs(&self, limit: usize) -> Vec<Song> {
+        let mut stats = self.statistic_repository.get_all();
+        stats.sort_by(|a, b| b.liked_count.cmp(&a.liked_count));
+        stats
+            .into_iter()
+            .filter(|stat| !stat.play_item_id.starts_with("radio_uuid_"))
+            .filter(|stat| stat.liked_count > 0)
+            .filter_map(|stat| self.song_repository.find_by_id(&stat.play_item_id))
+            .take(limit)
+            .collect()
+    }
+
     pub fn like_media_item(&self, media_item_id: &str) {
         self.update_or_create_media_item_stat(media_item_id, |item| item.liked_count += 1);
     }
