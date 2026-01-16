@@ -187,6 +187,8 @@ impl PlayerService {
                         }
                     }
                 }
+                let mut retry_count = 0;
+                const MAX_RETRIES: i32 = 10;
                 loop {
                     let Some(song) = queue.get_current_song() else {
                         changes_tx
@@ -216,6 +218,17 @@ impl PlayerService {
                             break PlaybackResult::PlaybackStopped;
                         }
                         Err(err) => {
+                            if retry_count < MAX_RETRIES {
+                                warn!(
+                                    "Playback failed, retrying ({}/{}) in 1s... Error: {:?}",
+                                    retry_count + 1,
+                                    MAX_RETRIES,
+                                    err
+                                );
+                                retry_count += 1;
+                                std::thread::sleep(std::time::Duration::from_secs(1));
+                                continue;
+                            }
                             error!("Failed to play file {}. Error: {:?}", song.file, err);
                             changes_tx
                                 .send(StateChangeEvent::PlaybackStateEvent(PlayerState::ERROR(song.file)))
@@ -227,6 +240,7 @@ impl PlayerService {
                         }
                     }
 
+                    retry_count = 0;
                     if !queue.move_current_to_next_song() {
                         break PlaybackResult::QueueFinished;
                     }
