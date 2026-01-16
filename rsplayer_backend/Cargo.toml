@@ -19,6 +19,11 @@ maintainer-scripts = "../PKGS/maintainer-scripts"
 
 assets = [
     [
+        "target/release/rsplayer",
+        "usr/bin/",
+        "755",
+    ],
+    [
         "../PKGS/debian/etc/systemd/system/rsplayer.service",
         "etc/systemd/system/rsplayer.service",
         "644",

@@ -45,15 +45,10 @@ command = "cargo"
 args = ["make", "build_release"]
 
 [tasks.package_deb_release]
-command = "cargo"
-args = [
-    "deb",
-    "--no-build",
-    "-p",
-    "rsplayer",
-    "--target=${TARGET}",
-    "--deb-version",
-    "${RELEASE_VERSION}",
+script = [
+    "mkdir -p target/release",
+    "cp target/${TARGET}/release/rsplayer target/release/rsplayer",
+    "cargo deb --no-build -p rsplayer --target=${TARGET} --deb-version ${RELEASE_VERSION}"
 ]
 
 # ---- LINT ----
