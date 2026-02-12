@@ -3,7 +3,7 @@ use api_models::{
     common::{PlayerCommand, SystemCommand, UserCommand, Volume},
     state::StateChangeEvent,
 };
-use log::{debug, error, info};
+use log::{debug, error, info, trace};
 use serialport::SerialPort;
 use std::result::Result::Ok;
 use std::str::FromStr;
@@ -15,31 +15,31 @@ use std::{
 use tokio::sync::{broadcast::error::{RecvError, TryRecvError}, mpsc::Sender};
 
 pub struct UsbService {
-    port: Mutex<Box<dyn SerialPort>>,
+    port: Mutex<Option<Box<dyn SerialPort>>>,
     baud_rate: u32,
     last_song_cache: Mutex<Option<(String, String, String)>>,
 }
 
 impl UsbService {
-    pub fn new(path: &str, baud_rate: u32) -> Result<Self> {
-        let port = serialport::new(path, baud_rate)
-            .timeout(Duration::from_secs(1))
-            .open()
-            .expect("Failed to open port");
-        Ok(Self {
-            port: Mutex::new(port),
+    pub fn new(baud_rate: u32) -> Self {
+        Self {
+            port: Mutex::new(None),
             baud_rate,
             last_song_cache: Mutex::new(None),
-        })
+        }
     }
 
     pub fn send_command(&self, command: &str) -> Result<()> {
         let message = format!("{command}\n");
 
-        let mut port = self.port.lock().unwrap();
-        port.write_all(message.as_bytes()).and_then(|()| port.flush())?;
-        debug!("Written command: {command}");
-        Ok(())
+        let mut port_guard = self.port.lock().unwrap();
+        if let Some(port) = port_guard.as_mut() {
+            port.write_all(message.as_bytes()).and_then(|()| port.flush())?;
+            trace!("Written command: {command}");
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("USB port not connected"))
+        }
     }
 
     pub fn try_reconnect(&self) -> Result<()> {
@@ -52,10 +52,12 @@ impl UsbService {
                     info!("Reconnected to USB device at {new_path}");
                     {
                         let mut port_guard = self.port.lock().unwrap();
-                        *port_guard = new_port;
+                        *port_guard = Some(new_port);
                     }
-                    if let Some((t, a, al)) = self.last_song_cache.lock().unwrap().clone() {
-                        let _ = self.send_track_info(&t, &a, &al);
+                    let cached_song = self.last_song_cache.lock().unwrap().clone();
+                    if let Some((t, a, al)) = cached_song {
+                        debug!("Resending cached track info: {t} - {a}");
+                        let _ = self.send_command(&format!("SetTrack({t}|{a}|{al})"));
                     }
                     Ok(())
                 }
@@ -88,6 +90,7 @@ pub fn get_rsplayer_firmware_usb_link() -> Option<String> {
     if let Ok(ports) = serialport::available_ports() {
         for p in ports {
             if let serialport::SerialPortType::UsbPort(info) = p.port_type {
+                debug!("Checking USB port: {:?} (Product: {:?}, VID: {:?}, PID: {:?})", p.port_name, info.product, info.vid, info.pid);
                 if info.product == Some("rsplayer-firmware-v1.0".to_owned()) {
                     return Some(p.port_name);
                 }
@@ -109,15 +112,23 @@ pub fn start_listening(
         loop {
             // Try to acquire a working port reader
             let port_result = {
-                let port_guard = service.port.lock().unwrap();
-                port_guard.try_clone()
+                let mut port_guard = service.port.lock().unwrap();
+                match port_guard.as_mut() {
+                    Some(p) => {
+                        debug!("Port available, attempting to clone...");
+                        p.try_clone()
+                    }
+                    None => {
+                        Err(serialport::Error::new(serialport::ErrorKind::NoDevice, "No port available"))
+                    }
+                }
             };
 
             match port_result {
                 Ok(port) => {
                     let mut reader = BufReader::new(port);
                     let mut line_buffer = String::new();
-                    info!("USB Listener loop started");
+                    info!("USB Listener loop started successfully");
 
                     loop {
                         match reader.read_line(&mut line_buffer) {
@@ -128,10 +139,10 @@ pub fn start_listening(
                             }
                             Ok(_) => {
                                 let msg = line_buffer.trim();
-                                debug!("Got usb message: {msg}");
                                 if msg.is_empty() {
                                     continue;
                                 }
+                                debug!("Got usb message: {msg}");
                                 if msg == "PowerOff" {
                                     _ = system_commands_tx.blocking_send(SystemCommand::PowerOff);
                                 } else {
@@ -153,7 +164,6 @@ pub fn start_listening(
                                 line_buffer.clear();
                             }
                             Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                                debug!("Timeout usb read");
                                 continue;
                             }
                             Err(e) => {
@@ -162,18 +172,23 @@ pub fn start_listening(
                             }
                         }
                     }
+                    // If we broke out of the inner loop, it means the connection is likely dead.
+                    // Clear the port so try_reconnect can start fresh.
+                    info!("USB connection broken, clearing port handle.");
+                    let mut port_guard = service.port.lock().unwrap();
+                    *port_guard = None;
                 }
                 Err(e) => {
-                    error!("Failed to clone port: {e}");
+                    debug!("Failed to get port handle: {e}");
                 }
             }
 
             // Connection lost or failed to start, try to reconnect
-            error!("USB connection lost or failed. Attempting to reconnect in 2 seconds...");
+            debug!("Waiting 2 seconds before next reconnection attempt...");
             sleep(Duration::from_secs(2));
 
             if let Err(e) = service.try_reconnect() {
-                debug!("Reconnect failed: {e}");
+                debug!("Reconnect attempt failed: {e}");
             }
         }
     });

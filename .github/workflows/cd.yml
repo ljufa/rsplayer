@@ -8,16 +8,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-      
   build_ui:
     name: Build UI
     runs-on: rsplayer-self-hosted
     steps:
-    - uses: actions/checkout@v3
-    # - uses: davidB/rust-cargo-make@v1
-    # - uses: taiki-e/install-action@v2
-    #   with:
-    #     tool: wasm-pack
+    - uses: actions/checkout@v4
     - name: Build release
       run: cargo make build_ui_release
     - name: Upload pkg dir
@@ -25,70 +20,85 @@ jobs:
       with:
         name: web_ui
         path: rsplayer_web_ui/public/pkg
-    
+
   build_backend:
     needs: build_ui
-    strategy:
-      matrix:
-        target: ["arm-unknown-linux-gnueabihf", "armv7-unknown-linux-gnueabihf","aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
-    name: Release
-    # make it use older libc version
+    name: Release Backend
     runs-on: rsplayer-self-hosted
+    strategy:
+      # Fix flakiness: Run jobs sequentially to avoid race conditions on shared workspace files
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        target: ["arm-unknown-linux-gnueabihf", "armv7-unknown-linux-gnueabihf", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
     steps:
-    - uses: actions/checkout@v5
-    # remove cache if you get random libc errors, target based key should help
+    - uses: actions/checkout@v4
+      with:
+        clean: true
+    
+    # Ensure no stale binary exists from a previous run or sibling job
+    - name: Clean Shared Target
+      run: rm -rf target/release || true
+
     - name: Download web_ui
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v4
       with:
         name: web_ui
         path: rsplayer_web_ui/public/pkg
-    # !!! Do not use binstall because it does not work well for cross compilation and libc dependency
-    # - name: Install tools
-    #   run: |
-    #     cargo install cross
-    #     cargo install cargo-deb
-    - name: Build Backend
-      run: cargo make --env TARGET=${{ matrix.target }} build_release
-    - name: Create deb package
-      run: cargo make --env RELEASE_VERSION=${GITHUB_REF_NAME} --env TARGET=${{ matrix.target }} package_deb_release
+
+    - name: Build and Package
+      env:
+        TARGET: ${{ matrix.target }}
+        RELEASE_VERSION: ${{ github.ref_name }}
+      run: |
+        cargo make --env TARGET=$TARGET build_release
+        cargo make --env RELEASE_VERSION=$RELEASE_VERSION --env TARGET=$TARGET package_deb_release
+
     - name: Upload deb package
       uses: actions/upload-artifact@v4
       with:
         name: deb-${{ matrix.target }}
         path: target/${{ matrix.target }}/debian/*.deb
+        if-no-files-found: error
+
     - name: Upload binary
       uses: actions/upload-artifact@v4
       with:
         name: rsplayer-${{ matrix.target }}
         path: target/${{ matrix.target }}/release/rsplayer
+        if-no-files-found: error
+
   publish:
     needs: build_backend
     name: Create release
     runs-on: rsplayer-self-hosted
     steps:
-    - name: Download files
-      uses: actions/download-artifact@v5
-    # todo: make rename as generic script
-    - name: Rename binary files
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      
+    - name: Prepare Release Assets
       run: |
-        [ -d "rsplayer-aarch64-unknown-linux-gnu" ] && mv rsplayer-aarch64-unknown-linux-gnu/rsplayer rsplayer_arm64 || true
-        [ -d "rsplayer-armv7-unknown-linux-gnueabihf" ] && mv rsplayer-armv7-unknown-linux-gnueabihf/rsplayer rsplayer_armhfv7 || true
-        [ -d "rsplayer-arm-unknown-linux-gnueabihf" ] && mv rsplayer-arm-unknown-linux-gnueabihf/rsplayer rsplayer_armhfv6 || true
-        [ -d "rsplayer-x86_64-unknown-linux-gnu" ] && mv rsplayer-x86_64-unknown-linux-gnu/rsplayer rsplayer_amd64 || true
-    - name: Prepare debs for release
-      run: |
-        [ -d "deb-arm-unknown-linux-gnueabihf" ] && find deb-arm-unknown-linux-gnueabihf -name "*.deb" -exec mv {} ./rsplayer_${{ github.ref_name }}_armhfv6.deb \; || true
-        [ -d "deb-armv7-unknown-linux-gnueabihf" ] && find deb-armv7-unknown-linux-gnueabihf -name "*.deb" -exec mv {} ./rsplayer_${{ github.ref_name }}_armhfv7.deb \; || true
-        [ -d "deb-aarch64-unknown-linux-gnu" ] && find deb-aarch64-unknown-linux-gnu -name "*.deb" -exec mv {} ./rsplayer_${{ github.ref_name }}_arm64.deb \; || true
-        [ -d "deb-x86_64-unknown-linux-gnu" ] && find deb-x86_64-unknown-linux-gnu -name "*.deb" -exec mv {} ./rsplayer_${{ github.ref_name }}_amd64.deb \; || true
-    - name: Display new structure of downloaded files
-      run: ls -R
-    - uses: ncipollo/release-action@v1
+        mkdir -p release_assets
+        
+        # Move binaries (Robust checks for missing targets)
+        [ -d "rsplayer-aarch64-unknown-linux-gnu" ] && mv rsplayer-aarch64-unknown-linux-gnu/rsplayer release_assets/rsplayer_arm64 || true
+        [ -d "rsplayer-armv7-unknown-linux-gnueabihf" ] && mv rsplayer-armv7-unknown-linux-gnueabihf/rsplayer release_assets/rsplayer_armhfv7 || true
+        [ -d "rsplayer-arm-unknown-linux-gnueabihf" ] && mv rsplayer-arm-unknown-linux-gnueabihf/rsplayer release_assets/rsplayer_armhfv6 || true
+        [ -d "rsplayer-x86_64-unknown-linux-gnu" ] && mv rsplayer-x86_64-unknown-linux-gnu/rsplayer release_assets/rsplayer_amd64 || true
+
+        # Move debs
+        [ -d "deb-arm-unknown-linux-gnueabihf" ] && find deb-arm-unknown-linux-gnueabihf -name "*.deb" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_armhfv6.deb \; || true
+        [ -d "deb-armv7-unknown-linux-gnueabihf" ] && find deb-armv7-unknown-linux-gnueabihf -name "*.deb" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_armhfv7.deb \; || true
+        [ -d "deb-aarch64-unknown-linux-gnu" ] && find deb-aarch64-unknown-linux-gnu -name "*.deb" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_arm64.deb \; || true
+        [ -d "deb-x86_64-unknown-linux-gnu" ] && find deb-x86_64-unknown-linux-gnu -name "*.deb" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_amd64.deb \; || true
+
+        ls -R release_assets
+
+    - name: Create Release
+      uses: ncipollo/release-action@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        artifacts: |
-          *.deb
-          rsplayer_*
+        artifacts: "release_assets/*"
         draft: true
         prerelease: true
         generateReleaseNotes: true

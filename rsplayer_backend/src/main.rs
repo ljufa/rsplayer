@@ -86,18 +86,10 @@ async fn main() {
 
     let usb_settings = config.get_settings().usb_settings;
     let usb_service = if usb_settings.enabled {
-        if let Some(device) = rsplayer_hardware::usb::get_rsplayer_firmware_usb_link() {
-            match UsbService::new(&device, usb_settings.baud_rate) {
-                Ok(service) => Some(Arc::new(service)),
-                Err(e) => {
-                    error!("Failed to create USB service: {e}");
-                    None
-                }
-            }
-        } else {
-            error!("No USB device found");
-            None
-        }
+        let service = Arc::new(UsbService::new(usb_settings.baud_rate));
+        // Try initial connection, but don't fail if it doesn't find the device yet
+        let _ = service.try_reconnect();
+        Some(service)
     } else {
         None
     };

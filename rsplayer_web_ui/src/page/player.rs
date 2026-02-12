@@ -3,7 +3,7 @@ use api_models::common::{MetadataCommand, PlaybackMode, PlayerCommand, SystemCom
 use api_models::player::Song;
 use api_models::state::{PlayerInfo, PlayerState, SongProgress};
 
-use seed::{a, attrs, button, div, empty, h1, h2, h3, i, input, prelude::*, span, style, C};
+use seed::{a, attrs, button, canvas, div, empty, h1, h2, h3, i, id, input, prelude::*, span, style, C};
 
 use std::str::FromStr;
 
@@ -150,6 +150,18 @@ fn view_controls(model: &PlayerModel) -> Node<Msg> {
             ],
         ],
         view_track_progress_bar(&model.progress),
+        div![
+            C!["container", "px-5", "pb-4"],
+            canvas![
+                id!("vumeter"),
+                style! {
+                    St::Width => "100%",
+                    St::Height => "20px",
+                    St::BorderRadius => "4px",
+                    // St::Background => "#222",
+                }
+            ]
+        ],
         view_volume_slider(&model.volume_state),
     ]
 }

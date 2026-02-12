@@ -16,6 +16,7 @@ use PlayerCommand::{CyclePlaybackMode, Next, Pause, Play, Prev};
 use UserCommand::{Player, Queue};
 
 mod page;
+mod vumeter;
 
 const SETTINGS: &str = "settings";
 
@@ -52,6 +53,7 @@ struct Model {
     player_model: PlayerModel,
     metadata_scan_info: Option<String>,
     notification: Option<StateChangeEvent>,
+    vumeter: Option<vumeter::VUMeter>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -83,6 +85,8 @@ pub enum Msg {
     SeekTrackPosition(u16),
     ResumeProgressUpdates,
     SetVolume(String),
+    InitVUMeter,
+    WindowResized,
 
     LikeMediaItemClick(MetadataCommand),
 }
@@ -175,6 +179,11 @@ impl Page {
 fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
     let page = Page::new(url.clone(), orders);
     orders.subscribe(Msg::UrlChanged).notify(subs::UrlChanged(url.clone()));
+    orders.stream(streams::window_event(Ev::Resize, |_| Msg::WindowResized));
+
+    if matches!(page, Page::Player) {
+         orders.after_next_render(|_| { Some(Msg::InitVUMeter) });
+    }
 
     orders.perform_cmd(async {
         let response = Request::get("/api/start_error")
@@ -204,6 +213,7 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
         },
         metadata_scan_info: None,
         notification: None,
+        vumeter: None,
     }
 }
 // ------ ------
@@ -316,7 +326,14 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.web_socket = create_websocket(orders).unwrap();
         }
 
-        Msg::UrlChanged(subs::UrlChanged(url)) => model.page = Page::new(url, orders),
+        Msg::UrlChanged(subs::UrlChanged(url)) => {
+            model.page = Page::new(url, orders);
+            if matches!(model.page, Page::Player) {
+                 orders.after_next_render(|_| { Some(Msg::InitVUMeter) });
+            } else {
+                 model.vumeter = None;
+            }
+        }
 
         Msg::AlbumImageUpdated(image) => {
             model.player_model.current_song.as_mut().unwrap().image_url = Some(image.text);
@@ -332,6 +349,16 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             log!("Resuming progress updates");
             model.player_model.stop_progress_updates = false;
             orders.skip();
+        }
+        Msg::InitVUMeter => {
+            if let Some(meter) = vumeter::VUMeter::new("vumeter") {
+                model.vumeter = Some(meter);
+            }
+        }
+        Msg::WindowResized => {
+            if let Some(meter) = &mut model.vumeter {
+                meter.resize();
+            }
         }
         Msg::SetVolume(volstr) => {
             orders.send_msg(Msg::SendSystemCommand(SystemCommand::SetVol(
@@ -391,6 +418,11 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 }
                 StateChangeEvent::PlaybackStateEvent(ps) => {
                     model.player_model.player_state = ps.clone();
+                    if !matches!(ps, PlayerState::PLAYING) {
+                         if let Some(meter) = &mut model.vumeter {
+                             meter.update(0, 0);
+                         }
+                    }
                 }
                 StateChangeEvent::MetadataSongScanStarted => {
                     model.metadata_scan_info = Some("Music directory scanning started.".to_string());
@@ -407,6 +439,12 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 StateChangeEvent::NotificationSuccess(_) | StateChangeEvent::NotificationError(_) => {
                     model.notification = Some(chg_ev.clone());
                     orders.perform_cmd(cmds::timeout(4000, || Msg::HideNotification));
+                    orders.skip();
+                }
+                StateChangeEvent::VUEvent(l, r) => {
+                    if let Some(meter) = &mut model.vumeter {
+                        meter.update(*l, *r);
+                    }
                     orders.skip();
                 }
                 _ => {}

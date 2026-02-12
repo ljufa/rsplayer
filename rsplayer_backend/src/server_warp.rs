@@ -126,7 +126,7 @@ pub fn start(
                     
                 }
                 Ok(ev) => {
-                    debug!("Received state changed event {ev:?}");
+                    trace!("Received state changed event {ev:?}");
                     notify_users(&users_notify, ev).await;
                 }
             }
@@ -244,7 +244,7 @@ async fn notify_users(users_to_notify: &Users, status_change_event: StateChangeE
             let users = users_to_notify.read().await;
             users.iter().for_each(|tx| {
                 let send_result = tx.1.send(Ok(Message::text(json_msg.clone())));
-                debug!("Sent message to user: {:?} with result: {:?}", tx.0, send_result);
+                trace!("Sent message to user: {:?} with result: {:?}", tx.0, send_result);
             });
         }
     }

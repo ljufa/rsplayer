@@ -116,8 +116,8 @@ TODO
 * [x] Like/Favorite song/radio
 * [x] Search files/radio/artist
 * [ ] Playlist by genre
-* [ ] Most played songs playlist
-* [ ] Liked songs playlist
+* [x] Most played songs playlist
+* [x] Liked songs playlist
 * [x] Show favorited radios on top of the list 
 * [ ] New music mix dynamic playlist
 * [ ] Generate missing album cover image using album name
@@ -129,6 +129,11 @@ TODO
 * [ ] use more information about the song based on last.fm response, update id tags on local files?
 * [ ] streaming to local device (i.e. phone) for i.e. preview
 * [ ] Add all settings to settings page
+* [ ] Implement MPD protocol for clients
+* [ ] Implement multi-room playback
+* [x] VU meter
+
+
 ## Code improvements
 * [ ] replace sled with native_db or redb (high memory usage)
 * [ ] get rid of `.unwrap()` calls

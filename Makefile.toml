@@ -1,10 +1,12 @@
 [env]
+# ram disk
+CARGO_TARGET_DIR = "/dev/shm/cargo_target"
+
 # RPI_HOST = "192.168.5.3"
 # TARGET = "arm-unknown-linux-gnueabihf"
 
 RPI_HOST = "192.168.5.4"
 TARGET = "aarch64-unknown-linux-gnu"
-# CARGO_TARGET_DIR = "/dev/shm/cargo_target"
 
 
 RELEASE_VERSION = "1.5.5"
@@ -28,12 +30,10 @@ args = [
     "--bin",
     "rsplayer",
 ]
-[tasks.build_debug]
+[tasks.build_dev]
 command = "cross"
 args = [
     "build",
-    "--target",
-    "${TARGET}",
     "--package",
     "rsplayer",
     "--bin",
@@ -43,6 +43,11 @@ args = [
 cwd = "rsplayer_web_ui"
 command = "cargo"
 args = ["make", "build_release"]
+
+[tasks.build_ui_dev]
+cwd = "rsplayer_web_ui"
+command = "cargo"
+args = ["make", "build_dev"]
 
 [tasks.package_deb_release]
 script = [
@@ -146,11 +151,11 @@ args = ["run"]
 [tasks.copy_remote]
 dependencies = ["build_release"]
 script = [
-    "rsync -avvP --rsync-path=\"sudo rsync\" target/${TARGET}/release/rsplayer pi@${RPI_HOST}:/usr/bin",
+    "rsync -avvP --rsync-path=\"sudo rsync\" ${CARGO_TARGET_DIR}/${TARGET}/release/rsplayer pi@${RPI_HOST}:/usr/bin",
     "ssh -x pi@${RPI_HOST} \"sudo systemctl restart rsplayer\""
 ]
-[tasks.copy_remote_debug]
-dependencies = ["build_debug"]
+[tasks.copy_remote_dev]
+dependencies = ["build_dev"]
 script = [
     "rsync -avvP --rsync-path=\"sudo rsync\" target/${TARGET}/debug/rsplayer pi@${RPI_HOST}:/usr/bin",
 ]
