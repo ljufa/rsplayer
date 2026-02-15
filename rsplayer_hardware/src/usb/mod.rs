@@ -18,6 +18,7 @@ pub struct UsbService {
     port: Mutex<Option<Box<dyn SerialPort>>>,
     baud_rate: u32,
     last_song_cache: Mutex<Option<(String, String, String)>>,
+    last_playback_mode_cache: Mutex<Option<String>>,
 }
 
 impl UsbService {
@@ -26,6 +27,7 @@ impl UsbService {
             port: Mutex::new(None),
             baud_rate,
             last_song_cache: Mutex::new(None),
+            last_playback_mode_cache: Mutex::new(None),
         }
     }
 
@@ -58,6 +60,11 @@ impl UsbService {
                     if let Some((t, a, al)) = cached_song {
                         debug!("Resending cached track info: {t} - {a}");
                         let _ = self.send_command(&format!("SetTrack({t}|{a}|{al})"));
+                    }
+                    let cached_mode = self.last_playback_mode_cache.lock().unwrap().clone();
+                    if let Some(mode) = cached_mode {
+                        debug!("Resending cached playback mode: {mode}");
+                        let _ = self.send_command(&format!("SetPlaybackMode({mode})"));
                     }
                     Ok(())
                 }
@@ -157,7 +164,9 @@ pub fn start_listening(
                                             }
                                         }
                                     }
-                                    if let Ok(pc) = PlayerCommand::from_str(msg) {
+                                    if msg == "CyclePlaybackMode" {
+                                        _ = player_commands_tx.blocking_send(UserCommand::Player(PlayerCommand::CyclePlaybackMode));
+                                    } else if let Ok(pc) = PlayerCommand::from_str(msg) {
                                         _ = player_commands_tx.blocking_send(UserCommand::Player(pc));
                                     }
                                 }
@@ -268,6 +277,12 @@ fn process_event(service: &UsbService, event: StateChangeEvent) {
                 0
             };
             let _ = service.send_progress(&current, &total, percent);
+        }
+        StateChangeEvent::PlaybackModeChangedEvent(mode) => {
+            let mode_str: &str = mode.into();
+            debug!("PlaybackModeChangedEvent received: {mode_str}");
+            *service.last_playback_mode_cache.lock().unwrap() = Some(mode_str.to_string());
+            let _ = service.send_command(&format!("SetPlaybackMode({mode_str})"));
         }
         _ => {}
     }

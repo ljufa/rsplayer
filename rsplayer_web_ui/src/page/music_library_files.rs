@@ -102,11 +102,19 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::StatusChangeEventReceived(StateChangeEvent::MetadataLocalItems(result)) => {
             model.wait_response = false;
             if model.search_input.is_empty() {
+                let children: Vec<NodeId> = model.tree.current.children(&model.tree.arena).collect();
+                for child in children {
+                    child.remove_subtree(&mut model.tree.arena);
+                }
                 result.into_iter().for_each(|item| {
                     let node = model.tree.arena.new_node(item);
                     model.tree.current.append(node, &mut model.tree.arena);
                 });
             } else {
+                let children: Vec<NodeId> = model.tree.root.children(&model.tree.arena).collect();
+                for child in children {
+                    child.remove_subtree(&mut model.tree.arena);
+                }
                 result.into_iter().for_each(|item| {
                     let node = model.tree.arena.new_node(item);
                     model.tree.root.append(node, &mut model.tree.arena);

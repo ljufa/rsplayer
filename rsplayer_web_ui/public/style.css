@@ -161,6 +161,76 @@ input[type=range].slider {
   padding-left: 10px;
 }
 
+.play-button-small {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  line-height: 1;
+  text-align: center;
+  color: var(--primary-text);
+  background-color: rgba(29, 185, 84, 0.7);
+  border-radius: 30px;
+  transition: all 0.2s ease;
+  top: 50%;
+  left: 35%;
+  transform: translate(-50%, -50%);
+}
+
+.play-button-small:hover,
+.play-button-small:focus {
+  color: var(--primary-text);
+  background-color: var(--accent);
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.play-button-small::after {
+  display: inline-block;
+  font-style: normal;
+  font-variant: normal;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  font-family: "Font Awesome 5 Free";
+  font-weight: 900;
+  font-size: 30px;
+  content: "\f04b";
+  padding-top: 15px;
+  padding-left: 5px;
+}
+
+.add-button-small {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  line-height: 1;
+  text-align: center;
+  color: var(--primary-text);
+  background-color: rgba(29, 185, 84, 0.7);
+  border-radius: 30px;
+  transition: all 0.2s ease;
+  top: 50%;
+  left: 65%;
+  transform: translate(-50%, -50%);
+}
+
+.add-button-small:hover,
+.add-button-small:focus {
+  color: var(--primary-text);
+  background-color: var(--accent);
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.add-button-small::after {
+  display: inline-block;
+  font-style: normal;
+  font-variant: normal;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  font-family: "Material Icons";
+  font-size: 30px;
+  content: "\e03b";
+  padding-top: 15px;
+}
+
 .load-more-button::after {
   content: "\f101";
   font-size: 90px;

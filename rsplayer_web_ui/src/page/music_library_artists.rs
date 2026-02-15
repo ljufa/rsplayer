@@ -65,17 +65,16 @@ pub fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
             wait_response: true,
             search_input: term,
         }
-    }else{
-
-    orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
-        api_models::common::MetadataCommand::QueryArtists,
-    )));
-    Model {
-        tree: TreeModel::new(),
-        wait_response: true,
-        search_input: String::new(),
+    } else {
+        orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+            api_models::common::MetadataCommand::QueryArtists,
+        )));
+        Model {
+            tree: TreeModel::new(),
+            wait_response: true,
+            search_input: String::new(),
+        }
     }
-}
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -83,6 +82,10 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
         Msg::StatusChangeEventReceived(StateChangeEvent::MetadataLocalItems(result)) => {
             model.wait_response = false;
+            let children: Vec<NodeId> = model.tree.current.children(&model.tree.arena).collect();
+            for child in children {
+                child.remove_subtree(&mut model.tree.arena);
+            }
             result.into_iter().for_each(|item| {
                 let node = model.tree.arena.new_node(item);
                 model.tree.current.append(node, &mut model.tree.arena);

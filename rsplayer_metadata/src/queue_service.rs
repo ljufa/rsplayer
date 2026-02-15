@@ -65,6 +65,7 @@ impl QueueService {
 
         let mode_str: &'static str = next_mode.into();
         _ = self.status_db.insert("playback_mode", mode_str);
+        _ = self.status_db.flush();
        next_mode
     }
 

@@ -189,7 +189,7 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
                     }
                 ],
                 a![
-                    attrs!(At::Title =>"Load playlist into queue"),
+                    attrs!(At::Title =>"Add playlist to queue"),
                     i![C!("is-large-icon material-icons"), "playlist_add"],
                     if model.selected_playlist_is_album {
                         ev(Ev::Click, move |_| Msg::AddAlbumToQueue(selected_playlist_id2))
@@ -341,6 +341,7 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
         | PlaylistType::Liked(pl) => {
             let id = pl.id.clone();
             let id2 = pl.id.clone();
+            let id3 = pl.id.clone();
             let name = pl.name.clone();
             div![
                 C![format!("item-{id}")],
@@ -355,11 +356,20 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                                 attrs! {At::Src => pl.image.as_ref().map_or("/headphones.png".to_string(),std::clone::Clone::clone)}
                             ]
                         ],
-                        span![C!["play-button"], ev(Ev::Click, |_| Msg::LoadPlaylistIntoQueue(id))]
+                        span![
+                            C!["play-button-small"],
+                            attrs! {At::Title => "Load playlist into queue"},
+                            ev(Ev::Click, move |_| Msg::LoadPlaylistIntoQueue(id))
+                        ],
+                        span![
+                            C!["add-button-small"],
+                            attrs! {At::Title => "Add playlist to queue"},
+                            ev(Ev::Click, move |_| Msg::AddPlaylistToQueue(id2))
+                        ]
                     ],
                     div![a![
                         C!["card-footer-item", "box"],
-                        ev(Ev::Click, |_| Msg::ShowPlaylistItemsClicked(false, id2, name)),
+                        ev(Ev::Click, move |_| Msg::ShowPlaylistItemsClicked(false, id3, name)),
                         C!["card-footer-item"],
                         pl.name.clone()
                     ],]
@@ -369,6 +379,7 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
         PlaylistType::LatestRelease(album) | PlaylistType::RecentlyAdded(album) => {
             let id = album.title.clone();
             let id2 = album.title.clone();
+            let id3 = album.title.clone();
             div![
                 C![format!("item-{id}")],
                 div![
@@ -383,10 +394,19 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                                 IF!(album.image_id.is_some() => attrs! {At::Src => format!("/artwork/{}", album.image_id.as_ref().unwrap())}),
                             ]
                         ],
-                        span![C!["play-button"], ev(Ev::Click, |_| Msg::LoadAlbumIntoQueue(id))]
+                        span![
+                            C!["play-button-small"],
+                            attrs! {At::Title => "Load album into queue"},
+                            ev(Ev::Click, move |_| Msg::LoadAlbumIntoQueue(id))
+                        ],
+                        span![
+                            C!["add-button-small"],
+                            attrs! {At::Title => "Add album to queue"},
+                            ev(Ev::Click, move |_| Msg::AddAlbumToQueue(id2))
+                        ]
                     ],
                     div![a![
-                        ev(Ev::Click, |_| Msg::ShowAlbumItemsClicked(id2)),
+                        ev(Ev::Click, move |_| Msg::ShowAlbumItemsClicked(id3)),
                         C!["card-footer-item", "box"],
                         ul![
                             style! {St::TextAlign => "center"},
