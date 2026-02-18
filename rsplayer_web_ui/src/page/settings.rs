@@ -274,6 +274,23 @@ pub fn view(model: &Model) -> Node<Msg> {
                     }
                 ]
             ],
+            div![
+                C!["buttons", "mt-4"],
+                IF!(model.settings.usb_settings.enabled =>
+                    button![
+                        C!["button", "is-danger"],
+                        "Power Off",
+                        ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::SetFirmwarePower(false)))
+                    ]
+                ),
+                IF!(model.settings.usb_settings.enabled =>
+                    button![
+                        C!["button", "is-success"],
+                        "Power On",
+                        ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::SetFirmwarePower(true)))
+                    ]
+                )
+            ]
         ],
 
         // volume control

@@ -91,6 +91,11 @@ impl UsbService {
     pub fn send_vu_level(&self, left: u8, right: u8) -> Result<()> {
         self.send_command(&format!("SetVU({left}|{right})"))
     }
+    
+    pub fn send_power_command(&self, on: bool) -> Result<()> {
+        let cmd = if on { "PowerOn" } else { "PowerOff" };
+        self.send_command(cmd)
+    }
 }
 
 pub fn get_rsplayer_firmware_usb_link() -> Option<String> {
@@ -166,6 +171,10 @@ pub fn start_listening(
                                     }
                                     if msg == "CyclePlaybackMode" {
                                         _ = player_commands_tx.blocking_send(UserCommand::Player(PlayerCommand::CyclePlaybackMode));
+                                    } else if msg == "SeekForward" {
+                                        _ = player_commands_tx.blocking_send(UserCommand::Player(PlayerCommand::SeekForward));
+                                    } else if msg == "SeekBackward" {
+                                        _ = player_commands_tx.blocking_send(UserCommand::Player(PlayerCommand::SeekBackward));
                                     } else if let Ok(pc) = PlayerCommand::from_str(msg) {
                                         _ = player_commands_tx.blocking_send(UserCommand::Player(pc));
                                     }

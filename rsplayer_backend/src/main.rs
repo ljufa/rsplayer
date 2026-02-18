@@ -127,7 +127,7 @@ async fn main() {
         player_service.play_from_current_queue_song();
     }
 
-    if let Some(service) = usb_service {
+    if let Some(service) = usb_service.clone() {
         usb::start_listening(
             service.clone(),
             player_commands_tx.clone(),
@@ -173,6 +173,7 @@ async fn main() {
 
         _ = spawn(command_handler::handle_system_commands(
                 ai_service,
+                usb_service.clone(),
                 system_commands_rx,
                 state_changes_tx.clone()))
             => {

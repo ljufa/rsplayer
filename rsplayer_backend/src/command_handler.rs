@@ -7,7 +7,8 @@ use tokio::sync::mpsc::Receiver;
 
 use api_models::common::MetadataCommand::{QueryLocalFiles, RescanMetadata};
 use api_models::common::PlayerCommand::{
-    CyclePlaybackMode, Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, Seek, Stop, TogglePlay,
+    CyclePlaybackMode, Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, Seek, SeekBackward, SeekForward,
+    Stop, TogglePlay,
 };
 use api_models::common::PlaylistCommand::{QueryAlbumItems, QueryPlaylist, QueryPlaylistItems, SaveQueueAsPlaylist};
 use api_models::common::QueueCommand::{
@@ -21,6 +22,7 @@ use api_models::playlist::PlaylistType;
 use api_models::state::StateChangeEvent;
 use rsplayer_config::ArcConfiguration;
 use rsplayer_hardware::audio_device::audio_service::ArcAudioInterfaceSvc;
+use rsplayer_hardware::usb::ArcUsbService;
 use rsplayer_metadata::album_repository::AlbumRepository;
 use rsplayer_metadata::metadata_service::MetadataService;
 use rsplayer_metadata::playlist_service::PlaylistService;
@@ -74,6 +76,12 @@ pub async fn handle_user_commands(
             }
             Player(Seek(sec)) => {
                 player_service.seek_current_song(sec);
+            }
+            Player(SeekForward) => {
+                player_service.seek_relative(10);
+            }
+            Player(SeekBackward) => {
+                player_service.seek_relative(-10);
             }
             Player(CyclePlaybackMode) => {
                 sender
@@ -415,6 +423,7 @@ pub async fn handle_user_commands(
 
 pub async fn handle_system_commands(
     ai_service: ArcAudioInterfaceSvc,
+    usb_service: Option<ArcUsbService>,
     mut input_commands_rx: Receiver<SystemCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) {
@@ -422,6 +431,13 @@ pub async fn handle_system_commands(
         if let Some(cmd) = input_commands_rx.recv().await {
             debug!("Received command {cmd:?}");
             match cmd {
+                SystemCommand::SetFirmwarePower(val) => {
+                    if let Some(service) = &usb_service {
+                        if let Err(e) = service.send_power_command(val) {
+                            error!("Failed to send power command: {e}");
+                        }
+                    }
+                }
                 SetVol(val) => {
                     let nv = ai_service.set_volume(val);
                     state_changes_sender

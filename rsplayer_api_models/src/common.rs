@@ -66,15 +66,25 @@ pub struct AudioCard {
 }
 
 #[derive(
-    Debug, Hash, Serialize, Clone, Copy, PartialEq, Eq, ToPrimitive, Deserialize, EnumString, EnumIter, IntoStaticStr,
+    Debug,
+    Hash,
+    Serialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    ToPrimitive,
+    Deserialize,
+    EnumString,
+    EnumIter,
+    IntoStaticStr,
+    Default,
 )]
-#[derive(Default)]
 pub enum VolumeCrtlType {
     Off,
     #[default]
     Alsa,
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Volume {
@@ -85,9 +95,13 @@ pub struct Volume {
 }
 impl Default for Volume {
     fn default() -> Self {
-        Self { step: 3, min: 0, max: 255, current: 0 }
+        Self {
+            step: 3,
+            min: 0,
+            max: 255,
+            current: 0,
+        }
     }
-    
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -109,6 +123,8 @@ pub enum PlayerCommand {
     PlayItem(String),
     CyclePlaybackMode,
     Seek(u16),
+    SeekForward,
+    SeekBackward,
     QueryCurrentPlayerInfo,
     TogglePlay,
 }
@@ -121,8 +137,8 @@ pub enum PlaybackMode {
     LoopSingle,
     LoopQueue,
 }
-impl PlaybackMode{
-    pub fn all()-> Vec<PlaybackMode>{
+impl PlaybackMode {
+    pub fn all() -> Vec<PlaybackMode> {
         use strum::IntoEnumIterator;
         PlaybackMode::iter().collect()
     }
@@ -178,6 +194,7 @@ pub enum SystemCommand {
     RestartSystem,
     RestartRSPlayer,
     QueryCurrentVolume,
+    SetFirmwarePower(bool),
 }
 
 #[must_use]

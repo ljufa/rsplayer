@@ -1,7 +1,7 @@
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use sled::Db;
 use std::sync::{
-    atomic::{AtomicBool, AtomicU16, Ordering},
+    atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering},
     Arc, Mutex,
 };
 use std::thread::JoinHandle;
@@ -25,6 +25,7 @@ pub struct PlayerService {
     playback_thread_handle: Arc<Mutex<Option<JoinHandle<PlaybackResult>>>>,
     stop_signal: Arc<AtomicBool>,
     skip_to_time: Arc<AtomicU16>,
+    last_known_time: Arc<AtomicU32>,
     audio_device: String,
     rsp_settings: RsPlayerSettings,
     music_dir: String,
@@ -45,6 +46,13 @@ impl PlayerService {
         let state_db = db.clone();
         let mut rx = state_changes_tx.subscribe();
         let state_tx = state_changes_tx.clone();
+        
+        let initial_time = match state_db.get(LAST_SONG_PROGRESS_KEY) {
+             Ok(Some(lt)) => String::from_utf8(lt.to_vec()).unwrap_or_else(|_| "0".to_string()).parse::<u32>().unwrap_or(0),
+             _ => 0,
+        };
+        let last_known_time = Arc::new(AtomicU32::new(initial_time));
+        let last_known_time_clone = last_known_time.clone();
         tokio::task::spawn(async move {
             let mut i = 0;
             loop {
@@ -52,8 +60,10 @@ impl PlayerService {
                     Ok(StateChangeEvent::SongTimeEvent(st)) => {
                         i += 1;
                         if i % 2 == 0 {
-                            let lt = st.current_time.as_secs().to_string();
-                            debug!("Save time state: {lt}");
+                            let lt_secs = st.current_time.as_secs();
+                            let lt = lt_secs.to_string();
+                            last_known_time_clone.store(lt_secs as u32, Ordering::Relaxed);
+                            trace!("Save time state: {lt}");
                             _ = state_db.insert(LAST_SONG_PROGRESS_KEY, lt.as_bytes());
                         }
                     }
@@ -91,6 +101,7 @@ impl PlayerService {
             playback_thread_handle: Arc::new(Mutex::new(None)),
             stop_signal: Arc::new(AtomicBool::new(false)),
             skip_to_time: Arc::new(AtomicU16::new(0)),
+            last_known_time,
             audio_device: settings.alsa_settings.output_device.name.clone(),
             rsp_settings: settings.rs_player_settings.clone(),
             music_dir: settings.metadata_settings.music_directory.clone(),
@@ -142,6 +153,12 @@ impl PlayerService {
     #[allow(clippy::unused_self, clippy::missing_const_for_fn)]
     pub fn seek_current_song(&self, seconds: u16) {
         self.skip_to_time.store(seconds, Ordering::Relaxed);
+    }
+
+    pub fn seek_relative(&self, offset_seconds: i32) {
+        let current = self.last_known_time.load(Ordering::Relaxed) as i32;
+        let new_time = (current + offset_seconds).max(0) as u16;
+        self.seek_current_song(new_time);
     }
 
     pub fn play_song(&self, song_id: &str) {
