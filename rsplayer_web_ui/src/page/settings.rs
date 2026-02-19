@@ -1,12 +1,18 @@
 
 use api_models::{
     common::{MetadataCommand::RescanMetadata, SystemCommand, UserCommand, VolumeCrtlType},
-    settings::{MetadataStoreSettings, RsPlayerSettings, Settings},
+    settings::{DspFilter, FilterConfig, MetadataStoreSettings, RsPlayerSettings, Settings},
     validator::Validate,
 };
-use gloo_console::log;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
+use gloo_console::{error, log};
+use gloo_file::futures::read_as_text;
+use gloo_file::File;
 use gloo_net::{http::Request, Error};
 use seed::{attrs, button, div, h1, i, input, label, option, prelude::*, section, select, span, style, C, IF};
+use wasm_bindgen::JsCast;
+use web_sys::FileList;
 
 use crate::view_spinner_modal;
 
@@ -44,6 +50,17 @@ pub enum Msg {
 
     InputAlsaDeviceChanged(String),
 
+    // --- DSP ---
+    DspAddFilter,
+    DspRemoveFilter(usize),
+    DspUpdateFilterType(usize, FilterType),
+    DspUpdateFilterValue(usize, DspField, String),
+    DspUpdateFilterChannels(usize, String),
+    DspApplySettings,
+    DspLoadPreset(usize),
+    DspImportConfig(FileList),
+    DspConfigLoaded(String),
+
     // --- Buttons ----
     SaveSettingsAndRestart,
     SettingsSaved(Result<String, Error>),
@@ -51,6 +68,37 @@ pub enum Msg {
     SettingsFetched(Settings),
     SendSystemCommand(SystemCommand),
     SendUserCommand(UserCommand),
+}
+
+#[derive(Debug, Clone, EnumIter, PartialEq, Eq)]
+pub enum FilterType {
+    Peaking,
+    LowShelf,
+    HighShelf,
+    LowPass,
+    HighPass,
+    Gain,
+}
+
+impl FilterType {
+    fn to_string(&self) -> &str {
+        match self {
+            FilterType::Peaking => "Peaking",
+            FilterType::LowShelf => "LowShelf",
+            FilterType::HighShelf => "HighShelf",
+            FilterType::LowPass => "LowPass",
+            FilterType::HighPass => "HighPass",
+            FilterType::Gain => "Gain",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum DspField {
+    Freq,
+    Gain,
+    Q,
+    Slope,
 }
 
 // ------ ------
@@ -85,12 +133,17 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
 pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
         Msg::SaveSettingsAndRestart => {
-            if model.settings.validate().is_ok() {
-                let settings = model.settings.clone();
-                orders.perform_cmd(async {
-                    Msg::SettingsSaved(save_settings(settings, "reload=true".to_string()).await)
-                });
-                model.waiting_response = true;
+            match model.settings.validate() {
+                Ok(_) => {
+                    let settings = model.settings.clone();
+                    orders.perform_cmd(async {
+                        Msg::SettingsSaved(save_settings(settings, "reload=true".to_string()).await)
+                    });
+                    model.waiting_response = true;
+                }
+                Err(e) => {
+                    error!(format!("Settings validation failed: {:?}", e));
+                }
             }
         }
         Msg::ToggleUsbEnabled => {
@@ -169,6 +222,100 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 model.settings.metadata_settings.music_directory.clone(),
                 full_scan,
             ))));
+        }
+        Msg::DspAddFilter => {
+            model.settings.rs_player_settings.dsp_settings.filters.push(FilterConfig {
+                filter: DspFilter::Peaking {
+                    freq: 1000.0,
+                    gain: 0.0,
+                    q: 0.707,
+                },
+                channels: vec![],
+            });
+        }
+        Msg::DspRemoveFilter(index) => {
+            if index < model.settings.rs_player_settings.dsp_settings.filters.len() {
+                model.settings.rs_player_settings.dsp_settings.filters.remove(index);
+            }
+        }
+        Msg::DspUpdateFilterType(index, filter_type) => {
+            if let Some(filter_config) = model.settings.rs_player_settings.dsp_settings.filters.get_mut(index) {
+                filter_config.filter = match filter_type {
+                    FilterType::Peaking => DspFilter::Peaking { freq: 1000.0, gain: 0.0, q: 0.707 },
+                    FilterType::LowShelf => DspFilter::LowShelf { freq: 80.0, gain: 0.0, q: Some(0.707), slope: None },
+                    FilterType::HighShelf => DspFilter::HighShelf { freq: 12000.0, gain: 0.0, q: Some(0.707), slope: None },
+                    FilterType::LowPass => DspFilter::LowPass { freq: 20000.0, q: 0.707 },
+                    FilterType::HighPass => DspFilter::HighPass { freq: 20.0, q: 0.707 },
+                    FilterType::Gain => DspFilter::Gain { gain: 0.0 },
+                };
+            }
+        }
+        Msg::DspUpdateFilterValue(index, field, value) => {
+             if let Some(filter_config) = model.settings.rs_player_settings.dsp_settings.filters.get_mut(index) {
+                if let Ok(val) = value.parse::<f64>() {
+                    match (&mut filter_config.filter, field) {
+                        (DspFilter::Peaking { freq, .. }, DspField::Freq) => *freq = val,
+                        (DspFilter::Peaking { gain, .. }, DspField::Gain) => *gain = val,
+                        (DspFilter::Peaking { q, .. }, DspField::Q) => *q = val,
+
+                        (DspFilter::LowShelf { freq, .. }, DspField::Freq) => *freq = val,
+                        (DspFilter::LowShelf { gain, .. }, DspField::Gain) => *gain = val,
+                        (DspFilter::LowShelf { q, .. }, DspField::Q) => *q = Some(val),
+                        (DspFilter::LowShelf { slope, .. }, DspField::Slope) => *slope = Some(val),
+
+                        (DspFilter::HighShelf { freq, .. }, DspField::Freq) => *freq = val,
+                        (DspFilter::HighShelf { gain, .. }, DspField::Gain) => *gain = val,
+                        (DspFilter::HighShelf { q, .. }, DspField::Q) => *q = Some(val),
+                        (DspFilter::HighShelf { slope, .. }, DspField::Slope) => *slope = Some(val),
+
+                        (DspFilter::LowPass { freq, .. }, DspField::Freq) => *freq = val,
+                        (DspFilter::LowPass { q, .. }, DspField::Q) => *q = val,
+
+                        (DspFilter::HighPass { freq, .. }, DspField::Freq) => *freq = val,
+                        (DspFilter::HighPass { q, .. }, DspField::Q) => *q = val,
+
+                        (DspFilter::Gain { gain }, DspField::Gain) => *gain = val,
+                        _ => {}
+                    }
+                }
+             }
+        }
+        Msg::DspUpdateFilterChannels(index, val) => {
+            if let Some(filter_config) = model.settings.rs_player_settings.dsp_settings.filters.get_mut(index) {
+                match val.as_str() {
+                    "Left" => filter_config.channels = vec![0],
+                    "Right" => filter_config.channels = vec![1],
+                    _ => filter_config.channels = vec![],
+                }
+            }
+        }
+        Msg::DspApplySettings => {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::UpdateDsp(model.settings.rs_player_settings.dsp_settings.clone())));
+        }
+        Msg::DspLoadPreset(index) => {
+            if let Some((_, filters)) = get_dsp_presets().get(index) {
+                model.settings.rs_player_settings.dsp_settings.filters = filters.clone();
+            }
+        }
+        Msg::DspImportConfig(file_list) => {
+            if let Some(file) = file_list.get(0) {
+                let file = File::from(file);
+                orders.perform_cmd(async move {
+                    if let Ok(content) = read_as_text(&file).await {
+                        Msg::DspConfigLoaded(content)
+                    } else {
+                        Msg::DspConfigLoaded(String::new()) // Error handling simplified
+                    }
+                });
+            }
+        }
+        Msg::DspConfigLoaded(content) => {
+            if !content.is_empty() {
+                let filters = crate::dsp::parse_dsp_config(&content);
+                if !filters.is_empty() {
+                    model.settings.rs_player_settings.dsp_settings.filters = filters;
+                }
+            }
         }
         _ => {}
     }
@@ -251,6 +398,14 @@ pub fn view(model: &Model) -> Node<Msg> {
                 ]
             ],
         ],
+
+        // dsp
+        section![
+            C!["section"],
+            h1![C!["title","has-text-white"], "DSP Settings"],
+            view_dsp_settings(&settings.rs_player_settings),
+        ],
+
         // usb
         section![
             C!["section"],
@@ -505,6 +660,230 @@ fn view_rsp(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
                 ],
             ]
         )
+    ]
+}
+
+fn view_dsp_settings(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
+    div![
+        C!["box", "has-background-dark"],
+        div![
+            C!["field", "mb-4"],
+            label!["Load Preset", C!["label", "has-text-white"]],
+            div![
+                C!["control"],
+                div![
+                    C!["select"],
+                    select![
+                        option![attrs!{At::Value => ""}, "Select a preset..."],
+                        get_dsp_presets().iter().enumerate().map(|(i, (name, _))| {
+                            option![
+                                attrs! {At::Value => i},
+                                name
+                            ]
+                        }),
+                        input_ev(Ev::Change, |val| {
+                            if let Ok(idx) = val.parse::<usize>() {
+                                Msg::DspLoadPreset(idx)
+                            } else {
+                                Msg::DspLoadPreset(999) // Invalid index to do nothing
+                            }
+                        })
+                    ]
+                ]
+            ]
+        ],
+        rsp_settings.dsp_settings.filters.iter().enumerate().map(|(index, filter)| {
+            view_filter(index, filter)
+        }),
+        div![
+            C!["buttons", "mt-4"],
+            button![
+                C!["button", "is-primary"],
+                "Add Filter",
+                ev(Ev::Click, |_| Msg::DspAddFilter)
+            ],
+            button![
+                C!["button", "is-warning"],
+                "Apply (Live)",
+                ev(Ev::Click, |_| Msg::DspApplySettings)
+            ],
+            div![
+                C!["file", "is-primary", "ml-2"],
+                label![
+                    C!["file-label"],
+                    input![
+                        C!["file-input"],
+                        attrs! { At::Type => "file", At::Accept => ".yml,.yaml" },
+                        ev(Ev::Change, |event| {
+                            let target = event.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap();
+                            if let Some(files) = target.files() {
+                                Msg::DspImportConfig(files)
+                            } else {
+                                Msg::DspApplySettings // Dummy
+                            }
+                        })
+                    ],
+                    span![
+                        C!["file-cta"],
+                        span![C!["file-icon"], i![C!["fas", "fa-upload"]]],
+                        span![C!["file-label"], "Import CamillaDSP config"]
+                    ]
+                ]
+            ]
+        ]
+    ]
+}
+
+fn view_filter(index: usize, filter_config: &FilterConfig) -> Node<Msg> {
+    let filter = &filter_config.filter;
+    let (current_type, freq, gain, q, slope) = match filter {
+        DspFilter::Peaking { freq, gain, q } => (FilterType::Peaking, Some(*freq), Some(*gain), Some(*q), None),
+        DspFilter::LowShelf { freq, gain, q, slope } => (FilterType::LowShelf, Some(*freq), Some(*gain), *q, *slope),
+        DspFilter::HighShelf { freq, gain, q, slope } => (FilterType::HighShelf, Some(*freq), Some(*gain), *q, *slope),
+        DspFilter::LowPass { freq, q } => (FilterType::LowPass, Some(*freq), None, Some(*q), None),
+        DspFilter::HighPass { freq, q } => (FilterType::HighPass, Some(*freq), None, Some(*q), None),
+        DspFilter::Gain { gain } => (FilterType::Gain, None, Some(*gain), None, None),
+    };
+
+    let current_channel = if filter_config.channels.is_empty() {
+        "Global"
+    } else if filter_config.channels == vec![0] {
+        "Left"
+    } else if filter_config.channels == vec![1] {
+        "Right"
+    } else {
+        "Custom"
+    };
+
+    div![
+        C!["field", "is-grouped", "is-grouped-multiline", "p-3", "mb-3"],
+        style! { St::Border => "1px solid #4a4a4a", St::BorderRadius => "4px"},
+
+        // Channel Selector
+        div![
+            C!["control"],
+            label!["Channel", C!["label", "has-text-white"]],
+            div![
+                C!["select"],
+                select![
+                    option![attrs!{At::Value => "Global"}, IF!(current_channel == "Global" => attrs!{At::Selected => ""}), "Global"],
+                    option![attrs!{At::Value => "Left"}, IF!(current_channel == "Left" => attrs!{At::Selected => ""}), "Left"],
+                    option![attrs!{At::Value => "Right"}, IF!(current_channel == "Right" => attrs!{At::Selected => ""}), "Right"],
+                    input_ev(Ev::Change, move |val| Msg::DspUpdateFilterChannels(index, val))
+                ]
+            ]
+        ],
+
+        // Filter Type
+        div![
+            C!["control"],
+            label!["Type", C!["label", "has-text-white"]],
+            div![
+                C!["select"],
+                select![
+                    FilterType::iter().map(|ft| {
+                        option![
+                            attrs! { At::Value => ft.to_string() },
+                            IF!(ft == current_type => attrs!{At::Selected => ""}),
+                            ft.to_string()
+                        ]
+                    }),
+                    input_ev(Ev::Change, move |val| {
+                        let new_type = match val.as_str() {
+                            "Peaking" => FilterType::Peaking,
+                            "LowShelf" => FilterType::LowShelf,
+                            "HighShelf" => FilterType::HighShelf,
+                            "LowPass" => FilterType::LowPass,
+                            "HighPass" => FilterType::HighPass,
+                            "Gain" => FilterType::Gain,
+                            _ => unreachable!(),
+                        };
+                        Msg::DspUpdateFilterType(index, new_type)
+                    })
+                ]
+            ]
+        ],
+
+        // Freq
+        freq.map(|f| div![
+            C!["control"],
+            label!["Freq", C!["label", "has-text-white"]],
+            input![
+                C!["input"],
+                attrs! { At::Type => "number", At::Value => f.to_string() },
+                input_ev(Ev::Input, move |v| Msg::DspUpdateFilterValue(index, DspField::Freq, v))
+            ]
+        ]),
+
+        // Gain
+        gain.map(|g| div![
+            C!["control"],
+            label!["Gain", C!["label", "has-text-white"]],
+            input![
+                C!["input"],
+                attrs! { At::Type => "number", At::Value => g.to_string() },
+                input_ev(Ev::Input, move |v| Msg::DspUpdateFilterValue(index, DspField::Gain, v))
+            ]
+        ]),
+        
+        // Q
+        q.map(|q_val| div![
+            C!["control"],
+            label!["Q", C!["label", "has-text-white"]],
+            input![
+                C!["input"],
+                attrs! { At::Type => "number", At::Value => q_val.to_string() },
+                input_ev(Ev::Input, move |v| Msg::DspUpdateFilterValue(index, DspField::Q, v))
+            ]
+        ]),
+
+        // Slope
+        slope.map(|s_val| div![
+            C!["control"],
+            label!["Slope", C!["label", "has-text-white"]],
+            input![
+                C!["input"],
+                attrs! { At::Type => "number", At::Value => s_val.to_string() },
+                input_ev(Ev::Input, move |v| Msg::DspUpdateFilterValue(index, DspField::Slope, v))
+            ]
+        ]),
+
+        // Remove button
+        div![
+            C!["control", "is-flex", "is-align-items-flex-end"],
+            button![
+                C!["button", "is-danger"],
+                "Remove",
+                ev(Ev::Click, move |_| Msg::DspRemoveFilter(index))
+            ]
+        ]
+    ]
+}
+
+
+fn get_dsp_presets() -> Vec<(&'static str, Vec<FilterConfig>)> {
+    vec![
+        ("Flat", vec![]),
+        ("Bass Boost", vec![
+            FilterConfig { filter: DspFilter::LowShelf { freq: 100.0, gain: 4.0, q: Some(0.707), slope: None }, channels: vec![] },
+        ]),
+        ("Bass Cut", vec![
+            FilterConfig { filter: DspFilter::LowShelf { freq: 100.0, gain: -4.0, q: Some(0.707), slope: None }, channels: vec![] },
+        ]),
+        ("Treble Boost", vec![
+            FilterConfig { filter: DspFilter::HighShelf { freq: 10000.0, gain: 4.0, q: Some(0.707), slope: None }, channels: vec![] },
+        ]),
+        ("Treble Cut", vec![
+            FilterConfig { filter: DspFilter::HighShelf { freq: 10000.0, gain: -4.0, q: Some(0.707), slope: None }, channels: vec![] },
+        ]),
+        ("Loudness", vec![
+            FilterConfig { filter: DspFilter::LowShelf { freq: 100.0, gain: 3.0, q: Some(0.707), slope: None }, channels: vec![] },
+            FilterConfig { filter: DspFilter::HighShelf { freq: 10000.0, gain: 3.0, q: Some(0.707), slope: None }, channels: vec![] },
+        ]),
+        ("Vocal Clarity", vec![
+            FilterConfig { filter: DspFilter::Peaking { freq: 2500.0, gain: 2.5, q: 1.0 }, channels: vec![] },
+            FilterConfig { filter: DspFilter::LowShelf { freq: 200.0, gain: -1.5, q: Some(0.707), slope: None }, channels: vec![] },
+        ]),
     ]
 }
 

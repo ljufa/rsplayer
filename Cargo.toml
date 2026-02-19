@@ -6,7 +6,7 @@ members = [
     "rsplayer_metadata",
     "rsplayer_config",
     "rsplayer_playback",
-    "rsplayer_hardware",
+    "rsplayer_hardware", "rsplayer_dsp",
 #    "rsplayer_web_ui"
 ]
 exclude = ["rsplayer_web_ui"]

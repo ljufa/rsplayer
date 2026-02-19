@@ -7,12 +7,12 @@ use std::time::Duration;
 use anyhow::{format_err, Result};
 
 use api_models::player::Song;
-use api_models::settings::RsPlayerSettings;
+use api_models::settings::{DspSettings, RsPlayerSettings};
 use api_models::state::{PlayerInfo, SongProgress, StateChangeEvent};
 use log::{debug, info, trace, warn};
 use rsplayer_metadata::radio_meta::{self, RadioMeta};
 use symphonia::core::audio::Channels;
-use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL, CODEC_TYPE_DSD_LSBF, CODEC_TYPE_DSD_MSBF};
+use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_DSD_LSBF, CODEC_TYPE_DSD_MSBF, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
 use symphonia::core::io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions, ReadOnlySource};
@@ -20,7 +20,9 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::{Time, TimeBase};
 use symphonia::default::{get_codecs, get_probe};
+use tokio::sync::Mutex;
 use tokio::sync::broadcast::Sender;
+use tokio::sync::mpsc::Receiver;
 
 use crate::rsp::output::AudioOutput;
 
@@ -44,6 +46,7 @@ pub fn play_file(
     rsp_settings: &RsPlayerSettings,
     music_dir: &str,
     changes_tx: &Sender<StateChangeEvent>,
+    dsp_rx: Arc<Mutex<Receiver<DspSettings>>>,
 ) -> Result<PlaybackResult> {
     debug!("Playing file {path_str}");
     let mut hint = Hint::new();
@@ -172,7 +175,15 @@ pub fn play_file(
                     let duration = decoded_buff.capacity() as u64;
 
                     // Try to open the audio output.
-                    let Ok(audio_out) = try_open(spec, duration, audio_device, rsp_settings, is_dsd, changes_tx.clone()) else {
+                    let Ok(audio_out) = try_open(
+                        spec,
+                        duration,
+                        audio_device,
+                        rsp_settings,
+                        is_dsd,
+                        changes_tx.clone(),
+                        dsp_rx.clone(),
+                    ) else {
                         break Err(format_err!("Failed to open audio output {audio_device}"));
                     };
                     debug!("Audio opened");

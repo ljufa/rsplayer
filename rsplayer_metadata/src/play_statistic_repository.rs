@@ -36,11 +36,10 @@ impl PlayStatisticsRepository {
         self.db
             .iter()
             .filter_map(Result::ok)
-            .map(|(_, value)| {
+            .filter_map(|(_, value)| {
                 let json = String::from_utf8(value.to_vec()).unwrap_or_default();
                 serde_json::from_str::<PlayItemStatistics>(&json).ok()
             })
-            .flatten()
             .collect()
     }
 

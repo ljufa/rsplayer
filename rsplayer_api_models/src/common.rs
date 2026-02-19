@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{player::Song, state::CurrentQueueQuery};
+use crate::{player::Song, settings::DspSettings, state::CurrentQueueQuery};
 use chrono::{DateTime, Utc};
 use num_derive::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -104,12 +104,13 @@ impl Default for Volume {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub enum UserCommand {
     Player(PlayerCommand),
     Queue(QueueCommand),
     Playlist(PlaylistCommand),
     Metadata(MetadataCommand),
+    UpdateDsp(DspSettings),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, EnumString, EnumIter, IntoStaticStr)]

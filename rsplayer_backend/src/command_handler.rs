@@ -16,7 +16,7 @@ use api_models::common::QueueCommand::{
     LoadSongToQueue, QueryCurrentQueue, QueryCurrentSong, RemoveItem,
 };
 use api_models::common::SystemCommand::{PowerOff, RestartRSPlayer, RestartSystem, SetVol, VolDown, VolUp};
-use api_models::common::UserCommand::{Metadata, Player, Playlist, Queue};
+use api_models::common::UserCommand::{Metadata, Player, Playlist, Queue, UpdateDsp};
 use api_models::common::{MetadataCommand, MetadataLibraryItem, SystemCommand, UserCommand};
 use api_models::playlist::PlaylistType;
 use api_models::state::StateChangeEvent;
@@ -38,7 +38,7 @@ pub async fn handle_user_commands(
     queue_service: Arc<QueueService>,
     album_repository: Arc<AlbumRepository>,
     song_repository: Arc<SongRepository>,
-    _config_store: ArcConfiguration,
+    config_store: ArcConfiguration,
     mut input_commands_rx: Receiver<UserCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) {
@@ -324,6 +324,17 @@ pub async fn handle_user_commands(
                     )))
                     .unwrap();
                 player_service.play_from_current_queue_song();
+            }
+            UpdateDsp(dsp_settings) => {
+                player_service.update_dsp_settings(dsp_settings.clone());
+                let mut settings = config_store.get_settings();
+                settings.rs_player_settings.dsp_settings = dsp_settings;
+                config_store.save_settings(&settings);
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(
+                        "DSP settings updated and saved".to_string(),
+                    ))
+                    .unwrap();
             }
 
             /*

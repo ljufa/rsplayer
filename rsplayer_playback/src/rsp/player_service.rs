@@ -9,7 +9,7 @@ use thread_priority::{ThreadBuilder, ThreadPriority};
 use tokio::sync::broadcast::Sender;
 
 use api_models::{
-    settings::{RsPlayerSettings, Settings},
+    settings::{DspSettings, RsPlayerSettings, Settings},
     state::{PlayerState, StateChangeEvent},
 };
 use rsplayer_metadata::metadata_service::MetadataService;
@@ -30,6 +30,7 @@ pub struct PlayerService {
     rsp_settings: RsPlayerSettings,
     music_dir: String,
     changes_tx: Sender<StateChangeEvent>,
+    dsp_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<DspSettings>>>>,
 }
 const LAST_SONG_PAUSED_KEY: &str = "last_song_paused";
 const LAST_SONG_PROGRESS_KEY: &str = "last_played_song_progress";
@@ -105,6 +106,7 @@ impl PlayerService {
             audio_device: settings.alsa_settings.output_device.name.clone(),
             rsp_settings: settings.rs_player_settings.clone(),
             music_dir: settings.metadata_settings.music_directory.clone(),
+            dsp_tx: Arc::new(Mutex::new(None)),
         };
         let last_played_song_progress = ps.get_last_played_song_time();
         if last_played_song_progress > 0 {
@@ -167,6 +169,14 @@ impl PlayerService {
         self.play_from_current_queue_song();
     }
 
+    pub fn update_dsp_settings(&self, dsp_settings: DspSettings) {
+        if let Some(tx) = self.dsp_tx.lock().unwrap().as_ref() {
+            if let Err(e) = tx.try_send(dsp_settings) {
+                error!("Failed to send DSP settings: {e}");
+            }
+        }
+    }
+
     fn play_all_in_queue(&self) -> JoinHandle<PlaybackResult> {
         self.stop_signal.store(false, Ordering::Relaxed);
         let stop_signal = self.stop_signal.clone();
@@ -178,6 +188,11 @@ impl PlayerService {
         let changes_tx = self.changes_tx.clone();
         let rsp_settings = self.rsp_settings.clone();
         let metadata_service = self.metadata_service.clone();
+        
+        let (dsp_tx, dsp_rx) = tokio::sync::mpsc::channel(1);
+        *self.dsp_tx.lock().unwrap() = Some(dsp_tx);
+        let dsp_rx_shared = Arc::new(tokio::sync::Mutex::new(dsp_rx));
+
         let is_multi_core_platform = core_affinity::get_core_ids().is_some_and(|ids| ids.len() > 1);
         let prio = if is_multi_core_platform {
             ThreadPriority::Crossplatform(playback_thread_prio.try_into().unwrap())
@@ -203,6 +218,7 @@ impl PlayerService {
                     }
                 }
                 let mut retry_count = 0;
+                let dsp_rx_local = dsp_rx_shared.clone();
                 const MAX_RETRIES: i32 = 10;
                 loop {
                     let Some(song) = queue.get_current_song() else {
@@ -230,6 +246,7 @@ impl PlayerService {
                         &rsp_settings,
                         &music_dir,
                         &changes_tx,
+                        dsp_rx_local.clone(),
                     ) {
                         Ok(PlaybackResult::PlaybackStopped) => {
                             changes_tx

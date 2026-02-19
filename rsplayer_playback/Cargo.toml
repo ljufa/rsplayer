@@ -10,6 +10,7 @@ edition = "2021"
 api_models = { path = "../rsplayer_api_models" }
 rsplayer_metadata = { path = "../rsplayer_metadata" }
 rsplayer_config = { path = "../rsplayer_config" }
+rsplayer_dsp = { path = "../rsplayer_dsp" }
 # general
 log.workspace = true
 env_logger.workspace = true

@@ -16,6 +16,7 @@ use PlayerCommand::{CyclePlaybackMode, Next, Pause, Play, Prev};
 use UserCommand::{Player, Queue};
 
 mod page;
+mod dsp;
 mod vumeter;
 
 const SETTINGS: &str = "settings";

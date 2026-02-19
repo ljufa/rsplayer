@@ -8,9 +8,13 @@
 //! Platform-dependant Audio Outputs
 
 use anyhow::Result;
+use api_models::settings::DspSettings;
 use api_models::settings::RsPlayerSettings;
 use api_models::state::StateChangeEvent;
 use log::info;
+use tokio::sync::Mutex;
+use tokio::sync::mpsc::Receiver;
+use std::sync::Arc;
 use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 use tokio::sync::broadcast::Sender;
 
@@ -29,25 +33,32 @@ mod cpal {
     use super::AudioOutput;
 
     use anyhow::{Error, Result};
+    use api_models::settings::DspSettings;
     use api_models::settings::RsPlayerSettings;
     use api_models::state::StateChangeEvent;
     use symphonia::core::audio::{AudioBufferRef, RawSample, SampleBuffer, SignalSpec};
     use symphonia::core::conv::ConvertibleSample;
+    use tokio::sync::Mutex;
     use tokio::sync::broadcast::Sender;
 
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
     use rb::{RbConsumer, RbProducer, SpscRb, RB};
 
+    use api_models::settings::DspFilter;
     use log::{debug, error, info};
-    use symphonia::core::sample::SampleFormat as SymphoniaSampleFormat;
+    use rsplayer_dsp::{BiquadParameters, Equalizer};
     use symphonia::core::conv::FromSample;
+    use symphonia::core::sample::SampleFormat as SymphoniaSampleFormat;
 
     pub struct CpalAudioOutput;
 
     trait AudioOutputSample:
         cpal::Sample + cpal::SizedSample + ConvertibleSample + RawSample + IntoSample<f32> + std::marker::Send + 'static
     {
+        fn is_dsd() -> bool {
+            false
+        }
     }
 
     impl AudioOutputSample for f32 {}
@@ -56,7 +67,11 @@ mod cpal {
     impl AudioOutputSample for u32 {}
     impl AudioOutputSample for i32 {}
     impl AudioOutputSample for u8 {}
-    impl AudioOutputSample for DsdU32 {}
+    impl AudioOutputSample for DsdU32 {
+        fn is_dsd() -> bool {
+            true
+        }
+    }
 
     // DSD Wrapper types
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Default)]
@@ -91,7 +106,7 @@ mod cpal {
         const FORMAT: SymphoniaSampleFormat = SymphoniaSampleFormat::U32; // Proxy
         const EFF_BITS: u32 = 32;
         const MID: Self = DsdU32(0x69696969);
-        
+
         fn clamped(self) -> Self {
             self
         }
@@ -119,7 +134,7 @@ mod cpal {
     }
 
     impl_from_sample_for_dsd_dummy!(i8, i16, i24, u8, u16, u24, f32, f64);
-    
+
     // For u32 and i32, we assume they hold packed DSD data and pass it through.
     impl FromSample<u32> for DsdU32 {
         fn from_sample(s: u32) -> Self {
@@ -134,10 +149,11 @@ mod cpal {
     }
 
     use symphonia::core::conv::IntoSample;
-    use symphonia::core::sample::{i24, u24}; // Need these for the macro
+    use symphonia::core::sample::{i24, u24};
+    use tokio::sync::mpsc::Receiver; // Need these for the macro
 
     // ConvertibleSample is automatically implemented because DsdU32 implements Sample and all FromSample variants.
-    
+
     // Explicit IntoSample<f32> for DsdU32 required by AudioOutputSample trait bound
     impl IntoSample<f32> for DsdU32 {
         fn into_sample(self) -> f32 {
@@ -183,6 +199,7 @@ mod cpal {
             rsp_settings: &RsPlayerSettings,
             is_dsd: bool,
             changes_tx: Sender<StateChangeEvent>,
+            dsp_rx: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<DspSettings>>>,
         ) -> Result<Box<dyn AudioOutput>> {
             // Get default host.
             let host = cpal::default_host();
@@ -194,47 +211,67 @@ mod cpal {
 
             // Attempt to find a supported config that matches the spec
             // If checking defaults fails or we want to search for DSD
-            let supported_configs_range = device.supported_output_configs()
+            let supported_configs_range = device
+                .supported_output_configs()
                 .map_err(|e| Error::msg(format!("failed to get supported configs: {e}")))?;
 
             // Check if we should prefer DSD.
             // If the track is DSD, we should look for DSD formats.
-            
+
             let (_config, sample_format) = if is_dsd {
                 // Since supported_configs is an iterator, we need to collect or clone it if we want to search multiple times.
                 // Or just search once.
                 // Note: DSD rate in ALSA is typically packed (e.g. 88200 for DSD64).
                 // spec.rate from DsdDecoder is already packed (88200).
-                let dsd_config = supported_configs_range.into_iter().find(|c: &cpal::SupportedStreamConfigRange| {
-                    let is_dsd_fmt = matches!(c.sample_format(), cpal::SampleFormat::DsdU32 | cpal::SampleFormat::DsdU16 | cpal::SampleFormat::DsdU8);
-                    is_dsd_fmt && c.min_sample_rate() <= spec.rate && c.max_sample_rate() >= spec.rate
-                });
-                
+                let dsd_config = supported_configs_range
+                    .into_iter()
+                    .find(|c: &cpal::SupportedStreamConfigRange| {
+                        let is_dsd_fmt = matches!(
+                            c.sample_format(),
+                            cpal::SampleFormat::DsdU32 | cpal::SampleFormat::DsdU16 | cpal::SampleFormat::DsdU8
+                        );
+                        is_dsd_fmt && c.min_sample_rate() <= spec.rate && c.max_sample_rate() >= spec.rate
+                    });
+
                 if let Some(dsd_c) = dsd_config {
                     info!("Using DSD format: {}", dsd_c.sample_format());
                     (dsd_c.with_sample_rate(spec.rate).config(), dsd_c.sample_format())
                 } else {
                     // Fallback to default if DSD not supported/found
                     info!("DSD requested but DSD format not found, falling back to default.");
-                    let default = device.default_output_config()
+                    let default = device
+                        .default_output_config()
                         .map_err(|e| Error::msg(format!("failed to get default config: {e}")))?;
                     (default.config(), default.sample_format())
                 }
             } else {
-                 // Non-DSD rate, use default config logic
-                 let default = device.default_output_config()
+                // Non-DSD rate, use default config logic
+                let default = device
+                    .default_output_config()
                     .map_err(|e| Error::msg(format!("failed to get default config: {e}")))?;
-                 (default.config(), default.sample_format())
+                (default.config(), default.sample_format())
             };
 
             // Select proper playback routine based on sample format.
             match sample_format {
-                cpal::SampleFormat::F32 => CpalAudioOutputImpl::<f32>::try_open(spec, duration, &device, rsp_settings, changes_tx),
-                cpal::SampleFormat::I32 => CpalAudioOutputImpl::<i32>::try_open(spec, duration, &device, rsp_settings, changes_tx),
-                cpal::SampleFormat::I16 => CpalAudioOutputImpl::<i16>::try_open(spec, duration, &device, rsp_settings, changes_tx),
-                cpal::SampleFormat::U16 => CpalAudioOutputImpl::<u16>::try_open(spec, duration, &device, rsp_settings, changes_tx),
-                cpal::SampleFormat::U32 => CpalAudioOutputImpl::<u32>::try_open(spec, duration, &device, rsp_settings, changes_tx),
-                cpal::SampleFormat::DsdU32 => CpalAudioOutputImpl::<DsdU32>::try_open(spec, duration, &device, rsp_settings, changes_tx),
+                cpal::SampleFormat::F32 => {
+                    CpalAudioOutputImpl::<f32>::try_open(spec, duration, &device, rsp_settings, changes_tx, dsp_rx)
+                }
+                cpal::SampleFormat::I32 => {
+                    CpalAudioOutputImpl::<i32>::try_open(spec, duration, &device, rsp_settings, changes_tx, dsp_rx)
+                }
+                cpal::SampleFormat::I16 => {
+                    CpalAudioOutputImpl::<i16>::try_open(spec, duration, &device, rsp_settings, changes_tx, dsp_rx)
+                }
+                cpal::SampleFormat::U16 => {
+                    CpalAudioOutputImpl::<u16>::try_open(spec, duration, &device, rsp_settings, changes_tx, dsp_rx)
+                }
+                cpal::SampleFormat::U32 => {
+                    CpalAudioOutputImpl::<u32>::try_open(spec, duration, &device, rsp_settings, changes_tx, dsp_rx)
+                }
+                cpal::SampleFormat::DsdU32 => {
+                    CpalAudioOutputImpl::<DsdU32>::try_open(spec, duration, &device, rsp_settings, changes_tx, dsp_rx)
+                }
                 _ => panic!("Unsupported sample format!"),
             }
         }
@@ -252,6 +289,11 @@ mod cpal {
         last_vu_update: std::time::Instant,
         current_max_l: f32,
         current_max_r: f32,
+        equalizer: Equalizer,
+        eq_scratch: Vec<f32>,
+        dsp_rx_poll: Option<Arc<Mutex<Receiver<DspSettings>>>>,
+        dsp_settings: DspSettings,
+        rate: usize,
     }
 
     impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
@@ -261,6 +303,7 @@ mod cpal {
             device: &cpal::Device,
             rsp_settings: &RsPlayerSettings,
             changes_tx: Sender<StateChangeEvent>,
+            dsp_rx: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<DspSettings>>>,
         ) -> Result<Box<dyn AudioOutput>> {
             let num_channels = spec.channels.count();
 
@@ -309,11 +352,17 @@ mod cpal {
             // Start the output stream.
             if let Err(err) = stream.play() {
                 error!("audio output stream play error: {err}");
-                
+
                 return Err(err.into());
             }
 
             let sample_buf = SampleBuffer::<T>::new(duration, spec);
+
+            let mut equalizer = Equalizer::new(num_channels);
+
+            if !T::is_dsd() {
+                Self::apply_filters(&mut equalizer, &rsp_settings.dsp_settings, spec.rate as usize);
+            }
 
             Ok(Box::new(CpalAudioOutputImpl {
                 ring_buf_producer,
@@ -324,7 +373,94 @@ mod cpal {
                 last_vu_update: std::time::Instant::now(),
                 current_max_l: 0.0,
                 current_max_r: 0.0,
+                equalizer,
+                eq_scratch: Vec::new(),
+                dsp_rx_poll: Some(dsp_rx),
+                dsp_settings: rsp_settings.dsp_settings.clone(),
+                rate: spec.rate as usize,
             }))
+        }
+
+        fn apply_filters(equalizer: &mut Equalizer, dsp_settings: &DspSettings, rate: usize) {
+            for filter_config in &dsp_settings.filters {
+                match &filter_config.filter {
+                    DspFilter::Gain { gain } => {
+                        if filter_config.channels.is_empty() {
+                            if let Err(e) = equalizer.add_global_gain_filter(*gain) {
+                                log::warn!("Failed to add global gain filter: {e}");
+                            }
+                        } else {
+                            for &ch in &filter_config.channels {
+                                if let Err(e) = equalizer.add_gain_filter(ch, *gain) {
+                                    log::warn!("Failed to add gain filter for channel {ch}: {e}");
+                                }
+                            }
+                        }
+                    }
+                    other_filter => {
+                        let params = match other_filter {
+                            DspFilter::Peaking { freq, q, gain } => {
+                                BiquadParameters::Peaking(rsplayer_dsp::config::PeakingWidth::Q {
+                                    freq: *freq as f32,
+                                    q: *q as f32,
+                                    gain: *gain as f32,
+                                })
+                            }
+                            DspFilter::LowShelf { freq, q, slope, gain } => {
+                                if let Some(s) = slope {
+                                    BiquadParameters::Lowshelf(rsplayer_dsp::config::ShelfSteepness::Slope {
+                                        freq: *freq as f32,
+                                        slope: *s as f32,
+                                        gain: *gain as f32,
+                                    })
+                                } else {
+                                    BiquadParameters::Lowshelf(rsplayer_dsp::config::ShelfSteepness::Q {
+                                        freq: *freq as f32,
+                                        q: q.map(|v| v as f32).unwrap_or(0.707),
+                                        gain: *gain as f32,
+                                    })
+                                }
+                            }
+                            DspFilter::HighShelf { freq, q, slope, gain } => {
+                                if let Some(s) = slope {
+                                    BiquadParameters::Highshelf(rsplayer_dsp::config::ShelfSteepness::Slope {
+                                        freq: *freq as f32,
+                                        slope: *s as f32,
+                                        gain: *gain as f32,
+                                    })
+                                } else {
+                                    BiquadParameters::Highshelf(rsplayer_dsp::config::ShelfSteepness::Q {
+                                        freq: *freq as f32,
+                                        q: q.map(|v| v as f32).unwrap_or(0.707),
+                                        gain: *gain as f32,
+                                    })
+                                }
+                            }
+                            DspFilter::LowPass { freq, q } => BiquadParameters::Lowpass {
+                                freq: *freq as f32,
+                                q: *q as f32,
+                            },
+                            DspFilter::HighPass { freq, q } => BiquadParameters::Highpass {
+                                freq: *freq as f32,
+                                q: *q as f32,
+                            },
+                            DspFilter::Gain { .. } => unreachable!(),
+                        };
+
+                        if filter_config.channels.is_empty() {
+                            if let Err(e) = equalizer.add_global_biquad_filter(rate, params) {
+                                log::warn!("Failed to add equalizer filter: {e}");
+                            }
+                        } else {
+                            for &ch in &filter_config.channels {
+                                if let Err(e) = equalizer.add_biquad_filter(ch, rate, params.clone()) {
+                                    log::warn!("Failed to add equalizer filter for channel {ch}: {e}");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -343,6 +479,38 @@ mod cpal {
             // Audio samples must be interleaved for cpal. Interleave the samples in the audio
             // buffer into the sample buffer.
             self.sample_buf.copy_interleaved_ref(decoded);
+
+            // Equalizer processing
+            if !T::is_dsd() {
+                if let Some(dsp_rx) = &self.dsp_rx_poll {
+                    if let Ok(mut rx) = dsp_rx.try_lock() {
+                        if let Ok(new_settings) = rx.try_recv() {
+                            self.dsp_settings = new_settings;
+                            self.equalizer.clear();
+                            Self::apply_filters(&mut self.equalizer, &self.dsp_settings, self.rate);
+                        }
+                    }
+                }
+
+                let samples_mut = self.sample_buf.samples_mut();
+                if self.eq_scratch.len() < samples_mut.len() {
+                    self.eq_scratch.resize(samples_mut.len(), 0.0);
+                }
+
+                // Convert to f32
+                for (i, s) in samples_mut.iter().enumerate() {
+                    self.eq_scratch[i] = (*s).into_sample();
+                }
+
+                // Process
+                self.equalizer.process(&mut self.eq_scratch[0..samples_mut.len()]);
+
+                // Convert back
+                for (i, s) in samples_mut.iter_mut().enumerate() {
+                    // Using symphonia::core::conv::FromSample to convert back from f32 to T
+                    *s = <T as symphonia::core::conv::FromSample<f32>>::from_sample(self.eq_scratch[i]);
+                }
+            }
 
             {
                 let samples = self.sample_buf.samples();
@@ -411,13 +579,28 @@ pub fn try_open(
     rsp_settings: &RsPlayerSettings,
     is_dsd: bool,
     changes_tx: Sender<StateChangeEvent>,
+    dsp_rx: Arc<Mutex<Receiver<DspSettings>>>,
 ) -> Result<Box<dyn AudioOutput>> {
-    let result = cpal::CpalAudioOutput::try_open(spec, duration, audio_device, rsp_settings, is_dsd, changes_tx.clone());
+    let result = cpal::CpalAudioOutput::try_open(
+        spec,
+        duration,
+        audio_device,
+        rsp_settings,
+        is_dsd,
+        changes_tx.clone(),
+        dsp_rx.clone(),
+    );
     if result.is_err() && audio_device.starts_with("hw:") {
-        info!(
-            "Failed to open audio output {audio_device}. Trying with plughw: prefix."
+        info!("Failed to open audio output {audio_device}. Trying with plughw: prefix.");
+        return cpal::CpalAudioOutput::try_open(
+            spec,
+            duration,
+            &audio_device.replace("hw:", "plughw:"),
+            rsp_settings,
+            is_dsd,
+            changes_tx,
+            dsp_rx,
         );
-        return cpal::CpalAudioOutput::try_open(spec, duration, &audio_device.replace("hw:", "plughw:"), rsp_settings, is_dsd, changes_tx);
     }
     result
 }

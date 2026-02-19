@@ -70,3 +70,4 @@ console-subscriber = "0.4.0"
 warp = { version = "0.3.7", features = ["compression", "tls"] }
 rust-embed = { version = "8.5.0", features = ["warp-ex", "compression"] }
 warp-embed = "0.5.0"
+serde = { workspace = true, features = ["derive"] }

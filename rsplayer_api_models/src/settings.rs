@@ -3,7 +3,7 @@ use validator::Validate;
 
 use crate::common::{AudioCard, CardMixer, PcmOutputDevice, VolumeCrtlType};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 pub struct Settings {
     pub volume_ctrl_settings: VolumeControlSettings,
     #[validate]
@@ -25,7 +25,7 @@ pub struct Settings {
     pub mqtt_settings: MqttCmdChannelSettings,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 pub struct RsPlayerSettings {
     pub enabled: bool,
 
@@ -41,6 +41,61 @@ pub struct RsPlayerSettings {
     #[validate(range(min = 1, max = 99))]
     pub player_threads_priority: u8,
     pub alsa_buffer_size: Option<u32>,
+    #[serde(default)]
+    #[validate]
+    pub dsp_settings: DspSettings,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate, Default)]
+pub struct DspSettings {
+    #[serde(default)]
+    #[validate]
+    pub filters: Vec<FilterConfig>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+pub struct FilterConfig {
+    #[serde(flatten)]
+    pub filter: DspFilter,
+    #[serde(default)]
+    pub channels: Vec<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum DspFilter {
+    Peaking {
+        freq: f64,
+        q: f64,
+        gain: f64,
+    },
+    LowShelf {
+        freq: f64,
+        #[serde(default)]
+        q: Option<f64>,
+        #[serde(default)]
+        slope: Option<f64>,
+        gain: f64,
+    },
+    HighShelf {
+        freq: f64,
+        #[serde(default)]
+        q: Option<f64>,
+        #[serde(default)]
+        slope: Option<f64>,
+        gain: f64,
+    },
+    LowPass {
+        freq: f64,
+        q: f64,
+    },
+    HighPass {
+        freq: f64,
+        q: f64,
+    },
+    Gain {
+        gain: f64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
@@ -77,6 +132,7 @@ impl Default for RsPlayerSettings {
             ring_buffer_size_ms: 200,
             player_threads_priority: 1,
             alsa_buffer_size: None,
+            dsp_settings: DspSettings::default(),
         }
     }
 }
@@ -149,10 +205,12 @@ impl Default for MetadataStoreSettings {
         Self {
             music_directory: "/music".into(),
             follow_links: true,
-            supported_extensions: vec!["flac", "wav", "mp3", "m4a", "aac", "aiff", "alac", "ogg", "wma", "mp4","dsd","dsf"]
-                .into_iter()
-                .map(std::borrow::ToOwned::to_owned)
-                .collect(),
+            supported_extensions: vec![
+                "flac", "wav", "mp3", "m4a", "aac", "aiff", "alac", "ogg", "wma", "mp4", "dsd", "dsf",
+            ]
+            .into_iter()
+            .map(std::borrow::ToOwned::to_owned)
+            .collect(),
             db_path: "ignored_files.db".to_string(),
         }
     }
