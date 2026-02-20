@@ -51,13 +51,11 @@ fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Nod
                 ),
                 ps.genre.as_ref().map_or_else(
                     || empty!(),
-                    |genre| 
-                    h3![C!["subtitle", "is-5", "has-text-grey-light"], genre],
+                    |genre| h3![C!["subtitle", "is-5", "has-text-grey-light"], genre],
                 ),
                 ps.date.as_ref().map_or_else(
                     || empty!(),
-                    |date| 
-                    h3![C!["subtitle", "is-5", "has-text-grey-light"], date],
+                    |date| h3![C!["subtitle", "is-5", "has-text-grey-light"], date],
                 ),
                 h3![
                     C!["subtitle", "is-5", "has-text-grey-light"],
@@ -94,9 +92,11 @@ fn view_controls(model: &PlayerModel) -> Node<Msg> {
                 C!["level-item"],
                 button![
                     C!["button", "is-ghost", "is-medium"],
-                    attrs!{At::Title => shuffle_title},
+                    attrs! {At::Title => shuffle_title},
                     span![C!["icon"], i![C!["fas", shuffle_class]]],
-                    ev(Ev::Click, |_| Msg::SendUserCommand(Player(PlayerCommand::CyclePlaybackMode))),
+                    ev(Ev::Click, |_| Msg::SendUserCommand(Player(
+                        PlayerCommand::CyclePlaybackMode
+                    ))),
                 ],
             ],
             // Main controls
@@ -183,6 +183,9 @@ fn view_track_progress_bar(progress: &SongProgress) -> Node<Msg> {
             attrs! {"max"=> progress.total_time.as_secs()},
             attrs! {"min"=> 0},
             attrs! {"type"=> "range"},
+            input_ev(Ev::Input, move |selected| Msg::SeekTrackPositionInput(
+                u16::from_str(selected.as_str()).unwrap_or_default()
+            )),
             input_ev(Ev::Change, move |selected| Msg::SeekTrackPosition(
                 u16::from_str(selected.as_str()).unwrap_or_default()
             )),
@@ -218,6 +221,7 @@ fn view_volume_slider(volume_state: &Volume) -> Node<Msg> {
                     attrs! {"max"=> volume_state.max},
                     attrs! {"min"=> volume_state.min},
                     attrs! {"type"=> "range"},
+                    input_ev(Ev::Input, Msg::SetVolumeInput),
                     input_ev(Ev::Change, Msg::SetVolume),
                 ],
             ],

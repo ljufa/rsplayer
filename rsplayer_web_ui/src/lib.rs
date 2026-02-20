@@ -3,7 +3,9 @@ extern crate api_models;
 use std::{rc::Rc, str::FromStr};
 
 use api_models::{
-    common::{MetadataCommand, PlaybackMode, PlayerCommand, QueueCommand, SystemCommand, UserCommand, Volume}, player::Song, state::{PlayerInfo, PlayerState, SongProgress, StateChangeEvent}
+    common::{MetadataCommand, PlaybackMode, PlayerCommand, QueueCommand, SystemCommand, UserCommand, Volume},
+    player::Song,
+    state::{PlayerInfo, PlayerState, SongProgress, StateChangeEvent},
 };
 use gloo_console::{error, log};
 use gloo_net::http::Request;
@@ -15,8 +17,8 @@ use web_sys::CloseEvent;
 use PlayerCommand::{CyclePlaybackMode, Next, Pause, Play, Prev};
 use UserCommand::{Player, Queue};
 
-mod page;
 mod dsp;
+mod page;
 mod vumeter;
 
 const SETTINGS: &str = "settings";
@@ -41,7 +43,7 @@ pub struct PlayerModel {
     progress: SongProgress,
     playback_mode: PlaybackMode,
     player_state: PlayerState,
-    stop_progress_updates: bool,
+    stop_updates: bool,
 }
 
 // #[derive(Debug)]
@@ -84,8 +86,10 @@ pub enum Msg {
     ReloadApp,
 
     SeekTrackPosition(u16),
-    ResumeProgressUpdates,
+    SeekTrackPositionInput(u16),
+    ResumeUpdates,
     SetVolume(String),
+    SetVolumeInput(String),
     InitVUMeter,
     WindowResized,
 
@@ -183,7 +187,7 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
     orders.stream(streams::window_event(Ev::Resize, |_| Msg::WindowResized));
 
     if matches!(page, Page::Player) {
-         orders.after_next_render(|_| { Some(Msg::InitVUMeter) });
+        orders.after_next_render(|_| Some(Msg::InitVUMeter));
     }
 
     orders.perform_cmd(async {
@@ -210,7 +214,7 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
             progress: SongProgress::default(),
             playback_mode: PlaybackMode::default(),
             player_state: PlayerState::STOPPED,
-            stop_progress_updates: false,
+            stop_updates: false,
         },
         metadata_scan_info: None,
         notification: None,
@@ -243,7 +247,10 @@ impl<'a> Urls<'a> {
         url.hash_path().iter().find_map(|p| {
             log!("p", p);
             if p.contains("?search=") {
-                let term = p.split_once("?search=").map(|(_, term)| term.to_string()).unwrap_or(p.to_string());
+                let term = p
+                    .split_once("?search=")
+                    .map(|(_, term)| term.to_string())
+                    .unwrap_or(p.to_string());
                 log!("term", &term);
                 Some(term)
             } else {
@@ -330,9 +337,9 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::UrlChanged(subs::UrlChanged(url)) => {
             model.page = Page::new(url, orders);
             if matches!(model.page, Page::Player) {
-                 orders.after_next_render(|_| { Some(Msg::InitVUMeter) });
+                orders.after_next_render(|_| Some(Msg::InitVUMeter));
             } else {
-                 model.vumeter = None;
+                model.vumeter = None;
             }
         }
 
@@ -341,14 +348,18 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::SeekTrackPosition(pos) => {
             log!(format!("Seeking to {}", pos));
-            model.player_model.stop_progress_updates = true;
+            model.player_model.stop_updates = true;
             model.player_model.progress.current_time = std::time::Duration::from_secs(pos.into());
             orders.send_msg(Msg::SendUserCommand(Player(PlayerCommand::Seek(pos))));
-            orders.perform_cmd(cmds::timeout(2000, || Msg::ResumeProgressUpdates));
+            orders.perform_cmd(cmds::timeout(100, || Msg::ResumeUpdates));
         }
-        Msg::ResumeProgressUpdates => {
+        Msg::SeekTrackPositionInput(pos) => {
+            model.player_model.stop_updates = true;
+            model.player_model.progress.current_time = std::time::Duration::from_secs(pos.into());
+        }
+        Msg::ResumeUpdates => {
             log!("Resuming progress updates");
-            model.player_model.stop_progress_updates = false;
+            model.player_model.stop_updates = false;
             orders.skip();
         }
         Msg::InitVUMeter => {
@@ -362,9 +373,18 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             }
         }
         Msg::SetVolume(volstr) => {
-            orders.send_msg(Msg::SendSystemCommand(SystemCommand::SetVol(
-                u8::from_str(volstr.as_str()).unwrap_or_default(),
-            )));
+            log!("New vol string {}", &volstr);
+            model.player_model.stop_updates = true;
+            let vol = u8::from_str(volstr.as_str()).unwrap_or(model.player_model.volume_state.current);
+            model.player_model.volume_state.current = vol;
+            orders.send_msg(Msg::SendSystemCommand(SystemCommand::SetVol(vol)));
+            orders.perform_cmd(cmds::timeout(100, || Msg::ResumeUpdates));
+        }
+        Msg::SetVolumeInput(volstr) => {
+            model.player_model.stop_updates = true;
+            let vol = u8::from_str(volstr.as_str()).unwrap_or(model.player_model.volume_state.current);
+            model.player_model.volume_state.current = vol;
+            orders.perform_cmd(cmds::timeout(100, || Msg::ResumeUpdates));
         }
         Msg::LikeMediaItemClick(MetadataCommand::LikeMediaItem(item_id)) => {
             if let Some(song) = model.player_model.current_song.as_mut() {
@@ -384,11 +404,11 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             )));
         }
         Msg::LikeMediaItemClick(MetadataCommand::DislikeMediaItem(item_id)) => {
-             if let Some(song) = model.player_model.current_song.as_mut() {
-                 if let Some(stats) = song.statistics.as_mut() {
-                     stats.liked_count = 0;
-                 }
-             }
+            if let Some(song) = model.player_model.current_song.as_mut() {
+                if let Some(stats) = song.statistics.as_mut() {
+                    stats.liked_count = 0;
+                }
+            }
             orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
                 MetadataCommand::DislikeMediaItem(item_id),
             )));
@@ -409,7 +429,9 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     model.player_model.current_song = Some(song.clone());
                 }
                 StateChangeEvent::VolumeChangeEvent(vol) => {
-                    model.player_model.volume_state = vol.clone();
+                    if model.player_model.volume_state.current != vol.current {
+                        model.player_model.volume_state = vol.clone();
+                    } 
                 }
                 StateChangeEvent::PlayerInfoEvent(pi) => {
                     model.player_model.player_info = Some(pi.clone());
@@ -420,9 +442,9 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 StateChangeEvent::PlaybackStateEvent(ps) => {
                     model.player_model.player_state = ps.clone();
                     if !matches!(ps, PlayerState::PLAYING) {
-                         if let Some(meter) = &mut model.vumeter {
-                             meter.update(0, 0);
-                         }
+                        if let Some(meter) = &mut model.vumeter {
+                            meter.update(0, 0);
+                        }
                     }
                 }
                 StateChangeEvent::MetadataSongScanStarted => {
@@ -443,6 +465,10 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     orders.skip();
                 }
                 StateChangeEvent::VUEvent(l, r) => {
+                    if model.player_model.stop_updates {
+                        orders.skip();
+                        return;
+                    }
                     if let Some(meter) = &mut model.vumeter {
                         meter.update(*l, *r);
                     }
@@ -547,8 +573,8 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             let msg = serde_json::from_str::<StateChangeEvent>(&message)
                 .unwrap_or_else(|_| panic!("Failed to decode WebSocket text message: {message}"));
             if let StateChangeEvent::SongTimeEvent(st) = msg {
-                if model.player_model.stop_progress_updates {
-                    log!("Progress updates are stopped");
+                if model.player_model.stop_updates {
+                    log!("Updates are stopped");
                     return;
                 }
                 model.player_model.progress = st;
@@ -762,7 +788,7 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
                         div![
                             i![
                                 C!["fas", "is-clickable", "small-button-footer", shuffle_class],
-                                attrs!{At::Title => shuffle_title},
+                                attrs! {At::Title => shuffle_title},
                                 ev(Ev::Click, |_| Msg::SendUserCommand(Player(CyclePlaybackMode))),
                             ],
                             i![
@@ -859,7 +885,13 @@ fn view_content(main_model: &Model, base_url: &Url) -> Node<Msg> {
 fn view_navigation_tabs(page: &Page) -> Node<Msg> {
     let page_name: &str = page.into();
     div![
-        C!["tabs", "is-toggle", "is-centered", "is-fullwidth", "has-background-dark-transparent"],
+        C![
+            "tabs",
+            "is-toggle",
+            "is-centered",
+            "is-fullwidth",
+            "has-background-dark-transparent"
+        ],
         ul![
             li![
                 IF!(page_name == "Player" => C!["is-active"]),
@@ -1100,19 +1132,16 @@ fn get_background_image(model: &PlayerModel) -> Option<String> {
     None
 }
 
-
 #[cfg(test)]
-mod test{
-    
+mod test {
+
     use wasm_bindgen_test::wasm_bindgen_test;
 
     use crate::Urls;
-
 
     #[wasm_bindgen_test]
     async fn test_get_search_term() {
         let url = Urls::library_abs().add_hash_path_part("artist?search=abc");
         assert_eq!(Urls::get_search_term(&url).unwrap(), "abc");
     }
-
 }

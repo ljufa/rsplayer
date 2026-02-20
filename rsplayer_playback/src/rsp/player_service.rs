@@ -15,6 +15,8 @@ use api_models::{
 use rsplayer_metadata::metadata_service::MetadataService;
 use rsplayer_metadata::queue_service::QueueService;
 
+use crate::rsp::dsp_filters::SharedDspState;
+
 use super::symphonia::PlaybackResult;
 
 pub struct PlayerService {
@@ -30,7 +32,8 @@ pub struct PlayerService {
     rsp_settings: RsPlayerSettings,
     music_dir: String,
     changes_tx: Sender<StateChangeEvent>,
-    dsp_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<DspSettings>>>>,
+    /// Shared DSP state — built/rebuilt outside the playback thread.
+    dsp_state: Arc<Mutex<SharedDspState>>,
 }
 const LAST_SONG_PAUSED_KEY: &str = "last_song_paused";
 const LAST_SONG_PROGRESS_KEY: &str = "last_played_song_progress";
@@ -47,10 +50,13 @@ impl PlayerService {
         let state_db = db.clone();
         let mut rx = state_changes_tx.subscribe();
         let state_tx = state_changes_tx.clone();
-        
+
         let initial_time = match state_db.get(LAST_SONG_PROGRESS_KEY) {
-             Ok(Some(lt)) => String::from_utf8(lt.to_vec()).unwrap_or_else(|_| "0".to_string()).parse::<u32>().unwrap_or(0),
-             _ => 0,
+            Ok(Some(lt)) => String::from_utf8(lt.to_vec())
+                .unwrap_or_else(|_| "0".to_string())
+                .parse::<u32>()
+                .unwrap_or(0),
+            _ => 0,
         };
         let last_known_time = Arc::new(AtomicU32::new(initial_time));
         let last_known_time_clone = last_known_time.clone();
@@ -94,6 +100,11 @@ impl PlayerService {
                 }
             }
         });
+
+        let dsp_state = Arc::new(Mutex::new(SharedDspState::new(
+            settings.rs_player_settings.dsp_settings.clone(),
+        )));
+
         let ps = PlayerService {
             state_db: db,
             changes_tx: state_changes_tx,
@@ -106,7 +117,7 @@ impl PlayerService {
             audio_device: settings.alsa_settings.output_device.name.clone(),
             rsp_settings: settings.rs_player_settings.clone(),
             music_dir: settings.metadata_settings.music_directory.clone(),
-            dsp_tx: Arc::new(Mutex::new(None)),
+            dsp_state,
         };
         let last_played_song_progress = ps.get_last_played_song_time();
         if last_played_song_progress > 0 {
@@ -169,11 +180,16 @@ impl PlayerService {
         self.play_from_current_queue_song();
     }
 
+    /// Update DSP settings and rebuild the equalizer immediately.
+    ///
+    /// This runs on the caller's thread (typically the command handler),
+    /// **not** on the playback thread.  The playback thread will pick up
+    /// the new equalizer on its next `write()` call via the shared mutex.
     pub fn update_dsp_settings(&self, dsp_settings: DspSettings) {
-        if let Some(tx) = self.dsp_tx.lock().unwrap().as_ref() {
-            if let Err(e) = tx.try_send(dsp_settings) {
-                error!("Failed to send DSP settings: {e}");
-            }
+        if let Ok(mut state) = self.dsp_state.lock() {
+            state.update_settings(dsp_settings);
+        } else {
+            error!("Failed to lock DSP state for update");
         }
     }
 
@@ -188,10 +204,7 @@ impl PlayerService {
         let changes_tx = self.changes_tx.clone();
         let rsp_settings = self.rsp_settings.clone();
         let metadata_service = self.metadata_service.clone();
-        
-        let (dsp_tx, dsp_rx) = tokio::sync::mpsc::channel(1);
-        *self.dsp_tx.lock().unwrap() = Some(dsp_tx);
-        let dsp_rx_shared = Arc::new(tokio::sync::Mutex::new(dsp_rx));
+        let dsp_state = self.dsp_state.clone();
 
         let is_multi_core_platform = core_affinity::get_core_ids().is_some_and(|ids| ids.len() > 1);
         let prio = if is_multi_core_platform {
@@ -218,7 +231,6 @@ impl PlayerService {
                     }
                 }
                 let mut retry_count = 0;
-                let dsp_rx_local = dsp_rx_shared.clone();
                 const MAX_RETRIES: i32 = 10;
                 loop {
                     let Some(song) = queue.get_current_song() else {
@@ -227,7 +239,7 @@ impl PlayerService {
                             .ok();
                         break PlaybackResult::QueueFinished;
                     };
-                    
+
                     if skip_to_time.load(Ordering::Relaxed) == 0 {
                         metadata_service.increase_play_count(&song.file);
                     }
@@ -246,7 +258,7 @@ impl PlayerService {
                         &rsp_settings,
                         &music_dir,
                         &changes_tx,
-                        dsp_rx_local.clone(),
+                        dsp_state.clone(),
                     ) {
                         Ok(PlaybackResult::PlaybackStopped) => {
                             changes_tx

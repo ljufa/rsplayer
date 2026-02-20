@@ -7,7 +7,7 @@ members = [
     "rsplayer_config",
     "rsplayer_playback",
     "rsplayer_hardware", "rsplayer_dsp",
-#    "rsplayer_web_ui"
+    #    "rsplayer_web_ui"
 ]
 exclude = ["rsplayer_web_ui"]
 
@@ -15,21 +15,21 @@ exclude = ["rsplayer_web_ui"]
 log = { version = "0.4.22" }
 env_logger = "0.11.5"
 anyhow = "1.0.88"
-serde = {version = "1.0.210", features = ["derive"]}
+serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.128"
 sled = "0.34.7"
 
 # fix for radio stream blocking playback thread + dsd
-symphonia = { git = "https://github.com/ljufa/Symphonia.git", branch = "master", features = ["all"] }
-# symphonia = { path = "../Symphonia/symphonia", features = ["all"]}
-cpal = { git = "https://github.com/ljufa/cpal.git", branch = "master"}
-# cpal = { path = "../cpal"}
+#symphonia = { git = "https://github.com/ljufa/Symphonia.git", branch = "master", features = ["all"] }
+symphonia = { path = "../Symphonia/symphonia", features = ["all"] }
+#cpal = { git = "https://github.com/ljufa/cpal.git", branch = "master"}
+cpal = { path = "../cpal" }
 
 cfg-if = "1.0.0"
 tokio = { version = "1.40.0", features = ["full", "tracing"] }
 futures = { version = "0.3.30", default-features = false }
 tokio-stream = "0.1.16"
-chrono = { version = "0.4.38",  features = ["serde"]}
+chrono = { version = "0.4.38", features = ["serde"] }
 uuid = { version = "1.8.0", features = ["serde", "v4"] }
 ureq = "2.10.1"
 

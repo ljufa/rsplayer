@@ -52,6 +52,7 @@ pub enum Msg {
 
     // --- DSP ---
     DspAddFilter,
+    DspRemoveAllFilters,
     DspRemoveFilter(usize),
     DspUpdateFilterType(usize, FilterType),
     DspUpdateFilterValue(usize, DspField, String),
@@ -232,6 +233,9 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 },
                 channels: vec![],
             });
+        }
+        Msg::DspRemoveAllFilters => {
+            model.settings.rs_player_settings.dsp_settings.filters.clear();
         }
         Msg::DspRemoveFilter(index) => {
             if index < model.settings.rs_player_settings.dsp_settings.filters.len() {
@@ -701,6 +705,11 @@ fn view_dsp_settings(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
                 C!["button", "is-primary"],
                 "Add Filter",
                 ev(Ev::Click, |_| Msg::DspAddFilter)
+            ],
+            button![
+                C!["button", "is-danger"],
+                "Remove All",
+                ev(Ev::Click, |_| Msg::DspRemoveAllFilters)
             ],
             button![
                 C!["button", "is-warning"],

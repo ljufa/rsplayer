@@ -1,13 +1,16 @@
+use std::str::FromStr;
 use std::sync::{
     atomic::{AtomicU16, Ordering},
     Arc, RwLock,
 };
-use std::str::FromStr;
 
 use rand::Rng;
 use sled::{Db, IVec, Tree};
 
-use api_models::{common::PlaybackMode, player::Song, playlist::PlaylistPage, settings::PlaybackQueueSetting, state::CurrentQueueQuery};
+use api_models::{
+    common::PlaybackMode, player::Song, playlist::PlaylistPage, settings::PlaybackQueueSetting,
+    state::CurrentQueueQuery,
+};
 
 use crate::{play_statistic_repository::PlayStatisticsRepository, song_repository::SongRepository};
 
@@ -37,11 +40,11 @@ impl QueueService {
             .expect("Failed to open random_history tree");
         random_history_db.clear().expect("Failed to clear random history");
         random_history_db.flush().expect("Failed to flush random history");
-        
+
         let playback_mode = if let Ok(Some(mode_str)) = status_db.get("playback_mode") {
-             PlaybackMode::from_str(std::str::from_utf8(&mode_str).unwrap_or("Sequential")).unwrap_or_default()
+            PlaybackMode::from_str(std::str::from_utf8(&mode_str).unwrap_or("Sequential")).unwrap_or_default()
         } else {
-             PlaybackMode::Sequential
+            PlaybackMode::Sequential
         };
 
         Self {
@@ -57,7 +60,7 @@ impl QueueService {
 
     pub fn cycle_playback_mode(&self) -> PlaybackMode {
         let mut mode_lock = self.playback_mode.write().unwrap();
-        
+
         let modes: Vec<_> = PlaybackMode::all();
         let current_index = modes.iter().position(|&m| m == *mode_lock).unwrap_or(0);
         let next_mode = modes[(current_index + 1) % modes.len()];
@@ -66,7 +69,7 @@ impl QueueService {
         let mode_str: &'static str = next_mode.into();
         _ = self.status_db.insert("playback_mode", mode_str);
         _ = self.status_db.flush();
-       next_mode
+        next_mode
     }
 
     pub fn get_playback_mode(&self) -> PlaybackMode {
@@ -90,7 +93,7 @@ impl QueueService {
         if queue_len == 0 {
             return false;
         }
-        
+
         let mode = self.get_playback_mode();
         match mode {
             PlaybackMode::LoopSingle => {
@@ -112,7 +115,7 @@ impl QueueService {
                 true
             }
             PlaybackMode::LoopQueue => {
-                 let Some(current_key) = self.get_current_or_first_song_key() else {
+                let Some(current_key) = self.get_current_or_first_song_key() else {
                     return false;
                 };
 
@@ -120,7 +123,7 @@ impl QueueService {
                     _ = self.status_db.insert(CURRENT_SONG_KEY, next.0);
                     true
                 } else if let Ok(Some(first)) = self.queue_db.first() {
-                     // Wrap around
+                    // Wrap around
                     _ = self.status_db.insert(CURRENT_SONG_KEY, first.0);
                     true
                 } else {
@@ -144,7 +147,7 @@ impl QueueService {
 
     pub fn move_current_to_previous_song(&self) -> bool {
         let mode = self.get_playback_mode();
-        
+
         // If Random, use history if available
         if mode == PlaybackMode::Random {
             let ridx = self.random_history_index.load(Ordering::Relaxed);
@@ -160,24 +163,24 @@ impl QueueService {
         }
 
         // For all other modes (or if random history is empty), move to previous in queue
-        // Or should LoopSingle/LoopQueue behave differently? 
+        // Or should LoopSingle/LoopQueue behave differently?
         // Typically "Previous" button moves to previous song in list even in Loop mode.
-        
+
         let Some(current_key) = self.get_current_or_first_song_key() else {
             return false;
         };
-        
+
         if let Ok(Some(prev_entry)) = self.queue_db.get_lt(&current_key) {
             _ = self.status_db.insert(CURRENT_SONG_KEY, prev_entry.0);
             return true;
         } else if mode == PlaybackMode::LoopQueue {
-             // Wrap around to last
-             if let Ok(Some(last)) = self.queue_db.last() {
-                 _ = self.status_db.insert(CURRENT_SONG_KEY, last.0);
-                 return true;
-             }
+            // Wrap around to last
+            if let Ok(Some(last)) = self.queue_db.last() {
+                _ = self.status_db.insert(CURRENT_SONG_KEY, last.0);
+                return true;
+            }
         }
-        
+
         false
     }
 

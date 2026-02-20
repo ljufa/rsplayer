@@ -158,10 +158,7 @@ pub async fn handle_user_commands(
                         id: "most_played".to_string(),
                         name: "Most Played".to_string(),
                         description: Some("Your most played tracks".to_string()),
-                        image: first_most_played
-                            .image_id
-                            .clone()
-                            .map(|id| format!("/artwork/{id}")),
+                        image: first_most_played.image_id.clone().map(|id| format!("/artwork/{id}")),
                         owner_name: None,
                     };
                     pls.items.push(PlaylistType::MostPlayed(pl));
@@ -465,7 +462,7 @@ pub async fn handle_system_commands(
                 }
                 VolDown => {
                     let nv = ai_service.volume_down();
-                    if nv.current > 0{
+                    if nv.current > 0 {
                         state_changes_sender
                             .send(StateChangeEvent::VolumeChangeEvent(nv))
                             .expect("Send event failed.");

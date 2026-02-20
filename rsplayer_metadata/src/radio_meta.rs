@@ -63,10 +63,10 @@ impl<R: Read> IcyMetadataReader<R> {
                                 (None, Some(title.to_string()))
                             };
                             let mut album = self.radio_meta.description.clone().unwrap_or_default();
-                            if album.is_empty(){
+                            if album.is_empty() {
                                 album = self.radio_meta.name.clone().unwrap_or_default();
                             }
-                            if album.is_empty(){
+                            if album.is_empty() {
                                 album = self.radio_meta.url.clone();
                             }
                             let song = Song {
@@ -112,16 +112,15 @@ impl<R: Read> Read for IcyMetadataReader<R> {
     }
 }
 
-pub fn get_external_radio_meta(
-    agent: &ureq::Agent,
-    resp: &ureq::Response,
-) -> Option<RadioMeta> {
+pub fn get_external_radio_meta(agent: &ureq::Agent, resp: &ureq::Response) -> Option<RadioMeta> {
     let final_url = resp.get_url();
     let mut radio_meta = RadioMeta {
         name: resp.header("icy-name").map(ToString::to_string),
         description: resp.header("icy-description").map(ToString::to_string),
         genre: resp.header("icy-genre").map(ToString::to_string),
-        url: resp.header("icy-url").map_or_else(|| final_url.to_string(), ToString::to_string),
+        url: resp
+            .header("icy-url")
+            .map_or_else(|| final_url.to_string(), ToString::to_string),
         image_url: None,
         samplerate: None,
         channels: None,
@@ -204,10 +203,8 @@ pub fn get_external_radio_meta(
         }
     } else if server.starts_with("QuantumCast Streamer") {
         if let Some(channel_key) = resp.header("x-quantumcast-channelkey") {
-            let track_url = Some(format!(
-                "https://api.streamabc.net/metadata/channel/{channel_key}.json"
-            ));
-            
+            let track_url = Some(format!("https://api.streamabc.net/metadata/channel/{channel_key}.json"));
+
             if let Some(url) = track_url {
                 if let Ok(api_resp) = agent.get(&url).call() {
                     if let Ok(body) = api_resp.into_string() {
@@ -251,13 +248,9 @@ fn build_radiosphere_api_url(final_url: &str) -> Option<String> {
     let channel_id_part = final_url.split("/channels/").nth(1)?;
     let channel_id = channel_id_part.split('/').next()?;
     let query_string = final_url.split('?').nth(1)?;
-    let source_param = query_string
-        .split('&')
-        .find(|p| p.starts_with("source="))?;
+    let source_param = query_string.split('&').find(|p| p.starts_with("source="))?;
     let source = source_param.split('=').nth(1)?;
-    Some(format!(
-        "https://{source}/channels/{channel_id}/current-track"
-    ))
+    Some(format!("https://{source}/channels/{channel_id}/current-track"))
 }
 
 fn parse_song_metadata(api_body: &str) -> Option<Song> {
@@ -291,14 +284,9 @@ fn build_radiosphere_channel_api_url(final_url: &str) -> Option<(String, String)
     let channel_id_part = final_url.split("/channels/").nth(1)?;
     let channel_id = channel_id_part.split('/').next()?.to_string();
     let query_string = final_url.split('?').nth(1)?;
-    let source_param = query_string
-        .split('&')
-        .find(|p| p.starts_with("source="))?;
+    let source_param = query_string.split('&').find(|p| p.starts_with("source="))?;
     let source = source_param.split('=').nth(1)?.to_string();
-    Some((
-        format!("https://{source}/channels/{channel_id}/"),
-        source,
-    ))
+    Some((format!("https://{source}/channels/{channel_id}/"), source))
 }
 
 #[cfg(test)]

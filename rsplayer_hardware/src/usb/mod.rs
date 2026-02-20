@@ -12,7 +12,10 @@ use std::{
     sync::{Arc, Mutex},
     thread::sleep,
 };
-use tokio::sync::{broadcast::error::{RecvError, TryRecvError}, mpsc::Sender};
+use tokio::sync::{
+    broadcast::error::{RecvError, TryRecvError},
+    mpsc::Sender,
+};
 
 pub struct UsbService {
     port: Mutex<Option<Box<dyn SerialPort>>>,
@@ -91,7 +94,7 @@ impl UsbService {
     pub fn send_vu_level(&self, left: u8, right: u8) -> Result<()> {
         self.send_command(&format!("SetVU({left}|{right})"))
     }
-    
+
     pub fn send_power_command(&self, on: bool) -> Result<()> {
         let cmd = if on { "PowerOn" } else { "PowerOff" };
         self.send_command(cmd)
@@ -102,7 +105,10 @@ pub fn get_rsplayer_firmware_usb_link() -> Option<String> {
     if let Ok(ports) = serialport::available_ports() {
         for p in ports {
             if let serialport::SerialPortType::UsbPort(info) = p.port_type {
-                debug!("Checking USB port: {:?} (Product: {:?}, VID: {:?}, PID: {:?})", p.port_name, info.product, info.vid, info.pid);
+                debug!(
+                    "Checking USB port: {:?} (Product: {:?}, VID: {:?}, PID: {:?})",
+                    p.port_name, info.product, info.vid, info.pid
+                );
                 if info.product == Some("rsplayer-firmware-v1.0".to_owned()) {
                     return Some(p.port_name);
                 }
@@ -130,9 +136,10 @@ pub fn start_listening(
                         debug!("Port available, attempting to clone...");
                         p.try_clone()
                     }
-                    None => {
-                        Err(serialport::Error::new(serialport::ErrorKind::NoDevice, "No port available"))
-                    }
+                    None => Err(serialport::Error::new(
+                        serialport::ErrorKind::NoDevice,
+                        "No port available",
+                    )),
                 }
             };
 
@@ -170,11 +177,14 @@ pub fn start_listening(
                                         }
                                     }
                                     if msg == "CyclePlaybackMode" {
-                                        _ = player_commands_tx.blocking_send(UserCommand::Player(PlayerCommand::CyclePlaybackMode));
+                                        _ = player_commands_tx
+                                            .blocking_send(UserCommand::Player(PlayerCommand::CyclePlaybackMode));
                                     } else if msg == "SeekForward" {
-                                        _ = player_commands_tx.blocking_send(UserCommand::Player(PlayerCommand::SeekForward));
+                                        _ = player_commands_tx
+                                            .blocking_send(UserCommand::Player(PlayerCommand::SeekForward));
                                     } else if msg == "SeekBackward" {
-                                        _ = player_commands_tx.blocking_send(UserCommand::Player(PlayerCommand::SeekBackward));
+                                        _ = player_commands_tx
+                                            .blocking_send(UserCommand::Player(PlayerCommand::SeekBackward));
                                     } else if let Ok(pc) = PlayerCommand::from_str(msg) {
                                         _ = player_commands_tx.blocking_send(UserCommand::Player(pc));
                                     }

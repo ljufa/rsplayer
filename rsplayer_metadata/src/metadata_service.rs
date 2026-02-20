@@ -192,12 +192,19 @@ impl MetadataService {
         if full_scan {
             self.song_repository.delete_all();
             self.album_repository.delete_all();
+            _ = self.ignored_files_db.clear();
+            _ = self.ignored_files_db.flush();
         }
 
         if !Path::new(ARTWORK_DIR).exists() {
             _ = std::fs::create_dir(ARTWORK_DIR);
         }
         let (new_files, deleted_db_keys) = self.get_diff();
+        info!(
+            "New files found: {} / Deleted files found: {}",
+            new_files.len(),
+            deleted_db_keys.len()
+        );
         let count = self.add_songs_to_db(new_files, state_changes_sender);
 
         if !full_scan {
@@ -284,6 +291,7 @@ impl MetadataService {
                 .expect("Status send failed");
             {
                 if let Err(e) = self.scan_single_file(Path::new(&file)) {
+                    log::error!("Unable to scan file {file}. Error: {e}");
                     self.ignored_files_db
                         .insert(self.full_path_to_database_key(&file), e.to_string().as_bytes())
                         .expect("DB error");

@@ -270,7 +270,7 @@ mod queue {
         queue.add_song(&create_song("mp3"));
         queue.add_song(&create_song("flac"));
         assert_eq!(queue.get_current_song().unwrap().file, "assets/music.mp3");
-        
+
         while queue.get_playback_mode() != PlaybackMode::LoopSingle {
             queue.cycle_playback_mode();
         }
@@ -598,7 +598,7 @@ pub mod test_shared {
         pub fn new() -> Self {
             let rnd = random_string::generate(25, "utf8");
             let db_dir = format!("/tmp/rsptest_{rnd}");
-            let mdir=  env!("CARGO_MANIFEST_DIR");
+            let mdir = env!("CARGO_MANIFEST_DIR");
             let music_dir = format!("{mdir}/assets");
             let path = &format!("{db_dir}_ams");
             if Path::new(path).exists() {

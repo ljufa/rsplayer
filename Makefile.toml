@@ -32,13 +32,7 @@ args = [
 ]
 [tasks.build_dev]
 command = "cross"
-args = [
-    "build",
-    "--package",
-    "rsplayer",
-    "--bin",
-    "rsplayer",
-]
+args = ["build", "--package", "rsplayer", "--bin", "rsplayer"]
 [tasks.build_ui_release]
 cwd = "rsplayer_web_ui"
 command = "cargo"
@@ -53,7 +47,7 @@ args = ["make", "build_dev"]
 script = [
     "mkdir -p target/release",
     "cp target/${TARGET}/release/rsplayer target/release/rsplayer",
-    "cargo deb --no-build -p rsplayer --target=${TARGET} --deb-version ${RELEASE_VERSION}"
+    "cargo deb --no-build -p rsplayer --target=${TARGET} --deb-version ${RELEASE_VERSION}",
 ]
 
 # ---- LINT ----
@@ -152,7 +146,7 @@ args = ["run"]
 dependencies = ["build_release"]
 script = [
     "rsync -avvP --rsync-path=\"sudo rsync\" ${CARGO_TARGET_DIR}/${TARGET}/release/rsplayer pi@${RPI_HOST}:/usr/bin",
-    "ssh -x pi@${RPI_HOST} \"sudo systemctl restart rsplayer\""
+    "ssh -x pi@${RPI_HOST} \"sudo systemctl restart rsplayer\"",
 ]
 [tasks.copy_remote_dev]
 dependencies = ["build_dev"]

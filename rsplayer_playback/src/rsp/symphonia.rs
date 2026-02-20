@@ -1,13 +1,13 @@
 use std::fs::File;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{format_err, Result};
 
 use api_models::player::Song;
-use api_models::settings::{DspSettings, RsPlayerSettings};
+use api_models::settings::RsPlayerSettings;
 use api_models::state::{PlayerInfo, SongProgress, StateChangeEvent};
 use log::{debug, info, trace, warn};
 use rsplayer_metadata::radio_meta::{self, RadioMeta};
@@ -20,13 +20,10 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::{Time, TimeBase};
 use symphonia::default::{get_codecs, get_probe};
-use tokio::sync::Mutex;
 use tokio::sync::broadcast::Sender;
-use tokio::sync::mpsc::Receiver;
 
-use crate::rsp::output::AudioOutput;
-
-use super::output::try_open;
+use crate::rsp::alsa_output::{self, AlsaOutput};
+use crate::rsp::dsp_filters::SharedDspState;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum PlaybackResult {
@@ -46,7 +43,7 @@ pub fn play_file(
     rsp_settings: &RsPlayerSettings,
     music_dir: &str,
     changes_tx: &Sender<StateChangeEvent>,
-    dsp_rx: Arc<Mutex<Receiver<DspSettings>>>,
+    dsp_state: Arc<Mutex<SharedDspState>>,
 ) -> Result<PlaybackResult> {
     debug!("Playing file {path_str}");
     let mut hint = Hint::new();
@@ -118,7 +115,7 @@ pub fn play_file(
 
     let decode_opts = &DecoderOptions::default();
     let mut decoder = get_codecs().make(codec_parameters, decode_opts)?;
-    let mut audio_output: Option<Box<dyn AudioOutput>> = None;
+    let mut audio_output: Option<AlsaOutput> = None;
     let mut last_current_time = 0;
     // Decode and play the packets belonging to the selected track.
     let loop_result = loop {
@@ -175,14 +172,14 @@ pub fn play_file(
                     let duration = decoded_buff.capacity() as u64;
 
                     // Try to open the audio output.
-                    let Ok(audio_out) = try_open(
+                    let Ok(audio_out) = alsa_output::try_open(
                         spec,
                         duration,
                         audio_device,
                         rsp_settings,
                         is_dsd,
                         changes_tx.clone(),
-                        dsp_rx.clone(),
+                        dsp_state.clone(),
                     ) else {
                         break Err(format_err!("Failed to open audio output {audio_device}"));
                     };

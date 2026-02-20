@@ -5,7 +5,6 @@ use core::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-
 use crate::common::MetadataLibraryItem;
 use crate::{
     common::{PlaybackMode, Volume},

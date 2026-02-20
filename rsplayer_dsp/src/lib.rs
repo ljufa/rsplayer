@@ -69,6 +69,11 @@ impl Equalizer {
         }
     }
 
+    /// Returns `true` if any channel has at least one filter configured.
+    pub fn has_filters(&self) -> bool {
+        self.filters.iter().any(|ch_filters| !ch_filters.is_empty())
+    }
+
     pub fn process(&mut self, buffer: &mut [f32]) {
         if self.channels == 0 || buffer.is_empty() {
             return;

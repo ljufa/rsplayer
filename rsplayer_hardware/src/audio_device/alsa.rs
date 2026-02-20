@@ -124,22 +124,22 @@ impl AlsaMixer {
 impl VolumeControlDevice for AlsaMixer {
     fn vol_up(&mut self) -> Volume {
         let ev = self.get_vol();
-        let nv = ev.current + ev.step;
-        if nv <= ev.max {
-            self.set_vol(nv)
-        } else {
-            ev
+        if let Some(nv) = ev.current.checked_add(ev.step) {
+            if nv <= ev.max {
+                self.set_vol(nv);
+            }
         }
+        ev
     }
 
     fn vol_down(&mut self) -> Volume {
         let ev = self.get_vol();
-        let nv = ev.current - ev.step;
-        if nv >= ev.min {
-            self.set_vol(nv)
-        } else {
-            ev
+        if let Some(nv) = ev.current.checked_sub(ev.step) {
+            if nv >= ev.min {
+                self.set_vol(nv);
+            }
         }
+        ev
     }
 
     fn get_vol(&mut self) -> Volume {

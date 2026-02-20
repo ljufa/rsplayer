@@ -42,25 +42,19 @@ impl AudioInterfaceService {
                 }
             }
         }
-        let volume_ctrl_device: Box<dyn VolumeControlDevice + Send + Sync> =
-            if settings.usb_settings.enabled {
-                if usb_service.is_none() {
-                    return Err(anyhow::anyhow!(
-                        "USB service is required for RSPlayerFirmware volume control."
-                    ));
-                }
-                Box::new(RSPlayerFirmwareVolumeControlDevice::new(
-                    usb_service.unwrap(),
-                ))
-            } else {
-                match settings.volume_ctrl_settings.ctrl_device {
-                    VolumeCrtlType::Alsa => AlsaMixer::new(
-                        card_index,
-                        settings.volume_ctrl_settings.alsa_mixer,
-                    ),
-                    VolumeCrtlType::Off => Box::new(NoOpVolumeControlDevice),
-                }
-            };
+        let volume_ctrl_device: Box<dyn VolumeControlDevice + Send + Sync> = if settings.usb_settings.enabled {
+            if usb_service.is_none() {
+                return Err(anyhow::anyhow!(
+                    "USB service is required for RSPlayerFirmware volume control."
+                ));
+            }
+            Box::new(RSPlayerFirmwareVolumeControlDevice::new(usb_service.unwrap()))
+        } else {
+            match settings.volume_ctrl_settings.ctrl_device {
+                VolumeCrtlType::Alsa => AlsaMixer::new(card_index, settings.volume_ctrl_settings.alsa_mixer),
+                VolumeCrtlType::Off => Box::new(NoOpVolumeControlDevice),
+            }
+        };
 
         Ok(Self {
             volume_ctrl_device: Mutex::new(volume_ctrl_device),

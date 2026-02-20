@@ -28,6 +28,9 @@ impl VolumeControlDevice for RSPlayerFirmwareVolumeControlDevice {
     }
     fn set_vol(&mut self, level: u8) -> Volume {
         let _ = self.usb_service.send_command(&format!("SetVol({level})"));
-        Volume::default()
+        Volume {
+            current: level,
+            ..Default::default()
+        }
     }
 }

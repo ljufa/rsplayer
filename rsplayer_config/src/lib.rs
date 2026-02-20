@@ -30,9 +30,7 @@ impl Configuration {
                     settings
                 }
                 Err(e) => {
-                    log::error!(
-                        "Failed to deserialize settings from DB: {e}. Falling back to default."
-                    );
+                    log::error!("Failed to deserialize settings from DB: {e}. Falling back to default.");
                     Settings::default()
                 }
             }
