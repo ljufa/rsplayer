@@ -44,6 +44,7 @@ pub struct PlayerModel {
     playback_mode: PlaybackMode,
     player_state: PlayerState,
     stop_updates: bool,
+    vu_meter_enabled: bool,
 }
 
 // #[derive(Debug)]
@@ -215,6 +216,7 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
             playback_mode: PlaybackMode::default(),
             player_state: PlayerState::STOPPED,
             stop_updates: false,
+            vu_meter_enabled: true,
         },
         metadata_scan_info: None,
         notification: None,
@@ -336,7 +338,7 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 
         Msg::UrlChanged(subs::UrlChanged(url)) => {
             model.page = Page::new(url, orders);
-            if matches!(model.page, Page::Player) {
+            if matches!(model.page, Page::Player) && model.player_model.vu_meter_enabled {
                 orders.after_next_render(|_| Some(Msg::InitVUMeter));
             } else {
                 model.vumeter = None;
@@ -363,8 +365,12 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             orders.skip();
         }
         Msg::InitVUMeter => {
-            if let Some(meter) = vumeter::VUMeter::new("vumeter") {
-                model.vumeter = Some(meter);
+            if model.player_model.vu_meter_enabled {
+                if let Some(meter) = vumeter::VUMeter::new("vumeter") {
+                    model.vumeter = Some(meter);
+                }
+            } else {
+                model.vumeter = None;
             }
         }
         Msg::WindowResized => {
@@ -473,6 +479,14 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                         meter.update(*l, *r);
                     }
                     orders.skip();
+                }
+                StateChangeEvent::VuMeterEnabledEvent(enabled) => {
+                    model.player_model.vu_meter_enabled = *enabled;
+                    if *enabled && matches!(model.page, Page::Player) {
+                        orders.after_next_render(|_| Some(Msg::InitVUMeter));
+                    } else {
+                        model.vumeter = None;
+                    }
                 }
                 _ => {}
             }

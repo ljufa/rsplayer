@@ -6,5 +6,6 @@ edition = "2021"
 [dependencies]
 log.workspace = true
 anyhow.workspace = true
+api_models = { path = "../rsplayer_api_models" }
 # Use the git repo to access internal library logic, as crates.io might not expose everything or be up-to-date for library usage
 camilladsp = { git = "https://github.com/HEnquist/camilladsp", package = "CamillaDSP", branch = "master", default-features = false, features = ["32bit"] }

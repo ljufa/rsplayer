@@ -44,13 +44,26 @@ pub struct RsPlayerSettings {
     #[serde(default)]
     #[validate]
     pub dsp_settings: DspSettings,
+    #[serde(default = "default_vu_meter_enabled")]
+    pub vu_meter_enabled: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 pub struct DspSettings {
+    #[serde(default = "default_dsp_enabled")]
+    pub enabled: bool,
     #[serde(default)]
     #[validate]
     pub filters: Vec<FilterConfig>,
+}
+
+impl Default for DspSettings {
+    fn default() -> Self {
+        Self {
+            enabled: default_dsp_enabled(),
+            filters: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
@@ -123,6 +136,12 @@ const fn ring_buffer_size_default_value() -> usize {
 const fn input_stream_buffer_size_default_value() -> usize {
     10
 }
+const fn default_dsp_enabled() -> bool {
+    true
+}
+const fn default_vu_meter_enabled() -> bool {
+    true
+}
 
 impl Default for RsPlayerSettings {
     fn default() -> Self {
@@ -133,6 +152,7 @@ impl Default for RsPlayerSettings {
             player_threads_priority: 1,
             alsa_buffer_size: None,
             dsp_settings: DspSettings::default(),
+            vu_meter_enabled: default_vu_meter_enabled(),
         }
     }
 }

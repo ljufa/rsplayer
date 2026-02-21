@@ -142,6 +142,7 @@ impl VolumeControlDevice for AlsaMixer {
         ev
     }
 
+
     fn get_vol(&mut self) -> Volume {
         if let Ok(mixer) = Mixer::new(self.card_name.as_str(), false) {
             if let Some(selem) = mixer.find_selem(&SelemId::new(&self.mixer_name, self.mixer_idx)) {

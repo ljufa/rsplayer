@@ -56,6 +56,7 @@ pub enum StateChangeEvent {
     PlaybackStateEvent(PlayerState),
     PlaybackModeChangedEvent(PlaybackMode),
     VUEvent(u8, u8),
+    VuMeterEnabledEvent(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

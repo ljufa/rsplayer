@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -23,7 +23,7 @@ use symphonia::default::{get_codecs, get_probe};
 use tokio::sync::broadcast::Sender;
 
 use crate::rsp::alsa_output::{self, AlsaOutput};
-use crate::rsp::dsp_filters::SharedDspState;
+use rsplayer_dsp::DspProcessor;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum PlaybackResult {
@@ -43,7 +43,8 @@ pub fn play_file(
     rsp_settings: &RsPlayerSettings,
     music_dir: &str,
     changes_tx: &Sender<StateChangeEvent>,
-    dsp_state: Arc<Mutex<SharedDspState>>,
+    dsp_state: Arc<Mutex<DspProcessor>>,
+    volume: Arc<AtomicU8>,
 ) -> Result<PlaybackResult> {
     debug!("Playing file {path_str}");
     let mut hint = Hint::new();
@@ -172,7 +173,7 @@ pub fn play_file(
                     let duration = decoded_buff.capacity() as u64;
 
                     // Try to open the audio output.
-                    let Ok(audio_out) = alsa_output::try_open(
+                    let Ok(audio_out) = AlsaOutput::new(
                         spec,
                         duration,
                         audio_device,
@@ -180,6 +181,7 @@ pub fn play_file(
                         is_dsd,
                         changes_tx.clone(),
                         dsp_state.clone(),
+                        volume.clone(),
                     ) else {
                         break Err(format_err!("Failed to open audio output {audio_device}"));
                     };
@@ -195,7 +197,6 @@ pub fn play_file(
                 let mut write_failed = false;
                 if packet.ts() > 0 {
                     if let Some(output) = audio_output.as_mut() {
-                        trace!("Before audio write");
                         if let Err(e) = output.write(decoded_buff) {
                             warn!("Audio output write error: {e}");
                             write_failed = true;

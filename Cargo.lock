@@ -2647,6 +2647,7 @@ version = "0.1.0"
 dependencies = [
  "CamillaDSP",
  "anyhow",
+ "api_models",
  "log",
 ]
 

@@ -1,7 +1,7 @@
 use log::{debug, error, info, trace, warn};
 use sled::Db;
 use std::sync::{
-    atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering},
+    atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, Ordering},
     Arc, Mutex,
 };
 use std::thread::JoinHandle;
@@ -15,7 +15,7 @@ use api_models::{
 use rsplayer_metadata::metadata_service::MetadataService;
 use rsplayer_metadata::queue_service::QueueService;
 
-use crate::rsp::dsp_filters::SharedDspState;
+use rsplayer_dsp::DspProcessor;
 
 use super::symphonia::PlaybackResult;
 
@@ -28,12 +28,13 @@ pub struct PlayerService {
     stop_signal: Arc<AtomicBool>,
     skip_to_time: Arc<AtomicU16>,
     last_known_time: Arc<AtomicU32>,
+    current_volume: Arc<AtomicU8>,
     audio_device: String,
     rsp_settings: RsPlayerSettings,
     music_dir: String,
     changes_tx: Sender<StateChangeEvent>,
     /// Shared DSP state — built/rebuilt outside the playback thread.
-    dsp_state: Arc<Mutex<SharedDspState>>,
+    dsp_state: Arc<Mutex<DspProcessor>>,
 }
 const LAST_SONG_PAUSED_KEY: &str = "last_song_paused";
 const LAST_SONG_PROGRESS_KEY: &str = "last_played_song_progress";
@@ -60,6 +61,8 @@ impl PlayerService {
         };
         let last_known_time = Arc::new(AtomicU32::new(initial_time));
         let last_known_time_clone = last_known_time.clone();
+        let current_volume = Arc::new(AtomicU8::new(0));
+        let current_volume_clone = current_volume.clone();
         tokio::task::spawn(async move {
             let mut i = 0;
             loop {
@@ -96,12 +99,15 @@ impl PlayerService {
                             }
                         }
                     }
+                    Ok(StateChangeEvent::VolumeChangeEvent(vol)) => {
+                        current_volume_clone.store(vol.current, Ordering::Relaxed);
+                    }
                     _ => (),
                 }
             }
         });
 
-        let dsp_state = Arc::new(Mutex::new(SharedDspState::new(
+        let dsp_state = Arc::new(Mutex::new(DspProcessor::new(
             settings.rs_player_settings.dsp_settings.clone(),
         )));
 
@@ -114,6 +120,7 @@ impl PlayerService {
             stop_signal: Arc::new(AtomicBool::new(false)),
             skip_to_time: Arc::new(AtomicU16::new(0)),
             last_known_time,
+            current_volume,
             audio_device: settings.alsa_settings.output_device.name.clone(),
             rsp_settings: settings.rs_player_settings.clone(),
             music_dir: settings.metadata_settings.music_directory.clone(),
@@ -205,6 +212,7 @@ impl PlayerService {
         let rsp_settings = self.rsp_settings.clone();
         let metadata_service = self.metadata_service.clone();
         let dsp_state = self.dsp_state.clone();
+        let current_volume = self.current_volume.clone();
 
         let is_multi_core_platform = core_affinity::get_core_ids().is_some_and(|ids| ids.len() > 1);
         let prio = if is_multi_core_platform {
@@ -259,6 +267,7 @@ impl PlayerService {
                         &music_dir,
                         &changes_tx,
                         dsp_state.clone(),
+                        current_volume.clone(),
                     ) {
                         Ok(PlaybackResult::PlaybackStopped) => {
                             changes_tx

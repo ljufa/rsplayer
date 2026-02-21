@@ -50,17 +50,19 @@ pub enum Msg {
 
     InputAlsaDeviceChanged(String),
 
-    // --- DSP ---
-    DspAddFilter,
-    DspRemoveAllFilters,
-    DspRemoveFilter(usize),
-    DspUpdateFilterType(usize, FilterType),
-    DspUpdateFilterValue(usize, DspField, String),
-    DspUpdateFilterChannels(usize, String),
-    DspApplySettings,
-    DspLoadPreset(usize),
-    DspImportConfig(FileList),
-    DspConfigLoaded(String),
+        // --- DSP ---
+        ToggleDspEnabled,
+        ToggleVuMeterEnabled,
+        DspAddFilter,
+        DspRemoveAllFilters,
+        DspRemoveFilter(usize),
+        DspUpdateFilterType(usize, FilterType),
+        DspUpdateFilterValue(usize, DspField, String),
+        DspUpdateFilterChannels(usize, String),
+        DspApplySettings,
+        DspLoadPreset(usize),
+        DspImportConfig(FileList),
+        DspConfigLoaded(String),
 
     // --- Buttons ----
     SaveSettingsAndRestart,
@@ -223,6 +225,12 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 model.settings.metadata_settings.music_directory.clone(),
                 full_scan,
             ))));
+        }
+        Msg::ToggleDspEnabled => {
+            model.settings.rs_player_settings.dsp_settings.enabled = !model.settings.rs_player_settings.dsp_settings.enabled;
+        }
+        Msg::ToggleVuMeterEnabled => {
+            model.settings.rs_player_settings.vu_meter_enabled = !model.settings.rs_player_settings.vu_meter_enabled;
         }
         Msg::DspAddFilter => {
             model.settings.rs_player_settings.dsp_settings.filters.push(FilterConfig {
@@ -670,6 +678,44 @@ fn view_rsp(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
 fn view_dsp_settings(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
     div![
         C!["box", "has-background-dark"],
+        div![
+            C!["field", "mt-5"],
+            ev(Ev::Click, |_| Msg::ToggleDspEnabled),
+            input![
+                C!["switch"],
+                attrs! {
+                    At::Name => "dsp_enabled_cb"
+                    At::Type => "checkbox"
+                    At::Checked => rsp_settings.dsp_settings.enabled.as_at_value(),
+                },
+            ],
+            label![
+                C!["label","has-text-white"],
+                "Enable DSP processing",
+                attrs! {
+                    At::For => "dsp_enabled_cb"
+                }
+            ]
+        ],
+        div![
+            C!["field", "mt-5"],
+            ev(Ev::Click, |_| Msg::ToggleVuMeterEnabled),
+            input![
+                C!["switch"],
+                attrs! {
+                    At::Name => "vu_meter_enabled_cb"
+                    At::Type => "checkbox"
+                    At::Checked => rsp_settings.vu_meter_enabled.as_at_value(),
+                },
+            ],
+            label![
+                C!["label","has-text-white"],
+                "Enable VU meter",
+                attrs! {
+                    At::For => "vu_meter_enabled_cb"
+                }
+            ]
+        ],
         div![
             C!["field", "mb-4"],
             label!["Load Preset", C!["label", "has-text-white"]],

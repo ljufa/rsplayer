@@ -3,8 +3,8 @@ use std::sync::{
     Arc, Mutex,
 };
 
+use crate::{BiquadParameters, Equalizer};
 use api_models::settings::{DspFilter, DspSettings};
-use rsplayer_dsp::{BiquadParameters, Equalizer};
 
 /// Cross-thread DSP coordination — no `Equalizer` lives here.
 ///
@@ -14,7 +14,7 @@ use rsplayer_dsp::{BiquadParameters, Equalizer};
 /// atomically.  The playback thread swaps the pending equalizer in at the
 /// start of `write()` via a cheap `try_lock` — no lock is ever held during
 /// the actual DSP processing.
-pub struct SharedDspState {
+pub struct DspProcessor {
     pub dsp_settings: DspSettings,
     /// A freshly-built `Equalizer` waiting to be picked up by the playback
     /// thread.  `None` when no update is pending.
@@ -30,7 +30,7 @@ pub struct SharedDspState {
     pub rate: usize,
 }
 
-impl SharedDspState {
+impl DspProcessor {
     pub fn new(dsp_settings: DspSettings) -> Self {
         Self {
             dsp_settings,
@@ -43,6 +43,9 @@ impl SharedDspState {
 
     /// Apply `self.dsp_settings` to `eq` at `self.rate`.
     fn apply_filters(&self, eq: &mut Equalizer) {
+        if !self.dsp_settings.enabled {
+            return;
+        }
         for filter_config in &self.dsp_settings.filters {
             match &filter_config.filter {
                 DspFilter::Gain { gain } => {
@@ -61,7 +64,7 @@ impl SharedDspState {
                 other_filter => {
                     let params = match other_filter {
                         DspFilter::Peaking { freq, q, gain } => {
-                            BiquadParameters::Peaking(rsplayer_dsp::config::PeakingWidth::Q {
+                            BiquadParameters::Peaking(crate::config::PeakingWidth::Q {
                                 freq: *freq as f32,
                                 q: *q as f32,
                                 gain: *gain as f32,
@@ -69,13 +72,13 @@ impl SharedDspState {
                         }
                         DspFilter::LowShelf { freq, q, slope, gain } => {
                             if let Some(s) = slope {
-                                BiquadParameters::Lowshelf(rsplayer_dsp::config::ShelfSteepness::Slope {
+                                BiquadParameters::Lowshelf(crate::config::ShelfSteepness::Slope {
                                     freq: *freq as f32,
                                     slope: *s as f32,
                                     gain: *gain as f32,
                                 })
                             } else {
-                                BiquadParameters::Lowshelf(rsplayer_dsp::config::ShelfSteepness::Q {
+                                BiquadParameters::Lowshelf(crate::config::ShelfSteepness::Q {
                                     freq: *freq as f32,
                                     q: q.map(|v| v as f32).unwrap_or(0.707),
                                     gain: *gain as f32,
@@ -84,13 +87,13 @@ impl SharedDspState {
                         }
                         DspFilter::HighShelf { freq, q, slope, gain } => {
                             if let Some(s) = slope {
-                                BiquadParameters::Highshelf(rsplayer_dsp::config::ShelfSteepness::Slope {
+                                BiquadParameters::Highshelf(crate::config::ShelfSteepness::Slope {
                                     freq: *freq as f32,
                                     slope: *s as f32,
                                     gain: *gain as f32,
                                 })
                             } else {
-                                BiquadParameters::Highshelf(rsplayer_dsp::config::ShelfSteepness::Q {
+                                BiquadParameters::Highshelf(crate::config::ShelfSteepness::Q {
                                     freq: *freq as f32,
                                     q: q.map(|v| v as f32).unwrap_or(0.707),
                                     gain: *gain as f32,

@@ -6,6 +6,9 @@ pub use camilladsp::config::{self, BiquadParameters};
 use camilladsp::filters::Filter;
 use log::error;
 
+mod dsp_processor;
+pub use dsp_processor::DspProcessor;
+
 pub struct Equalizer {
     channels: usize,
     // We use Box<dyn Filter + Send> to allow storing different filter types if needed,
