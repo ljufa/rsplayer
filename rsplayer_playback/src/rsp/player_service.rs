@@ -17,6 +17,7 @@ use rsplayer_metadata::queue_service::QueueService;
 
 use rsplayer_dsp::DspProcessor;
 
+use crate::rsp::vumeter::VUMeter;
 use super::symphonia::PlaybackResult;
 
 pub struct PlayerService {
@@ -33,9 +34,14 @@ pub struct PlayerService {
     rsp_settings: RsPlayerSettings,
     music_dir: String,
     changes_tx: Sender<StateChangeEvent>,
-    /// Shared DSP state — built/rebuilt outside the playback thread.
-    dsp_state: Arc<Mutex<DspProcessor>>,
+    /// DSP processor — owned by the command-handler side only.  The playback
+    /// thread receives a lightweight `DspHandle` instead (no `DspProcessor`
+    /// reference crosses the thread boundary).  The `Mutex` here is solely for
+    /// `&self` / `Arc<PlayerService>` interior mutability — the playback thread
+    /// never locks this.  `None` when DSP is disabled in settings.
+    dsp_processor: Arc<Mutex<Option<DspProcessor>>>,
 }
+
 const LAST_SONG_PAUSED_KEY: &str = "last_song_paused";
 const LAST_SONG_PROGRESS_KEY: &str = "last_played_song_progress";
 
@@ -63,6 +69,13 @@ impl PlayerService {
         let last_known_time_clone = last_known_time.clone();
         let current_volume = Arc::new(AtomicU8::new(0));
         let current_volume_clone = current_volume.clone();
+        let dsp_processor = Arc::new(Mutex::new(if settings.rs_player_settings.dsp_settings.enabled {
+            Some(DspProcessor::new(settings.rs_player_settings.dsp_settings.clone()))
+        } else {
+            None
+        }));
+        let dsp_processor_clone = dsp_processor.clone();
+
         tokio::task::spawn(async move {
             let mut i = 0;
             loop {
@@ -102,14 +115,26 @@ impl PlayerService {
                     Ok(StateChangeEvent::VolumeChangeEvent(vol)) => {
                         current_volume_clone.store(vol.current, Ordering::Relaxed);
                     }
+                    Ok(StateChangeEvent::PlayerInfoEvent(info)) => {
+                        if let Ok(mut guard) = dsp_processor_clone.lock() {
+                            if let Some(proc) = guard.as_mut() {
+                                if let Some(rate) = info.audio_format_rate {
+                                    proc.rate = rate as usize;
+                                }
+                                if let Some(channels) = info.audio_format_channels {
+                                    proc.channels = channels;
+                                }
+                                info!(
+                                    "DSP processor updated with rate: {}, channels: {}",
+                                    proc.rate, proc.channels
+                                );
+                            }
+                        }
+                    }
                     _ => (),
                 }
             }
         });
-
-        let dsp_state = Arc::new(Mutex::new(DspProcessor::new(
-            settings.rs_player_settings.dsp_settings.clone(),
-        )));
 
         let ps = PlayerService {
             state_db: db,
@@ -124,7 +149,7 @@ impl PlayerService {
             audio_device: settings.alsa_settings.output_device.name.clone(),
             rsp_settings: settings.rs_player_settings.clone(),
             music_dir: settings.metadata_settings.music_directory.clone(),
-            dsp_state,
+            dsp_processor,
         };
         let last_played_song_progress = ps.get_last_played_song_time();
         if last_played_song_progress > 0 {
@@ -187,16 +212,18 @@ impl PlayerService {
         self.play_from_current_queue_song();
     }
 
-    /// Update DSP settings and rebuild the equalizer immediately.
+    /// Update DSP settings and push a new equalizer to the playback thread.
     ///
-    /// This runs on the caller's thread (typically the command handler),
-    /// **not** on the playback thread.  The playback thread will pick up
-    /// the new equalizer on its next `write()` call via the shared mutex.
+    /// `DspProcessor` is exclusively owned here — no mutex needed.
+    /// The playback thread picks up the new equalizer via the shared `pending`
+    /// Arc on its next `write()` call.
     pub fn update_dsp_settings(&self, dsp_settings: DspSettings) {
-        if let Ok(mut state) = self.dsp_state.lock() {
-            state.update_settings(dsp_settings);
-        } else {
-            error!("Failed to lock DSP state for update");
+        if let Ok(mut guard) = self.dsp_processor.lock() {
+            if let Some(ref mut dsp) = *guard {
+                dsp.update_settings(dsp_settings);
+            } else {
+                debug!("DSP update requested but DSP is disabled");
+            }
         }
     }
 
@@ -211,9 +238,10 @@ impl PlayerService {
         let changes_tx = self.changes_tx.clone();
         let rsp_settings = self.rsp_settings.clone();
         let metadata_service = self.metadata_service.clone();
-        let dsp_state = self.dsp_state.clone();
+        // Give the playback thread a lightweight handle — no DspProcessor ownership.
+        let dsp_handle = self.dsp_processor.lock().ok().and_then(|g| g.as_ref().map(DspProcessor::handle));
         let current_volume = self.current_volume.clone();
-
+        let vu_meter_enabled = self.rsp_settings.vu_meter_enabled;
         let is_multi_core_platform = core_affinity::get_core_ids().is_some_and(|ids| ids.len() > 1);
         let prio = if is_multi_core_platform {
             ThreadPriority::Crossplatform(playback_thread_prio.try_into().unwrap())
@@ -258,6 +286,11 @@ impl PlayerService {
                     changes_tx
                         .send(StateChangeEvent::PlaybackStateEvent(PlayerState::PLAYING))
                         .expect("msg send failed");
+                    let vu_meter = if vu_meter_enabled {
+                        Some(VUMeter::new(current_volume.clone(), changes_tx.clone()))
+                    } else {
+                        None
+                    };
                     match super::symphonia::play_file(
                         &song.file,
                         &stop_signal,
@@ -266,8 +299,8 @@ impl PlayerService {
                         &rsp_settings,
                         &music_dir,
                         &changes_tx,
-                        dsp_state.clone(),
-                        current_volume.clone(),
+                        dsp_handle.as_ref(),
+                        vu_meter,
                     ) {
                         Ok(PlaybackResult::PlaybackStopped) => {
                             changes_tx

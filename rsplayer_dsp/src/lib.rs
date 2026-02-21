@@ -6,8 +6,11 @@ pub use camilladsp::config::{self, BiquadParameters};
 use camilladsp::filters::Filter;
 use log::error;
 
+use symphonia::core::conv::{FromSample, IntoSample};
+use symphonia::core::sample::Sample;
+
 mod dsp_processor;
-pub use dsp_processor::DspProcessor;
+pub use dsp_processor::{DspHandle, DspProcessor};
 
 pub struct Equalizer {
     channels: usize,
@@ -15,6 +18,7 @@ pub struct Equalizer {
     // and Send to allow moving between threads.
     filters: Vec<Vec<Box<dyn Filter + Send>>>,
     scratch_buffers: Vec<Vec<f32>>,
+    conversion_scratch: Vec<f32>,
 }
 
 impl Equalizer {
@@ -29,6 +33,7 @@ impl Equalizer {
             channels,
             filters,
             scratch_buffers,
+            conversion_scratch: Vec::new(),
         }
     }
 
@@ -75,6 +80,37 @@ impl Equalizer {
     /// Returns `true` if any channel has at least one filter configured.
     pub fn has_filters(&self) -> bool {
         self.filters.iter().any(|ch_filters| !ch_filters.is_empty())
+    }
+
+    pub fn process_samples<T>(&mut self, samples: &mut [T])
+    where
+        T: Sample + IntoSample<f32> + FromSample<f32>,
+    {
+        if !self.has_filters() {
+            return;
+        }
+
+        // Temporarily take ownership of the conversion scratch buffer to avoid
+        // multiple mutable borrows of `self` when calling `self.process`.
+        let mut scratch = std::mem::take(&mut self.conversion_scratch);
+        let len = samples.len();
+
+        if scratch.len() < len {
+            scratch.resize(len, 0.0);
+        }
+
+        for (i, s) in samples.iter().enumerate() {
+            scratch[i] = (*s).into_sample();
+        }
+
+        self.process(&mut scratch[0..len]);
+
+        for (i, s) in samples.iter_mut().enumerate() {
+            *s = <T as FromSample<f32>>::from_sample(scratch[i]);
+        }
+
+        // Restore the buffer to `self` for reuse.
+        self.conversion_scratch = scratch;
     }
 
     pub fn process(&mut self, buffer: &mut [f32]) {

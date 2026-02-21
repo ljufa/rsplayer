@@ -3,6 +3,9 @@ use gloo_console::warn;
 use serde::Deserialize;
 use std::collections::HashMap;
 
+mod dsp_presets;
+pub use dsp_presets::get_dsp_presets;
+
 #[derive(Debug, Deserialize)]
 struct DspConfig {
     #[serde(default)]
@@ -125,6 +128,51 @@ fn convert_filter(def: &DspFilterDef) -> Option<DspFilter> {
             let freq = get_f64(params, "freq")?;
             let q = get_f64(params, "q").unwrap_or(0.707);
             Some(DspFilter::HighPass { freq, q })
+        }
+        "BandPass" => {
+            let freq = get_f64(params, "freq")?;
+            let q = get_f64(params, "q").unwrap_or(0.707);
+            Some(DspFilter::BandPass { freq, q })
+        }
+        "Notch" => {
+            let freq = get_f64(params, "freq")?;
+            let q = get_f64(params, "q").unwrap_or(0.707);
+            Some(DspFilter::Notch { freq, q })
+        }
+        "AllPass" => {
+            let freq = get_f64(params, "freq")?;
+            let q = get_f64(params, "q").unwrap_or(0.707);
+            Some(DspFilter::AllPass { freq, q })
+        }
+        "LowPassFO" => {
+            let freq = get_f64(params, "freq")?;
+            Some(DspFilter::LowPassFO { freq })
+        }
+        "HighPassFO" => {
+            let freq = get_f64(params, "freq")?;
+            Some(DspFilter::HighPassFO { freq })
+        }
+        "LowShelfFO" => {
+            let freq = get_f64(params, "freq")?;
+            let gain = get_f64(params, "gain")?;
+            Some(DspFilter::LowShelfFO { freq, gain })
+        }
+        "HighShelfFO" => {
+            let freq = get_f64(params, "freq")?;
+            let gain = get_f64(params, "gain")?;
+            Some(DspFilter::HighShelfFO { freq, gain })
+        }
+        "LinkwitzTransform" => {
+            let freq_act = get_f64(params, "freq_act")?;
+            let q_act = get_f64(params, "q_act")?;
+            let freq_target = get_f64(params, "freq_target")?;
+            let q_target = get_f64(params, "q_target")?;
+            Some(DspFilter::LinkwitzTransform {
+                freq_act,
+                q_act,
+                freq_target,
+                q_target,
+            })
         }
         "Gain" => {
             let gain = get_f64(params, "gain")?;

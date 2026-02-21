@@ -106,6 +106,38 @@ pub enum DspFilter {
         freq: f64,
         q: f64,
     },
+    BandPass {
+        freq: f64,
+        q: f64,
+    },
+    Notch {
+        freq: f64,
+        q: f64,
+    },
+    AllPass {
+        freq: f64,
+        q: f64,
+    },
+    LowPassFO {
+        freq: f64,
+    },
+    HighPassFO {
+        freq: f64,
+    },
+    LowShelfFO {
+        freq: f64,
+        gain: f64,
+    },
+    HighShelfFO {
+        freq: f64,
+        gain: f64,
+    },
+    LinkwitzTransform {
+        freq_act: f64,
+        q_act: f64,
+        freq_target: f64,
+        q_target: f64,
+    },
     Gain {
         gain: f64,
     },

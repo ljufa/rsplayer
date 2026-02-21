@@ -95,6 +95,12 @@ pub async fn handle_user_commands(
                 state_changes_sender
                     .send(StateChangeEvent::PlaybackModeChangedEvent(mode))
                     .unwrap();
+                let settings = config_store.get_settings();
+                state_changes_sender
+                    .send(StateChangeEvent::VuMeterEnabledEvent(
+                        settings.rs_player_settings.vu_meter_enabled,
+                    ))
+                    .unwrap();
             }
 
             /*

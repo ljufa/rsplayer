@@ -8,6 +8,9 @@ use tokio::sync::broadcast::Sender;
 const VU_UPDATE_INTERVAL: Duration = Duration::from_millis(50);
 
 /// VU meter state and logic.
+///
+/// When VU metering is disabled the caller should simply not create a
+/// `VUMeter` at all (use `Option<VUMeter>` in the owning struct).
 pub(crate) struct VUMeter {
     /// Last time a VU event was sent to the frontend.
     last_update: std::time::Instant,
@@ -15,36 +18,26 @@ pub(crate) struct VUMeter {
     current_max_l: f32,
     /// Current maximum absolute sample value (right channel).
     current_max_r: f32,
-    /// Whether VU metering is enabled (from settings).
-    enabled: bool,
-    /// Current volume level (0‑255) used to scale peaks.
+    /// Current volume level (0-255) used to scale peaks.
     volume: Arc<AtomicU8>,
     /// Channel to send VU events to the frontend.
     changes_tx: Sender<StateChangeEvent>,
 }
 
 impl VUMeter {
-    pub(crate) fn new(enabled: bool, volume: Arc<AtomicU8>, changes_tx: Sender<StateChangeEvent>) -> Self {
+    pub(crate) fn new(volume: Arc<AtomicU8>, changes_tx: Sender<StateChangeEvent>) -> Self {
         Self {
             last_update: std::time::Instant::now(),
             current_max_l: 0.0,
             current_max_r: 0.0,
-            enabled,
             volume,
             changes_tx,
         }
     }
 
-    pub(crate) fn enabled(&self) -> bool {
-        self.enabled
-    }
-
     /// Update peak values from a slice of samples.
     /// `samples` is an interleaved slice of channel-count samples.
     pub(crate) fn update_peaks(&mut self, channels: usize, samples: &[impl IntoSample<f32> + Copy]) {
-        if !self.enabled {
-            return;
-        }
         let volume_factor = self.volume.load(Ordering::Relaxed) as f32 / 255.0;
         if channels >= 2 {
             for chunk in samples.chunks(channels) {
@@ -76,9 +69,6 @@ impl VUMeter {
     /// If enough time has passed since the last update, send a VU event
     /// and reset the peak values. Returns `true` if an event was sent.
     pub(crate) fn maybe_send_event(&mut self) -> bool {
-        if !self.enabled {
-            return false;
-        }
         if self.last_update.elapsed() > VU_UPDATE_INTERVAL {
             let vu_l = (self.current_max_l * 255.0).min(255.0) as u8;
             let vu_r = (self.current_max_r * 255.0).min(255.0) as u8;

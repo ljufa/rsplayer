@@ -2649,6 +2649,7 @@ dependencies = [
  "anyhow",
  "api_models",
  "log",
+ "symphonia",
 ]
 
 [[package]]

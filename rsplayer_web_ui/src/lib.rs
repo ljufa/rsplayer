@@ -216,7 +216,7 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
             playback_mode: PlaybackMode::default(),
             player_state: PlayerState::STOPPED,
             stop_updates: false,
-            vu_meter_enabled: true,
+            vu_meter_enabled: false,
         },
         metadata_scan_info: None,
         notification: None,

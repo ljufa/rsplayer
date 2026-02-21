@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{format_err, Result};
@@ -22,8 +22,9 @@ use symphonia::core::units::{Time, TimeBase};
 use symphonia::default::{get_codecs, get_probe};
 use tokio::sync::broadcast::Sender;
 
-use crate::rsp::alsa_output::{self, AlsaOutput};
-use rsplayer_dsp::DspProcessor;
+use crate::rsp::alsa_output::AlsaOutput;
+use crate::rsp::vumeter::VUMeter;
+use rsplayer_dsp::DspHandle;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum PlaybackResult {
@@ -35,6 +36,7 @@ pub enum PlaybackResult {
 
 unsafe impl Send for PlaybackResult {}
 
+#[allow(clippy::too_many_arguments)]
 pub fn play_file(
     path_str: &str,
     stop_signal: &Arc<AtomicBool>,
@@ -43,8 +45,8 @@ pub fn play_file(
     rsp_settings: &RsPlayerSettings,
     music_dir: &str,
     changes_tx: &Sender<StateChangeEvent>,
-    dsp_state: Arc<Mutex<DspProcessor>>,
-    volume: Arc<AtomicU8>,
+    dsp_handle: Option<&DspHandle>,
+    vu_meter: Option<VUMeter>,
 ) -> Result<PlaybackResult> {
     debug!("Playing file {path_str}");
     let mut hint = Hint::new();
@@ -117,6 +119,7 @@ pub fn play_file(
     let decode_opts = &DecoderOptions::default();
     let mut decoder = get_codecs().make(codec_parameters, decode_opts)?;
     let mut audio_output: Option<AlsaOutput> = None;
+    let mut vu_meter = vu_meter;
     let mut last_current_time = 0;
     // Decode and play the packets belonging to the selected track.
     let loop_result = loop {
@@ -179,9 +182,8 @@ pub fn play_file(
                         audio_device,
                         rsp_settings,
                         is_dsd,
-                        changes_tx.clone(),
-                        dsp_state.clone(),
-                        volume.clone(),
+                        dsp_handle,
+                        vu_meter.take(),
                     ) else {
                         break Err(format_err!("Failed to open audio output {audio_device}"));
                     };

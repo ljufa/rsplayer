@@ -14,6 +14,7 @@ use seed::{attrs, button, div, h1, i, input, label, option, prelude::*, section,
 use wasm_bindgen::JsCast;
 use web_sys::FileList;
 
+use crate::dsp::get_dsp_presets;
 use crate::view_spinner_modal;
 
 const API_SETTINGS_PATH: &str = "/api/settings";
@@ -80,7 +81,15 @@ pub enum FilterType {
     HighShelf,
     LowPass,
     HighPass,
+    BandPass,
+    Notch,
+    AllPass,
+    LowPassFO,
+    HighPassFO,
+    LowShelfFO,
+    HighShelfFO,
     Gain,
+    // LinkwitzTransform is complex, maybe skip for now in simple UI or add later
 }
 
 impl FilterType {
@@ -91,6 +100,13 @@ impl FilterType {
             FilterType::HighShelf => "HighShelf",
             FilterType::LowPass => "LowPass",
             FilterType::HighPass => "HighPass",
+            FilterType::BandPass => "BandPass",
+            FilterType::Notch => "Notch",
+            FilterType::AllPass => "AllPass",
+            FilterType::LowPassFO => "LowPassFO",
+            FilterType::HighPassFO => "HighPassFO",
+            FilterType::LowShelfFO => "LowShelfFO",
+            FilterType::HighShelfFO => "HighShelfFO",
             FilterType::Gain => "Gain",
         }
     }
@@ -258,6 +274,13 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     FilterType::HighShelf => DspFilter::HighShelf { freq: 12000.0, gain: 0.0, q: Some(0.707), slope: None },
                     FilterType::LowPass => DspFilter::LowPass { freq: 20000.0, q: 0.707 },
                     FilterType::HighPass => DspFilter::HighPass { freq: 20.0, q: 0.707 },
+                    FilterType::BandPass => DspFilter::BandPass { freq: 1000.0, q: 0.707 },
+                    FilterType::Notch => DspFilter::Notch { freq: 1000.0, q: 0.707 },
+                    FilterType::AllPass => DspFilter::AllPass { freq: 1000.0, q: 0.707 },
+                    FilterType::LowPassFO => DspFilter::LowPassFO { freq: 20000.0 },
+                    FilterType::HighPassFO => DspFilter::HighPassFO { freq: 20.0 },
+                    FilterType::LowShelfFO => DspFilter::LowShelfFO { freq: 80.0, gain: 0.0 },
+                    FilterType::HighShelfFO => DspFilter::HighShelfFO { freq: 12000.0, gain: 0.0 },
                     FilterType::Gain => DspFilter::Gain { gain: 0.0 },
                 };
             }
@@ -286,6 +309,24 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                         (DspFilter::HighPass { freq, .. }, DspField::Freq) => *freq = val,
                         (DspFilter::HighPass { q, .. }, DspField::Q) => *q = val,
 
+                        (DspFilter::BandPass { freq, .. }, DspField::Freq) => *freq = val,
+                        (DspFilter::BandPass { q, .. }, DspField::Q) => *q = val,
+
+                        (DspFilter::Notch { freq, .. }, DspField::Freq) => *freq = val,
+                        (DspFilter::Notch { q, .. }, DspField::Q) => *q = val,
+
+                        (DspFilter::AllPass { freq, .. }, DspField::Freq) => *freq = val,
+                        (DspFilter::AllPass { q, .. }, DspField::Q) => *q = val,
+
+                        (DspFilter::LowPassFO { freq, .. }, DspField::Freq) => *freq = val,
+                        (DspFilter::HighPassFO { freq, .. }, DspField::Freq) => *freq = val,
+
+                        (DspFilter::LowShelfFO { freq, .. }, DspField::Freq) => *freq = val,
+                        (DspFilter::LowShelfFO { gain, .. }, DspField::Gain) => *gain = val,
+
+                        (DspFilter::HighShelfFO { freq, .. }, DspField::Freq) => *freq = val,
+                        (DspFilter::HighShelfFO { gain, .. }, DspField::Gain) => *gain = val,
+
                         (DspFilter::Gain { gain }, DspField::Gain) => *gain = val,
                         _ => {}
                     }
@@ -305,8 +346,8 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             orders.send_msg(Msg::SendUserCommand(UserCommand::UpdateDsp(model.settings.rs_player_settings.dsp_settings.clone())));
         }
         Msg::DspLoadPreset(index) => {
-            if let Some((_, filters)) = get_dsp_presets().get(index) {
-                model.settings.rs_player_settings.dsp_settings.filters = filters.clone();
+            if let Some(preset) = get_dsp_presets().get(index) {
+                model.settings.rs_player_settings.dsp_settings.filters = preset.filters.clone();
             }
         }
         Msg::DspImportConfig(file_list) => {
@@ -406,6 +447,25 @@ pub fn view(model: &Model) -> Node<Msg> {
                     "Auto resume playback on start",
                     attrs! {
                         At::For => "resume_playback_cb"
+                    }
+                ]
+            ],
+            div![
+                C!["field", "mt-5"],
+                ev(Ev::Click, |_| Msg::ToggleVuMeterEnabled),
+                input![
+                    C!["switch"],
+                    attrs! {
+                        At::Name => "vu_meter_enabled_cb"
+                        At::Type => "checkbox"
+                        At::Checked => settings.rs_player_settings.vu_meter_enabled.as_at_value(),
+                    },
+                ],
+                label![
+                    C!["label","has-text-white"],
+                    "Enable VU meter",
+                    attrs! {
+                        At::For => "vu_meter_enabled_cb"
                     }
                 ]
             ],
@@ -698,25 +758,6 @@ fn view_dsp_settings(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
             ]
         ],
         div![
-            C!["field", "mt-5"],
-            ev(Ev::Click, |_| Msg::ToggleVuMeterEnabled),
-            input![
-                C!["switch"],
-                attrs! {
-                    At::Name => "vu_meter_enabled_cb"
-                    At::Type => "checkbox"
-                    At::Checked => rsp_settings.vu_meter_enabled.as_at_value(),
-                },
-            ],
-            label![
-                C!["label","has-text-white"],
-                "Enable VU meter",
-                attrs! {
-                    At::For => "vu_meter_enabled_cb"
-                }
-            ]
-        ],
-        div![
             C!["field", "mb-4"],
             label!["Load Preset", C!["label", "has-text-white"]],
             div![
@@ -725,10 +766,10 @@ fn view_dsp_settings(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
                     C!["select"],
                     select![
                         option![attrs!{At::Value => ""}, "Select a preset..."],
-                        get_dsp_presets().iter().enumerate().map(|(i, (name, _))| {
+                        get_dsp_presets().iter().enumerate().map(|(i, preset)| {
                             option![
                                 attrs! {At::Value => i},
-                                name
+                                &preset.name
                             ]
                         }),
                         input_ev(Ev::Change, |val| {
@@ -797,6 +838,14 @@ fn view_filter(index: usize, filter_config: &FilterConfig) -> Node<Msg> {
         DspFilter::HighShelf { freq, gain, q, slope } => (FilterType::HighShelf, Some(*freq), Some(*gain), *q, *slope),
         DspFilter::LowPass { freq, q } => (FilterType::LowPass, Some(*freq), None, Some(*q), None),
         DspFilter::HighPass { freq, q } => (FilterType::HighPass, Some(*freq), None, Some(*q), None),
+        DspFilter::BandPass { freq, q } => (FilterType::BandPass, Some(*freq), None, Some(*q), None),
+        DspFilter::Notch { freq, q } => (FilterType::Notch, Some(*freq), None, Some(*q), None),
+        DspFilter::AllPass { freq, q } => (FilterType::AllPass, Some(*freq), None, Some(*q), None),
+        DspFilter::LowPassFO { freq } => (FilterType::LowPassFO, Some(*freq), None, None, None),
+        DspFilter::HighPassFO { freq } => (FilterType::HighPassFO, Some(*freq), None, None, None),
+        DspFilter::LowShelfFO { freq, gain } => (FilterType::LowShelfFO, Some(*freq), Some(*gain), None, None),
+        DspFilter::HighShelfFO { freq, gain } => (FilterType::HighShelfFO, Some(*freq), Some(*gain), None, None),
+        DspFilter::LinkwitzTransform { .. } => (FilterType::Gain, None, None, None, None), // Placeholder
         DspFilter::Gain { gain } => (FilterType::Gain, None, Some(*gain), None, None),
     };
 
@@ -916,31 +965,6 @@ fn view_filter(index: usize, filter_config: &FilterConfig) -> Node<Msg> {
 }
 
 
-fn get_dsp_presets() -> Vec<(&'static str, Vec<FilterConfig>)> {
-    vec![
-        ("Flat", vec![]),
-        ("Bass Boost", vec![
-            FilterConfig { filter: DspFilter::LowShelf { freq: 100.0, gain: 4.0, q: Some(0.707), slope: None }, channels: vec![] },
-        ]),
-        ("Bass Cut", vec![
-            FilterConfig { filter: DspFilter::LowShelf { freq: 100.0, gain: -4.0, q: Some(0.707), slope: None }, channels: vec![] },
-        ]),
-        ("Treble Boost", vec![
-            FilterConfig { filter: DspFilter::HighShelf { freq: 10000.0, gain: 4.0, q: Some(0.707), slope: None }, channels: vec![] },
-        ]),
-        ("Treble Cut", vec![
-            FilterConfig { filter: DspFilter::HighShelf { freq: 10000.0, gain: -4.0, q: Some(0.707), slope: None }, channels: vec![] },
-        ]),
-        ("Loudness", vec![
-            FilterConfig { filter: DspFilter::LowShelf { freq: 100.0, gain: 3.0, q: Some(0.707), slope: None }, channels: vec![] },
-            FilterConfig { filter: DspFilter::HighShelf { freq: 10000.0, gain: 3.0, q: Some(0.707), slope: None }, channels: vec![] },
-        ]),
-        ("Vocal Clarity", vec![
-            FilterConfig { filter: DspFilter::Peaking { freq: 2500.0, gain: 2.5, q: 1.0 }, channels: vec![] },
-            FilterConfig { filter: DspFilter::LowShelf { freq: 200.0, gain: -1.5, q: Some(0.707), slope: None }, channels: vec![] },
-        ]),
-    ]
-}
 
 #[allow(clippy::future_not_send)]
 async fn save_settings(settings: Settings, query: String) -> Result<String, Error> {
