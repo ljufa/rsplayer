@@ -36,9 +36,7 @@ impl IrService {
                         self.dispatch_command(line.to_string()).await;
                     }
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    continue;
-                }
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {}
                 Err(e) => {
                     log::error!("Failed to read IR socket. Will stop thread: {e}");
                     break;

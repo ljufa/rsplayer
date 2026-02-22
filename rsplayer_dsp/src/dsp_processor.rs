@@ -8,6 +8,7 @@ use crate::{BiquadParameters, Equalizer};
 use api_models::settings::{DspFilter, DspSettings};
 
 /// Apply DSP settings filters to `eq` for the given `rate`.
+#[allow(clippy::cast_possible_truncation)]
 fn apply_filters_with_settings(dsp_settings: &DspSettings, eq: &mut Equalizer, rate: usize) {
     for filter_config in &dsp_settings.filters {
         match &filter_config.filter {
@@ -25,88 +26,9 @@ fn apply_filters_with_settings(dsp_settings: &DspSettings, eq: &mut Equalizer, r
                 }
             }
             other_filter => {
-                let params = match other_filter {
-                    DspFilter::Peaking { freq, q, gain } => BiquadParameters::Peaking(crate::config::PeakingWidth::Q {
-                        freq: *freq as f32,
-                        q: *q as f32,
-                        gain: *gain as f32,
-                    }),
-                    DspFilter::LowShelf { freq, q, slope, gain } => {
-                        if let Some(s) = slope {
-                            BiquadParameters::Lowshelf(crate::config::ShelfSteepness::Slope {
-                                freq: *freq as f32,
-                                slope: *s as f32,
-                                gain: *gain as f32,
-                            })
-                        } else {
-                            BiquadParameters::Lowshelf(crate::config::ShelfSteepness::Q {
-                                freq: *freq as f32,
-                                q: q.map(|v| v as f32).unwrap_or(0.707),
-                                gain: *gain as f32,
-                            })
-                        }
-                    }
-                    DspFilter::HighShelf { freq, q, slope, gain } => {
-                        if let Some(s) = slope {
-                            BiquadParameters::Highshelf(crate::config::ShelfSteepness::Slope {
-                                freq: *freq as f32,
-                                slope: *s as f32,
-                                gain: *gain as f32,
-                            })
-                        } else {
-                            BiquadParameters::Highshelf(crate::config::ShelfSteepness::Q {
-                                freq: *freq as f32,
-                                q: q.map(|v| v as f32).unwrap_or(0.707),
-                                gain: *gain as f32,
-                            })
-                        }
-                    }
-                    DspFilter::LowPass { freq, q } => BiquadParameters::Lowpass {
-                        freq: *freq as f32,
-                        q: *q as f32,
-                    },
-                    DspFilter::HighPass { freq, q } => BiquadParameters::Highpass {
-                        freq: *freq as f32,
-                        q: *q as f32,
-                    },
-                    DspFilter::BandPass { freq, q } => BiquadParameters::Bandpass(crate::config::NotchWidth::Q {
-                        freq: *freq as f32,
-                        q: *q as f32,
-                    }),
-                    DspFilter::Notch { freq, q } => BiquadParameters::Notch(crate::config::NotchWidth::Q {
-                        freq: *freq as f32,
-                        q: *q as f32,
-                    }),
-                    DspFilter::AllPass { freq, q } => BiquadParameters::Allpass(crate::config::NotchWidth::Q {
-                        freq: *freq as f32,
-                        q: *q as f32,
-                    }),
-                    DspFilter::LowPassFO { freq } => BiquadParameters::LowpassFO { freq: *freq as f32 },
-                    DspFilter::HighPassFO { freq } => BiquadParameters::HighpassFO { freq: *freq as f32 },
-                    DspFilter::LowShelfFO { freq, gain } => BiquadParameters::LowshelfFO {
-                        freq: *freq as f32,
-                        gain: *gain as f32,
-                    },
-                    DspFilter::HighShelfFO { freq, gain } => BiquadParameters::HighshelfFO {
-                        freq: *freq as f32,
-                        gain: *gain as f32,
-                    },
-                    DspFilter::LinkwitzTransform {
-                        freq_act,
-                        q_act,
-                        freq_target,
-                        q_target,
-                    } => BiquadParameters::LinkwitzTransform {
-                        freq_act: *freq_act as f32,
-                        q_act: *q_act as f32,
-                        freq_target: *freq_target as f32,
-                        q_target: *q_target as f32,
-                    },
-                    DspFilter::Gain { .. } => unreachable!(),
-                };
-
+                let params = create_biquad_params(other_filter);
                 if filter_config.channels.is_empty() {
-                    if let Err(e) = eq.add_global_biquad_filter(rate, params) {
+                    if let Err(e) = eq.add_global_biquad_filter(rate, &params) {
                         log::warn!("Failed to add equalizer filter: {e}");
                     }
                 } else {
@@ -121,9 +43,95 @@ fn apply_filters_with_settings(dsp_settings: &DspSettings, eq: &mut Equalizer, r
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
+fn create_biquad_params(filter: &DspFilter) -> BiquadParameters {
+    match filter {
+        DspFilter::Peaking { freq, q, gain } => BiquadParameters::Peaking(crate::config::PeakingWidth::Q {
+            freq: *freq as f32,
+            q: *q as f32,
+            gain: *gain as f32,
+        }),
+        DspFilter::LowShelf { freq, q, slope, gain } => slope.map_or_else(
+            || {
+                BiquadParameters::Lowshelf(crate::config::ShelfSteepness::Q {
+                    freq: *freq as f32,
+                    q: q.map(|v| v as f32).unwrap_or(0.707),
+                    gain: *gain as f32,
+                })
+            },
+            |s| {
+                BiquadParameters::Lowshelf(crate::config::ShelfSteepness::Slope {
+                    freq: *freq as f32,
+                    slope: s as f32,
+                    gain: *gain as f32,
+                })
+            },
+        ),
+        DspFilter::HighShelf { freq, q, slope, gain } => slope.map_or_else(
+            || {
+                BiquadParameters::Highshelf(crate::config::ShelfSteepness::Q {
+                    freq: *freq as f32,
+                    q: q.map(|v| v as f32).unwrap_or(0.707),
+                    gain: *gain as f32,
+                })
+            },
+            |s| {
+                BiquadParameters::Highshelf(crate::config::ShelfSteepness::Slope {
+                    freq: *freq as f32,
+                    slope: s as f32,
+                    gain: *gain as f32,
+                })
+            },
+        ),
+        DspFilter::LowPass { freq, q } => BiquadParameters::Lowpass {
+            freq: *freq as f32,
+            q: *q as f32,
+        },
+        DspFilter::HighPass { freq, q } => BiquadParameters::Highpass {
+            freq: *freq as f32,
+            q: *q as f32,
+        },
+        DspFilter::BandPass { freq, q } => BiquadParameters::Bandpass(crate::config::NotchWidth::Q {
+            freq: *freq as f32,
+            q: *q as f32,
+        }),
+        DspFilter::Notch { freq, q } => BiquadParameters::Notch(crate::config::NotchWidth::Q {
+            freq: *freq as f32,
+            q: *q as f32,
+        }),
+        DspFilter::AllPass { freq, q } => BiquadParameters::Allpass(crate::config::NotchWidth::Q {
+            freq: *freq as f32,
+            q: *q as f32,
+        }),
+        DspFilter::LowPassFO { freq } => BiquadParameters::LowpassFO { freq: *freq as f32 },
+        DspFilter::HighPassFO { freq } => BiquadParameters::HighpassFO { freq: *freq as f32 },
+        DspFilter::LowShelfFO { freq, gain } => BiquadParameters::LowshelfFO {
+            freq: *freq as f32,
+            gain: *gain as f32,
+        },
+        DspFilter::HighShelfFO { freq, gain } => BiquadParameters::HighshelfFO {
+            freq: *freq as f32,
+            gain: *gain as f32,
+        },
+        DspFilter::LinkwitzTransform {
+            freq_act,
+            q_act,
+            freq_target,
+            q_target,
+        } => BiquadParameters::LinkwitzTransform {
+            freq_act: *freq_act as f32,
+            q_act: *q_act as f32,
+            freq_target: *freq_target as f32,
+            q_target: *q_target as f32,
+        },
+        DspFilter::Gain { .. } => unreachable!(),
+    }
+}
+
 /// The shared state that crosses the thread boundary between the
-/// command-handler and the playback thread.  The playback thread holds a
-/// `DspHandle`; the command-handler thread owns the `DspProcessor`
+/// command-handler and the playback thread.
+///
+/// The playback thread holds a `DspHandle`; the command-handler thread owns the `DspProcessor`
 /// exclusively — no outer `Mutex<DspProcessor>` is needed.
 ///
 /// All fields are `Arc`-wrapped so cloning the handle is cheap and neither
@@ -158,7 +166,9 @@ impl DspHandle {
     }
 }
 
-/// Command-handler-side DSP owner.  Exclusively owned by `PlayerService` —
+/// Command-handler-side DSP owner.
+///
+/// Exclusively owned by `PlayerService` —
 /// never wrapped in a `Mutex`.  Cross-thread communication with the playback
 /// thread happens only through the `Arc`s inside the `DspHandle`.
 pub struct DspProcessor {
@@ -195,7 +205,7 @@ impl DspProcessor {
 
     /// Replace DSP settings, build a new equalizer, and push it to pending.
     /// Called from the command-handler thread — exclusively owned, no mutex.
-    pub fn update_settings(&mut self, dsp_settings: DspSettings) {
+    pub fn update_settings(&mut self, dsp_settings: &DspSettings) {
         if let Ok(mut s) = self.handle.settings.lock() {
             *s = dsp_settings.clone();
         }
@@ -205,7 +215,7 @@ impl DspProcessor {
                 self.rate, self.channels
             );
             let mut eq = Equalizer::new(self.channels);
-            apply_filters_with_settings(&dsp_settings, &mut eq, self.rate);
+            apply_filters_with_settings(dsp_settings, &mut eq, self.rate);
             let active = eq.has_filters();
             if let Ok(mut slot) = self.handle.pending.lock() {
                 *slot = Some(eq);

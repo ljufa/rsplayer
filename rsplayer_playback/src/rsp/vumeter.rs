@@ -11,7 +11,7 @@ const VU_UPDATE_INTERVAL: Duration = Duration::from_millis(50);
 ///
 /// When VU metering is disabled the caller should simply not create a
 /// `VUMeter` at all (use `Option<VUMeter>` in the owning struct).
-pub(crate) struct VUMeter {
+pub struct VUMeter {
     /// Last time a VU event was sent to the frontend.
     last_update: std::time::Instant,
     /// Current maximum absolute sample value (left channel).
@@ -38,7 +38,7 @@ impl VUMeter {
     /// Update peak values from a slice of samples.
     /// `samples` is an interleaved slice of channel-count samples.
     pub(crate) fn update_peaks(&mut self, channels: usize, samples: &[impl IntoSample<f32> + Copy]) {
-        let volume_factor = self.volume.load(Ordering::Relaxed) as f32 / 255.0;
+        let volume_factor = f32::from(self.volume.load(Ordering::Relaxed)) / 255.0;
         if channels >= 2 {
             for chunk in samples.chunks(channels) {
                 if chunk.len() >= 2 {
@@ -70,7 +70,9 @@ impl VUMeter {
     /// and reset the peak values. Returns `true` if an event was sent.
     pub(crate) fn maybe_send_event(&mut self) -> bool {
         if self.last_update.elapsed() > VU_UPDATE_INTERVAL {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let vu_l = (self.current_max_l * 255.0).min(255.0) as u8;
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let vu_r = (self.current_max_r * 255.0).min(255.0) as u8;
             _ = self.changes_tx.send(StateChangeEvent::VUEvent(vu_l, vu_r));
             self.last_update = std::time::Instant::now();

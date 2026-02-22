@@ -9,7 +9,7 @@ pub struct DsdU32(pub u32);
 impl cpal::Sample for DsdU32 {
     type Float = f32;
     type Signed = i32;
-    const EQUILIBRIUM: Self = DsdU32(0x69696969);
+    const EQUILIBRIUM: Self = DsdU32(0x6969_6969);
 }
 
 impl cpal::SizedSample for DsdU32 {
@@ -34,7 +34,7 @@ impl std::ops::Sub for DsdU32 {
 impl symphonia::core::sample::Sample for DsdU32 {
     const FORMAT: SymphoniaSampleFormat = SymphoniaSampleFormat::U32; // Proxy
     const EFF_BITS: u32 = 32;
-    const MID: Self = DsdU32(0x69696969);
+    const MID: Self = DsdU32(0x6969_6969);
 
     fn clamped(self) -> Self {
         self
@@ -55,7 +55,7 @@ macro_rules! impl_from_sample_for_dsd_dummy {
             $(
                 impl FromSample<$t> for DsdU32 {
                     fn from_sample(_s: $t) -> Self {
-                        DsdU32(0x69696969)
+                        DsdU32(0x6969_6969)
                     }
                 }
             )*
@@ -73,6 +73,7 @@ impl FromSample<u32> for DsdU32 {
 
 impl FromSample<i32> for DsdU32 {
     fn from_sample(s: i32) -> Self {
+        #[allow(clippy::cast_sign_loss)]
         DsdU32(s as u32)
     }
 }
@@ -86,8 +87,11 @@ use symphonia::core::sample::{i24, u24};
 impl IntoSample<f32> for DsdU32 {
     fn into_sample(self) -> f32 {
         let ones = self.0.count_ones();
+        #[allow(clippy::cast_possible_wrap)]
         let centered = (ones as i32) - 16;
-        centered as f32 / 16.0
+        #[allow(clippy::cast_precision_loss)]
+        let res = centered as f32 / 16.0;
+        res
     }
 }
 
@@ -97,7 +101,7 @@ impl IntoSample<f32> for DsdU32 {
 
 impl cpal::FromSample<f32> for DsdU32 {
     fn from_sample_(_s: f32) -> Self {
-        DsdU32(0x69696969)
+        DsdU32(0x6969_6969)
     }
 }
 
@@ -109,7 +113,7 @@ impl cpal::FromSample<DsdU32> for f32 {
 
 impl cpal::FromSample<i32> for DsdU32 {
     fn from_sample_(_s: i32) -> Self {
-        DsdU32(0x69696969)
+        DsdU32(0x6969_6969)
     }
 }
 

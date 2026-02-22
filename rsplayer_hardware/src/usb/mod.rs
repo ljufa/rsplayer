@@ -48,8 +48,12 @@ impl UsbService {
     }
 
     pub fn try_reconnect(&self) -> Result<()> {
-        if let Some(new_path) = get_rsplayer_firmware_usb_link() {
-            match serialport::new(&new_path, self.baud_rate)
+        get_rsplayer_firmware_usb_link().map_or_else(
+            || {
+                debug!("No USB device found for reconnection.");
+                Err(anyhow::anyhow!("Device not found"))
+            },
+            |new_path| match serialport::new(&new_path, self.baud_rate)
                 .timeout(Duration::from_secs(1))
                 .open()
             {
@@ -75,11 +79,8 @@ impl UsbService {
                     error!("Failed to open port at {new_path}: {e}");
                     Err(anyhow::anyhow!("Failed to open port"))
                 }
-            }
-        } else {
-            debug!("No USB device found for reconnection.");
-            Err(anyhow::anyhow!("Device not found"))
-        }
+            },
+        )
     }
 
     pub fn send_track_info(&self, title: &str, artist: &str, album: &str) -> Result<()> {
@@ -131,16 +132,18 @@ pub fn start_listening(
             // Try to acquire a working port reader
             let port_result = {
                 let mut port_guard = service.port.lock().unwrap();
-                match port_guard.as_mut() {
-                    Some(p) => {
+                port_guard.as_mut().map_or_else(
+                    || {
+                        Err(serialport::Error::new(
+                            serialport::ErrorKind::NoDevice,
+                            "No port available",
+                        ))
+                    },
+                    |p| {
                         debug!("Port available, attempting to clone...");
                         p.try_clone()
-                    }
-                    None => Err(serialport::Error::new(
-                        serialport::ErrorKind::NoDevice,
-                        "No port available",
-                    )),
-                }
+                    },
+                )
             };
 
             match port_result {
@@ -191,9 +194,7 @@ pub fn start_listening(
                                 }
                                 line_buffer.clear();
                             }
-                            Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                                continue;
-                            }
+                            Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {}
                             Err(e) => {
                                 error!("Error reading from USB: {e}");
                                 break;
@@ -222,7 +223,10 @@ pub fn start_listening(
     });
 }
 
-pub fn start_state_sync(service: Arc<UsbService>, state_changes_tx: tokio::sync::broadcast::Sender<StateChangeEvent>) {
+pub fn start_state_sync(
+    service: Arc<UsbService>,
+    state_changes_tx: &tokio::sync::broadcast::Sender<StateChangeEvent>,
+) {
     let mut rx = state_changes_tx.subscribe();
 
     tokio::spawn(async move {
@@ -246,12 +250,11 @@ pub fn start_state_sync(service: Arc<UsbService>, state_changes_tx: tokio::sync:
             loop {
                 match rx.try_recv() {
                     Ok(e) => events.push(e),
-                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Empty | TryRecvError::Closed) => break,
                     Err(TryRecvError::Lagged(count)) => {
                         error!("USB state sync channel lagged by {count} messages during drain");
                         continue;
                     }
-                    Err(TryRecvError::Closed) => break,
                 }
                 if events.len() > 100 {
                     break;
@@ -290,6 +293,7 @@ fn process_event(service: &UsbService, event: StateChangeEvent) {
         StateChangeEvent::SongTimeEvent(progress) => {
             let current = api_models::common::dur_to_string(&progress.current_time);
             let total = api_models::common::dur_to_string(&progress.total_time);
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let percent = if progress.total_time.as_secs() > 0 {
                 ((progress.current_time.as_secs_f32() / progress.total_time.as_secs_f32()) * 100.0) as u8
             } else {

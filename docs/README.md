@@ -123,6 +123,10 @@ TODO
 * [ ] Generate missing album cover image using album name
 * [x] Seek to position
 * [x] Keep last N songs in *history* when random mode is enabled
+* [ ] Remote file system management (nfs and samba)
+* [ ] Lyrics Support
+* [ ] Music Recommendations
+* [ ] Web UI Themes
 * [ ] Windows support
 * [ ] MacOS support
 * [x] DSD/DoP playback support
@@ -132,13 +136,16 @@ TODO
 * [ ] Implement MPD protocol for clients
 * [ ] Implement multi-room playback
 * [x] VU meter
+* [x] Minimal DSP - filters
 
 
 ## Code improvements
+* [ ] replace bulma css with something modern and maitained
+* [ ] replace seed-rs with something newer and maintained
 * [ ] replace sled with native_db or redb (high memory usage)
 * [ ] get rid of `.unwrap()` calls
 * [ ] get rid of unnecessary `.clone()` calls
-* [ ] refactor names all over the code
+* [ ] refactoring
 * [ ] replace `warp` with `axum` or `actix`
 * [ ] write generic fun and macros to reduce code duplication in UI
 

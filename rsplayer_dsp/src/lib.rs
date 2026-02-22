@@ -48,13 +48,14 @@ impl Equalizer {
     }
 
     // Helper to add the same filter to all channels (e.g. for room correction or bass boost)
-    pub fn add_global_biquad_filter(&mut self, samplerate: usize, params: BiquadParameters) -> Result<()> {
+    pub fn add_global_biquad_filter(&mut self, samplerate: usize, params: &BiquadParameters) -> Result<()> {
         for ch in 0..self.channels {
             self.add_biquad_filter(ch, samplerate, params.clone())?;
         }
         Ok(())
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     pub fn add_gain_filter(&mut self, channel: usize, gain: f64) -> Result<()> {
         if channel >= self.channels {
             return Err(anyhow::anyhow!("Channel index out of bounds"));

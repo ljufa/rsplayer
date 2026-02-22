@@ -67,7 +67,7 @@ impl<R: Read> IcyMetadataReader<R> {
                                 album = self.radio_meta.name.clone().unwrap_or_default();
                             }
                             if album.is_empty() {
-                                album = self.radio_meta.url.clone();
+                                album.clone_from(&self.radio_meta.url);
                             }
                             let song = Song {
                                 title: song_title,
@@ -128,120 +128,128 @@ pub fn get_external_radio_meta(agent: &ureq::Agent, resp: &ureq::Response) -> Op
     };
 
     if let Some(audio_info) = resp.header("ice-audio-info") {
-        audio_info.split(';').for_each(|s| {
-            if let Some((key, value)) = s.split_once('=') {
-                match key.trim() {
-                    "samplerate" => {
-                        if let Ok(val) = value.trim().parse() {
-                            radio_meta.samplerate = Some(val);
-                        }
-                    }
-                    "channels" => {
-                        if let Ok(val) = value.trim().parse() {
-                            radio_meta.channels = Some(val);
-                        }
-                    }
-                    "bitrate" => {
-                        if let Ok(val) = value.trim().parse() {
-                            radio_meta.bitrate = Some(val);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        });
+        parse_audio_info(audio_info, &mut radio_meta);
     }
 
     let server = resp.header("Server").unwrap_or_default();
     if server == "radiosphere" {
-        let track_url = build_radiosphere_api_url(final_url);
-
-        if let Some(url) = track_url {
-            if let Ok(api_resp) = agent.get(&url).call() {
-                if let Ok(body) = api_resp.into_string() {
-                    if let Some(song) = parse_song_metadata(&body) {
-                        radio_meta.name = Some(format!(
-                            "{} - {}",
-                            song.artist.unwrap_or_default(),
-                            song.title.unwrap_or_default()
-                        ));
-                    }
-                }
-            }
-        }
-        if let Some((channel_url, source)) = build_radiosphere_channel_api_url(final_url) {
-            if let Ok(api_resp) = agent.get(&channel_url).call() {
-                if let Ok(api_body) = api_resp.into_string() {
-                    if let Ok(json_body) = serde_json::from_str::<serde_json::Value>(&api_body) {
-                        if let Some(cover_image_url) = json_body.get("coverImageUrl").and_then(|v| v.as_str()) {
-                            radio_meta.image_url = Some(cover_image_url.to_string());
-                        }
-                        let channel = json_body.get("title").and_then(|v| v.as_str());
-                        let station = source.split('.').next().map(|s| {
-                            let mut c = s.chars();
-                            match c.next() {
-                                None => String::new(),
-                                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-                            }
-                        });
-                        let mut new_description = String::new();
-                        if let Some(station_str) = station {
-                            new_description.push_str(&station_str);
-                        }
-                        if let Some(channel_str) = channel {
-                            if !new_description.is_empty() {
-                                new_description.push_str(" - ");
-                            }
-                            new_description.push_str(channel_str);
-                        }
-                        if !new_description.is_empty() {
-                            radio_meta.description = Some(new_description);
-                        }
-                    }
-                }
-            }
-        }
+        process_radiosphere_meta(agent, final_url, &mut radio_meta);
     } else if server.starts_with("QuantumCast Streamer") {
         if let Some(channel_key) = resp.header("x-quantumcast-channelkey") {
-            let track_url = Some(format!("https://api.streamabc.net/metadata/channel/{channel_key}.json"));
+            process_quantumcast_meta(agent, channel_key, &mut radio_meta);
+        }
+    }
+    Some(radio_meta)
+}
 
-            if let Some(url) = track_url {
-                if let Ok(api_resp) = agent.get(&url).call() {
-                    if let Ok(body) = api_resp.into_string() {
-                        if let Some(song) = parse_song_metadata(&body) {
-                            radio_meta.name = Some(format!(
-                                "{} - {}",
-                                song.artist.unwrap_or_default(),
-                                song.title.unwrap_or_default()
-                            ));
-                        }
-                        if let Ok(json_body) = serde_json::from_str::<serde_json::Value>(&body) {
-                            if let Some(cover_url) = json_body.get("cover").and_then(|v| v.as_str()) {
-                                radio_meta.image_url = Some(cover_url.to_string());
-                            }
-                            let channel = json_body.get("channel").and_then(|v| v.as_str());
-                            let station = json_body.get("station").and_then(|v| v.as_str());
-                            let mut new_description = String::new();
-                            if let Some(station_str) = station {
-                                new_description.push_str(station_str);
-                            }
-                            if let Some(channel_str) = channel {
-                                if !new_description.is_empty() {
-                                    new_description.push_str(" - ");
-                                }
-                                new_description.push_str(channel_str);
-                            }
+fn parse_audio_info(audio_info: &str, radio_meta: &mut RadioMeta) {
+    audio_info.split(';').for_each(|s| {
+        if let Some((key, value)) = s.split_once('=') {
+            match key.trim() {
+                "samplerate" => {
+                    if let Ok(val) = value.trim().parse() {
+                        radio_meta.samplerate = Some(val);
+                    }
+                }
+                "channels" => {
+                    if let Ok(val) = value.trim().parse() {
+                        radio_meta.channels = Some(val);
+                    }
+                }
+                "bitrate" => {
+                    if let Ok(val) = value.trim().parse() {
+                        radio_meta.bitrate = Some(val);
+                    }
+                }
+                _ => {}
+            }
+        }
+    });
+}
 
-                            if !new_description.is_empty() {
-                                radio_meta.description = Some(new_description);
-                            }
+fn process_radiosphere_meta(agent: &ureq::Agent, final_url: &str, radio_meta: &mut RadioMeta) {
+    let track_url = build_radiosphere_api_url(final_url);
+
+    if let Some(url) = track_url {
+        if let Ok(api_resp) = agent.get(&url).call() {
+            if let Ok(body) = api_resp.into_string() {
+                if let Some(song) = parse_song_metadata(&body) {
+                    radio_meta.name = Some(format!(
+                        "{} - {}",
+                        song.artist.unwrap_or_default(),
+                        song.title.unwrap_or_default()
+                    ));
+                }
+            }
+        }
+    }
+    if let Some((channel_url, source)) = build_radiosphere_channel_api_url(final_url) {
+        if let Ok(api_resp) = agent.get(&channel_url).call() {
+            if let Ok(api_body) = api_resp.into_string() {
+                if let Ok(json_body) = serde_json::from_str::<serde_json::Value>(&api_body) {
+                    if let Some(cover_image_url) = json_body.get("coverImageUrl").and_then(|v| v.as_str()) {
+                        radio_meta.image_url = Some(cover_image_url.to_string());
+                    }
+                    let channel = json_body.get("title").and_then(|v| v.as_str());
+                    let station = source.split('.').next().map(|s| {
+                        let mut c = s.chars();
+                        c.next()
+                            .map_or_else(String::new, |f| f.to_uppercase().collect::<String>() + c.as_str())
+                    });
+                    let mut new_description = String::new();
+                    if let Some(station_str) = station {
+                        new_description.push_str(&station_str);
+                    }
+                    if let Some(channel_str) = channel {
+                        if !new_description.is_empty() {
+                            new_description.push_str(" - ");
                         }
+                        new_description.push_str(channel_str);
+                    }
+                    if !new_description.is_empty() {
+                        radio_meta.description = Some(new_description);
                     }
                 }
             }
         }
     }
-    Some(radio_meta)
+}
+
+fn process_quantumcast_meta(agent: &ureq::Agent, channel_key: &str, radio_meta: &mut RadioMeta) {
+    let track_url = format!("https://api.streamabc.net/metadata/channel/{channel_key}.json");
+
+    if let Ok(api_resp) = agent.get(&track_url).call() {
+        if let Ok(body) = api_resp.into_string() {
+            if let Some(song) = parse_song_metadata(&body) {
+                radio_meta.name = Some(format!(
+                    "{} - {}",
+                    song.artist.unwrap_or_default(),
+                    song.title.unwrap_or_default()
+                ));
+            }
+            if let Ok(json_body) = serde_json::from_str::<serde_json::Value>(&body) {
+                if let Some(cover_url) = json_body.get("cover").and_then(|v| v.as_str()) {
+                    radio_meta.image_url = Some(cover_url.to_string());
+                }
+                let channel = json_body.get("channel").and_then(|v| v.as_str());
+                let station = json_body.get("station").and_then(|v| v.as_str());
+                let mut new_description = String::new();
+                if let Some(station_str) = station {
+                    new_description.push_str(station_str);
+                }
+                if let Some(channel_str) = channel {
+                    if !new_description.is_empty() {
+                        new_description.push_str(" - ");
+                    }
+                    new_description.push_str(channel_str);
+                }
+
+                if !new_description.is_empty() {
+                    radio_meta.description = Some(new_description);
+                }
+            }
+        }
+    }
 }
 
 fn build_radiosphere_api_url(final_url: &str) -> Option<String> {
@@ -256,18 +264,22 @@ fn build_radiosphere_api_url(final_url: &str) -> Option<String> {
 fn parse_song_metadata(api_body: &str) -> Option<Song> {
     let json_body = serde_json::from_str::<serde_json::Value>(api_body).ok()?;
 
-    let title: Option<&str>;
-    let artist: Option<&str>;
-
-    if let Some(track_info) = json_body.get("trackInfo") {
-        // Radiosphere
-        title = track_info.get("title").and_then(|v| v.as_str());
-        artist = track_info.get("artistCredits").and_then(|v| v.as_str());
-    } else {
-        // QuantumCast
-        title = json_body.get("song").and_then(|v| v.as_str());
-        artist = json_body.get("artist").and_then(|v| v.as_str());
-    }
+    let (title, artist) = json_body.get("trackInfo").map_or_else(
+        || {
+            // QuantumCast
+            (
+                json_body.get("song").and_then(|v| v.as_str()),
+                json_body.get("artist").and_then(|v| v.as_str()),
+            )
+        },
+        |track_info| {
+            // Radiosphere
+            (
+                track_info.get("title").and_then(|v| v.as_str()),
+                track_info.get("artistCredits").and_then(|v| v.as_str()),
+            )
+        },
+    );
 
     if title.is_some() || artist.is_some() {
         Some(Song {

@@ -308,7 +308,7 @@ impl MetadataService {
     }
 
     fn scan_single_file(&self, file_path: &Path) -> Result<()> {
-        info!("Scanning file:\t{file_path:?}");
+        info!("Scanning file:\t{}", file_path.display());
 
         let file = Box::new(File::open(file_path).unwrap());
         let file_modification_date: DateTime<Utc> = file.as_ref().metadata()?.modified()?.into();
@@ -343,7 +343,7 @@ impl MetadataService {
                     }
                 }
 
-                song.file = file_p.clone();
+                song.file.clone_from(file_p);
                 song.file_date = file_modification_date;
                 log::debug!("Add/update song in database: {song:?}");
                 self.song_repository.save(&song);

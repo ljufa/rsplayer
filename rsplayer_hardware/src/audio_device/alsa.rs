@@ -48,13 +48,13 @@ pub fn get_all_cards() -> Vec<AudioCard> {
             name: card_name.clone(),
             description: card.get_longname().unwrap_or_default(),
             pcm_devices,
-            mixers: get_card_mixers(&card_name, &card.get_index()),
+            mixers: get_card_mixers(&card_name, card.get_index()),
         });
     }
     result
 }
 
-fn get_card_mixers(card_id: &str, card_idx: &i32) -> Vec<CardMixer> {
+fn get_card_mixers(card_id: &str, card_idx: i32) -> Vec<CardMixer> {
     let mixer_card_name = format!("hw:{card_idx}");
     let mut result = vec![];
     let Ok(mixer) = Mixer::new(&mixer_card_name, false) else {
@@ -141,7 +141,6 @@ impl VolumeControlDevice for AlsaMixer {
         }
         ev
     }
-
 
     fn get_vol(&mut self) -> Volume {
         if let Ok(mixer) = Mixer::new(self.card_name.as_str(), false) {

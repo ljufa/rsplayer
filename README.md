@@ -24,14 +24,18 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - **Written in Rust**: Enjoy the benefits of minimal dependencies and high performance, thanks to the Rust native implementation.
 - **Comprehensive Music Library Management**: Scan, search, and browse your music library and online radio stations with ease.
 - **Dynamic Playlists**: Automaticaly create dynamic playlists for personalized listening experiences.
+- **DSP Integration**: Advanced Digital Signal Processing with filters and presets.
+- **Web UI VU Meter**: Real-time audio visualization in the web interface.
+- **Extended Hardware Control**: Support for seek and power management via firmware interactions.
 
 ### Planed features
 - **Expanded Audio Codec Support**: Compatibility with a wider range of audio codecs.
 - **Intelligent Dynamic Playlists**: Advanced dynamic playlists that adapt based on user likes or playback counts for a personalized listening experience.
 - **Windows Compatibility**: Development of a Windows build to extend platform support.
 - **MacOS Compatibility**: Development of a MacOS build to extend platform support.
-- **DSP Support**: Integration of Digital Signal Processing (DSP) capabilities for enhanced audio effects and manipulations.
 - **Remote file system management**: Ability to mount and use remote file storage (nfs and samba) from UI. 
+- **Lyrics Support**: Display synchronized or unsynchronized lyrics.
+- **Music Recommendations**: Suggest similar tracks or artists based on listening history or current playback.
 ## Installation 
 To install RSPlayer on debian based linux distro, execute the following script (requires curl):
 ```bash

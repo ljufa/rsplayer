@@ -329,7 +329,7 @@ pub async fn handle_user_commands(
                 player_service.play_from_current_queue_song();
             }
             UpdateDsp(dsp_settings) => {
-                player_service.update_dsp_settings(dsp_settings.clone());
+                player_service.update_dsp_settings(&dsp_settings);
                 let mut settings = config_store.get_settings();
                 settings.rs_player_settings.dsp_settings = dsp_settings;
                 config_store.save_settings(&settings);

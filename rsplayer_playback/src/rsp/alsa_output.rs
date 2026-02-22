@@ -129,6 +129,7 @@ pub struct AlsaOutput {
 
 #[allow(clippy::too_many_arguments)]
 impl AlsaOutput {
+    #[allow(clippy::too_many_arguments, deprecated)]
     pub fn new(
         spec: SignalSpec,
         duration: u64,
@@ -143,6 +144,7 @@ impl AlsaOutput {
             .devices()?
             .find(|d| d.name().unwrap_or_default() == audio_device)
             .ok_or_else(|| Error::msg(format!("Device {audio_device} not found!")))?;
+
         debug!("Spec: {spec:?}");
 
         let supported_configs_range = device
@@ -201,6 +203,7 @@ impl AlsaOutput {
         )
     }
 
+    #[allow(clippy::too_many_lines)]
     fn open_with_format(
         spec: SignalSpec,
         duration: u64,
@@ -279,7 +282,7 @@ impl AlsaOutput {
                             data[written..].iter_mut().for_each(|s| *s = DsdU32::MID);
                         },
                         {
-                            let ef = error_flag_clone.clone();
+                            let ef = error_flag_clone;
                             move |err| {
                                 error!("audio output error: {err}");
                                 ef.store(true, Ordering::Relaxed);
@@ -359,7 +362,7 @@ impl AlsaOutput {
         Ok(())
     }
 
-    pub fn flush(&mut self) {
+    pub fn flush(&self) {
         _ = self.stream.pause();
     }
 }

@@ -47,6 +47,7 @@ const LAST_SONG_PROGRESS_KEY: &str = "last_played_song_progress";
 
 impl PlayerService {
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn new(
         settings: &Settings,
         metadata_service: Arc<MetadataService>,
@@ -85,6 +86,7 @@ impl PlayerService {
                         if i % 2 == 0 {
                             let lt_secs = st.current_time.as_secs();
                             let lt = lt_secs.to_string();
+                            #[allow(clippy::cast_possible_truncation)]
                             last_known_time_clone.store(lt_secs as u32, Ordering::Relaxed);
                             trace!("Save time state: {lt}");
                             _ = state_db.insert(LAST_SONG_PROGRESS_KEY, lt.as_bytes());
@@ -201,7 +203,9 @@ impl PlayerService {
     }
 
     pub fn seek_relative(&self, offset_seconds: i32) {
+        #[allow(clippy::cast_possible_wrap)]
         let current = self.last_known_time.load(Ordering::Relaxed) as i32;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let new_time = (current + offset_seconds).max(0) as u16;
         self.seek_current_song(new_time);
     }
@@ -217,7 +221,7 @@ impl PlayerService {
     /// `DspProcessor` is exclusively owned here — no mutex needed.
     /// The playback thread picks up the new equalizer via the shared `pending`
     /// Arc on its next `write()` call.
-    pub fn update_dsp_settings(&self, dsp_settings: DspSettings) {
+    pub fn update_dsp_settings(&self, dsp_settings: &DspSettings) {
         if let Ok(mut guard) = self.dsp_processor.lock() {
             if let Some(ref mut dsp) = *guard {
                 dsp.update_settings(dsp_settings);
@@ -227,6 +231,7 @@ impl PlayerService {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn play_all_in_queue(&self) -> JoinHandle<PlaybackResult> {
         self.stop_signal.store(false, Ordering::Relaxed);
         let stop_signal = self.stop_signal.clone();
@@ -252,6 +257,7 @@ impl PlayerService {
             .name("playback".to_string())
             .priority(prio)
             .spawn(move |prio| {
+                const MAX_RETRIES: i32 = 10;
                 if prio.is_ok() {
                     info!("Playback thread started with priority {playback_thread_prio:?}");
                 } else {
@@ -267,8 +273,8 @@ impl PlayerService {
                     }
                 }
                 let mut retry_count = 0;
-                const MAX_RETRIES: i32 = 10;
                 loop {
+
                     let Some(song) = queue.get_current_song() else {
                         changes_tx
                             .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))

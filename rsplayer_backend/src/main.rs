@@ -134,7 +134,7 @@ async fn main() {
             system_commands_tx.clone(),
             state_changes_tx.clone(),
         );
-        usb::start_state_sync(service, state_changes_tx.clone());
+        usb::start_state_sync(service, &state_changes_tx);
     }
 
     #[cfg(feature = "lirc")]

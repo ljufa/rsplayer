@@ -9,7 +9,7 @@ use anyhow::{format_err, Result};
 use api_models::player::Song;
 use api_models::settings::RsPlayerSettings;
 use api_models::state::{PlayerInfo, SongProgress, StateChangeEvent};
-use log::{debug, info, trace, warn};
+use log::{debug, info, warn};
 use rsplayer_metadata::radio_meta::{self, RadioMeta};
 use symphonia::core::audio::Channels;
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_DSD_LSBF, CODEC_TYPE_DSD_MSBF, CODEC_TYPE_NULL};
@@ -36,7 +36,7 @@ pub enum PlaybackResult {
 
 unsafe impl Send for PlaybackResult {}
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn play_file(
     path_str: &str,
     stop_signal: &Arc<AtomicBool>,

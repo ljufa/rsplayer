@@ -26,13 +26,10 @@ impl AudioInterfaceService {
     pub fn new(config: &ArcConfiguration, usb_service: Option<ArcUsbService>) -> Result<Self> {
         let mut settings = config.get_settings();
         let cards = crate::audio_device::alsa::get_all_cards();
-        let mut card_index = 0;
-        if let Some(card) = cards
+        let card_index = cards
             .iter()
             .find(|c| c.id == settings.alsa_settings.output_device.card_id)
-        {
-            card_index = card.index;
-        }
+            .map_or(0, |card| card.index);
 
         if let Some(mixer_name) = &settings.volume_ctrl_settings.alsa_mixer_name {
             for card in &cards {
