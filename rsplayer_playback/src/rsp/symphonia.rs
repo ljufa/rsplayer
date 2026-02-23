@@ -110,7 +110,7 @@ pub fn play_file(
             audio_format_bit: bps,
             audio_format_channels: chan_num,
             audio_format_rate: rate,
-            codec: cd.map(|c| c.long_name.to_string()),
+            codec: cd.map(|c| c.short_name.to_uppercase()),
         }))
         .expect("msg send failed");
 

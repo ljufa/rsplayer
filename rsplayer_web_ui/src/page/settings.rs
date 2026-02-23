@@ -10,7 +10,7 @@ use gloo_console::{error, log};
 use gloo_file::futures::read_as_text;
 use gloo_file::File;
 use gloo_net::{http::Request, Error};
-use seed::{attrs, button, div, h1, i, input, label, option, prelude::*, section, select, span, style, C, IF};
+use seed::{attrs, button, details, div, h1, i, input, label, option, prelude::*, section, select, span, style, summary, C, IF};
 use wasm_bindgen::JsCast;
 use web_sys::FileList;
 
@@ -72,6 +72,11 @@ pub enum Msg {
     SettingsFetched(Settings),
     SendSystemCommand(SystemCommand),
     SendUserCommand(UserCommand),
+
+    // --- Appearance ---
+    /// Emitted when the user picks a theme in the settings page.
+    /// The parent (lib.rs) intercepts this and calls applyTheme().
+    SelectTheme(String),
 }
 
 #[derive(Debug, Clone, EnumIter, PartialEq, Eq)]
@@ -370,6 +375,9 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 }
             }
         }
+        Msg::SelectTheme(_) => {
+            // Handled by the parent (lib.rs) — nothing to do here.
+        }
         _ => {}
     }
 }
@@ -378,10 +386,19 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 //     View
 // ------ ------
 #[allow(clippy::too_many_lines)]
-pub fn view(model: &Model) -> Node<Msg> {
+pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
     let settings = &model.settings;
     div![
         view_spinner_modal(model.waiting_response),
+        // Appearance
+        section![
+            C!["section"],
+            details![
+                C!["settings-details"],
+                summary![C!["settings-details__summary"], "Appearance"],
+                div![C!["settings-details__body"], view_theme_picker(current_theme)],
+            ],
+        ],
         // players
         section![
             C!["section"],
@@ -757,76 +774,80 @@ fn view_dsp_settings(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
                 }
             ]
         ],
-        div![
-            C!["field", "mb-4"],
-            label!["Load Preset", C!["label", "has-text-white"]],
+        IF!(rsp_settings.dsp_settings.enabled =>
             div![
-                C!["control"],
                 div![
-                    C!["select"],
-                    select![
-                        option![attrs!{At::Value => ""}, "Select a preset..."],
-                        get_dsp_presets().iter().enumerate().map(|(i, preset)| {
-                            option![
-                                attrs! {At::Value => i},
-                                &preset.name
+                    C!["field", "mb-4"],
+                    label!["Load Preset", C!["label", "has-text-white"]],
+                    div![
+                        C!["control"],
+                        div![
+                            C!["select"],
+                            select![
+                                option![attrs!{At::Value => ""}, "Select a preset..."],
+                                get_dsp_presets().iter().enumerate().map(|(i, preset)| {
+                                    option![
+                                        attrs! {At::Value => i},
+                                        &preset.name
+                                    ]
+                                }),
+                                input_ev(Ev::Change, |val| {
+                                    if let Ok(idx) = val.parse::<usize>() {
+                                        Msg::DspLoadPreset(idx)
+                                    } else {
+                                        Msg::DspLoadPreset(999) // Invalid index to do nothing
+                                    }
+                                })
                             ]
-                        }),
-                        input_ev(Ev::Change, |val| {
-                            if let Ok(idx) = val.parse::<usize>() {
-                                Msg::DspLoadPreset(idx)
-                            } else {
-                                Msg::DspLoadPreset(999) // Invalid index to do nothing
-                            }
-                        })
+                        ]
                     ]
-                ]
-            ]
-        ],
-        rsp_settings.dsp_settings.filters.iter().enumerate().map(|(index, filter)| {
-            view_filter(index, filter)
-        }),
-        div![
-            C!["buttons", "mt-4"],
-            button![
-                C!["button", "is-primary"],
-                "Add Filter",
-                ev(Ev::Click, |_| Msg::DspAddFilter)
-            ],
-            button![
-                C!["button", "is-danger"],
-                "Remove All",
-                ev(Ev::Click, |_| Msg::DspRemoveAllFilters)
-            ],
-            button![
-                C!["button", "is-warning"],
-                "Apply (Live)",
-                ev(Ev::Click, |_| Msg::DspApplySettings)
-            ],
-            div![
-                C!["file", "is-primary", "ml-2"],
-                label![
-                    C!["file-label"],
-                    input![
-                        C!["file-input"],
-                        attrs! { At::Type => "file", At::Accept => ".yml,.yaml" },
-                        ev(Ev::Change, |event| {
-                            let target = event.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap();
-                            if let Some(files) = target.files() {
-                                Msg::DspImportConfig(files)
-                            } else {
-                                Msg::DspApplySettings // Dummy
-                            }
-                        })
+                ],
+                rsp_settings.dsp_settings.filters.iter().enumerate().map(|(index, filter)| {
+                    view_filter(index, filter)
+                }),
+                div![
+                    C!["buttons", "mt-4"],
+                    button![
+                        C!["button", "is-primary", "is-small"],
+                        "Add Filter",
+                        ev(Ev::Click, |_| Msg::DspAddFilter)
                     ],
-                    span![
-                        C!["file-cta"],
-                        span![C!["file-icon"], i![C!["fas", "fa-upload"]]],
-                        span![C!["file-label"], "Import CamillaDSP config"]
+                    button![
+                        C!["button", "is-danger", "is-small"],
+                        "Remove All",
+                        ev(Ev::Click, |_| Msg::DspRemoveAllFilters)
+                    ],
+                    button![
+                        C!["button", "is-warning", "is-small"],
+                        "Apply (Live)",
+                        ev(Ev::Click, |_| Msg::DspApplySettings)
+                    ],
+                    div![
+                        C!["file", "is-primary", "is-small", "ml-2"],
+                        label![
+                            C!["file-label"],
+                            input![
+                                C!["file-input"],
+                                attrs! { At::Type => "file", At::Accept => ".yml,.yaml" },
+                                ev(Ev::Change, |event| {
+                                    let target = event.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap();
+                                    if let Some(files) = target.files() {
+                                        Msg::DspImportConfig(files)
+                                    } else {
+                                        Msg::DspApplySettings // Dummy
+                                    }
+                                })
+                            ],
+                            span![
+                                C!["file-cta"],
+                                span![C!["file-icon"], i![C!["fas", "fa-upload"]]],
+                                span![C!["file-label"], "Import CamillaDSP config"]
+                            ]
+                        ]
                     ]
                 ]
             ]
-        ]
+        )
     ]
 }
 
@@ -956,7 +977,7 @@ fn view_filter(index: usize, filter_config: &FilterConfig) -> Node<Msg> {
         div![
             C!["control", "is-flex", "is-align-items-flex-end"],
             button![
-                C!["button", "is-danger"],
+                C!["button", "is-danger", "is-small"],
                 "Remove",
                 ev(Ev::Click, move |_| Msg::DspRemoveFilter(index))
             ]
@@ -965,6 +986,55 @@ fn view_filter(index: usize, filter_config: &FilterConfig) -> Node<Msg> {
 }
 
 
+
+/// (bg, primary-text, accent, ui-elements, label)
+const THEMES: &[(&str, &str, &str, &str, &str)] = &[
+    ("dark",          "#121212", "#FFFFFF", "#1DB954", "#282828", ),
+    ("light",         "#f5f5f5", "#1a1a1a", "#1a8f3c", "#e0e0e0", ),
+    ("solarized",     "#002b36", "#eee8d5", "#2aa198", "#073642", ),
+    ("dracula",       "#282a36", "#f8f8f2", "#bd93f9", "#44475a", ),
+    ("nord",          "#2e3440", "#eceff4", "#88c0d0", "#3b4252", ),
+    ("rose-pine",     "#191724", "#e0def4", "#eb6f92", "#26233a", ),
+    ("ocean",         "#0f1923", "#cdd6f4", "#4fc3f7", "#1a2a3a", ),
+    ("gruvbox",       "#282828", "#ebdbb2", "#b8bb26", "#3c3836", ),
+    ("catppuccin",    "#1e1e2e", "#cdd6f4", "#cba6f7", "#313244", ),
+    ("high-contrast", "#000000", "#ffffff", "#00ff00", "#1a1a1a", ),
+];
+
+const THEME_LABELS: &[(&str, &str)] = &[
+    ("dark",          "Dark"),
+    ("light",         "Light"),
+    ("solarized",     "Solarized"),
+    ("dracula",       "Dracula"),
+    ("nord",          "Nord"),
+    ("rose-pine",     "Rose Pine"),
+    ("ocean",         "Ocean"),
+    ("gruvbox",       "Gruvbox"),
+    ("catppuccin",    "Catppuccin"),
+    ("high-contrast", "Hi-Contrast"),
+];
+
+fn view_theme_picker(current_theme: &str) -> Node<Msg> {
+    div![
+        C!["theme-picker"],
+        THEMES.iter().zip(THEME_LABELS.iter()).map(|((id, bg, _text, accent, ui), (_id2, label))| {
+            let theme_id = id.to_string();
+            let is_active = *id == current_theme;
+            div![
+                C!["theme-card", IF!(is_active => "is-active")],
+                // colour swatch: bg | ui | accent
+                div![
+                    C!["theme-card__swatch"],
+                    span![style! { St::Background => *bg }],
+                    span![style! { St::Background => *ui }],
+                    span![style! { St::Background => *accent }],
+                ],
+                span![C!["theme-card__name"], *label],
+                ev(Ev::Click, move |_| Msg::SelectTheme(theme_id)),
+            ]
+        })
+    ]
+}
 
 #[allow(clippy::future_not_send)]
 async fn save_settings(settings: Settings, query: String) -> Result<String, Error> {

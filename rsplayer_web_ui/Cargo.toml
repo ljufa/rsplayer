@@ -21,7 +21,7 @@ wasm-sockets = { version = "1" }
 gloo-console = { version = "0.3.0" }
 gloo-net = { version = "0.6.0" }
 indextree = "4.7.2"
-web-sys = { version = "0.3", features = ["HtmlCanvasElement", "HtmlElement", "CanvasRenderingContext2d", "CanvasGradient", "Window", "Document", "Element", "Node", "DomRect"] }
+web-sys = { version = "0.3", features = ["HtmlCanvasElement", "HtmlElement", "CanvasRenderingContext2d", "CanvasGradient", "Window", "Document", "Element", "Node", "DomRect", "CssStyleDeclaration"] }
 wasm-bindgen = "0.2"
 gloo-file = { version = "0.3.0", features = ["futures"] }
 serde_yaml = "0.9.34"

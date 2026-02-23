@@ -58,6 +58,10 @@ struct Model {
     metadata_scan_info: Option<String>,
     notification: Option<StateChangeEvent>,
     vumeter: Option<vumeter::VUMeter>,
+    /// Name of the currently active theme (e.g. "dark", "light", "solarized", "high-contrast").
+    current_theme: String,
+    /// Whether the library sub-nav dropdown is expanded.
+    library_nav_open: bool,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -95,6 +99,12 @@ pub enum Msg {
     WindowResized,
 
     LikeMediaItemClick(MetadataCommand),
+    /// Cycle to the next theme (calls JS cycleTheme()).
+    CycleTheme,
+    /// Apply a specific theme by name (from the settings picker).
+    ChangeTheme(String),
+    /// Toggle the library sub-nav dropdown open/closed.
+    ToggleLibraryNav,
 }
 
 #[derive(Debug, Deserialize)]
@@ -164,18 +174,6 @@ impl Page {
         }
     }
 
-    const fn has_image_background(&self) -> bool {
-        !matches!(self, Page::Settings(_))
-    }
-    const fn has_tabs(&self) -> bool {
-        matches!(
-            self,
-            Page::MusicLibraryFiles(_)
-                | Page::MusicLibraryStaticPlaylist(_)
-                | Page::MusicLibraryArtists(_)
-                | Page::MusicLibraryRadio(_)
-        )
-    }
 }
 
 // ------ ------
@@ -202,6 +200,9 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
             Msg::Ignore
         }
     });
+    // Read whichever theme JS already applied (from localStorage / system pref).
+    let current_theme = getTheme();
+
     Model {
         base_url: url.to_base_url(),
         page,
@@ -221,6 +222,8 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
         metadata_scan_info: None,
         notification: None,
         vumeter: None,
+        current_theme,
+        library_nav_open: false,
     }
 }
 // ------ ------
@@ -338,6 +341,16 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 
         Msg::UrlChanged(subs::UrlChanged(url)) => {
             model.page = Page::new(url, orders);
+            // Close library dropdown when navigating away from library section.
+            if !matches!(
+                model.page,
+                Page::MusicLibraryFiles(_)
+                    | Page::MusicLibraryStaticPlaylist(_)
+                    | Page::MusicLibraryArtists(_)
+                    | Page::MusicLibraryRadio(_)
+            ) {
+                model.library_nav_open = false;
+            }
             if matches!(model.page, Page::Player) && model.player_model.vu_meter_enabled {
                 orders.after_next_render(|_| Some(Msg::InitVUMeter));
             } else {
@@ -532,6 +545,9 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 if let page::settings::Msg::SendUserCommand(cmd) = &msg {
                     _ = model.web_socket.send_string(&serde_json::to_string(cmd).unwrap());
                 }
+                if let page::settings::Msg::SelectTheme(theme) = &msg {
+                    orders.send_msg(Msg::ChangeTheme(theme.clone()));
+                }
                 page::settings::update(msg, sett_model, &mut orders.proxy(Msg::Settings));
             }
         }
@@ -610,6 +626,15 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::ReloadApp => {
             _ = window().location().reload();
         }
+        Msg::CycleTheme => {
+            model.current_theme = cycleTheme();
+        }
+        Msg::ChangeTheme(theme) => {
+            model.current_theme = applyTheme(&theme);
+        }
+        Msg::ToggleLibraryNav => {
+            model.library_nav_open = !model.library_nav_open;
+        }
         Msg::Ignore => {}
         _ => {}
     }
@@ -620,22 +645,23 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 // ------ ------
 
 fn view(model: &Model) -> impl IntoNodes<Msg> {
-    let mut bg = "radial-gradient(circle, rgb(49, 144, 228) 0%, rgb(0, 0, 0) 100%);".to_string();
-    if model.page.has_image_background() {
-        if let Some(bg_image) = get_background_image(&model.player_model) {
-            bg = format!("url({})", bg_image)
-        }
+    let (bg_image, bg_color) = if let Some(img) = get_background_image(&model.player_model) {
+        (format!("url({})", img), String::new())
+    } else {
+        (String::new(), "var(--background)".to_string())
     };
 
     div![
         style! {
-            St::BackgroundImage => bg,
+            St::BackgroundImage => bg_image,
+            St::BackgroundColor => bg_color,
             St::BackgroundRepeat => "no-repeat",
             St::BackgroundSize => "cover",
-            St::MinHeight => "95vh",
+            St::BackgroundPosition => "center",
+            St::MinHeight => "100%",
         },
         C!["container"],
-        view_navigation_tabs(&model.page),
+        view_navigation_tabs(&model.page, model.library_nav_open),
         view_startup_error(model.startup_error.as_ref()),
         view_reconnect_notification(model),
         view_metadata_scan_notification(model),
@@ -736,7 +762,7 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
                     figure![
                         C!["image", "is-64x64"],
                         img![
-                            attrs! {"src" => get_background_image(player_model).unwrap_or("/headphones.png".to_string())}
+                            attrs! {"src" => get_background_image(player_model).unwrap_or("/no_album.svg".to_string())}
                         ],
                     ]
                 ],
@@ -828,15 +854,18 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
                                 ev(Ev::Click, |_| Msg::SendUserCommand(Player(Next))),
                             ],
                         ],
-                        div![input![
-                            C!["slider"],
-                            attrs! {"value"=> player_model.volume_state.current},
-                            // attrs! {"step"=> player_model.volume_state.step},
-                            attrs! {"max"=> player_model.volume_state.max},
-                            attrs! {"min"=> player_model.volume_state.min},
-                            attrs! {"type"=> "range"},
-                            input_ev(Ev::Change, Msg::SetVolume),
-                        ],],
+                        div![
+                            C!["footer-volume"],
+                            input![
+                                C!["slider", "is-fullwidth"],
+                                attrs! {"value"=> player_model.volume_state.current},
+                                // attrs! {"step"=> player_model.volume_state.step},
+                                attrs! {"max"=> player_model.volume_state.max},
+                                attrs! {"min"=> player_model.volume_state.min},
+                                attrs! {"type"=> "range"},
+                                input_ev(Ev::Change, Msg::SetVolume),
+                            ],
+                        ],
                     ]
                 ],
             ],
@@ -874,16 +903,11 @@ fn view_startup_error(error_msg: Option<&String>) -> Node<Msg> {
 fn view_content(main_model: &Model, base_url: &Url) -> Node<Msg> {
     let page = &main_model.page;
     div![
-        style! {
-            St::Background => "rgba(86, 92, 86, 0.507)",
-            St::MinHeight => "95vh"
-        },
         C!["main-content"],
-        IF!(main_model.page.has_tabs() => view_music_lib_tabs(&main_model.page)),
         match page {
             Page::Home => page::home::view(base_url),
             Page::NotFound => page::not_found::view(),
-            Page::Settings(model) => page::settings::view(model).map_msg(Msg::Settings),
+            Page::Settings(model) => page::settings::view(model, &main_model.current_theme).map_msg(Msg::Settings),
             Page::Player => page::player::view(&main_model.player_model),
             Page::Queue(model) => page::queue::view(model).map_msg(Msg::Queue),
             Page::MusicLibraryStaticPlaylist(model) =>
@@ -896,100 +920,98 @@ fn view_content(main_model: &Model, base_url: &Url) -> Node<Msg> {
     ]
 }
 
-fn view_navigation_tabs(page: &Page) -> Node<Msg> {
+fn view_navigation_tabs(page: &Page, library_nav_open: bool) -> Node<Msg> {
     let page_name: &str = page.into();
-    div![
-        C![
-            "tabs",
-            "is-toggle",
-            "is-centered",
-            "is-fullwidth",
-            "has-background-dark-transparent"
-        ],
-        ul![
-            li![
-                IF!(page_name == "Player" => C!["is-active"]),
-                a![span![
-                    C!["icon", "is-small"],
-                    i![C!["material-icons"], attrs!("aria-hidden" => "true"), "music_note"],
-                ]],
-                ev(Ev::Click, |_| { Urls::player_abs().go_and_load() }),
-            ],
-            li![
-                IF!(page_name == "Queue" => C!["is-active"]),
-                a![span![
-                    C!["icon", "is-small"],
-                    i![C!["material-icons"], attrs!("aria-hidden" => "true"), "queue_music"],
-                ]],
-                ev(Ev::Click, |_| { Urls::queue_abs().go_and_load() }),
-            ],
-            li![
-                IF!(page_name == "MusicLibraryFiles" || page_name ==  "MusicLibraryStaticPlaylist" => C!["is-active"]),
-                a![span![
-                    C!["icon", "is-small"],
-                    i![C!["material-icons"], attrs!("aria-hidden" => "true"), "library_music"],
-                ],],
-                ev(Ev::Click, |_| {
-                    Urls::library_abs()
-                        .add_hash_path_part(MUSIC_LIBRARY_PL_STATIC)
-                        .go_and_load()
-                }),
-            ],
-            li![
-                IF!(page_name == "Settings" => C!["is-active"]),
-                a![span![
-                    C!["icon", "is-small"],
-                    i![C!["material-icons"], attrs!("aria-hidden" => "true"), "tune"],
-                ]],
-                ev(Ev::Click, |_| { Urls::settings_abs().go_and_load() }),
-            ],
-        ]
-    ]
-}
+    let is_library = matches!(
+        page,
+        Page::MusicLibraryFiles(_)
+            | Page::MusicLibraryStaticPlaylist(_)
+            | Page::MusicLibraryArtists(_)
+            | Page::MusicLibraryRadio(_)
+    );
 
-fn view_music_lib_tabs(page: &Page) -> Node<Msg> {
-    let page_name: &str = page.into();
-    div![
-        C!["tabs", "is-boxed", "is-centered", "is-toggle", "pt-3"],
+    nav![
+        C!["app-nav", "has-background-dark-transparent"],
+        // Main tab row
         ul![
+            C!["app-nav__items"],
+            // Now Playing
             li![
-                C!["has-background-dark-transparent"],
-                IF!(page_name == "MusicLibraryStaticPlaylist" => C!["is-active"]),
+                C!["app-nav__item", IF!(page_name == "Player" => "is-active")],
                 a![
-                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_PL_STATIC)},
-                    span!("Playlists")
-                ]
-            ],
-            li![
-                C!["has-background-dark-transparent"],
-                IF!(page_name == "MusicLibraryFiles" => C!["is-active"]),
-                a![
-                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_FILES)},
-                    span!("Files"),
+                    C!["app-nav__link"],
+                    i![C!["material-icons"], attrs!("aria-hidden" => "true"), "music_note"],
+                    span![C!["app-nav__label"], "Now Playing"],
+                    ev(Ev::Click, |_| Urls::player_abs().go_and_load()),
                 ],
             ],
+            // Queue
             li![
-                C!["has-background-dark-transparent"],
-                IF!(page_name == "MusicLibraryRadio" => C!["is-active"]),
+                C!["app-nav__item", IF!(page_name == "Queue" => "is-active")],
                 a![
-                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_RADIO)},
-                    span!("Radio")
-                ]
-            ],
-            li![
-                C!["has-background-dark-transparent"],
-                IF!(page_name == "MusicLibraryArtists" => C!["is-active"]),
-                a![
-                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_ARTISTS)},
-                    span!("Artists"),
+                    C!["app-nav__link"],
+                    i![C!["material-icons"], attrs!("aria-hidden" => "true"), "queue_music"],
+                    span![C!["app-nav__label"], "Queue"],
+                    ev(Ev::Click, |_| Urls::queue_abs().go_and_load()),
                 ],
             ],
+            // Library — clicking toggles the sub-nav dropdown
             li![
-                C!["has-background-dark-transparent"],
-                IF!(page_name == "MusicLibraryDynamicPlaylist" => C!["is-active"]),
-                a![attrs! {At::Href => ""}, span!("Discover")]
+                C!["app-nav__item", IF!(is_library => "is-active")],
+                a![
+                    C!["app-nav__link"],
+                    i![C!["material-icons"], attrs!("aria-hidden" => "true"), "library_music"],
+                    span![C!["app-nav__label"], "Library"],
+                    // Chevron rotates when open
+                    i![
+                        C!["material-icons", "app-nav__chevron", IF!(library_nav_open => "is-open")],
+                        attrs!("aria-hidden" => "true"),
+                        "expand_more"
+                    ],
+                    ev(Ev::Click, |_| Msg::ToggleLibraryNav),
+                ],
+            ],
+            // Settings
+            li![
+                C!["app-nav__item", IF!(page_name == "Settings" => "is-active")],
+                a![
+                    C!["app-nav__link"],
+                    i![C!["material-icons"], attrs!("aria-hidden" => "true"), "tune"],
+                    span![C!["app-nav__label"], "Settings"],
+                    ev(Ev::Click, |_| Urls::settings_abs().go_and_load()),
+                ],
             ],
         ],
+        // Library sub-nav — slides in below the main row when open
+        IF!(library_nav_open =>
+            div![
+                C!["app-nav__subnav"],
+                a![
+                    C!["app-nav__sublink", IF!(page_name == "MusicLibraryStaticPlaylist" => "is-active")],
+                    i![C!["material-icons"], "playlist_play"],
+                    span!["Playlists"],
+                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_PL_STATIC)},
+                ],
+                a![
+                    C!["app-nav__sublink", IF!(page_name == "MusicLibraryFiles" => "is-active")],
+                    i![C!["material-icons"], "folder_open"],
+                    span!["Files"],
+                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_FILES)},
+                ],
+                a![
+                    C!["app-nav__sublink", IF!(page_name == "MusicLibraryArtists" => "is-active")],
+                    i![C!["material-icons"], "people"],
+                    span!["Artists"],
+                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_ARTISTS)},
+                ],
+                a![
+                    C!["app-nav__sublink", IF!(page_name == "MusicLibraryRadio" => "is-active")],
+                    i![C!["material-icons"], "radio"],
+                    span!["Radio"],
+                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_RADIO)},
+                ],
+            ]
+        ),
     ]
 }
 
@@ -1036,6 +1058,22 @@ pub fn start() {
 extern "C" {
     pub fn scrollToId(id: &str);
     pub fn attachCarousel(id: &str);
+
+    /// Advance to the next theme in the cycle, persist to localStorage, and
+    /// return the new theme name.
+    pub fn cycleTheme() -> String;
+
+    /// Return the currently active theme name (reads localStorage / system pref).
+    pub fn getTheme() -> String;
+
+    /// Apply a named theme, persist to localStorage, return the applied name.
+    pub fn applyTheme(theme: &str) -> String;
+
+    /// Return JSON string of all theme names in order.
+    pub fn getAllThemes() -> String;
+
+    /// Return JSON string of full theme metadata map (label, bg, text, accent, ui).
+    pub fn getAllThemeMeta() -> String;
 }
 
 fn create_websocket(orders: &impl Orders<Msg>) -> Result<EventClient, WebSocketError> {

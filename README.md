@@ -36,6 +36,8 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - **Remote file system management**: Ability to mount and use remote file storage (nfs and samba) from UI. 
 - **Lyrics Support**: Display synchronized or unsynchronized lyrics.
 - **Music Recommendations**: Suggest similar tracks or artists based on listening history or current playback.
+- **Web UI Themes**: Support for customizable themes and dark/light modes.
+
 ## Installation 
 To install RSPlayer on debian based linux distro, execute the following script (requires curl):
 ```bash
@@ -74,25 +76,17 @@ volumes:
 ```
 
 ## Usage
-Once RSPlayer is installed, you can access the web user interface by navigating to http://localhost or the IP address of the machine on which it is installed. From the web user interface, you can finish configuration following steps described [here](https://ljufa.github.io/rsplayer/#/?id=basic-configuration).
+Once RSPlayer is installed, you can access the web user interface by navigating to http://localhost or the IP address of the machine on which it is installed.
 
-For minimal working configuration it is required to select *Audio interface*, *PCM device*, *Music directory path* followed by *Update library*.
-#### Detailed documentation -> https://ljufa.github.io/rsplayer/
-
- ## Requirements
-* x86(Amd64) or Arm(64 and 32bit) computer with debian based linux distribution.
-
-## Tested on
-* Rpi4 - RpiOS bookworm and bullseye
-* Rpi Zero WH - RpiOS bookworm and bullseye
-* Various x86_64 laptop/pc with ubuntu and debian based distros
+For detailed configuration instructions, please refer to the [documentation](https://ljufa.github.io/rsplayer/#/?id=basic-configuration).
 
 ## DIY Hardware
 For DIY enthusiasts, `rsplayer` offers the flexibility to integrate with custom hardware components.
-All KiCad files and hardware documentation are now located in the [rsplayer_hardware](https://github.com/ljufa/rsplayer_hardware) repository.
-The firmware for hardware control has been moved to the [rsplayer_firmware](https://github.com/ljufa/rsplayer_firmware) repository.
 
-This separation allows for more focused development and easier maintenance of both the software and hardware aspects of the project.
+- **Hardware Designs**: [rsplayer_hardware](https://github.com/ljufa/rsplayer_hardware)
+- **Firmware**: [rsplayer_firmware](https://github.com/ljufa/rsplayer_firmware)
+
+See the [Hardware Integration documentation](https://ljufa.github.io/rsplayer/#/?id=hardware-integration) for more details.
 
 ## Contributing
 If you would like to contribute to RSPlayer, please submit a pull request or open an issue on the GitHub repository.

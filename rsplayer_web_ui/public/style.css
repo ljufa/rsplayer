@@ -13,12 +13,174 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
 
-:root {
+/* ============================================================
+   THEME DEFINITIONS
+   Applied via data-theme attribute on <html> element.
+   ============================================================ */
+
+/* Dark theme (default — Spotify-inspired) */
+:root,
+[data-theme="dark"] {
   --background: #121212;
   --primary-text: #FFFFFF;
   --secondary-text: #B3B3B3;
   --accent: #1DB954;
   --ui-elements: #282828;
+  --border-color: #3a3a3a;
+  --modal-bg: rgba(18, 18, 18, 0.55);
+  --overlay-bg: rgba(24, 24, 24, 0.55);
+  --content-bg: rgba(18, 18, 18, 0.3);
+  --player-controls-bg: rgba(0, 0, 0, 0.35);
+  --nav-bg: rgba(18, 18, 18, 0.85);
+  --theme-icon: "\f186"; /* moon */
+}
+
+/* Light theme */
+[data-theme="light"] {
+  --background: #f5f5f5;
+  --primary-text: #1a1a1a;
+  --secondary-text: #555555;
+  --accent: #1a8f3c;
+  --ui-elements: #e0e0e0;
+  --border-color: #cccccc;
+  --modal-bg: rgba(220, 220, 220, 0.6);
+  --overlay-bg: rgba(230, 230, 230, 0.6);
+  --content-bg: rgba(220, 220, 220, 0.35);
+  --player-controls-bg: rgba(220, 220, 220, 0.5);
+  --nav-bg: rgba(240, 240, 240, 0.9);
+  --theme-icon: "\f185"; /* sun */
+}
+
+/* Solarized Dark theme */
+[data-theme="solarized"] {
+  --background: #002b36;
+  --primary-text: #eee8d5;
+  --secondary-text: #839496;
+  --accent: #2aa198;
+  --ui-elements: #073642;
+  --border-color: #586e75;
+  --modal-bg: rgba(0, 43, 54, 0.55);
+  --overlay-bg: rgba(7, 54, 66, 0.55);
+  --content-bg: rgba(0, 43, 54, 0.3);
+  --player-controls-bg: rgba(0, 43, 54, 0.4);
+  --nav-bg: rgba(0, 43, 54, 0.88);
+  --theme-icon: "\f5a2"; /* moon-stars / palette fallback */
+}
+
+/* High Contrast theme */
+[data-theme="high-contrast"] {
+  --background: #000000;
+  --primary-text: #ffffff;
+  --secondary-text: #ffff00;
+  --accent: #00ff00;
+  --ui-elements: #1a1a1a;
+  --border-color: #ffffff;
+  --modal-bg: rgba(0, 0, 0, 0.9);
+  --overlay-bg: rgba(0, 0, 0, 0.9);
+  --content-bg: rgba(0, 0, 0, 0.8);
+  --player-controls-bg: rgba(0, 0, 0, 0.8);
+  --nav-bg: rgba(0, 0, 0, 0.95);
+}
+
+/* Dracula theme */
+[data-theme="dracula"] {
+  --background: #282a36;
+  --primary-text: #f8f8f2;
+  --secondary-text: #6272a4;
+  --accent: #bd93f9;
+  --ui-elements: #44475a;
+  --border-color: #6272a4;
+  --modal-bg: rgba(40, 42, 54, 0.6);
+  --overlay-bg: rgba(40, 42, 54, 0.6);
+  --content-bg: rgba(40, 42, 54, 0.3);
+  --player-controls-bg: rgba(40, 42, 54, 0.4);
+  --nav-bg: rgba(40, 42, 54, 0.88);
+}
+
+/* Nord theme */
+[data-theme="nord"] {
+  --background: #2e3440;
+  --primary-text: #eceff4;
+  --secondary-text: #7b88a1;
+  --accent: #88c0d0;
+  --ui-elements: #3b4252;
+  --border-color: #4c566a;
+  --modal-bg: rgba(46, 52, 64, 0.6);
+  --overlay-bg: rgba(46, 52, 64, 0.6);
+  --content-bg: rgba(46, 52, 64, 0.3);
+  --player-controls-bg: rgba(59, 66, 82, 0.4);
+  --nav-bg: rgba(46, 52, 64, 0.88);
+}
+
+/* Rose Pine theme */
+[data-theme="rose-pine"] {
+  --background: #191724;
+  --primary-text: #e0def4;
+  --secondary-text: #908caa;
+  --accent: #eb6f92;
+  --ui-elements: #26233a;
+  --border-color: #403d52;
+  --modal-bg: rgba(25, 23, 36, 0.6);
+  --overlay-bg: rgba(25, 23, 36, 0.6);
+  --content-bg: rgba(25, 23, 36, 0.3);
+  --player-controls-bg: rgba(38, 35, 58, 0.4);
+  --nav-bg: rgba(25, 23, 36, 0.88);
+}
+
+/* Ocean (blue) theme */
+[data-theme="ocean"] {
+  --background: #0f1923;
+  --primary-text: #cdd6f4;
+  --secondary-text: #7a9bb5;
+  --accent: #4fc3f7;
+  --ui-elements: #1a2a3a;
+  --border-color: #2a4a6a;
+  --modal-bg: rgba(15, 25, 35, 0.6);
+  --overlay-bg: rgba(15, 25, 35, 0.6);
+  --content-bg: rgba(15, 25, 35, 0.3);
+  --player-controls-bg: rgba(26, 42, 58, 0.4);
+  --nav-bg: rgba(15, 25, 35, 0.88);
+}
+
+/* Gruvbox Dark theme */
+[data-theme="gruvbox"] {
+  --background: #282828;
+  --primary-text: #ebdbb2;
+  --secondary-text: #a89984;
+  --accent: #b8bb26;
+  --ui-elements: #3c3836;
+  --border-color: #504945;
+  --modal-bg: rgba(40, 40, 40, 0.6);
+  --overlay-bg: rgba(40, 40, 40, 0.6);
+  --content-bg: rgba(40, 40, 40, 0.3);
+  --player-controls-bg: rgba(60, 56, 54, 0.4);
+  --nav-bg: rgba(40, 40, 40, 0.88);
+}
+
+/* Catppuccin Mocha theme */
+[data-theme="catppuccin"] {
+  --background: #1e1e2e;
+  --primary-text: #cdd6f4;
+  --secondary-text: #7f849c;
+  --accent: #cba6f7;
+  --ui-elements: #313244;
+  --border-color: #45475a;
+  --modal-bg: rgba(30, 30, 46, 0.6);
+  --overlay-bg: rgba(30, 30, 46, 0.6);
+  --content-bg: rgba(30, 30, 46, 0.3);
+  --player-controls-bg: rgba(49, 50, 68, 0.4);
+  --nav-bg: rgba(30, 30, 46, 0.88);
+}
+
+/* ============================================================
+   THEME TRANSITION — smooth color changes on switch
+   ============================================================ */
+*, *::before, *::after {
+  transition: background-color 0.25s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+html, body {
+  min-height: 100%;
 }
 
 body {
@@ -45,6 +207,7 @@ body {
   font-feature-settings: 'liga';
 }
 
+/* Legacy Bulma .tabs — kept for any residual uses */
 .tabs.is-toggle li.is-active a {
   background-color: var(--accent);
   border-color: var(--accent);
@@ -58,12 +221,173 @@ body {
 
 .tabs a:hover {
   color: var(--accent);
-  background-color: #333333; /* Slightly lighter dark gray background on hover */
+  background-color: var(--ui-elements);
 }
-
 
 .tabs:not(:last-child) {
   margin-bottom: 0rem;
+}
+
+/* ============================================================
+   APP NAVIGATION BAR
+   ============================================================ */
+
+.app-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  width: 100%;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--nav-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Main row */
+.app-nav__items {
+  display: flex;
+  align-items: stretch;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.app-nav__item {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+}
+
+.app-nav__link {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 4px 6px;
+  color: var(--primary-text);
+  opacity: 0.75;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
+  user-select: none;
+  position: relative;
+}
+
+.app-nav__link .material-icons {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.app-nav__label {
+  font-size: 0.62rem;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.app-nav__link:hover {
+  color: var(--primary-text);
+  opacity: 1;
+  background-color: transparent;
+}
+
+/* Active indicator — accent underline */
+.app-nav__item.is-active .app-nav__link {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.app-nav__item.is-active .app-nav__link::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background-color: var(--accent);
+}
+
+/* Chevron icon — rotates when sub-nav is open */
+.app-nav__chevron {
+  font-size: 16px !important;
+  transition: transform 0.2s ease;
+  color: inherit;
+}
+
+.app-nav__chevron.is-open {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+/* Library sub-nav dropdown */
+.app-nav__subnav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+  background-color: var(--overlay-bg);
+  border-top: 1px solid var(--border-color);
+  animation: subnav-slide-in 0.15s ease;
+}
+
+@keyframes subnav-slide-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.app-nav__sublink {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
+  border-radius: 20px;
+  color: var(--primary-text);
+  opacity: 0.75;
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-family: 'Inter', sans-serif;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.app-nav__sublink .material-icons {
+  font-size: 16px;
+}
+
+.app-nav__sublink:hover {
+  color: var(--primary-text);
+  opacity: 1;
+  background-color: var(--ui-elements);
+}
+
+.app-nav__sublink.is-active {
+  color: var(--accent);
+  opacity: 1;
+  background-color: color-mix(in srgb, var(--accent) 15%, transparent);
+  font-weight: 700;
+}
+
+/* Mobile: slightly larger touch targets */
+@media screen and (max-width: 480px) {
+  .app-nav__link {
+    padding: 10px 2px 8px;
+  }
+  .app-nav__label {
+    font-size: 0.55rem;
+  }
+  .app-nav__sublink {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
 }
 
 .transparent {
@@ -90,7 +414,7 @@ input[type=range].slider {
 
 
 .has-background-dark-transparent {
-  background-color: rgba(24, 24, 24, 0.8);
+  background-color: var(--overlay-bg);
 }
 
 .sk-fading-circle .sk-circle:before {
@@ -168,7 +492,7 @@ input[type=range].slider {
   line-height: 1;
   text-align: center;
   color: var(--primary-text);
-  background-color: rgba(29, 185, 84, 0.7);
+  background-color: color-mix(in srgb, var(--accent) 70%, transparent);
   border-radius: 30px;
   transition: all 0.2s ease;
   top: 50%;
@@ -204,7 +528,7 @@ input[type=range].slider {
   line-height: 1;
   text-align: center;
   color: var(--primary-text);
-  background-color: rgba(29, 185, 84, 0.7);
+  background-color: color-mix(in srgb, var(--accent) 70%, transparent);
   border-radius: 30px;
   transition: all 0.2s ease;
   top: 50%;
@@ -347,13 +671,14 @@ input[type=range].slider {
 .is-large-icon {
   font-size: 36px;
   padding-left: 5px;
-  transition: transform .2s ease;
-
+  color: var(--accent);
+  transition: transform .2s ease, color .2s ease;
 }
 
 .is-large-icon:hover,
 .is-large-icon:focus {
   transform: scale(1.2);
+  color: var(--primary-text);
 }
 
 .section {
@@ -361,7 +686,7 @@ input[type=range].slider {
 }
 
 .modal-background {
-  background-color: rgba(18, 18, 18, 0.7);
+  background-color: var(--modal-bg);
 }
 
 .white-icon {
@@ -369,7 +694,15 @@ input[type=range].slider {
 }
 
 .main-content {
+  background: var(--content-bg);
   padding-bottom: 80px;
+  min-height: calc(120vh - 80px);
+}
+
+@media screen and (orientation: landscape) and (max-width: 800px) {
+  .main-content {
+    min-height: calc(210vh - 80px);
+  }
 }
 
 .page-foot {
@@ -383,7 +716,7 @@ input[type=range].slider {
   padding: 5px;
   display: flex;
   align-items: center;
-  border-top: 1px solid #000;
+  border-top: 1px solid var(--border-color);
 }
 
 p.has-overflow-ellipsis-text {
@@ -440,6 +773,12 @@ input.input-size {
   font-size: 1.6em;
 }
 
+.footer-volume {
+  width: 120px;
+  min-width: 80px;
+  padding-top: 4px;
+}
+
 .modal {
   padding-bottom: 80px;
 }
@@ -449,13 +788,13 @@ input.input-size {
 }
 
 .card {
-  background-color: var(--ui-elements);
+  background-color: var(--overlay-bg);
   padding: 10px;
   border-radius: 8px;
 }
 
 .card-footer-item {
-  background-color: var(--ui-elements);
+  background-color: var(--overlay-bg);
   margin: 15px;
 }
 
@@ -546,6 +885,27 @@ input.input-size {
   justify-content: space-between;
 }
 
+[data-theme] .slider-navigation-previous,
+[data-theme] .slider-navigation-next {
+  background-color: var(--overlay-bg) !important;
+  background-image: none !important;
+  color: var(--primary-text) !important;
+  border: 1px solid var(--border-color);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+[data-theme] .slider-navigation-previous:hover,
+[data-theme] .slider-navigation-next:hover {
+  background-color: var(--ui-elements) !important;
+  color: var(--accent) !important;
+}
+
+[data-theme] .slider-navigation-previous svg,
+[data-theme] .slider-navigation-next svg {
+  fill: var(--primary-text);
+}
+
 .button:active, .button:focus {
   transform: scale(0.98);
   box-shadow: 3px 2px 22px 1px rgb(0 0 0 / 24%);
@@ -570,13 +930,25 @@ a:hover {
 }
 
 .track-info {
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
+  width: 100%;
+  overflow: hidden;
+}
+
+.track-info .title,
+.track-info .subtitle,
+.track-info a {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .player-controls {
   width: 100%;
   max-width: 600px;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--player-controls-bg);
   padding: 20px;
   border-radius: 10px;
 }
@@ -622,4 +994,504 @@ a:hover {
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+/* ============================================================
+   THEME TOGGLE BUTTON
+   ============================================================ */
+.theme-toggle-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--secondary-text);
+  font-size: 1.1rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.2s ease, background-color 0.2s ease;
+  white-space: nowrap;
+}
+
+.theme-toggle-btn:hover {
+  color: var(--primary-text);
+  background-color: var(--ui-elements);
+}
+
+.theme-toggle-btn .theme-label {
+  font-size: 0.7rem;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   BULMA COLOR CLASS OVERRIDES — ALL THEMES
+   Applied to every named theme so Bulma's hardcoded color
+   helpers always defer to the active theme palette.
+   ============================================================ */
+
+/* Selector covering every theme except the default dark
+   (dark inherits from :root and is already correct) */
+[data-theme="light"],
+[data-theme="solarized"],
+[data-theme="high-contrast"],
+[data-theme="dracula"],
+[data-theme="nord"],
+[data-theme="rose-pine"],
+[data-theme="ocean"],
+[data-theme="gruvbox"],
+[data-theme="catppuccin"] {
+  color-scheme: dark; /* keeps browser chrome (scrollbars etc.) dark */
+}
+
+/* Light theme needs a light color-scheme so form controls render correctly */
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* has-text-white / has-text-light → primary text */
+[data-theme] .has-text-white,
+[data-theme] .has-text-light {
+  color: var(--primary-text) !important;
+}
+
+/* has-text-grey-light / has-text-grey → secondary text */
+[data-theme] .has-text-grey-light,
+[data-theme] .has-text-grey {
+  color: var(--secondary-text) !important;
+}
+
+/* has-text-dark → primary text */
+[data-theme] .has-text-dark {
+  color: var(--primary-text) !important;
+}
+
+/* has-background-dark → ui-elements */
+[data-theme] .has-background-dark {
+  background-color: var(--ui-elements) !important;
+}
+
+/* is-dark buttons */
+[data-theme] .button.is-dark {
+  background-color: var(--ui-elements) !important;
+  border-color: var(--border-color) !important;
+  color: var(--primary-text) !important;
+}
+
+/* tabs — Bulma defaults tabs to a white background */
+[data-theme] .tabs a {
+  color: var(--secondary-text);
+  background-color: transparent;
+  border-color: var(--border-color);
+}
+
+[data-theme] .tabs ul {
+  border-color: var(--border-color);
+}
+
+/* inputs, selects, textareas */
+[data-theme] .input,
+[data-theme] .select select,
+[data-theme] .textarea {
+  background-color: var(--ui-elements);
+  border-color: var(--border-color);
+  color: var(--primary-text);
+}
+
+[data-theme] .input::placeholder,
+[data-theme] .textarea::placeholder {
+  color: var(--secondary-text);
+}
+
+/* select dropdown arrow */
+[data-theme] .select::after {
+  border-color: var(--secondary-text) !important;
+}
+
+/* notifications */
+[data-theme] .notification {
+  background-color: var(--ui-elements);
+  color: var(--primary-text);
+}
+
+/* message box */
+[data-theme] .message-body {
+  background-color: var(--ui-elements);
+  color: var(--primary-text);
+  border-color: var(--border-color);
+}
+
+/* modal card */
+[data-theme] .modal-card-head,
+[data-theme] .modal-card-foot {
+  background-color: var(--ui-elements);
+  border-color: var(--border-color);
+}
+
+[data-theme] .modal-card-body {
+  background-color: var(--overlay-bg);
+  color: var(--primary-text);
+}
+
+[data-theme] .modal-card-title {
+  color: var(--primary-text);
+}
+
+/* list items (queue page) */
+[data-theme] .list-item {
+  background-color: var(--overlay-bg);
+  border-color: var(--border-color);
+  color: var(--primary-text);
+}
+
+[data-theme] .list-item-title {
+  color: var(--primary-text) !important;
+}
+
+[data-theme] .description {
+  color: var(--secondary-text) !important;
+}
+
+/* subtitle — Bulma forces grey */
+[data-theme] .subtitle {
+  color: var(--secondary-text);
+}
+
+/* title */
+[data-theme] .title {
+  color: var(--primary-text);
+}
+
+/* label */
+[data-theme] .label {
+  color: var(--primary-text) !important;
+}
+
+/* Bulma tag / badge */
+[data-theme] .tag:not(body) {
+  background-color: var(--ui-elements);
+  color: var(--primary-text);
+}
+
+/* progress bar track */
+[data-theme] .progress {
+  background-color: var(--ui-elements);
+}
+
+/* slider track */
+[data-theme] input[type=range].slider::-webkit-slider-runnable-track {
+  background-color: var(--border-color);
+}
+[data-theme] input[type=range].slider::-moz-range-track {
+  background-color: var(--border-color);
+}
+
+/* slider thumb — always use accent colour for visibility */
+[data-theme] input[type=range].slider::-webkit-slider-thumb {
+  background-color: var(--accent);
+}
+[data-theme] input[type=range].slider::-moz-range-thumb {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* breadcrumb separator */
+[data-theme] .breadcrumb li + li::before {
+  color: var(--secondary-text);
+}
+
+/* switch toggle borders */
+[data-theme] .field.has-addons .control .button {
+  border-color: var(--border-color);
+}
+
+/* High contrast: thicker borders for legibility */
+[data-theme="high-contrast"] .button {
+  border: 2px solid var(--border-color);
+}
+
+[data-theme="high-contrast"] .wtree li span {
+  border: 2px solid var(--border-color);
+}
+
+[data-theme="high-contrast"] .progress.is-small {
+  border: 1px solid var(--border-color);
+}
+
+/* ============================================================
+   THEME PICKER CARDS (settings page appearance section)
+   ============================================================ */
+
+/* Collapsible settings section */
+.settings-details {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.settings-details__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--primary-text);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  background-color: var(--ui-elements);
+  transition: background-color 0.15s ease;
+}
+
+.settings-details__summary::-webkit-details-marker { display: none; }
+
+.settings-details__summary::after {
+  content: 'expand_more';
+  font-family: 'Material Icons';
+  font-size: 20px;
+  margin-left: auto;
+  color: var(--secondary-text);
+  transition: transform 0.2s ease;
+}
+
+.settings-details[open] .settings-details__summary::after {
+  transform: rotate(180deg);
+}
+
+.settings-details__body {
+  padding: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.theme-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 0.75rem;
+}
+
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 8px 10px;
+  border: 2px solid transparent;
+  background-color: var(--ui-elements);
+  transition: border-color 0.2s ease, transform 0.15s ease;
+  min-width: 80px;
+}
+
+.theme-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.theme-card.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.theme-card__swatch {
+  display: flex;
+  gap: 3px;
+  border-radius: 6px;
+  overflow: hidden;
+  width: 56px;
+  height: 32px;
+}
+
+.theme-card__swatch span {
+  flex: 1;
+  display: block;
+}
+
+.theme-card__name {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--secondary-text);
+  white-space: nowrap;
+}
+
+/* ============================================================
+   BULMA SEMANTIC COLOUR OVERRIDES
+   Replace every hardcoded Bulma colour (primary teal, info blue,
+   success green, etc.) with theme-aware CSS variables so buttons,
+   switches, notifications and file inputs match the active theme.
+   ============================================================ */
+
+/* ---- is-primary → accent colour ---- */
+[data-theme] .button.is-primary,
+[data-theme] .button.is-primary:focus:not(:active) {
+  background-color: var(--accent);
+  border-color: transparent;
+  color: var(--primary-text);
+}
+[data-theme] .button.is-primary:hover,
+[data-theme] .button.is-primary.is-hovered {
+  background-color: var(--accent);
+  filter: brightness(1.12);
+  border-color: transparent;
+  color: var(--primary-text);
+}
+[data-theme] .button.is-primary:active,
+[data-theme] .button.is-primary.is-active {
+  background-color: var(--accent);
+  filter: brightness(0.9);
+  border-color: transparent;
+  color: var(--primary-text);
+}
+[data-theme] .button.is-primary:focus:not(:active) {
+  box-shadow: 0 0 0 0.125em color-mix(in srgb, var(--accent) 40%, transparent);
+}
+/* outlined variant */
+[data-theme] .button.is-primary.is-outlined {
+  background-color: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+[data-theme] .button.is-primary.is-outlined:hover,
+[data-theme] .button.is-primary.is-outlined:focus {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: var(--primary-text);
+}
+
+/* ---- is-success → accent colour (save/apply actions) ---- */
+[data-theme] .button.is-success {
+  background-color: var(--accent);
+  border-color: transparent;
+  color: var(--primary-text);
+}
+[data-theme] .button.is-success:hover {
+  background-color: var(--accent);
+  filter: brightness(1.12);
+  color: var(--primary-text);
+}
+
+/* ---- is-warning → keep semantic amber but ensure readable text ---- */
+[data-theme] .button.is-warning {
+  background-color: #c8860a;
+  border-color: transparent;
+  color: #fff;
+}
+[data-theme] .button.is-warning:hover {
+  background-color: #b5780a;
+  color: #fff;
+}
+
+/* ---- is-danger → keep semantic red ---- */
+[data-theme] .button.is-danger {
+  background-color: #c0392b;
+  border-color: transparent;
+  color: #fff;
+}
+[data-theme] .button.is-danger:hover {
+  background-color: #a93226;
+  color: #fff;
+}
+
+/* ---- is-info → secondary text colour ---- */
+[data-theme] .button.is-info {
+  background-color: var(--secondary-text);
+  border-color: transparent;
+  color: var(--background);
+}
+[data-theme] .button.is-info:hover {
+  background-color: var(--secondary-text);
+  filter: brightness(1.15);
+  color: var(--background);
+}
+
+/* ---- Notifications ---- */
+[data-theme] .notification.is-primary {
+  background-color: var(--accent);
+  color: var(--primary-text);
+}
+[data-theme] .notification.is-primary.is-light {
+  background-color: color-mix(in srgb, var(--accent) 15%, var(--background));
+  color: var(--accent);
+}
+[data-theme] .notification.is-info {
+  background-color: var(--ui-elements);
+  color: var(--primary-text);
+  border-left: 3px solid var(--secondary-text);
+}
+[data-theme] .notification.is-info.is-light {
+  background-color: color-mix(in srgb, var(--secondary-text) 15%, var(--background));
+  color: var(--secondary-text);
+}
+[data-theme] .notification.is-danger {
+  background-color: #c0392b;
+  color: #fff;
+}
+[data-theme] .notification.is-danger.is-light,
+[data-theme] .notification.is-error.is-light {
+  background-color: color-mix(in srgb, #c0392b 15%, var(--background));
+  color: #e88;
+}
+
+/* ---- Switch toggle ---- */
+/* unchecked track */
+[data-theme] .switch[type=checkbox]+label::before,
+[data-theme] .switch[type=checkbox]+label:before {
+  background: var(--ui-elements);
+  border-color: var(--border-color);
+}
+/* checked track → accent */
+[data-theme] .switch[type=checkbox]:checked+label::before,
+[data-theme] .switch[type=checkbox]:checked+label:before {
+  background: var(--accent);
+}
+/* thumb stays white for contrast */
+[data-theme] .switch[type=checkbox]+label::after,
+[data-theme] .switch[type=checkbox]+label:after {
+  background: var(--primary-text);
+}
+
+/* ---- Progress bar (indeterminate loading spinners) ---- */
+[data-theme] .progress.is-small:indeterminate,
+[data-theme] .progress.is-small:not([value]) {
+  background-image: linear-gradient(
+    to right,
+    var(--accent) 30%,
+    var(--ui-elements) 30%
+  );
+}
+/* overwrite the Bulma animated stripe colour */
+[data-theme] .progress:indeterminate {
+  animation-name: moveIndeterminate;
+}
+
+/* ---- File upload button (is-primary) ---- */
+[data-theme] .file.is-primary .file-cta {
+  background-color: var(--accent);
+  border-color: transparent;
+  color: var(--primary-text);
+}
+[data-theme] .file.is-primary:hover .file-cta,
+[data-theme] .file.is-primary.is-hovered .file-cta {
+  background-color: var(--accent);
+  filter: brightness(1.1);
+  border-color: transparent;
+  color: var(--primary-text);
+}
+
+/* ---- Message box borders (is-danger for startup error) ---- */
+[data-theme] .message.is-danger {
+  background-color: color-mix(in srgb, #c0392b 12%, var(--background));
+}
+[data-theme] .message.is-danger .message-header {
+  background-color: #c0392b;
+  color: #fff;
+}
+[data-theme] .message.is-danger .message-body {
+  border-color: #c0392b;
+  color: var(--primary-text);
 }

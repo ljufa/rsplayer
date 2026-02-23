@@ -27,3 +27,106 @@ function attachCarousel(id) {
     }
 }
 
+// ============================================================
+//   THEME MANAGEMENT
+// ============================================================
+
+const THEMES = [
+    "dark",
+    "light",
+    "solarized",
+    "dracula",
+    "nord",
+    "rose-pine",
+    "ocean",
+    "gruvbox",
+    "catppuccin",
+    "high-contrast",
+];
+const THEME_STORAGE_KEY = "rsplayer-theme";
+
+// bg, primary-text, accent, ui-elements colours used for the swatch preview
+const THEME_META = {
+    "dark":          { label: "Dark",          bg: "#121212", text: "#FFFFFF", accent: "#1DB954", ui: "#282828" },
+    "light":         { label: "Light",         bg: "#f5f5f5", text: "#1a1a1a", accent: "#1a8f3c", ui: "#e0e0e0" },
+    "solarized":     { label: "Solarized",     bg: "#002b36", text: "#eee8d5", accent: "#2aa198", ui: "#073642" },
+    "dracula":       { label: "Dracula",       bg: "#282a36", text: "#f8f8f2", accent: "#bd93f9", ui: "#44475a" },
+    "nord":          { label: "Nord",          bg: "#2e3440", text: "#eceff4", accent: "#88c0d0", ui: "#3b4252" },
+    "rose-pine":     { label: "Rose Pine",     bg: "#191724", text: "#e0def4", accent: "#eb6f92", ui: "#26233a" },
+    "ocean":         { label: "Ocean",         bg: "#0f1923", text: "#cdd6f4", accent: "#4fc3f7", ui: "#1a2a3a" },
+    "gruvbox":       { label: "Gruvbox",       bg: "#282828", text: "#ebdbb2", accent: "#b8bb26", ui: "#3c3836" },
+    "catppuccin":    { label: "Catppuccin",    bg: "#1e1e2e", text: "#cdd6f4", accent: "#cba6f7", ui: "#313244" },
+    "high-contrast": { label: "Hi-Contrast",  bg: "#000000", text: "#ffffff", accent: "#00ff00", ui: "#1a1a1a" },
+};
+
+/**
+ * Apply a theme by setting data-theme on <html> and persisting to localStorage.
+ * Returns the theme name that was applied.
+ */
+function applyTheme(theme) {
+    if (!THEMES.includes(theme)) {
+        theme = "dark";
+    }
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+        localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch(e) {}
+    return theme;
+}
+
+/**
+ * Return the currently active theme name.
+ */
+function getTheme() {
+    try {
+        const stored = localStorage.getItem(THEME_STORAGE_KEY);
+        if (stored && THEMES.includes(stored)) {
+            return stored;
+        }
+    } catch(e) {}
+    // Fallback: respect prefers-color-scheme
+    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
+        return "light";
+    }
+    return "dark";
+}
+
+/**
+ * Advance to the next theme in the cycle and apply it.
+ * Returns the new theme name.
+ */
+function cycleTheme() {
+    const current = getTheme();
+    const idx = THEMES.indexOf(current);
+    const next = THEMES[(idx + 1) % THEMES.length];
+    return applyTheme(next);
+}
+
+/**
+ * Return a JSON string with all theme metadata (for the settings theme picker).
+ * Keys: label, bg, text, accent, ui
+ */
+function getThemeMeta(theme) {
+    const meta = THEME_META[theme] || THEME_META["dark"];
+    return JSON.stringify(meta);
+}
+
+/**
+ * Return a JSON string array of all available theme names.
+ */
+function getAllThemes() {
+    return JSON.stringify(THEMES);
+}
+
+/**
+ * Return a JSON string of the full THEME_META map.
+ */
+function getAllThemeMeta() {
+    return JSON.stringify(THEME_META);
+}
+
+// Apply saved (or system-preferred) theme as early as possible to avoid flash.
+(function() {
+    applyTheme(getTheme());
+}());
+

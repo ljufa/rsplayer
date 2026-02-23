@@ -222,7 +222,7 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
                         div![
                             C!["list-item"],
                             div![
-                                C!["list-item-content", "has-background-dark-transparent"],
+                                C!["list-item-content"],
                                 div![C!["list-item-title", "has-text-light"], song.get_title()],
                                 div![C!["description", "has-text-light"], song.artist.clone()]
                             ],
@@ -232,13 +232,13 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
                                     C!["buttons"],
                                     a![
                                         attrs!(At::Title =>"Add song to queue"),
-                                        C!["icon"],
+                                        C!["icon", "white-icon"],
                                         i![C!("material-icons"), "playlist_add"],
                                         ev(Ev::Click, move |_| Msg::AddSongToQueue(song_id))
                                     ],
                                     a![
                                         attrs!(At::Title =>"Play song and replace queue"),
-                                        C!["icon"],
+                                        C!["icon", "white-icon"],
                                         i![C!("material-icons"), "play_circle_filled"],
                                         ev(Ev::Click, move |_| Msg::PlaySongFromPlaylist(song_id2))
                                     ],
@@ -353,7 +353,7 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                             C!["image", "is-square"],
                             img![
                                 C!["image-center-half-size"],
-                                attrs! {At::Src => pl.image.as_ref().map_or("/headphones.png".to_string(),std::clone::Clone::clone)}
+                                attrs! {At::Src => pl.image.as_ref().map_or("/no_album.svg".to_string(),std::clone::Clone::clone)}
                             ]
                         ],
                         span![
@@ -390,7 +390,7 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                             C!["image", "is-square"],
                             img![
                                 C!["image-center-half-size"],
-                                IF!(album.image_id.is_none() => attrs! {At::Src => "/headphones.png"}),
+                                IF!(album.image_id.is_none() => attrs! {At::Src => "/no_album.svg"}),
                                 IF!(album.image_id.is_some() => attrs! {At::Src => format!("/artwork/{}", album.image_id.as_ref().unwrap())}),
                             ]
                         ],

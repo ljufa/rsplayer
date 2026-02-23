@@ -445,7 +445,7 @@ fn view_queue_item(song: &Song, model: &Model) -> Node<Msg> {
             IF!(model.current_song_id.as_ref().is_some_and(|cur| *cur == id ) => "current")
         ],
         div![
-            C!["list-item-content", "has-background-dark-transparent"],
+            C!["list-item-content"],
             div![
                 C!["list-item-title", "has-text-light"],
                 span![&song.get_title()],
