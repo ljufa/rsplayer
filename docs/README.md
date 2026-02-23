@@ -107,37 +107,22 @@ TODO
 # Roadmap
  
 ## Features
-* [x] Make artist/album/song as a link on playback page
-* [x] Replace UART communication with rsplayer_firmware with USB
-* [ ] Implement MQTT or other homeassistant friendly communication channel 
-* [x] Show files as a tree
-* [x] Show media library (artist/album) as a tree
-* [x] Web radio browse/play
-* [x] Like/Favorite song/radio
-* [x] Search files/radio/artist
-* [ ] Playlist by genre
-* [x] Most played songs playlist
-* [x] Liked songs playlist
-* [x] Show favorited radios on top of the list 
+* [ ] MQTT or other homeassistant friendly communication channel 
+* [ ] Playlists by genre, year
 * [ ] New music mix dynamic playlist
 * [ ] Generate missing album cover image using album name
-* [x] Seek to position
-* [x] Keep last N songs in *history* when random mode is enabled
 * [ ] Remote file system management (nfs and samba)
 * [ ] Lyrics Support
 * [ ] Music Recommendations
 * [ ] Web UI Themes
 * [ ] Windows support
 * [ ] MacOS support
-* [x] DSD/DoP playback support
-* [ ] use more information about the song based on last.fm response, update id tags on local files?
-* [ ] streaming to local device (i.e. phone) for i.e. preview
-* [ ] Add all settings to settings page
-* [ ] Implement MPD protocol for clients
-* [ ] Implement multi-room playback
-* [x] VU meter
-* [x] Minimal DSP - filters
-
+* [ ] streaming to local device/browser (i.e. phone) for i.e. preview
+* [ ] MPD protocol for clients
+* [ ] Subsonic protocol for clients
+* [ ] Multi-room playback
+* [ ] MPRIS D-Bus integration on linux
+* [ ] Community plugin framework
 
 ## Code improvements
 * [ ] replace bulma css with something modern and maitained
