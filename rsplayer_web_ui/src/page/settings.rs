@@ -522,14 +522,14 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
                 C!["buttons", "mt-4"],
                 IF!(model.settings.usb_settings.enabled =>
                     button![
-                        C!["button", "is-danger"],
+                        C!["button", "is-danger", "is-small"],
                         "Power Off",
                         ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::SetFirmwarePower(false)))
                     ]
                 ),
                 IF!(model.settings.usb_settings.enabled =>
                     button![
-                        C!["button", "is-success"],
+                        C!["button", "is-success", "is-small"],
                         "Power On",
                         ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::SetFirmwarePower(true)))
                     ]

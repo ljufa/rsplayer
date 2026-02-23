@@ -407,26 +407,26 @@ impl QueueService {
             keys.len()
         };
 
-        let mut new_keys = Vec::new();
-        // Insert new songs
+        let count = songs.len();
+        // Insert new songs into values vector
         for (i, song) in songs.into_iter().enumerate() {
             values.insert(insert_index + i, IVec::from(song.to_json_string_bytes()));
+            // Ensure keys vector is long enough
             if let Ok(new_key) = self.queue_db.generate_id() {
-                let ivec_key = IVec::from(&new_key.to_be_bytes());
-                keys.push(ivec_key.clone());
-                new_keys.push(ivec_key);
+                keys.push(IVec::from(&new_key.to_be_bytes()));
             }
         }
 
-        for key in new_keys.into_iter().rev() {
-            self.add_to_priority_queue(key);
-        }
-
-        // Rewrite from insertion point
+        // Rewrite from insertion point onwards
         for (i, key) in keys.iter().enumerate().skip(insert_index) {
             if i < values.len() {
                 _ = self.queue_db.insert(key, values[i].clone());
             }
+        }
+
+        // Add the keys at the insertion range to priority queue (in reverse order)
+        for i in (0..count).rev() {
+            self.add_to_priority_queue(keys[insert_index + i].clone());
         }
 
         // Return key of first inserted song
@@ -469,19 +469,18 @@ impl QueueService {
 
             values.insert(insert_index, IVec::from(song.to_json_string_bytes()));
 
-            // Generate a new key for the extra item
             if let Ok(new_key) = self.queue_db.generate_id() {
-                let ivec_key = IVec::from(&new_key.to_be_bytes());
-                keys.push(ivec_key.clone());
-                self.add_to_priority_queue(ivec_key);
+                keys.push(IVec::from(&new_key.to_be_bytes()));
             }
 
-            // Rewrite the queue from the insertion point
             for (i, key) in keys.iter().enumerate().skip(insert_index) {
                 if i < values.len() {
                     _ = self.queue_db.insert(key, values[i].clone());
                 }
             }
+
+            // The song is now at the key previously at insert_index
+            self.add_to_priority_queue(keys[insert_index].clone());
         }
     }
 
@@ -491,8 +490,6 @@ impl QueueService {
         if from_index >= keys.len() {
             return;
         }
-
-        self.add_to_priority_queue(keys[from_index].clone());
 
         let current_key_opt = self.get_current_or_first_song_key();
         let current_index = current_key_opt
@@ -510,6 +507,8 @@ impl QueueService {
         };
 
         self.move_item(from_index, target_index);
+        // The song is now at the key that was previously at target_index
+        self.add_to_priority_queue(keys[target_index].clone());
     }
 
     pub fn move_item(&self, from_index: usize, to_index: usize) {

@@ -652,22 +652,43 @@ fn view(model: &Model) -> impl IntoNodes<Msg> {
     };
 
     div![
-        style! {
-            St::BackgroundImage => bg_image,
-            St::BackgroundColor => bg_color,
-            St::BackgroundRepeat => "no-repeat",
-            St::BackgroundSize => "cover",
-            St::BackgroundPosition => "center",
-            St::MinHeight => "100%",
-        },
         C!["container"],
-        view_navigation_tabs(&model.page, model.library_nav_open),
-        view_startup_error(model.startup_error.as_ref()),
-        view_reconnect_notification(model),
-        view_metadata_scan_notification(model),
-        view_content(model, &model.base_url),
-        view_player_footer(&model.page, &model.player_model),
-        view_notification(model)
+        style! {
+            St::MinHeight => "100vh",
+            St::Position => "relative",
+            St::BackgroundColor => bg_color,
+        },
+        // Sticky background layer constrained to container width
+        div![
+            style! {
+                St::Position => "sticky",
+                St::Top => "0",
+                St::Height => "100vh",
+                St::Width => "100%",
+                St::ZIndex => 0,
+                St::BackgroundImage => bg_image,
+                St::BackgroundRepeat => "no-repeat",
+                St::BackgroundSize => "cover",
+                St::BackgroundPosition => "center",
+                St::PointerEvents => "none",
+            },
+        ],
+        // Content layer - pulled up to overlap sticky background
+        div![
+            style! {
+                St::Position => "relative",
+                St::MarginTop => "-100vh",
+                St::MinHeight => "100vh",
+                St::ZIndex => 1,
+            },
+            view_navigation_tabs(&model.page, model.library_nav_open),
+            view_startup_error(model.startup_error.as_ref()),
+            view_reconnect_notification(model),
+            view_metadata_scan_notification(model),
+            view_content(model, &model.base_url),
+            view_player_footer(&model.page, &model.player_model),
+            view_notification(model)
+        ]
     ]
 }
 
@@ -690,9 +711,11 @@ fn view_reconnect_notification(model: &Model) -> Node<Msg> {
 fn view_notification(model: &Model) -> Node<Msg> {
     div![
         style! {
-            "z-index" => 10
-            "bottom" => 0
-            "position" => "fixed"
+            St::ZIndex => 1000,
+            St::Top => "20px",
+            St::Right => "20px",
+            St::Position => "fixed",
+            St::MaxWidth => "300px",
         },
         model.notification.as_ref().map_or(empty!(), |not| match not {
             StateChangeEvent::NotificationSuccess(info) => {
@@ -863,6 +886,7 @@ fn view_player_footer(page: &Page, player_model: &PlayerModel) -> Node<Msg> {
                                 attrs! {"max"=> player_model.volume_state.max},
                                 attrs! {"min"=> player_model.volume_state.min},
                                 attrs! {"type"=> "range"},
+                                input_ev(Ev::Input, Msg::SetVolumeInput),
                                 input_ev(Ev::Change, Msg::SetVolume),
                             ],
                         ],
