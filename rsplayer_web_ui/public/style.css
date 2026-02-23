@@ -425,7 +425,7 @@ input[type=range].slider {
   padding: 5px;
   overflow-x: hidden;
   overflow-y: auto;
-  height: 1200px;
+  height: calc(100vh - 220px);
   scroll-behavior: smooth;
 }
 
@@ -448,6 +448,42 @@ input[type=range].slider {
 .list-item-controls a {
   padding: 20px;
 }
+
+/* Queue items — compact height, left-aligned text */
+/* Queue items — compact height, left-aligned text */
+.scroll-list .list-item:not(.box) {
+  padding: 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.scroll-list .list-item-content {
+  padding: 4px 8px;
+  display: block;
+}
+
+.scroll-list .list-item-controls {
+  padding-right: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.scroll-list .list-item-controls a {
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scroll-list .material-icons {
+  font-size: 20px;
+}
+
+/* Force left alignment for titles */
+.list-item-title {
+  text-align: left;
+}
+
+
 
 .play-button {
   position: absolute;
@@ -1481,6 +1517,68 @@ a:hover {
   filter: brightness(1.1);
   border-color: transparent;
   color: var(--primary-text);
+}
+
+/* ============================================================
+   SONG ACTION BUTTONS — collapsed by default, expand on hover
+   ============================================================ */
+
+/* The wrapper sits in .list-item-controls */
+.song-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  position: relative;
+}
+
+/* The individual action icons — hidden until expanded */
+.song-actions__btns {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  max-width: 0;
+  overflow: hidden;
+  transition: max-width 0.25s ease, opacity 0.2s ease;
+  opacity: 0;
+  white-space: nowrap;
+}
+
+/* Expand on hover of the whole list-item or tree node span */
+.list-item:hover .song-actions__btns,
+.list-item:focus-within .song-actions__btns,
+.wtree li span:hover .song-actions__btns,
+.wtree li span:focus-within .song-actions__btns {
+  max-width: 200px;
+  opacity: 1;
+}
+
+/* The "more" trigger icon — always visible */
+.song-actions__trigger {
+  cursor: pointer;
+  color: var(--secondary-text);
+  transition: color 0.2s ease;
+  padding: 4px;
+}
+
+.list-item:hover .song-actions__trigger {
+  color: var(--primary-text);
+}
+
+/* D&D drag handle */
+.drag-handle {
+  cursor: grab;
+  color: var(--secondary-text);
+  padding: 4px 2px;
+  touch-action: none;
+  flex-shrink: 0;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-handle .material-icons {
+  font-size: 20px;
 }
 
 /* ---- Message box borders (is-danger for startup error) ---- */

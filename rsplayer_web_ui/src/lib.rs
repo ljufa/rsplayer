@@ -1058,6 +1058,7 @@ pub fn start() {
 extern "C" {
     pub fn scrollToId(id: &str);
     pub fn attachCarousel(id: &str);
+    pub fn attachQueueDragScroll();
 
     /// Advance to the next theme in the cycle, persist to localStorage, and
     /// return the new theme name.

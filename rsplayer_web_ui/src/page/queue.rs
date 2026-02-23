@@ -1,5 +1,5 @@
 use api_models::common::PlayerCommand;
-use api_models::common::QueueCommand::RemoveItem;
+use api_models::common::QueueCommand::{self, RemoveItem};
 use api_models::common::UserCommand;
 use api_models::player::Song;
 use api_models::playlist::PlaylistPage;
@@ -12,7 +12,7 @@ use seed::{
     textarea, C, IF,
 };
 
-use crate::scrollToId;
+use crate::{attachQueueDragScroll, scrollToId};
 
 #[derive(Debug)]
 pub struct Model {
@@ -24,6 +24,7 @@ pub struct Model {
     add_url_input: String,
     show_save_playlist_modal: bool,
     save_playlist_input: String,
+    dragged_item_index: Option<usize>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -52,6 +53,10 @@ pub enum Msg {
     CloseSaveAsPlaylistModal,
     SaveAsPlaylist,
     KeyPressed(web_sys::KeyboardEvent),
+    DragStart(usize),
+    DragOver(usize),
+    Drop(usize),
+    PlayNext(usize),
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -73,6 +78,7 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
         add_url_input: String::default(),
         show_save_playlist_modal: false,
         save_playlist_input: String::default(),
+        dragged_item_index: None,
     }
 }
 
@@ -86,6 +92,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::StatusChangeEventReceived(StateChangeEvent::CurrentQueueEvent(pc)) => {
             model.waiting_response = false;
             model.current_queue = pc;
+            orders.after_next_render(|_| attachQueueDragScroll());
         }
         Msg::StatusChangeEventReceived(StateChangeEvent::CurrentSongEvent(evt)) => {
             model.waiting_response = false;
@@ -168,6 +175,46 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 model.show_save_playlist_modal = false;
                 model.save_playlist_input = String::default();
             }
+        }
+        Msg::DragStart(idx) => {
+            model.dragged_item_index = Some(idx);
+        }
+        Msg::DragOver(_) => {
+            // Necessary to allow dropping
+        }
+        Msg::Drop(idx) => {
+            if let Some(from_idx) = model.dragged_item_index {
+                if from_idx != idx {
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(QueueCommand::MoveItem(
+                        from_idx, idx,
+                    ))));
+                    // Refresh queue to show changes
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                        QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
+                            model.search_input.clone(),
+                            model
+                                .current_queue
+                                .as_ref()
+                                .map_or(0, |p| p.offset.saturating_sub(p.limit)),
+                        )),
+                    )));
+                }
+            }
+            model.dragged_item_index = None;
+        }
+        Msg::PlayNext(idx) => {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                QueueCommand::MoveItemAfterCurrent(idx),
+            )));
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
+                    model.search_input.clone(),
+                    model
+                        .current_queue
+                        .as_ref()
+                        .map_or(0, |p| p.offset.saturating_sub(p.limit)),
+                )),
+            )));
         }
         Msg::AddUrlInputChanged(value) => {
             model.add_url_input = value;
@@ -356,6 +403,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
             model.current_queue.as_ref().map_or_else(|| empty!(), |page| {
                 let offset = page.offset;
                 let iter = page.items.iter();
+                let start_index = page.offset.saturating_sub(page.limit);
                 div![
                     div![
                         C!["transparent is-flex is-justify-content-center has-background-dark-transparent"],
@@ -421,7 +469,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                     // queue items`
                     div![C!["scroll-list list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
                         div![id!("top-list-item")],
-                        iter.map(|it| { view_queue_item(it, model)  })
+                        iter.enumerate().map(|(idx, it)| { view_queue_item(it, start_index + idx, model)  })
                     ],
                     button![
                         C!["button","is-fullwidth", "is-outlined", "is-primary"],
@@ -434,45 +482,86 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
     ]
 }
 
-fn view_queue_item(song: &Song, model: &Model) -> Node<Msg> {
+fn view_queue_item(song: &Song, idx: usize, model: &Model) -> Node<Msg> {
     let id = song.file.clone();
     let id1 = song.file.clone();
     let id2 = song.file.clone();
     div![
+        attrs! {
+            At::Draggable => "true",
+        },
+        ev(Ev::DragStart, move |_| Msg::DragStart(idx)),
+        ev(Ev::DragOver, move |event| {
+            event.prevent_default();
+            Msg::DragOver(idx)
+        }),
+        ev(Ev::Drop, move |event| {
+            event.prevent_default();
+            Msg::Drop(idx)
+        }),
         IF!(model.current_song_id.as_ref().is_some_and(|cur| *cur == id ) => id!("current")),
         C![
             "list-item",
             IF!(model.current_song_id.as_ref().is_some_and(|cur| *cur == id ) => "current")
         ],
+        // Drag handle
+        div![
+            C!["is-flex is-align-items-center"],
+            style! {St::PaddingRight => "10px", St::Cursor => "grab"},
+            attrs!(At::Title => "Drag to reorder"),
+            i![C!["material-icons has-text-grey"], "drag_handle"],
+        ],
         div![
             C!["list-item-content"],
             div![
                 C!["list-item-title", "has-text-light"],
-                span![&song.get_title()],
-                &song.date.as_ref().map(|d| span![format!(" ({d})")]),
-                &song
-                    .time
+                style! { St::FontWeight => "bold" }, // Match playlist details look
+                song.get_title()
+            ],
+            div![
+                C!["description", "has-text-grey"], // Grey for artist
+                style! { St::FontSize => "0.9em" },
+                if let Some(artist) = &song.artist {
+                    format!("{} ", artist)
+                } else {
+                    String::new()
+                },
+                // Optional: Year
+                song.date.as_ref().map(|d| format!(" • {d}")).unwrap_or_default(),
+                // Duration
+                song.time
                     .as_ref()
-                    .map(|t| span![format!(" [{}]", api_models::common::dur_to_string(t))]),
+                    .map(|t| format!(" • {}", api_models::common::dur_to_string(t)))
+                    .unwrap_or_default(),
             ],
             ev(Ev::Click, move |_| Msg::PlaylistItemSelected(id)),
         ],
         div![
             C!["list-item-controls"],
             div![
-                a![
-                    C!["white-icon"],
-                    C!["is-hidden-mobile"],
-                    attrs!(At::Title =>"Play song"),
-                    i![C!("material-icons"), "play_arrow"],
-                    ev(Ev::Click, move |_| Msg::PlaylistItemSelected(id2))
-                ],
-                a![
-                    C!["white-icon"],
-                    attrs!(At::Title =>"Remove song from queue"),
-                    i![C!("material-icons"), "delete"],
-                    ev(Ev::Click, move |_| Msg::PlaylistItemRemove(id1))
-                ],
+                C!["song-actions"],
+                i![C!["material-icons", "song-actions__trigger"], "more_vert"],
+                div![
+                    C!["song-actions__btns"],
+                    a![
+                        C!["white-icon"],
+                        attrs!(At::Title =>"Play Next"),
+                        i![C!("material-icons"), "playlist_play"],
+                        ev(Ev::Click, move |_| Msg::PlayNext(idx))
+                    ],
+                    a![
+                        C!["white-icon"],
+                        attrs!(At::Title =>"Play song"),
+                        i![C!("material-icons"), "play_arrow"],
+                        ev(Ev::Click, move |_| Msg::PlaylistItemSelected(id2))
+                    ],
+                    a![
+                        C!["white-icon"],
+                        attrs!(At::Title =>"Remove from queue"),
+                        i![C!("material-icons"), "delete"],
+                        ev(Ev::Click, move |_| Msg::PlaylistItemRemove(id1))
+                    ],
+                ]
             ]
         ],
     ]

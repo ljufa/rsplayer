@@ -87,8 +87,46 @@ impl QueueService {
         None
     }
 
+    fn get_priority_queue(&self) -> Vec<IVec> {
+        self.status_db
+            .get("priority_queue")
+            .ok()
+            .flatten()
+            .map(|bytes| {
+                let vec_u8: Vec<Vec<u8>> = serde_json::from_slice(&bytes).unwrap_or_default();
+                vec_u8.into_iter().map(IVec::from).collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn save_priority_queue(&self, queue: &[IVec]) {
+        let vec_u8: Vec<&[u8]> = queue.iter().map(|iv| &**iv).collect();
+        if let Ok(bytes) = serde_json::to_vec(&vec_u8) {
+            _ = self.status_db.insert("priority_queue", bytes);
+        }
+    }
+
+    pub fn add_to_priority_queue(&self, key: IVec) {
+        let mut q = self.get_priority_queue();
+        if let Some(pos) = q.iter().position(|k| k == &key) {
+            q.remove(pos);
+        }
+        q.insert(0, key);
+        self.save_priority_queue(&q);
+    }
+
     #[allow(clippy::branches_sharing_code)]
     pub fn move_current_to_next_song(&self) -> bool {
+        let mut pq = self.get_priority_queue();
+        while !pq.is_empty() {
+            let key = pq.remove(0);
+            self.save_priority_queue(&pq);
+            if self.queue_db.contains_key(&key).unwrap_or(false) {
+                _ = self.status_db.insert(CURRENT_SONG_KEY, &key);
+                return true;
+            }
+        }
+
         let queue_len = self.queue_db.len();
         if queue_len == 0 {
             return false;
@@ -335,6 +373,12 @@ impl QueueService {
         pc
     }
 
+    pub fn set_current_to_last(&self) {
+        if let Ok(Some((key, _))) = self.queue_db.last() {
+            _ = self.status_db.insert(CURRENT_SONG_KEY, key);
+        }
+    }
+
     pub fn add_songs_from_dir(&self, dir: &str) {
         self.song_repository
             .get_all_iterator()
@@ -343,6 +387,172 @@ impl QueueService {
                 self.add_song(&song);
             });
     }
+
+    pub fn add_songs_after_current(&self, songs: Vec<Song>) -> Option<IVec> {
+        if songs.is_empty() {
+            return None;
+        }
+
+        let current_key_opt = self.get_current_or_first_song_key();
+        let entries: Vec<(IVec, IVec)> = self.queue_db.iter().filter_map(Result::ok).collect();
+
+        let mut keys: Vec<IVec> = entries.iter().map(|(k, _)| k.clone()).collect();
+        let mut values: Vec<IVec> = entries.into_iter().map(|(_, v)| v).collect();
+
+        let insert_index = if let Some(current_key) = current_key_opt {
+            keys.iter()
+                .position(|k| k == &current_key)
+                .map_or(keys.len(), |i| i + 1)
+        } else {
+            keys.len()
+        };
+
+        let mut new_keys = Vec::new();
+        // Insert new songs
+        for (i, song) in songs.into_iter().enumerate() {
+            values.insert(insert_index + i, IVec::from(song.to_json_string_bytes()));
+            if let Ok(new_key) = self.queue_db.generate_id() {
+                let ivec_key = IVec::from(&new_key.to_be_bytes());
+                keys.push(ivec_key.clone());
+                new_keys.push(ivec_key);
+            }
+        }
+
+        for key in new_keys.into_iter().rev() {
+            self.add_to_priority_queue(key);
+        }
+
+        // Rewrite from insertion point
+        for (i, key) in keys.iter().enumerate().skip(insert_index) {
+            if i < values.len() {
+                _ = self.queue_db.insert(key, values[i].clone());
+            }
+        }
+
+        // Return key of first inserted song
+        if insert_index < keys.len() {
+            Some(keys[insert_index].clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn add_songs_from_dir_after_current(&self, dir: &str) -> Option<IVec> {
+        let songs: Vec<Song> = self
+            .song_repository
+            .get_all_iterator()
+            .filter(|item| item.file.starts_with(dir))
+            .collect();
+
+        self.add_songs_after_current(songs)
+    }
+
+    pub fn set_current_song(&self, key: IVec) {
+        _ = self.status_db.insert(CURRENT_SONG_KEY, key);
+    }
+
+    pub fn add_song_after_current(&self, song_id: &str) {
+        if let Some(song) = self.song_repository.find_by_id(song_id) {
+            let current_key_opt = self.get_current_or_first_song_key();
+            let entries: Vec<(IVec, IVec)> = self.queue_db.iter().filter_map(Result::ok).collect();
+
+            let mut keys: Vec<IVec> = entries.iter().map(|(k, _)| k.clone()).collect();
+            let mut values: Vec<IVec> = entries.into_iter().map(|(_, v)| v).collect();
+
+            let insert_index = if let Some(current_key) = current_key_opt {
+                keys.iter()
+                    .position(|k| k == &current_key)
+                    .map_or(keys.len(), |i| i + 1)
+            } else {
+                keys.len()
+            };
+
+            values.insert(insert_index, IVec::from(song.to_json_string_bytes()));
+
+            // Generate a new key for the extra item
+            if let Ok(new_key) = self.queue_db.generate_id() {
+                let ivec_key = IVec::from(&new_key.to_be_bytes());
+                keys.push(ivec_key.clone());
+                self.add_to_priority_queue(ivec_key);
+            }
+
+            // Rewrite the queue from the insertion point
+            for (i, key) in keys.iter().enumerate().skip(insert_index) {
+                if i < values.len() {
+                    _ = self.queue_db.insert(key, values[i].clone());
+                }
+            }
+        }
+    }
+
+    pub fn move_item_after_current(&self, from_index: usize) {
+        let keys: Vec<IVec> = self.queue_db.iter().filter_map(Result::ok).map(|(k, _)| k).collect();
+
+        if from_index >= keys.len() {
+            return;
+        }
+
+        self.add_to_priority_queue(keys[from_index].clone());
+
+        let current_key_opt = self.get_current_or_first_song_key();
+        let current_index = current_key_opt
+            .and_then(|ck| keys.iter().position(|k| k == &ck))
+            .unwrap_or(0);
+
+        if from_index == current_index || from_index == current_index + 1 {
+            return;
+        }
+
+        let target_index = if from_index < current_index {
+            current_index
+        } else {
+            current_index + 1
+        };
+
+        self.move_item(from_index, target_index);
+    }
+
+    pub fn move_item(&self, from_index: usize, to_index: usize) {
+        let entries: Vec<(IVec, IVec)> = self.queue_db.iter().filter_map(Result::ok).collect();
+
+        let keys: Vec<IVec> = entries.iter().map(|(k, _)| k.clone()).collect();
+        let mut values: Vec<IVec> = entries.into_iter().map(|(_, v)| v).collect();
+
+        if from_index >= keys.len() || to_index >= keys.len() {
+            return;
+        }
+
+        // Update Current Song Key
+        let current_key_opt = self.get_current_or_first_song_key();
+        let current_index_opt = current_key_opt.and_then(|ck| keys.iter().position(|k| k == &ck));
+
+        let val = values.remove(from_index);
+        values.insert(to_index, val);
+
+        let min_index = std::cmp::min(from_index, to_index);
+        let max_index = std::cmp::max(from_index, to_index);
+
+        for i in min_index..=max_index {
+            _ = self.queue_db.insert(&keys[i], values[i].clone());
+        }
+
+        if let Some(current_index) = current_index_opt {
+            let new_current_index = if current_index == from_index {
+                to_index
+            } else if from_index < current_index && to_index >= current_index {
+                current_index - 1
+            } else if from_index > current_index && to_index <= current_index {
+                current_index + 1
+            } else {
+                current_index
+            };
+
+            if new_current_index != current_index {
+                _ = self.status_db.insert(CURRENT_SONG_KEY, &keys[new_current_index]);
+            }
+        }
+    }
+
     pub fn load_songs_from_dir(&self, dir: &str) {
         self.replace_all(
             self.song_repository

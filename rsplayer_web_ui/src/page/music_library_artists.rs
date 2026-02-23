@@ -20,6 +20,8 @@ pub enum Msg {
     ExpandNodeClick(NodeId),
     CollapseNodeClick(NodeId),
     AddItemToQueue(NodeId),
+    AddItemAfterCurrent(NodeId),
+    AddItemAndPlay(NodeId),
     LoadItemToQueue(NodeId),
     SearchInputChanged(String),
     DoSearch,
@@ -132,6 +134,48 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 MetadataLibraryItem::Artist { name } => {
                     orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
                         api_models::common::QueueCommand::AddArtistToQueue(name.to_owned()),
+                    )));
+                }
+                _ => {}
+            }
+        }
+        Msg::AddItemAfterCurrent(id) => {
+            let item = model.tree.arena.get(id).unwrap().get();
+            match item {
+                MetadataLibraryItem::SongItem(song) => {
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                        api_models::common::QueueCommand::AddSongAfterCurrent(song.file.clone()),
+                    )));
+                }
+                MetadataLibraryItem::Album { name, year: _ } => {
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                        api_models::common::QueueCommand::AddAlbumAfterCurrent(name.to_owned()),
+                    )));
+                }
+                MetadataLibraryItem::Artist { name } => {
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                        api_models::common::QueueCommand::AddArtistAfterCurrent(name.to_owned()),
+                    )));
+                }
+                _ => {}
+            }
+        }
+        Msg::AddItemAndPlay(id) => {
+            let item = model.tree.arena.get(id).unwrap().get();
+            match item {
+                MetadataLibraryItem::SongItem(song) => {
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                        api_models::common::QueueCommand::AddSongAndPlay(song.file.clone()),
+                    )));
+                }
+                MetadataLibraryItem::Album { name, year: _ } => {
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                        api_models::common::QueueCommand::AddAlbumAndPlay(name.to_owned()),
+                    )));
+                }
+                MetadataLibraryItem::Artist { name } => {
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                        api_models::common::QueueCommand::AddArtistAndPlay(name.to_owned()),
                     )));
                 }
                 _ => {}
@@ -315,14 +359,35 @@ fn get_tree_start_node(node_id: NodeId, arena: &Arena<MetadataLibraryItem>) -> N
             div![
                 C!["level-right"],
                 div![
-                    C!["level-item", "mr-5"],
-                    i![C!["material-icons"], "playlist_add"],
-                    ev(Ev::Click, move |_| Msg::AddItemToQueue(node_id))
-                ],
-                div![
-                    C!["level-item", "mr-5"],
-                    i![C!["material-icons"], "play_circle_filled"],
-                    ev(Ev::Click, move |_| Msg::LoadItemToQueue(node_id))
+                    C!["song-actions"],
+                    i![C!["material-icons", "song-actions__trigger"], "more_vert"],
+                    div![
+                        C!["song-actions__btns"],
+                        div![
+                            C!["level-item"],
+                            attrs!(At::Title => "Add to queue"),
+                            i![C!["material-icons", "white-icon"], "playlist_add"],
+                            ev(Ev::Click, move |_| Msg::AddItemToQueue(node_id))
+                        ],
+                        div![
+                            C!["level-item"],
+                            attrs!(At::Title => "Play Next"),
+                            i![C!["material-icons", "white-icon"], "playlist_play"],
+                            ev(Ev::Click, move |_| Msg::AddItemAfterCurrent(node_id))
+                        ],
+                        div![
+                            C!["level-item"],
+                            attrs!(At::Title => "Play Now"),
+                            i![C!["material-icons", "white-icon"], "play_arrow"],
+                            ev(Ev::Click, move |_| Msg::AddItemAndPlay(node_id))
+                        ],
+                        div![
+                            C!["level-item"],
+                            attrs!(At::Title => "Replace queue & play"),
+                            i![C!["material-icons", "white-icon"], "play_circle_filled"],
+                            ev(Ev::Click, move |_| Msg::LoadItemToQueue(node_id))
+                        ],
+                    ],
                 ],
             ],
         ]);

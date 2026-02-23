@@ -130,3 +130,73 @@ function getAllThemeMeta() {
     applyTheme(getTheme());
 }());
 
+// ============================================================
+//   QUEUE DRAG-AND-DROP AUTO-SCROLL
+// ============================================================
+
+let _queueScrollRAF = null;
+
+function attachQueueDragScroll() {
+    const list = document.querySelector('.scroll-list');
+    if (!list) return;
+
+    // Avoid attaching multiple start listeners
+    if (list._hasDragScroll) return;
+    list._hasDragScroll = true;
+
+    const EDGE = 150;     // px from top/bottom to start scrolling
+    const BASE_SPEED = 20;
+
+    const onDragOver = function(e) {
+        e.preventDefault(); // Necessary to allow dropping and continuous events
+
+        const rect = list.getBoundingClientRect();
+        const y = e.clientY;
+        
+        const distTop = y - rect.top;
+        const distBot = rect.bottom - y;
+
+        let speed = 0;
+
+        // Scroll Up: cursor near top or above
+        if (distTop < EDGE) {
+            // Intensity increases as we go higher
+            // At EDGE: 0. At 0: 1. At -100: 2.
+            let intensity = (EDGE - distTop) / EDGE;
+            speed = -BASE_SPEED * Math.pow(Math.max(0, intensity), 1.5);
+        } 
+        // Scroll Down: cursor near bottom or below
+        else if (distBot < EDGE) {
+            let intensity = (EDGE - distBot) / EDGE;
+            speed = BASE_SPEED * Math.pow(Math.max(0, intensity), 1.5);
+        }
+
+        if (_queueScrollRAF) cancelAnimationFrame(_queueScrollRAF);
+        
+        if (Math.abs(speed) > 1) {
+            const scroll = () => {
+                list.scrollTop += speed;
+                _queueScrollRAF = requestAnimationFrame(scroll);
+            };
+            _queueScrollRAF = requestAnimationFrame(scroll);
+        }
+    };
+
+    const cleanup = function() {
+        if (_queueScrollRAF) {
+            cancelAnimationFrame(_queueScrollRAF);
+            _queueScrollRAF = null;
+        }
+        window.removeEventListener('dragover', onDragOver);
+        window.removeEventListener('dragend', cleanup);
+        window.removeEventListener('drop', cleanup);
+    };
+
+    // Only activate global scroll behavior when a drag starts FROM the list
+    list.addEventListener('dragstart', function() {
+        window.addEventListener('dragover', onDragOver, {passive: false});
+        window.addEventListener('dragend', cleanup);
+        window.addEventListener('drop', cleanup);
+    });
+}
+

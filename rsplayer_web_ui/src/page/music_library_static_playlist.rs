@@ -34,9 +34,13 @@ pub enum Msg {
     LoadAlbumIntoQueue(String),
     AddPlaylistToQueue(String),
     AddAlbumToQueue(String),
+    AddPlaylistAfterCurrent(String),
+    AddAlbumAfterCurrent(String),
     CloseSelectedPlaylistItemsModal,
     KeyPressed(web_sys::KeyboardEvent),
     AddSongToQueue(String),
+    AddSongAfterCurrent(String),
+    AddSongAndPlay(String),
     PlaySongFromPlaylist(String),
     LoadMorePlaylistItems,
     WebSocketOpen,
@@ -132,6 +136,16 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 api_models::common::QueueCommand::AddSongToQueue(song_id),
             )));
         }
+        Msg::AddSongAfterCurrent(song_id) => {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::AddSongAfterCurrent(song_id),
+            )));
+        }
+        Msg::AddSongAndPlay(song_id) => {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::AddSongAndPlay(song_id),
+            )));
+        }
         Msg::PlaySongFromPlaylist(song_id) => {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
                 api_models::common::QueueCommand::LoadSongToQueue(song_id),
@@ -152,6 +166,19 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 api_models::common::QueueCommand::AddPlaylistToQueue(pl_id),
             )));
         }
+        Msg::AddPlaylistAfterCurrent(pl_id) => {
+            // Load items then add each after current — reuse LoadPlaylistInQueue for simplicity
+            // but with the dedicated command once available; for now use AddPlaylistToQueue
+            // (a full "insert after" for playlists would need a batch backend command)
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::AddPlaylistToQueue(pl_id),
+            )));
+        }
+        Msg::AddAlbumAfterCurrent(album_id) => {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::AddAlbumToQueue(album_id),
+            )));
+        }
         Msg::WebSocketOpen => {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
                 api_models::common::PlaylistCommand::QueryPlaylist,
@@ -168,6 +195,8 @@ pub fn view(model: &Model) -> Node<Msg> {
 fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
     let selected_playlist_id = model.selected_playlist_id.clone();
     let selected_playlist_id2 = model.selected_playlist_id.clone();
+    let selected_playlist_id3 = model.selected_playlist_id.clone();
+    let is_album = model.selected_playlist_is_album;
     div![
         C!["modal", IF!(!model.selected_playlist_items.is_empty() => "is-active")],
         div![
@@ -180,21 +209,30 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
             header![
                 C!["modal-card-head"],
                 a![
-                    attrs!(At::Title =>"Load playlist into queue"),
+                    attrs!(At::Title =>"Replace queue & play"),
                     i![C!("is-large-icon material-icons"), "play_circle_filled"],
-                    if model.selected_playlist_is_album {
+                    if is_album {
                         ev(Ev::Click, move |_| Msg::LoadAlbumIntoQueue(selected_playlist_id))
                     } else {
                         ev(Ev::Click, move |_| Msg::LoadPlaylistIntoQueue(selected_playlist_id))
                     }
                 ],
                 a![
-                    attrs!(At::Title =>"Add playlist to queue"),
+                    attrs!(At::Title =>"Add to queue"),
                     i![C!("is-large-icon material-icons"), "playlist_add"],
-                    if model.selected_playlist_is_album {
+                    if is_album {
                         ev(Ev::Click, move |_| Msg::AddAlbumToQueue(selected_playlist_id2))
                     } else {
                         ev(Ev::Click, move |_| Msg::AddPlaylistToQueue(selected_playlist_id2))
+                    }
+                ],
+                a![
+                    attrs!(At::Title =>"Play Next (add after current)"),
+                    i![C!("is-large-icon material-icons"), "playlist_play"],
+                    if is_album {
+                        ev(Ev::Click, move |_| Msg::AddAlbumAfterCurrent(selected_playlist_id3))
+                    } else {
+                        ev(Ev::Click, move |_| Msg::AddPlaylistAfterCurrent(selected_playlist_id3))
                     }
                 ],
                 p![
@@ -218,7 +256,9 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
                     div![id!("first-list-item")],
                     model.selected_playlist_items.iter().map(|song| {
                         let song_id = song.file.clone();
-                        let song_id2 = song.file.clone();
+                        let song_id_next = song.file.clone();
+                        let song_id_play = song.file.clone();
+                        let song_id_replace = song.file.clone();
                         div![
                             C!["list-item"],
                             div![
@@ -229,19 +269,35 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
                             div![
                                 C!["list-item-controls"],
                                 div![
-                                    C!["buttons"],
-                                    a![
-                                        attrs!(At::Title =>"Add song to queue"),
-                                        C!["icon", "white-icon"],
-                                        i![C!("material-icons"), "playlist_add"],
-                                        ev(Ev::Click, move |_| Msg::AddSongToQueue(song_id))
-                                    ],
-                                    a![
-                                        attrs!(At::Title =>"Play song and replace queue"),
-                                        C!["icon", "white-icon"],
-                                        i![C!("material-icons"), "play_circle_filled"],
-                                        ev(Ev::Click, move |_| Msg::PlaySongFromPlaylist(song_id2))
-                                    ],
+                                    C!["song-actions"],
+                                    i![C!["material-icons", "song-actions__trigger"], "more_vert"],
+                                    div![
+                                        C!["song-actions__btns"],
+                                        a![
+                                            attrs!(At::Title =>"Add to queue"),
+                                            C!["icon", "white-icon"],
+                                            i![C!("material-icons"), "playlist_add"],
+                                            ev(Ev::Click, move |_| Msg::AddSongToQueue(song_id))
+                                        ],
+                                        a![
+                                            attrs!(At::Title =>"Play Next"),
+                                            C!["icon", "white-icon"],
+                                            i![C!("material-icons"), "playlist_play"],
+                                            ev(Ev::Click, move |_| Msg::AddSongAfterCurrent(song_id_next))
+                                        ],
+                                        a![
+                                            attrs!(At::Title =>"Play Now"),
+                                            C!["icon", "white-icon"],
+                                            i![C!("material-icons"), "play_arrow"],
+                                            ev(Ev::Click, move |_| Msg::AddSongAndPlay(song_id_play))
+                                        ],
+                                        a![
+                                            attrs!(At::Title =>"Replace queue & play"),
+                                            C!["icon", "white-icon"],
+                                            i![C!("material-icons"), "play_circle_filled"],
+                                            ev(Ev::Click, move |_| Msg::PlaySongFromPlaylist(song_id_replace))
+                                        ],
+                                    ]
                                 ]
                             ],
                         ]

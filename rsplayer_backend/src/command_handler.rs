@@ -204,6 +204,126 @@ pub async fn handle_user_commands(
             Queue(RemoveItem(song_id)) => {
                 queue_service.remove_song(&song_id);
             }
+            Queue(QueueCommand::AddSongAfterCurrent(song_id)) => {
+                queue_service.add_song_after_current(&song_id);
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(
+                        "Song added after current".to_string(),
+                    ))
+                    .unwrap();
+            }
+            Queue(QueueCommand::AddSongAndPlay(song_id)) => {
+                player_service.stop_current_song();
+                queue_service.add_song_by_id(&song_id);
+                queue_service.set_current_to_last();
+                player_service.play_from_current_queue_song();
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(
+                        "Song added and playing".to_string(),
+                    ))
+                    .unwrap();
+            }
+            Queue(QueueCommand::AddDirectoryAfterCurrent(dir)) => {
+                queue_service.add_songs_from_dir_after_current(&dir);
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(
+                        "Directory added after current".to_string(),
+                    ))
+                    .unwrap();
+            }
+            Queue(QueueCommand::AddDirectoryAndPlay(dir)) => {
+                if let Some(first_key) = queue_service.add_songs_from_dir_after_current(&dir) {
+                    player_service.stop_current_song();
+                    queue_service.set_current_song(first_key);
+                    player_service.play_from_current_queue_song();
+                    state_changes_sender
+                        .send(StateChangeEvent::NotificationSuccess(
+                            "Directory added and playing".to_string(),
+                        ))
+                        .unwrap();
+                }
+            }
+            Queue(QueueCommand::AddArtistAfterCurrent(artist)) => {
+                let songs = album_repository
+                    .find_by_artist(&artist)
+                    .iter()
+                    .flat_map(|alb| alb.song_keys.iter())
+                    .filter_map(|sk| song_repository.find_by_id(sk))
+                    .collect();
+                queue_service.add_songs_after_current(songs);
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(
+                        "Artist added after current".to_string(),
+                    ))
+                    .unwrap();
+            }
+            Queue(QueueCommand::AddArtistAndPlay(artist)) => {
+                let songs = album_repository
+                    .find_by_artist(&artist)
+                    .iter()
+                    .flat_map(|alb| alb.song_keys.iter())
+                    .filter_map(|sk| song_repository.find_by_id(sk))
+                    .collect();
+                if let Some(first_key) = queue_service.add_songs_after_current(songs) {
+                    player_service.stop_current_song();
+                    queue_service.set_current_song(first_key);
+                    player_service.play_from_current_queue_song();
+                    state_changes_sender
+                        .send(StateChangeEvent::NotificationSuccess(
+                            "Artist added and playing".to_string(),
+                        ))
+                        .unwrap();
+                }
+            }
+            Queue(QueueCommand::AddAlbumAfterCurrent(album_id)) => {
+                let songs = album_repository
+                    .find_by_id(&album_id)
+                    .map(|alb| {
+                        alb.song_keys
+                            .iter()
+                            .filter_map(|sk| song_repository.find_by_id(sk))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                queue_service.add_songs_after_current(songs);
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(
+                        "Album added after current".to_string(),
+                    ))
+                    .unwrap();
+            }
+            Queue(QueueCommand::AddAlbumAndPlay(album_id)) => {
+                let songs = album_repository
+                    .find_by_id(&album_id)
+                    .map(|alb| {
+                        alb.song_keys
+                            .iter()
+                            .filter_map(|sk| song_repository.find_by_id(sk))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if let Some(first_key) = queue_service.add_songs_after_current(songs) {
+                    player_service.stop_current_song();
+                    queue_service.set_current_song(first_key);
+                    player_service.play_from_current_queue_song();
+                    state_changes_sender
+                        .send(StateChangeEvent::NotificationSuccess(
+                            "Album added and playing".to_string(),
+                        ))
+                        .unwrap();
+                }
+            }
+            Queue(QueueCommand::MoveItem(from, to)) => {
+                queue_service.move_item(from, to);
+            }
+            Queue(QueueCommand::MoveItemAfterCurrent(from)) => {
+                queue_service.move_item_after_current(from);
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(
+                        "Song moved after current".to_string(),
+                    ))
+                    .unwrap();
+            }
             Queue(LoadPlaylistInQueue(pl_id)) => {
                 player_service.stop_current_song();
                 let pl_songs = playlist_service.get_playlist_page_by_name(&pl_id, 0, 20000).items;

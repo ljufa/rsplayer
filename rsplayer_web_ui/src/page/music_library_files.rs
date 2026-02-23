@@ -24,6 +24,8 @@ pub enum Msg {
     ExpandNodeClick(NodeId),
     CollapseNodeClick(NodeId),
     AddItemToQueue(NodeId),
+    AddItemAfterCurrent(NodeId),
+    AddItemAndPlay(NodeId),
     LoadItemToQueue(NodeId),
     SearchInputChanged(String),
     DoSearch,
@@ -138,7 +140,52 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::AddItemToQueue(id) => {
             let path = model.tree.get_full_path(id, !model.search_input.is_empty());
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(AddLocalLibDirectory(path))));
+            let item = model.tree.arena.get(id).map(|node| node.get());
+            match item {
+                Some(MetadataLibraryItem::SongItem(song)) => {
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                        api_models::common::QueueCommand::AddSongToQueue(song.file.clone()),
+                    )));
+                }
+                Some(MetadataLibraryItem::Directory { .. }) => {
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(AddLocalLibDirectory(path))));
+                }
+                _ => {}
+            }
+        }
+        Msg::AddItemAfterCurrent(id) => {
+            let item = model.tree.arena.get(id).map(|node| node.get());
+            match item {
+                Some(MetadataLibraryItem::SongItem(song)) => {
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                        api_models::common::QueueCommand::AddSongAfterCurrent(song.file.clone()),
+                    )));
+                }
+                Some(MetadataLibraryItem::Directory { .. }) => {
+                    let path = model.tree.get_full_path(id, !model.search_input.is_empty());
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                        api_models::common::QueueCommand::AddDirectoryAfterCurrent(path),
+                    )));
+                }
+                _ => {}
+            }
+        }
+        Msg::AddItemAndPlay(id) => {
+            let item = model.tree.arena.get(id).map(|node| node.get());
+            match item {
+                Some(MetadataLibraryItem::SongItem(song)) => {
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                        api_models::common::QueueCommand::AddSongAndPlay(song.file.clone()),
+                    )));
+                }
+                Some(MetadataLibraryItem::Directory { .. }) => {
+                    let path = model.tree.get_full_path(id, !model.search_input.is_empty());
+                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                        api_models::common::QueueCommand::AddDirectoryAndPlay(path),
+                    )));
+                }
+                _ => {}
+            }
         }
         Msg::LoadItemToQueue(id) => {
             let path = model.tree.get_full_path(id, !model.search_input.is_empty());
@@ -303,14 +350,39 @@ fn get_tree_start_node(node_id: NodeId, arena: &Arena<MetadataLibraryItem>, is_s
             div![
                 C!["level-right"],
                 div![
-                    C!["level-item", "mr-5"],
-                    i![C!["material-icons"], "playlist_add"],
-                    ev(Ev::Click, move |_| Msg::AddItemToQueue(node_id))
-                ],
-                div![
-                    C!["level-item", "mr-5"],
-                    i![C!["material-icons"], "play_circle_filled"],
-                    ev(Ev::Click, move |_| Msg::LoadItemToQueue(node_id))
+                    C!["song-actions"],
+                    i![C!["material-icons", "song-actions__trigger"], "more_vert"],
+                    div![
+                        C!["song-actions__btns"],
+                        div![
+                            C!["level-item"],
+                            attrs!(At::Title => "Add to queue"),
+                            i![C!["material-icons", "white-icon"], "playlist_add"],
+                            ev(Ev::Click, move |_| Msg::AddItemToQueue(node_id))
+                        ],
+                        IF!(matches!(item, MetadataLibraryItem::SongItem(_) | MetadataLibraryItem::Directory { .. }) =>
+                            div![
+                                C!["level-item"],
+                                attrs!(At::Title => "Play Next"),
+                                i![C!["material-icons", "white-icon"], "playlist_play"],
+                                ev(Ev::Click, move |_| Msg::AddItemAfterCurrent(node_id))
+                            ]
+                        ),
+                        IF!(matches!(item, MetadataLibraryItem::SongItem(_) | MetadataLibraryItem::Directory { .. }) =>
+                            div![
+                                C!["level-item"],
+                                attrs!(At::Title => "Play Now"),
+                                i![C!["material-icons", "white-icon"], "play_arrow"],
+                                ev(Ev::Click, move |_| Msg::AddItemAndPlay(node_id))
+                            ]
+                        ),
+                        div![
+                            C!["level-item"],
+                            attrs!(At::Title => "Replace queue & play"),
+                            i![C!["material-icons", "white-icon"], "play_circle_filled"],
+                            ev(Ev::Click, move |_| Msg::LoadItemToQueue(node_id))
+                        ],
+                    ],
                 ],
             ],
         ]);

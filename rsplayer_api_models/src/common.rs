@@ -183,6 +183,16 @@ pub enum QueueCommand {
     QueryCurrentSong,
     QueryCurrentQueue(CurrentQueueQuery),
     RemoveItem(String),
+    AddSongAfterCurrent(String),
+    AddSongAndPlay(String),
+    AddDirectoryAfterCurrent(String),
+    AddDirectoryAndPlay(String),
+    AddArtistAfterCurrent(String),
+    AddArtistAndPlay(String),
+    AddAlbumAfterCurrent(String),
+    AddAlbumAndPlay(String),
+    MoveItem(usize, usize),
+    MoveItemAfterCurrent(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
