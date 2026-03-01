@@ -100,12 +100,12 @@ pub fn start(
         .or(ui_static_content)
         .or(artwork_static_content)
         .with(cors);
-    let ws_bcast_tx_handle = ws_bcast_tx.clone();
+    let ws_bcast_tx_handle = ws_bcast_tx;
     let ws_handle = async move {
         loop {
             match state_changes_rx.recv().await {
                 Err(broadcast::error::RecvError::Lagged(count)) => {
-                    warn!("Websocket broadcaster lagged, skipped {} messages.", count);
+                    warn!("Websocket broadcaster lagged, skipped {count} messages.");
                 }
                 Err(broadcast::error::RecvError::Closed) => {
                     error!("State change event stream closed, exiting websocket handler.");
@@ -243,7 +243,7 @@ async fn user_connected(
 
     debug!("new websocket client: {user_id}");
     let current_users = ACTIVE_USERS.fetch_add(1, Ordering::SeqCst) + 1;
-    info!("Number of active websockets is: {}", current_users);
+    info!("Number of active websockets is: {current_users}");
 
     let (mut to_user_ws, mut from_user_ws) = ws.split();
 
@@ -309,13 +309,13 @@ async fn user_connected(
         }
     }
 
-    user_disconnected(user_id).await;
+    user_disconnected(user_id);
 }
 
-async fn user_disconnected(my_id: usize) {
+fn user_disconnected(my_id: usize) {
     info!("good bye user: {my_id}");
     let current_users = ACTIVE_USERS.fetch_sub(1, Ordering::SeqCst) - 1;
-    info!("Number of active websockets is: {}", current_users);
+    info!("Number of active websockets is: {current_users}");
 }
 
 fn get_ports() -> (u16, u16) {
