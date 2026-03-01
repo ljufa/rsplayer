@@ -179,6 +179,13 @@ pub fn start_listening(
                                             }
                                         }
                                     }
+                                    if msg.starts_with("PowerState=") {
+                                        if let Some((_, state_str)) = msg.split_once('=') {
+                                            let is_on = state_str == "1";
+                                            info!("Firmware power state changed: {}", is_on);
+                                            _ = state_changes_tx.send(StateChangeEvent::RSPlayerFirmwarePowerEvent(is_on));
+                                        }
+                                    }
                                     if msg == "CyclePlaybackMode" {
                                         _ = player_commands_tx
                                             .blocking_send(UserCommand::Player(PlayerCommand::CyclePlaybackMode));

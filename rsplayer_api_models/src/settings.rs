@@ -20,9 +20,6 @@ pub struct Settings {
     #[serde(default)]
     #[validate]
     pub usb_settings: UsbCmdChannelSettings,
-    #[serde(default)]
-    #[validate]
-    pub mqtt_settings: MqttCmdChannelSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
@@ -148,17 +145,7 @@ pub struct UsbCmdChannelSettings {
     pub enabled: bool,
     pub baud_rate: u32,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
 
-pub struct MqttCmdChannelSettings {
-    pub enabled: bool,
-    pub mqtt_broker: String,
-    pub mqtt_port: u16,
-    pub mqtt_user: String,
-    pub mqtt_password: String,
-    pub mqtt_out_topic: String,
-    pub mqtt_in_topic: String,
-}
 const fn thread_priority_default_value() -> u8 {
     1
 }
@@ -290,19 +277,6 @@ impl Default for UsbCmdChannelSettings {
         }
     }
 }
-impl Default for MqttCmdChannelSettings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            mqtt_broker: "localhost".to_string(),
-            mqtt_port: 1883,
-            mqtt_user: String::new(),
-            mqtt_password: String::new(),
-            mqtt_out_topic: "rsplayer/out".to_string(),
-            mqtt_in_topic: "rsplayer/in".to_string(),
-        }
-    }
-}
 
 pub const DEFAULT_ALSA_PCM_DEVICE: &str = "hw:0";
 pub const DEFAULT_ALSA_MIXER: &str = "0,Master";
@@ -321,7 +295,6 @@ impl Default for Settings {
             playlist_settings: PlaylistSetting::default(),
             rs_player_settings: RsPlayerSettings::default(),
             usb_settings: UsbCmdChannelSettings::default(),
-            mqtt_settings: MqttCmdChannelSettings::default(),
         }
     }
 }

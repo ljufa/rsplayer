@@ -57,6 +57,7 @@ pub enum StateChangeEvent {
     PlaybackModeChangedEvent(PlaybackMode),
     VUEvent(u8, u8),
     VuMeterEnabledEvent(bool),
+    RSPlayerFirmwarePowerEvent(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

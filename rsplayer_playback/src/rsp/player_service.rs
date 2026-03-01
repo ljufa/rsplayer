@@ -78,16 +78,18 @@ impl PlayerService {
         let dsp_processor_clone = dsp_processor.clone();
 
         tokio::task::spawn(async move {
-            let mut i = 0;
+            let mut last_saved_secs: u64 = u64::MAX;
             loop {
                 match rx.recv().await {
                     Ok(StateChangeEvent::SongTimeEvent(st)) => {
-                        i += 1;
-                        if i % 2 == 0 {
-                            let lt_secs = st.current_time.as_secs();
+                        let lt_secs = st.current_time.as_secs();
+                        #[allow(clippy::cast_possible_truncation)]
+                        last_known_time_clone.store(lt_secs as u32, Ordering::Relaxed);
+                        // Write to DB at most once per second to avoid saturating sled's
+                        // background compaction thread (SongTimeEvent fires per audio packet).
+                        if lt_secs != last_saved_secs {
+                            last_saved_secs = lt_secs;
                             let lt = lt_secs.to_string();
-                            #[allow(clippy::cast_possible_truncation)]
-                            last_known_time_clone.store(lt_secs as u32, Ordering::Relaxed);
                             trace!("Save time state: {lt}");
                             _ = state_db.insert(LAST_SONG_PROGRESS_KEY, lt.as_bytes());
                         }

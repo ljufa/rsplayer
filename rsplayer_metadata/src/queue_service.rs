@@ -120,12 +120,15 @@ impl QueueService {
         let mut pq = self.get_priority_queue();
         while !pq.is_empty() {
             let key = pq.remove(0);
-            self.save_priority_queue(&pq);
             if self.queue_db.contains_key(&key).unwrap_or(false) {
+                // Save the drained priority queue once, after finding a valid entry.
+                self.save_priority_queue(&pq);
                 _ = self.status_db.insert(CURRENT_SONG_KEY, &key);
                 return true;
             }
         }
+        // All entries were stale — persist the now-empty priority queue once.
+        self.save_priority_queue(&pq);
 
         let queue_len = self.queue_db.len();
         if queue_len == 0 {
@@ -280,10 +283,13 @@ impl QueueService {
     pub fn replace_all(&self, iter: impl Iterator<Item = Song>) {
         _ = self.queue_db.clear();
         _ = self.status_db.remove(CURRENT_SONG_KEY);
+        _ = self.status_db.remove("priority_queue");
         iter.for_each(|song| {
             let key = self.queue_db.generate_id().unwrap().to_be_bytes();
             _ = self.queue_db.insert(key, song.to_json_string_bytes());
         });
+        // Flush so sled can reclaim space from the cleared log entries.
+        _ = self.queue_db.flush();
     }
 
     pub fn get_queue_page<F>(&self, offset: usize, limit: usize, song_filter: F) -> (usize, Vec<Song>)
@@ -336,6 +342,8 @@ impl QueueService {
     pub fn clear(&self) {
         _ = self.queue_db.clear();
         _ = self.status_db.remove(CURRENT_SONG_KEY);
+        _ = self.status_db.remove("priority_queue");
+        _ = self.queue_db.flush();
     }
     pub fn query_current_queue(&self, query: CurrentQueueQuery) -> Option<PlaylistPage> {
         let mut pc = None;
@@ -393,48 +401,23 @@ impl QueueService {
             return None;
         }
 
-        let current_key_opt = self.get_current_or_first_song_key();
-        let entries: Vec<(IVec, IVec)> = self.queue_db.iter().filter_map(Result::ok).collect();
-
-        let mut keys: Vec<IVec> = entries.iter().map(|(k, _)| k.clone()).collect();
-        let mut values: Vec<IVec> = entries.into_iter().map(|(_, v)| v).collect();
-
-        let insert_index = if let Some(current_key) = current_key_opt {
-            keys.iter()
-                .position(|k| k == &current_key)
-                .map_or(keys.len(), |i| i + 1)
-        } else {
-            keys.len()
-        };
-
-        let count = songs.len();
-        // Insert new songs into values vector
-        for (i, song) in songs.into_iter().enumerate() {
-            values.insert(insert_index + i, IVec::from(song.to_json_string_bytes()));
-            // Ensure keys vector is long enough
-            if let Ok(new_key) = self.queue_db.generate_id() {
-                keys.push(IVec::from(&new_key.to_be_bytes()));
+        // Append new songs to the end of the queue (avoids O(N) rewrites of existing
+        // entries). The priority queue ensures they play immediately after the current song.
+        let mut new_keys: Vec<IVec> = Vec::with_capacity(songs.len());
+        for song in songs {
+            if let Ok(id) = self.queue_db.generate_id() {
+                let key = IVec::from(&id.to_be_bytes());
+                _ = self.queue_db.insert(&key, song.to_json_string_bytes());
+                new_keys.push(key);
             }
         }
 
-        // Rewrite from insertion point onwards
-        for (i, key) in keys.iter().enumerate().skip(insert_index) {
-            if i < values.len() {
-                _ = self.queue_db.insert(key, values[i].clone());
-            }
+        // Add to priority queue in reverse order so the first song plays first.
+        for key in new_keys.iter().rev() {
+            self.add_to_priority_queue(key.clone());
         }
 
-        // Add the keys at the insertion range to priority queue (in reverse order)
-        for i in (0..count).rev() {
-            self.add_to_priority_queue(keys[insert_index + i].clone());
-        }
-
-        // Return key of first inserted song
-        if insert_index < keys.len() {
-            Some(keys[insert_index].clone())
-        } else {
-            None
-        }
+        new_keys.into_iter().next()
     }
 
     pub fn add_songs_from_dir_after_current(&self, dir: &str) -> Option<IVec> {
@@ -453,34 +436,13 @@ impl QueueService {
 
     pub fn add_song_after_current(&self, song_id: &str) {
         if let Some(song) = self.song_repository.find_by_id(song_id) {
-            let current_key_opt = self.get_current_or_first_song_key();
-            let entries: Vec<(IVec, IVec)> = self.queue_db.iter().filter_map(Result::ok).collect();
-
-            let mut keys: Vec<IVec> = entries.iter().map(|(k, _)| k.clone()).collect();
-            let mut values: Vec<IVec> = entries.into_iter().map(|(_, v)| v).collect();
-
-            let insert_index = if let Some(current_key) = current_key_opt {
-                keys.iter()
-                    .position(|k| k == &current_key)
-                    .map_or(keys.len(), |i| i + 1)
-            } else {
-                keys.len()
-            };
-
-            values.insert(insert_index, IVec::from(song.to_json_string_bytes()));
-
-            if let Ok(new_key) = self.queue_db.generate_id() {
-                keys.push(IVec::from(&new_key.to_be_bytes()));
+            // Append to the end of the queue and schedule via the priority queue.
+            // This avoids O(N) rewrites of every entry after the insertion point.
+            if let Ok(id) = self.queue_db.generate_id() {
+                let key = IVec::from(&id.to_be_bytes());
+                _ = self.queue_db.insert(&key, song.to_json_string_bytes());
+                self.add_to_priority_queue(key);
             }
-
-            for (i, key) in keys.iter().enumerate().skip(insert_index) {
-                if i < values.len() {
-                    _ = self.queue_db.insert(key, values[i].clone());
-                }
-            }
-
-            // The song is now at the key previously at insert_index
-            self.add_to_priority_queue(keys[insert_index].clone());
         }
     }
 

@@ -1,22 +1,10 @@
-use std::env;
-use std::{
-    collections::HashMap,
-    sync::atomic::{AtomicUsize, Ordering},
-};
-use std::{sync::Arc, time::Duration};
-
-use futures::Future;
-use futures::FutureExt;
-use futures::StreamExt;
-use log::debug;
-use log::info;
-use log::warn;
+use futures::{Future, SinkExt, StreamExt};
+use log::{debug, error, info, trace, warn};
 use rust_embed::RustEmbed;
-use tokio::{
-    sync::{broadcast::Receiver, mpsc, RwLock},
-    time::sleep,
-};
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use std::env;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use tokio::sync::{broadcast, mpsc};
 use warp::http::{HeaderMap, HeaderValue};
 use warp::{
     hyper::Method,
@@ -32,12 +20,8 @@ use rsplayer_config::Configuration;
 
 /// Our global unique user id counter.
 static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
+static ACTIVE_USERS: AtomicUsize = AtomicUsize::new(0);
 
-/// Our state of currently connected users.
-///
-/// - Key is their id
-/// - Value is a sender of `warp::ws::Message`
-type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
 type Config = Arc<Configuration>;
 
 type UserCommandSender = mpsc::Sender<UserCommand>;
@@ -65,7 +49,7 @@ pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Out
 }
 
 pub fn start(
-    mut state_changes_rx: Receiver<StateChangeEvent>,
+    mut state_changes_rx: broadcast::Receiver<StateChangeEvent>,
     player_commands_tx: UserCommandSender,
     system_commands_tx: SystemCommandSender,
     config: &Config,
@@ -74,27 +58,26 @@ pub fn start(
     impl Future<Output = ()>,
     impl Future<Output = ()>,
 ) {
-    // Keep track of all connected users, key is usize, value
-    // is a websocket sender.
-    let users = Users::default();
-    // Turn our "state" into a new Filter...
-    let users_notify = users.clone();
-    let users_f = warp::any().map(move || users.clone());
     let player_commands_tx = warp::any().map(move || player_commands_tx.clone());
     let system_commands_tx = warp::any().map(move || system_commands_tx.clone());
+    let (ws_bcast_tx, _) = broadcast::channel::<Arc<String>>(32);
+    let ws_bcast_tx_filter = ws_bcast_tx.clone();
     let cors = warp::cors()
         .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
         .allow_any_origin();
 
     let player_ws_path = warp::path!("api" / "ws")
         .and(warp::ws())
-        .and(users_f)
+        .and(warp::any().map(move || ws_bcast_tx_filter.subscribe()))
         .and(player_commands_tx)
         .and(system_commands_tx)
-        .map(|ws: warp::ws::Ws, users, player_commands, system_commands| {
-            // And then our closure will be called when it completes...
-            ws.on_upgrade(|websocket| user_connected(websocket, users, player_commands, system_commands))
-        });
+        .map(
+            |ws: warp::ws::Ws, ws_rx, player_commands, system_commands| {
+                ws.on_upgrade(|websocket| {
+                    user_connected(websocket, ws_rx, player_commands, system_commands)
+                })
+            },
+        );
 
     let mut cache_headers = HeaderMap::new();
     cache_headers.insert(
@@ -117,16 +100,25 @@ pub fn start(
         .or(ui_static_content)
         .or(artwork_static_content)
         .with(cors);
-
+    let ws_bcast_tx_handle = ws_bcast_tx.clone();
     let ws_handle = async move {
         loop {
             match state_changes_rx.recv().await {
-                Err(_e) => {
-                    sleep(Duration::from_millis(100)).await;
+                Err(broadcast::error::RecvError::Lagged(count)) => {
+                    warn!("Websocket broadcaster lagged, skipped {} messages.", count);
+                }
+                Err(broadcast::error::RecvError::Closed) => {
+                    error!("State change event stream closed, exiting websocket handler.");
+                    break;
                 }
                 Ok(ev) => {
                     trace!("Received state changed event {ev:?}");
-                    notify_users(&users_notify, ev).await;
+                    let json_msg = serde_json::to_string(&ev).unwrap();
+                    if !json_msg.is_empty()
+                        && ws_bcast_tx_handle.send(Arc::new(json_msg)).is_err()
+                    {
+                        trace!("No active ws clients, not sending state change");
+                    }
                 }
             }
         }
@@ -151,7 +143,9 @@ mod filters {
 
     use super::{handlers, Config};
 
-    pub fn settings_save(config: Config) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    pub fn settings_save(
+        config: Config,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::post()
             .and(warp::path!("api" / "settings"))
             .and(json_body())
@@ -160,7 +154,9 @@ mod filters {
             .and_then(handlers::save_settings)
     }
 
-    pub fn get_settings(config: Config) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    pub fn get_settings(
+        config: Config,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "settings"))
             .and(with_config(config))
@@ -176,7 +172,8 @@ mod filters {
             .map(move || error_msg.clone())
     }
 
-    fn with_config(config: Config) -> impl Filter<Extract = (Config,), Error = std::convert::Infallible> + Clone {
+    fn with_config(config: Config) -> impl Filter<Extract = (Config,), Error = std::convert::Infallible> + Clone
+    {
         warp::any().map(move || config.clone())
     }
 
@@ -236,87 +233,89 @@ mod handlers {
     }
 }
 
-async fn notify_users(users_to_notify: &Users, status_change_event: StateChangeEvent) {
-    if !users_to_notify.read().await.is_empty() {
-        let json_msg = serde_json::to_string(&status_change_event).unwrap();
-        if !json_msg.is_empty() {
-            let users = users_to_notify.read().await;
-            users.iter().for_each(|tx| {
-                let send_result = tx.1.send(Ok(Message::text(json_msg.clone())));
-                trace!("Sent message to user: {:?} with result: {:?}", tx.0, send_result);
-            });
-        }
-    }
-}
-
 async fn user_connected(
     ws: WebSocket,
-    users: Users,
+    mut ws_rx: broadcast::Receiver<Arc<String>>,
     user_commands_tx: UserCommandSender,
     system_commands_tx: SystemCommandSender,
 ) {
-    // Use a counter to assign a new unique ID for this user.
     let user_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
 
     debug!("new websocket client: {user_id}");
+    let current_users = ACTIVE_USERS.fetch_add(1, Ordering::SeqCst) + 1;
+    info!("Number of active websockets is: {}", current_users);
 
-    // Split the socket into a sender and receive of messages.
-    let (to_user_ws, mut from_user_ws) = ws.split();
+    let (mut to_user_ws, mut from_user_ws) = ws.split();
 
-    // Use an unbounded channel to handle buffering and flushing of messages
-    // to the websocket...
-    let (tx, rx) = mpsc::unbounded_channel();
-    let rx = UnboundedReceiverStream::new(rx);
-    _ = tokio::task::Builder::new()
-        .name(&format!("Websocket thread for user:{user_id}"))
-        .spawn(rx.forward(to_user_ws).map(|result| {
-            if let Err(e) = result {
-                debug!("websocket send error: {e}");
-            }
-        }));
-
-    // Save the sender in our list of connected users.
-    users.write().await.insert(user_id, tx);
-
-    // input socket loop
-    while let Some(result) = from_user_ws.next().await {
-        let msg = match result {
-            Ok(msg) => msg,
-            Err(e) => {
-                debug!("websocket error(uid={user_id}): {e}");
-                break;
-            }
-        };
-        info!("Got command from user {msg:?}");
-        if let Ok(cmd) = msg.to_str() {
-            let user_command: Option<UserCommand> = serde_json::from_str(cmd).ok();
-            if let Some(pc) = user_command {
-                user_commands_tx.send(pc).await.expect("failed to send user message");
-            } else {
-                let system_command: Option<SystemCommand> = serde_json::from_str(cmd).ok();
-                if let Some(sc) = system_command {
-                    system_commands_tx
-                        .send(sc)
-                        .await
-                        .expect("failed to send system message");
-                } else {
-                    warn!("Unknown command received: [{cmd}]");
+    loop {
+        tokio::select! {
+            // Receive message from client
+            Some(result) = from_user_ws.next() => {
+                let msg = match result {
+                    Ok(msg) => msg,
+                    Err(e) => {
+                        debug!("websocket error(uid={user_id}): {e}");
+                        break;
+                    }
+                };
+                if msg.is_close() {
+                    break;
+                }
+                if let Ok(cmd) = msg.to_str() {
+                    if cmd.is_empty() {
+                        continue;
+                    }
+                    info!("Got command from user {user_id}: {cmd:?}");
+                    let user_command: Option<UserCommand> = serde_json::from_str(cmd).ok();
+                    if let Some(pc) = user_command {
+                        if user_commands_tx.send(pc).await.is_err() {
+                            error!("failed to send user message");
+                            break;
+                        }
+                    } else {
+                        let system_command: Option<SystemCommand> = serde_json::from_str(cmd).ok();
+                        if let Some(sc) = system_command {
+                            if system_commands_tx.send(sc).await.is_err() {
+                                error!("failed to send system message");
+                                break;
+                            }
+                        } else {
+                            warn!("Unknown command received: [{cmd}]");
+                        }
+                    }
+                }
+            },
+            // Send broadcast message to client
+            result = ws_rx.recv() => {
+                match result {
+                    Ok(json_msg) => {
+                        if to_user_ws
+                            .send(Message::text(json_msg.as_ref().clone()))
+                            .await
+                            .is_err()
+                        {
+                            debug!("Failed to send message to user {user_id}, client disconnected.");
+                            break;
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        warn!("Client {user_id} is lagging, skipped {n} messages.");
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        break;
+                    }
                 }
             }
         }
     }
 
-    // Make an extra clone to give to our disconnection handler...
-    // user_ws_rx stream will keep processing as long as the user stays
-    // connected. Once they disconnect, then...
-    user_disconnected(user_id, &users.clone()).await;
+    user_disconnected(user_id).await;
 }
 
-async fn user_disconnected(my_id: usize, users: &Users) {
+async fn user_disconnected(my_id: usize) {
     info!("good bye user: {my_id}");
-    // Stream closed up, so remove from the user list
-    users.write().await.remove(&my_id);
-    info!("Number of active websockets is: {}", users.read().await.len());
+    let current_users = ACTIVE_USERS.fetch_sub(1, Ordering::SeqCst) - 1;
+    info!("Number of active websockets is: {}", current_users);
 }
 
 fn get_ports() -> (u16, u16) {

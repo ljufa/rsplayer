@@ -107,7 +107,7 @@ TODO
 # Roadmap
  
 ## Features
-* [ ] MQTT or other homeassistant friendly communication channel 
+* [x] MQTT or other homeassistant friendly communication channel 
 * [ ] Playlists by genre, year
 * [ ] New music mix dynamic playlist
 * [ ] Generate missing album cover image using album name
