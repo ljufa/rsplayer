@@ -1,7 +1,7 @@
 [env]
 # ram disk
-CARGO_TARGET_DIR = "/dev/shm/cargo_target"
-# CARGO_TARGET_DIR = "target"
+# CARGO_TARGET_DIR = "/dev/shm/cargo_target"
+CARGO_TARGET_DIR = "target"
 
 # RPI_HOST = "192.168.5.3"
 # TARGET = "arm-unknown-linux-gnueabihf"
