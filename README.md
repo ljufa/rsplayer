@@ -80,6 +80,13 @@ Once RSPlayer is installed, you can access the web user interface by navigating 
 
 For detailed configuration instructions, please refer to the [documentation](https://ljufa.github.io/rsplayer/#/?id=basic-configuration).
 
+## Home Assistant Integration
+RSPlayer can be controlled from [Home Assistant](https://www.home-assistant.io/) via the [rsplayer_hacs_plugin](https://github.com/ljufa/rsplayer_hacs_plugin).
+
+Features include media player control (play, pause, stop, next/prev, volume) and real-time sync with `rsplayer_firmware` power state.
+
+Install via HACS by adding `https://github.com/ljufa/rsplayer_hacs_plugin` as a custom repository.
+
 ## DIY Hardware
 For DIY enthusiasts, `rsplayer` offers the flexibility to integrate with custom hardware components.
 
