@@ -84,10 +84,6 @@ function getTheme() {
             return stored;
         }
     } catch(e) {}
-    // Fallback: respect prefers-color-scheme
-    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
-        return "light";
-    }
     return "dark";
 }
 
