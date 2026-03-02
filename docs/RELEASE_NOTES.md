@@ -1,5 +1,41 @@
 # Release Notes
 
+## v1.8.0 — 2026-03-02
+
+### New Features
+
+#### Synchronized Lyrics
+Real-time synchronized lyrics support has been added via integration with **LRCLIB**.
+- **Web UI Lyrics View**: A new lyrics modal (accessible via the alignment icon in the player) displays lyrics in real-time.
+- **Auto-Scrolling**: The view automatically scrolls to keep the current line centered and highlighted.
+- **Latency Compensation**: Synchronization accounts for the configured audio ring buffer size to ensure lyrics stay perfectly in sync with the audible sound.
+- **Fallback**: Plain text lyrics are displayed if synchronized data is unavailable.
+
+#### Local Browser Playback
+A new "Local Browser Playback" mode allows you to stream audio directly to your web browser.
+- **Listen Anywhere**: Play your music library on the device you're using to control rsplayer (phone, tablet, laptop) rather than the server's hardware output.
+- **Full Control**: Volume, seeking, and playback state are synchronized between the browser and the backend.
+- **Easy Toggle**: Switch between ALSA, PipeWire, and Browser playback directly from the settings page.
+
+#### PipeWire Integration
+Native support for PipeWire has been added for modern Linux distributions.
+- **Virtual Card**: PipeWire appears as an available audio interface if `wpctl` is present on the host.
+- **Volume Management**: Volume control is handled via `wpctl` for seamless integration with the system's sound server.
+
+### Improvements
+
+- **Metadata & Discovery**: Integration with **last.fm API** for enhanced metadata and improved fuzzy search capabilities in the library.
+- **ALSA "Default" Device**: Improved compatibility by allowing the selection of the system's "default" ALSA device.
+- **Feature Comparison**: Updated `FEATURE_PARITY.md` to include **Logitech Media Server (LMS)** and reflect new rsplayer capabilities.
+- **Backend**: The backend now serves music files directly to the Web UI to support the new local playback feature.
+
+### Bug Fixes
+
+- Fixed various linting issues and removed unnecessary memory allocations (clippy fixes).
+- Improved error handling for audio device selection.
+
+---
+
 ## v1.7.0 — 2026-03-01
 
 ### New Features
