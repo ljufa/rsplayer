@@ -33,6 +33,7 @@ pub struct PlayerService {
     audio_device: String,
     rsp_settings: RsPlayerSettings,
     music_dir: String,
+    local_browser_playback: bool,
     changes_tx: Sender<StateChangeEvent>,
     /// DSP processor — owned by the command-handler side only.  The playback
     /// thread receives a lightweight `DspHandle` instead (no `DspProcessor`
@@ -153,6 +154,7 @@ impl PlayerService {
             audio_device: settings.alsa_settings.output_device.name.clone(),
             rsp_settings: settings.rs_player_settings.clone(),
             music_dir: settings.metadata_settings.music_directory.clone(),
+            local_browser_playback: settings.local_browser_playback,
             dsp_processor,
         };
         let last_played_song_progress = ps.get_last_played_song_time();
@@ -250,6 +252,7 @@ impl PlayerService {
         let current_volume = self.current_volume.clone();
         let vu_meter_enabled = self.rsp_settings.vu_meter_enabled;
         let is_multi_core_platform = core_affinity::get_core_ids().is_some_and(|ids| ids.len() > 1);
+        let local_browser_playback = self.local_browser_playback;
         let prio = if is_multi_core_platform {
             ThreadPriority::Crossplatform(playback_thread_prio.try_into().unwrap())
         } else {
@@ -299,17 +302,27 @@ impl PlayerService {
                     } else {
                         None
                     };
-                    match super::symphonia::play_file(
-                        &song.file,
-                        &stop_signal,
-                        &skip_to_time,
-                        &audio_device,
-                        &rsp_settings,
-                        &music_dir,
-                        &changes_tx,
-                        dsp_handle.as_ref(),
-                        vu_meter,
-                    ) {
+                    let play_result = if local_browser_playback {
+                        loop {
+                            if stop_signal.load(Ordering::Relaxed) {
+                                break Ok(PlaybackResult::PlaybackStopped);
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(250));
+                        }
+                    } else {
+                        super::symphonia::play_file(
+                            &song.file,
+                            &stop_signal,
+                            &skip_to_time,
+                            &audio_device,
+                            &rsp_settings,
+                            &music_dir,
+                            &changes_tx,
+                            dsp_handle.as_ref(),
+                            vu_meter,
+                        )
+                    };
+                    match play_result {
                         Ok(PlaybackResult::PlaybackStopped) => {
                             changes_tx
                                 .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))

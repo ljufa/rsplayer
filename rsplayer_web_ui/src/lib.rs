@@ -20,6 +20,7 @@ use UserCommand::{Player, Queue};
 mod dsp;
 mod page;
 mod vumeter;
+mod lyrics;
 
 const SETTINGS: &str = "settings";
 
@@ -45,6 +46,12 @@ pub struct PlayerModel {
     player_state: PlayerState,
     stop_updates: bool,
     vu_meter_enabled: bool,
+    lyrics_modal_open: bool,
+    lyrics_loading: bool,
+    lyrics: Option<lyrics::LrcLibResponse>,
+    parsed_lyrics: Option<Vec<lyrics::LyricLine>>,
+    ring_buffer_size_ms: usize,
+    last_active_lyrics_idx: Option<usize>,
 }
 
 // #[derive(Debug)]
@@ -62,6 +69,7 @@ struct Model {
     current_theme: String,
     /// Whether the library sub-nav dropdown is expanded.
     library_nav_open: bool,
+    local_browser_playback: bool,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -74,6 +82,7 @@ pub enum Msg {
     ReconnectWebSocket,
     UrlChanged(subs::UrlChanged),
     StatusChangeEventReceived(StateChangeEvent),
+    SettingsFetchedGlobal(api_models::settings::Settings),
     Settings(page::settings::Msg),
     StartErrorReceived(String),
     Queue(page::queue::Msg),
@@ -105,6 +114,10 @@ pub enum Msg {
     ChangeTheme(String),
     /// Toggle the library sub-nav dropdown open/closed.
     ToggleLibraryNav,
+
+    ToggleLyricsModal,
+    FetchLyrics,
+    LyricsFetched(Option<lyrics::LrcLibResponse>),
 }
 
 #[derive(Debug, Deserialize)]
@@ -190,6 +203,18 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
     }
 
     orders.perform_cmd(async {
+        let response = Request::get("/api/settings").send().await;
+        if let Ok(response) = response {
+            if response.ok() {
+                if let Ok(sett) = response.json::<api_models::settings::Settings>().await {
+                    return Msg::SettingsFetchedGlobal(sett);
+                }
+            }
+        }
+        Msg::Ignore
+    });
+
+    orders.perform_cmd(async {
         let response = Request::get("/api/start_error")
             .send()
             .await
@@ -218,12 +243,19 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
             player_state: PlayerState::STOPPED,
             stop_updates: false,
             vu_meter_enabled: false,
+            lyrics_modal_open: false,
+            lyrics_loading: false,
+            lyrics: None,
+            parsed_lyrics: None,
+            ring_buffer_size_ms: 200, // Default value
+            last_active_lyrics_idx: None,
         },
         metadata_scan_info: None,
         notification: None,
         vumeter: None,
         current_theme,
         library_nav_open: false,
+        local_browser_playback: false,
     }
 }
 // ------ ------
@@ -271,6 +303,10 @@ impl<'a> Urls<'a> {
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
+        Msg::SettingsFetchedGlobal(sett) => {
+            model.local_browser_playback = sett.local_browser_playback;
+            model.player_model.ring_buffer_size_ms = sett.rs_player_settings.ring_buffer_size_ms;
+        }
         Msg::WebSocketOpened => {
             model.web_socket_reconnector = None;
             log!("WebSocket connection is open now");
@@ -362,6 +398,16 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.player_model.current_song.as_mut().unwrap().image_url = Some(image.text);
         }
         Msg::SeekTrackPosition(pos) => {
+            if model.local_browser_playback {
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        if let Some(audio_el) = document.get_element_by_id("local-audio-player") {
+                            let audio: web_sys::HtmlAudioElement = audio_el.unchecked_into();
+                            audio.set_current_time(pos as f64);
+                        }
+                    }
+                }
+            }
             log!(format!("Seeking to {}", pos));
             model.player_model.stop_updates = true;
             model.player_model.progress.current_time = std::time::Duration::from_secs(pos.into());
@@ -392,6 +438,17 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             }
         }
         Msg::SetVolume(volstr) => {
+            if model.local_browser_playback {
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        if let Some(audio_el) = document.get_element_by_id("local-audio-player") {
+                            let audio: web_sys::HtmlAudioElement = audio_el.unchecked_into();
+                            let vol = u8::from_str(volstr.as_str()).unwrap_or(model.player_model.volume_state.current);
+                            audio.set_volume(vol as f64 / model.player_model.volume_state.max as f64);
+                        }
+                    }
+                }
+            }
             log!("New vol string {}", &volstr);
             model.player_model.stop_updates = true;
             let vol = u8::from_str(volstr.as_str()).unwrap_or(model.player_model.volume_state.current);
@@ -400,6 +457,17 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             orders.perform_cmd(cmds::timeout(100, || Msg::ResumeUpdates));
         }
         Msg::SetVolumeInput(volstr) => {
+            if model.local_browser_playback {
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        if let Some(audio_el) = document.get_element_by_id("local-audio-player") {
+                            let audio: web_sys::HtmlAudioElement = audio_el.unchecked_into();
+                            let vol = u8::from_str(volstr.as_str()).unwrap_or(model.player_model.volume_state.current);
+                            audio.set_volume(vol as f64 / model.player_model.volume_state.max as f64);
+                        }
+                    }
+                }
+            }
             model.player_model.stop_updates = true;
             let vol = u8::from_str(volstr.as_str()).unwrap_or(model.player_model.volume_state.current);
             model.player_model.volume_state.current = vol;
@@ -446,13 +514,28 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                         orders.perform_cmd(async { update_album_cover(ps).await });
                     }
                     model.player_model.current_song = Some(song.clone());
+                    model.player_model.lyrics = None;
+                    model.player_model.parsed_lyrics = None;
+                    model.player_model.last_active_lyrics_idx = None;
+                    if model.player_model.lyrics_modal_open {
+                        orders.send_msg(Msg::FetchLyrics);
+                    }
                 }
                 StateChangeEvent::VolumeChangeEvent(vol) => {
                     if model.player_model.volume_state.current != vol.current {
                         model.player_model.volume_state = vol.clone();
-                    } 
-                }
-                StateChangeEvent::PlayerInfoEvent(pi) => {
+                        if model.local_browser_playback {
+                            if let Some(window) = web_sys::window() {
+                                if let Some(document) = window.document() {
+                                    if let Some(audio_el) = document.get_element_by_id("local-audio-player") {
+                                        let audio: web_sys::HtmlAudioElement = audio_el.unchecked_into();
+                                        audio.set_volume(vol.current as f64 / vol.max as f64);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }                StateChangeEvent::PlayerInfoEvent(pi) => {
                     model.player_model.player_info = Some(pi.clone());
                 }
                 StateChangeEvent::PlaybackModeChangedEvent(mode) => {
@@ -460,6 +543,20 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 }
                 StateChangeEvent::PlaybackStateEvent(ps) => {
                     model.player_model.player_state = ps.clone();
+                    if model.local_browser_playback {
+                        if let Some(window) = web_sys::window() {
+                            if let Some(document) = window.document() {
+                                if let Some(audio_el) = document.get_element_by_id("local-audio-player") {
+                                    let audio: web_sys::HtmlAudioElement = audio_el.unchecked_into();
+                                    match ps {
+                                        PlayerState::PLAYING => { let _ = audio.play(); },
+                                        PlayerState::PAUSED | PlayerState::STOPPED => { let _ = audio.pause(); },
+                                        _ => {}
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if !matches!(ps, PlayerState::PLAYING) {
                         if let Some(meter) = &mut model.vumeter {
                             meter.update(0, 0);
@@ -609,6 +706,19 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 }
                 model.player_model.progress = st;
                 model.player_model.player_state = PlayerState::PLAYING;
+
+                // Handle lyrics synchronization and scrolling
+                let current_time = model.player_model.progress.current_time.as_secs_f64() - (model.player_model.ring_buffer_size_ms as f64 / 1000.0);
+                let active_idx = model.player_model.parsed_lyrics.as_ref().and_then(|lines| {
+                    lines.iter().rposition(|line| line.time_secs <= current_time)
+                });
+
+                if active_idx != model.player_model.last_active_lyrics_idx {
+                    model.player_model.last_active_lyrics_idx = active_idx;
+                    if model.player_model.lyrics_modal_open && active_idx.is_some() {
+                        orders.after_next_render(|_| scrollToId("lyric-active"));
+                    }
+                }
             } else {
                 orders.send_msg(Msg::StatusChangeEventReceived(msg));
             }
@@ -635,6 +745,31 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::ToggleLibraryNav => {
             model.library_nav_open = !model.library_nav_open;
         }
+
+        Msg::ToggleLyricsModal => {
+            model.player_model.lyrics_modal_open = !model.player_model.lyrics_modal_open;
+            if model.player_model.lyrics_modal_open && model.player_model.lyrics.is_none() {
+                orders.send_msg(Msg::FetchLyrics);
+            }
+        }
+
+        Msg::FetchLyrics => {
+            if let Some(song) = model.player_model.current_song.clone() {
+                model.player_model.lyrics_loading = true;
+                orders.perform_cmd(fetch_lyrics_task(song));
+            }
+        }
+
+        Msg::LyricsFetched(lyrics) => {
+            model.player_model.lyrics_loading = false;
+            model.player_model.lyrics = lyrics.clone();
+            if let Some(lrc) = lyrics.and_then(|l| l.synced_lyrics) {
+                model.player_model.parsed_lyrics = Some(lyrics::parse_lrc(&lrc));
+            } else {
+                model.player_model.parsed_lyrics = None;
+            }
+        }
+
         Msg::Ignore => {}
         _ => {}
     }
@@ -685,6 +820,7 @@ fn view(model: &Model) -> impl IntoNodes<Msg> {
             view_startup_error(model.startup_error.as_ref()),
             view_reconnect_notification(model),
             view_metadata_scan_notification(model),
+            view_local_browser_playback(model),
             view_content(model, &model.base_url),
             view_player_footer(&model.page, &model.player_model),
             view_notification(model)
@@ -1176,6 +1312,35 @@ async fn update_album_cover(track: Song) -> Msg {
 }
 
 #[allow(clippy::future_not_send)]
+async fn fetch_lyrics_task(song: Song) -> Msg {
+    let artist = song.artist.as_deref().unwrap_or_default();
+    let title = song.title.as_deref().unwrap_or_default();
+    let album = song.album.as_deref().unwrap_or_default();
+    let duration = song.time.map(|d| d.as_secs()).unwrap_or(0);
+
+    let url = format!(
+        "https://lrclib.net/api/get?artist_name={}&track_name={}&album_name={}&duration={}",
+        js_sys::encode_uri_component(artist),
+        js_sys::encode_uri_component(title),
+        js_sys::encode_uri_component(album),
+        duration
+    );
+
+    let res = Request::get(&url).send().await;
+    match res {
+        Ok(response) => {
+            if response.status() == 200 {
+                let lyrics = response.json::<lyrics::LrcLibResponse>().await.ok();
+                Msg::LyricsFetched(lyrics)
+            } else {
+                Msg::LyricsFetched(None)
+            }
+        }
+        Err(_) => Msg::LyricsFetched(None),
+    }
+}
+
+#[allow(clippy::future_not_send)]
 async fn get_album_image_from_lastfm_api(album: String, artist: String) -> Option<Image> {
     let current = seed::browser::util::window().location();
     let protocol = current.protocol().map_or("http:".to_owned(), |f| f);
@@ -1207,6 +1372,42 @@ fn get_background_image(model: &PlayerModel) -> Option<String> {
         return ps.image_url.clone();
     }
     None
+}
+
+fn view_local_browser_playback(model: &Model) -> Node<Msg> {
+    if !model.local_browser_playback {
+        return empty!();
+    }
+    
+    let is_playing = model.player_model.player_state == PlayerState::PLAYING;
+    let file = model.player_model.current_song.as_ref().map(|s| s.file.clone());
+
+    if let Some(file_path) = file {
+        let src = if file_path.starts_with("http://") || file_path.starts_with("https://") {
+            file_path
+        } else {
+            let encoded_path = js_sys::encode_uri_component(&file_path);
+            // encodeURIComponent encodes `/` as `%2F`, which we don't want for paths
+            let encoded_path = String::from(encoded_path).replace("%2F", "/");
+            format!("/music/{}", encoded_path)
+        };
+        
+        div![
+            C!["local-playback-container"],
+            style! { St::Display => "none" },
+            seed::custom![
+                Tag::from("audio"),
+                attrs! {
+                    At::Id => "local-audio-player",
+                    At::Src => src,
+                    At::AutoPlay => is_playing.as_at_value(),
+                    At::Controls => true.as_at_value(),
+                }
+            ]
+        ]
+    } else {
+        empty!()
+    }
 }
 
 #[cfg(test)]

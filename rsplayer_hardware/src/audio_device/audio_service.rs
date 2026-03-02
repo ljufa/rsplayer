@@ -18,6 +18,7 @@ pub struct AudioInterfaceService {
 
 use super::rsp_firmware::RSPlayerFirmwareVolumeControlDevice;
 use super::NoOpVolumeControlDevice;
+use super::pipewire::PipewireVolumeControlDevice;
 use api_models::common::VolumeCrtlType;
 
 use crate::usb::ArcUsbService;
@@ -49,6 +50,7 @@ impl AudioInterfaceService {
         } else {
             match settings.volume_ctrl_settings.ctrl_device {
                 VolumeCrtlType::Alsa => AlsaMixer::new(card_index, settings.volume_ctrl_settings.alsa_mixer),
+                VolumeCrtlType::Pipewire => Box::new(PipewireVolumeControlDevice::new()),
                 VolumeCrtlType::Off => Box::new(NoOpVolumeControlDevice),
             }
         };

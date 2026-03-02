@@ -10,7 +10,7 @@ use gloo_console::{error, log};
 use gloo_file::futures::read_as_text;
 use gloo_file::File;
 use gloo_net::{http::Request, Error};
-use seed::{attrs, button, details, div, h1, i, input, label, option, prelude::*, section, select, span, style, summary, C, IF};
+use seed::{attrs, button, details, div, empty, h1, i, input, label, option, prelude::*, section, select, span, style, summary, C, IF};
 use wasm_bindgen::JsCast;
 use web_sys::FileList;
 
@@ -190,8 +190,18 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
 
         Msg::InputAlsaCardChange(value) => {
-            model.selected_audio_card_id = value.clone();
-            model.settings.alsa_settings.output_device.card_id = value;
+            if value == "browser" {
+                model.settings.local_browser_playback = true;
+            } else {
+                model.settings.local_browser_playback = false;
+                model.selected_audio_card_id = value.clone();
+                model.settings.alsa_settings.output_device.card_id = value.clone();
+                if value == "pipewire" {
+                    model.settings.volume_ctrl_settings.ctrl_device = VolumeCrtlType::Pipewire;
+                } else {
+                    model.settings.volume_ctrl_settings.ctrl_device = VolumeCrtlType::Alsa;
+                }
+            }
         }
         Msg::InputAlsaPcmChange(value) => {
             model
@@ -411,13 +421,18 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
                         C!["select"],
                         select![
                             option!["-- Select audio interface --"],
+                            option![
+                                IF!(model.settings.local_browser_playback => attrs!(At::Selected => "")),
+                                attrs! {At::Value => "browser"},
+                                "Local Browser Playback"
+                            ],
                             model
                             .settings
                             .alsa_settings
                             .available_audio_cards
                             .iter()
                             .map(|card| option![
-                                IF!(model.settings.alsa_settings.output_device.card_id == card.id => attrs!(At::Selected => "")),
+                                IF!(model.settings.alsa_settings.output_device.card_id == card.id && !model.settings.local_browser_playback => attrs!(At::Selected => "")),
                                 attrs! {At::Value => card.id},
                                 card.name.clone()
                             ])],
@@ -426,7 +441,7 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
                         }),
                     ],
                 ],
-                div![C!["control"],
+                IF!(!model.settings.local_browser_playback => div![C!["control"],
                     label!["PCM Device", C!["label","has-text-white"]],
                     div![
                         C!["select"],
@@ -444,9 +459,9 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
                         ],
                         input_ev(Ev::Change, Msg::InputAlsaPcmChange),
                     ],
-            ]
+            ]),
             ],
-            view_rsp(&settings.rs_player_settings),
+            view_rsp(&settings.rs_player_settings, settings.local_browser_playback),
             view_metadata_storage(&model.settings.metadata_settings),
             div![
                 C!["field", "mt-5"],
@@ -678,7 +693,10 @@ fn view_metadata_storage(metadata_settings: &MetadataStoreSettings) -> Node<Msg>
     ]
 }
 
-fn view_rsp(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
+fn view_rsp(rsp_settings: &RsPlayerSettings, local_browser_playback: bool) -> Node<Msg> {
+    if local_browser_playback {
+        return empty!();
+    }
     div![
         C!["field"],
         label!["Input buffer size (MB) (1-200)", C!["label", "has-text-white", "mt-5"]],

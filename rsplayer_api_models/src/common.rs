@@ -84,6 +84,7 @@ pub enum VolumeCrtlType {
     Off,
     #[default]
     Alsa,
+    Pipewire,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

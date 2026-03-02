@@ -20,6 +20,82 @@ pub fn view(model: &PlayerModel) -> Node<Msg> {
             view_track_info(model.current_song.as_ref(), model.player_info.as_ref()),
         ],
         view_controls(model),
+        IF!(model.lyrics_modal_open => view_lyrics_modal(model)),
+    ]
+}
+
+fn view_lyrics_modal(model: &PlayerModel) -> Node<Msg> {
+    // Offset calculation using the actual ring buffer size in milliseconds.
+    let latency_offset = model.ring_buffer_size_ms as f64 / 1000.0;
+    let current_time = (model.progress.current_time.as_secs_f64() - latency_offset).max(0.0);
+    
+    let active_index = model.parsed_lyrics.as_ref().and_then(|lines| {
+        lines.iter().rposition(|line| line.time_secs <= current_time)
+    });
+
+    div![
+        C!["modal", "is-active"],
+        div![
+            C!["modal-background"],
+            ev(Ev::Click, |_| Msg::ToggleLyricsModal)
+        ],
+        div![
+            C!["modal-content"],
+            id!("lyrics-modal-content"),
+            style! {
+                St::BackgroundColor => "#1a1a1a",
+                St::Color => "white",
+                St::Padding => "2rem",
+                St::BorderRadius => "8px",
+                St::MaxHeight => "80vh",
+                St::OverflowY => "auto",
+                St::Width => "90%",
+                St::MaxWidth => "600px",
+            },
+            if model.lyrics_loading {
+                div![C!["has-text-centered"], "Loading lyrics..."]
+            } else if let Some(lyrics) = &model.parsed_lyrics {
+                div![
+                    C!["lyrics-list"],
+                    lyrics.iter().enumerate().map(|(idx, line)| {
+                        let is_active = Some(idx) == active_index;
+                        div![
+                            IF!(is_active => id!("lyric-active")),
+                            style! {
+                                St::FontSize => "1.25rem",
+                                St::FontWeight => if is_active { "700" } else { "400" },
+                                St::Color => if is_active { "white" } else { "#888" },
+                                St::Padding => "0.6rem 0",
+                                St::Transition => "all 0.3s ease",
+                                St::TextAlign => "center",
+                                St::LineHeight => "1.4",
+                            },
+                            line.text.clone()
+                        ]
+                    })
+                ]
+            } else if let Some(lyrics) = &model.lyrics {
+                if let Some(plain) = &lyrics.plain_lyrics {
+                    div![
+                        style! {
+                            St::WhiteSpace => "pre-wrap",
+                            St::TextAlign => "center",
+                            St::FontSize => "1.2rem",
+                        },
+                        plain.clone()
+                    ]
+                } else {
+                    div![C!["has-text-centered"], "Lyrics not found."]
+                }
+            } else {
+                div![C!["has-text-centered"], "Lyrics not found."]
+            }
+        ],
+        button![
+            C!["modal-close", "is-large"],
+            attrs! {At::AriaLabel => "close"},
+            ev(Ev::Click, |_| Msg::ToggleLyricsModal)
+        ]
     ]
 }
 
@@ -147,6 +223,13 @@ fn view_controls(model: &PlayerModel) -> Node<Msg> {
                         ev(Ev::Click, |_| Msg::LikeMediaItemClick(cmd))
                     ]
                 }),
+                // Lyrics button
+                button![
+                    C!["button", "is-ghost", "is-medium"],
+                    attrs! {At::Title => "Lyrics"},
+                    span![C!["icon"], i![C!["fas", "fa-align-left"]]],
+                    ev(Ev::Click, |_| Msg::ToggleLyricsModal)
+                ],
             ],
         ],
         view_track_progress_bar(&model.progress),

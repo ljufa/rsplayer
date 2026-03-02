@@ -16,7 +16,8 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 ### Online demo -> https://rsplayer.dlj.freemyip.com/
 
 ## Features
-- **Low Latency Output**: Direct output to ALSA minimizes latency.
+- **Low Latency Output**: Direct output to ALSA or PipeWire minimizes latency.
+- **Local Browser Playback**: Stream audio directly to your web browser for local playback.
 - **Adjustable Playback Thread Priority**: Customize the priority of the playback thread up to a real-time rating of 99 via the settings page.
 - **Dedicated CPU Core for Playback**: By default, the playback thread is pinned to a single CPU core for optimized performance.
 - **Web UI Remote Control**: Manage your playback remotely with an intuitive web interface.
@@ -27,6 +28,8 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - **DSP Integration**: Advanced Digital Signal Processing with filters and presets.
 - **Web UI VU Meter**: Real-time audio visualization in the web interface.
 - **Extended Hardware Control**: Support for seek and power management via firmware interactions.
+- **Web UI Themes**: Support for customizable themes and dark/light modes.
+- **Synchronized Lyrics**: Real-time synchronized lyrics support via LRCLIB integration.
 
 ### Planed features
 - **Expanded Audio Codec Support**: Compatibility with a wider range of audio codecs.
@@ -34,9 +37,7 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - **Windows Compatibility**: Development of a Windows build to extend platform support.
 - **MacOS Compatibility**: Development of a MacOS build to extend platform support.
 - **Remote file system management**: Ability to mount and use remote file storage (nfs and samba) from UI. 
-- **Lyrics Support**: Display synchronized or unsynchronized lyrics.
 - **Music Recommendations**: Suggest similar tracks or artists based on listening history or current playback.
-- **Web UI Themes**: Support for customizable themes and dark/light modes.
 
 ## Installation 
 To install RSPlayer on debian based linux distro, execute the following script (requires curl):

@@ -20,6 +20,8 @@ pub struct Settings {
     #[serde(default)]
     #[validate]
     pub usb_settings: UsbCmdChannelSettings,
+    #[serde(default)]
+    pub local_browser_playback: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
@@ -295,6 +297,7 @@ impl Default for Settings {
             playlist_settings: PlaylistSetting::default(),
             rs_player_settings: RsPlayerSettings::default(),
             usb_settings: UsbCmdChannelSettings::default(),
+            local_browser_playback: false,
         }
     }
 }

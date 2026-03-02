@@ -94,11 +94,16 @@ pub fn start(
         .with(warp::compression::gzip())
         .with(warp::reply::with::headers(cache_headers));
 
+    let music_dir = config.get_settings().metadata_settings.music_directory.clone();
+    let music_static_content = warp::path("music")
+        .and(warp::fs::dir(music_dir));
+
     let routes = player_ws_path
         .or(filters::settings_save(config.clone()))
         .or(filters::get_settings(config.clone()))
         .or(ui_static_content)
         .or(artwork_static_content)
+        .or(music_static_content)
         .with(cors);
     let ws_bcast_tx_handle = ws_bcast_tx;
     let ws_handle = async move {

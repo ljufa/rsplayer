@@ -51,6 +51,23 @@ pub fn get_all_cards() -> Vec<AudioCard> {
             mixers: get_card_mixers(&card_name, card.get_index()),
         });
     }
+    
+    // Add Pipewire as a virtual card if wpctl is available
+    if std::process::Command::new("wpctl").arg("--version").output().is_ok() {
+        result.push(AudioCard {
+            id: "pipewire".to_string(),
+            index: 999,
+            name: "Pipewire".to_string(),
+            description: "Pipewire Sound Server".to_string(),
+            pcm_devices: vec![PcmOutputDevice {
+                name: "default".to_string(),
+                description: "Default Pipewire Device".to_string(),
+                card_id: "pipewire".to_string(),
+            }],
+            mixers: vec![],
+        });
+    }
+
     result
 }
 

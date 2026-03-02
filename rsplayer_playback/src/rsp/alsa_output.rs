@@ -140,10 +140,13 @@ impl AlsaOutput {
         vu_meter: Option<VUMeter>,
     ) -> Result<AlsaOutput> {
         let host = cpal::default_host();
-        let device = host
-            .devices()?
-            .find(|d| d.name().unwrap_or_default() == audio_device)
-            .ok_or_else(|| Error::msg(format!("Device {audio_device} not found!")))?;
+        let device = if audio_device == "default" {
+            host.default_output_device().ok_or_else(|| Error::msg("Default audio device not found!"))?
+        } else {
+            host.devices()?
+                .find(|d| d.name().unwrap_or_default() == audio_device)
+                .ok_or_else(|| Error::msg(format!("Device {audio_device} not found!")))?
+        };
 
         debug!("Spec: {spec:?}");
 

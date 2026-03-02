@@ -41,25 +41,25 @@ To configure `rsplayer`, navigate to the settings page in the web UI. Here is an
 
 ## General
 
--   **Audio interface:** Selects the primary ALSA audio device for playback.
--   **PCM Device:** Choose the specific PCM device for the selected audio interface.
--   **Input buffer size (MB):** The size of the buffer for audio data, in megabytes (1-200).
--   **Ring buffer size (ms):** The size of the ring buffer in milliseconds (1-10000).
--   **Player thread priority:** The priority of the player thread, from 1 to 99.
--   **Set alsa buffer frame size (Experimental!):** An experimental feature to set the ALSA buffer frame size.
+-   **Audio interface:** Selects the primary audio device for playback. Options include your available ALSA hardware cards, a `Pipewire` virtual card (if `wpctl` is installed on the host), or `Local Browser Playback` for streaming audio directly to your device's web browser.
+-   **PCM Device:** Choose the specific PCM device for the selected audio interface (hidden if Local Browser Playback is selected).
+-   **Input buffer size (MB):** The size of the buffer for audio data, in megabytes (1-200). (Hidden if Local Browser Playback is selected).
+-   **Ring buffer size (ms):** The size of the ring buffer in milliseconds (1-10000). (Hidden if Local Browser Playback is selected).
+-   **Player thread priority:** The priority of the player thread, from 1 to 99. (Hidden if Local Browser Playback is selected).
+-   **Set alsa buffer frame size (Experimental!):** An experimental feature to set the ALSA buffer frame size. (Hidden if Local Browser Playback is selected).
 -   **Music directory path:** The full path to your music library. After changing this, you need to click "Update library" or "Full rescan".
 -   **Auto resume playback on start:** If enabled, `rsplayer` will automatically resume playback of the last track when it starts.
 
 ## Volume control
 
--   **Volume control device:** Select the method for controlling volume (e.g., Alsa).
+-   **Volume control device:** Select the method for controlling volume (e.g., Alsa, Pipewire).
 -   **Alsa mixer:** If "Alsa" is chosen, this selects the specific mixer control.
 -   **Volume step:** The amount to increase or decrease the volume with each step.
 
-## USB
+## RSPlayer firmware(control board) USB link
 
--   **Enable USB channel communication?:** Enables communication over a USB serial connection.
--   **Serial device:** The device path for the USB serial connection (e.g., `/dev/ttyAMA0`).
+-   **Enable link with rsplayer firmware:** Enables communication over a USB serial connection with custom rsplayer firmware control boards.
+-   **(When enabled):** Provides quick action buttons to **Power Off** or **Power On** the connected firmware hardware.
 
 # Hardware Integration
 
@@ -112,12 +112,12 @@ TODO
 * [ ] New music mix dynamic playlist
 * [ ] Generate missing album cover image using album name
 * [ ] Remote file system management (nfs and samba)
-* [ ] Lyrics Support
+* [x] Synchronized Lyrics Support
 * [ ] Music Recommendations
-* [ ] Web UI Themes
+* [x] Web UI Themes
 * [ ] Windows support
 * [ ] MacOS support
-* [ ] streaming to local device/browser (i.e. phone) for i.e. preview
+* [x] streaming to local device/browser (i.e. phone) for i.e. preview
 * [ ] MPD protocol for clients
 * [ ] Subsonic protocol for clients
 * [ ] Multi-room playback
@@ -127,7 +127,7 @@ TODO
 ## Code improvements
 * [ ] replace bulma css with something modern and maitained
 * [ ] replace seed-rs with something newer and maintained
-* [ ] replace sled with native_db or redb (high memory usage)
+* [ ] replace sled with native_db, redb, Fjall... (high memory usage)
 * [ ] get rid of `.unwrap()` calls
 * [ ] get rid of unnecessary `.clone()` calls
 * [ ] refactoring
