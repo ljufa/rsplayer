@@ -8,6 +8,12 @@ pub struct PipewireVolumeControlDevice {
     current_vol: Volume,
 }
 
+impl Default for PipewireVolumeControlDevice {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PipewireVolumeControlDevice {
     pub fn new() -> Self {
         let mut dev = Self {
@@ -77,16 +83,16 @@ impl VolumeControlDevice for PipewireVolumeControlDevice {
         let level = level.clamp(self.current_vol.min, self.current_vol.max);
         
         #[allow(clippy::cast_precision_loss)]
-        let level_float = (level as f32) / 100.0;
+        let level_float = f32::from(level) / 100.0;
         
         let output = Command::new("wpctl")
             .arg("set-volume")
             .arg("@DEFAULT_AUDIO_SINK@")
-            .arg(format!("{:.2}", level_float))
+            .arg(format!("{level_float:.2}"))
             .output();
             
         if let Err(e) = output {
-            error!("Failed to set volume via wpctl: {}", e);
+            error!("Failed to set volume via wpctl: {e}");
         } else if let Ok(o) = output {
             if !o.status.success() {
                  error!("wpctl returned error: {}", String::from_utf8_lossy(&o.stderr));

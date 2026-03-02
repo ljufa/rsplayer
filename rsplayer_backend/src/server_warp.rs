@@ -94,7 +94,7 @@ pub fn start(
         .with(warp::compression::gzip())
         .with(warp::reply::with::headers(cache_headers));
 
-    let music_dir = config.get_settings().metadata_settings.music_directory.clone();
+    let music_dir = config.get_settings().metadata_settings.music_directory;
     let music_static_content = warp::path("music")
         .and(warp::fs::dir(music_dir));
 
