@@ -118,6 +118,13 @@ pub enum Msg {
     ToggleLyricsModal,
     FetchLyrics,
     LyricsFetched(Option<lyrics::LrcLibResponse>),
+
+    BrowserAudioTimeUpdate(f64, f64),
+    BrowserAudioEnded,
+    BrowserAudioPaused,
+    BrowserAudioPlaying,
+    MediaNextTrack,
+    MediaPrevTrack,
 }
 
 #[derive(Debug, Deserialize)]
@@ -305,7 +312,17 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
         Msg::SettingsFetchedGlobal(sett) => {
             model.local_browser_playback = sett.local_browser_playback;
-            model.player_model.ring_buffer_size_ms = sett.rs_player_settings.ring_buffer_size_ms;
+            // In browser mode there's no ring buffer — no latency offset needed
+            model.player_model.ring_buffer_size_ms = if sett.local_browser_playback {
+                0
+            } else {
+                sett.rs_player_settings.ring_buffer_size_ms
+            };
+            if sett.local_browser_playback {
+                setupMediaSessionHandlers();
+                orders.stream(streams::window_event(Ev::from("media-nexttrack"), |_| Msg::MediaNextTrack));
+                orders.stream(streams::window_event(Ev::from("media-previoustrack"), |_| Msg::MediaPrevTrack));
+            }
         }
         Msg::WebSocketOpened => {
             model.web_socket_reconnector = None;
@@ -514,6 +531,14 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                         orders.perform_cmd(async { update_album_cover(ps).await });
                     }
                     model.player_model.current_song = Some(song.clone());
+                    if model.local_browser_playback {
+                        let title = song.title.as_deref().unwrap_or("");
+                        let artist = song.artist.as_deref().unwrap_or("");
+                        let album = song.album.as_deref().unwrap_or("");
+                        let artwork = get_background_image(&model.player_model)
+                            .unwrap_or_default();
+                        updateMediaSessionMetadata(title, artist, album, &artwork);
+                    }
                     model.player_model.lyrics = None;
                     model.player_model.parsed_lyrics = None;
                     model.player_model.last_active_lyrics_idx = None;
@@ -700,6 +725,11 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             let msg = serde_json::from_str::<StateChangeEvent>(&message)
                 .unwrap_or_else(|_| panic!("Failed to decode WebSocket text message: {message}"));
             if let StateChangeEvent::SongTimeEvent(st) = msg {
+                // In browser playback mode, the <audio> element drives progress
+                // via BrowserAudioTimeUpdate — ignore backend time events
+                if model.local_browser_playback {
+                    return;
+                }
                 if model.player_model.stop_updates {
                     log!("Updates are stopped");
                     return;
@@ -767,6 +797,63 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 model.player_model.parsed_lyrics = Some(lyrics::parse_lrc(&lrc));
             } else {
                 model.player_model.parsed_lyrics = None;
+            }
+        }
+
+        Msg::BrowserAudioTimeUpdate(current, duration) => {
+            if model.player_model.stop_updates || !model.local_browser_playback {
+                return;
+            }
+            // Guard against Infinity/NaN (radio streams have infinite duration)
+            if current.is_finite() {
+                model.player_model.progress.current_time = std::time::Duration::from_secs_f64(current);
+            }
+            if duration.is_finite() {
+                model.player_model.progress.total_time = std::time::Duration::from_secs_f64(duration);
+            }
+            model.player_model.player_state = PlayerState::PLAYING;
+
+            // Lyrics synchronization (ring_buffer_size_ms is 0 in browser mode)
+            let latency_offset = model.player_model.ring_buffer_size_ms as f64 / 1000.0;
+            let current_time = current - latency_offset;
+            let active_idx = model.player_model.parsed_lyrics.as_ref().and_then(|lines| {
+                lines.iter().rposition(|line| line.time_secs <= current_time)
+            });
+            if active_idx != model.player_model.last_active_lyrics_idx {
+                model.player_model.last_active_lyrics_idx = active_idx;
+                if model.player_model.lyrics_modal_open && active_idx.is_some() {
+                    orders.after_next_render(|_| scrollToId("lyric-active"));
+                }
+            }
+        }
+
+        Msg::BrowserAudioEnded => {
+            if model.local_browser_playback {
+                orders.send_msg(Msg::SendUserCommand(Player(PlayerCommand::Next)));
+            }
+        }
+
+        Msg::BrowserAudioPaused => {
+            if model.local_browser_playback {
+                model.player_model.player_state = PlayerState::PAUSED;
+            }
+        }
+
+        Msg::BrowserAudioPlaying => {
+            if model.local_browser_playback {
+                model.player_model.player_state = PlayerState::PLAYING;
+            }
+        }
+
+        Msg::MediaNextTrack => {
+            if model.local_browser_playback {
+                orders.send_msg(Msg::SendUserCommand(Player(PlayerCommand::Next)));
+            }
+        }
+
+        Msg::MediaPrevTrack => {
+            if model.local_browser_playback {
+                orders.send_msg(Msg::SendUserCommand(Player(PlayerCommand::Prev)));
             }
         }
 
@@ -1235,6 +1322,12 @@ extern "C" {
 
     /// Return JSON string of full theme metadata map (label, bg, text, accent, ui).
     pub fn getAllThemeMeta() -> String;
+
+    /// Update browser Media Session metadata (title, artist, album art).
+    pub fn updateMediaSessionMetadata(title: &str, artist: &str, album: &str, artwork_url: &str);
+
+    /// Register Media Session action handlers for media keys (play/pause/next/prev/seek).
+    pub fn setupMediaSessionHandlers();
 }
 
 fn create_websocket(orders: &impl Orders<Msg>) -> Result<EventClient, WebSocketError> {
@@ -1402,7 +1495,20 @@ fn view_local_browser_playback(model: &Model) -> Node<Msg> {
                     At::Src => src,
                     At::AutoPlay => is_playing.as_at_value(),
                     At::Controls => true.as_at_value(),
-                }
+                },
+                ev(Ev::from("timeupdate"), |event: web_sys::Event| {
+                    let audio: web_sys::HtmlAudioElement = event.target().unwrap().unchecked_into();
+                    let current = audio.current_time();
+                    let duration = audio.duration();
+                    if duration.is_nan() || duration == 0.0 {
+                        Msg::Ignore
+                    } else {
+                        Msg::BrowserAudioTimeUpdate(current, duration)
+                    }
+                }),
+                ev(Ev::from("ended"), |_| Msg::BrowserAudioEnded),
+                ev(Ev::from("pause"), |_| Msg::BrowserAudioPaused),
+                ev(Ev::from("play"), |_| Msg::BrowserAudioPlaying),
             ]
         ]
     } else {

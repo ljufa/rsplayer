@@ -121,6 +121,48 @@ function getAllThemeMeta() {
     return JSON.stringify(THEME_META);
 }
 
+// ============================================================
+//   MEDIA SESSION API (media keys, OS controls)
+// ============================================================
+
+function updateMediaSessionMetadata(title, artist, album, artworkUrl) {
+    if (!('mediaSession' in navigator)) return;
+    var artwork = [];
+    if (artworkUrl) {
+        artwork.push({ src: artworkUrl, sizes: '512x512', type: 'image/jpeg' });
+    }
+    navigator.mediaSession.metadata = new MediaMetadata({
+        title: title || '',
+        artist: artist || '',
+        album: album || '',
+        artwork: artwork,
+    });
+}
+
+function setupMediaSessionHandlers() {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.setActionHandler('play', function() {
+        var audio = document.getElementById('local-audio-player');
+        if (audio) audio.play();
+    });
+    navigator.mediaSession.setActionHandler('pause', function() {
+        var audio = document.getElementById('local-audio-player');
+        if (audio) audio.pause();
+    });
+    navigator.mediaSession.setActionHandler('nexttrack', function() {
+        window.dispatchEvent(new CustomEvent('media-nexttrack'));
+    });
+    navigator.mediaSession.setActionHandler('previoustrack', function() {
+        window.dispatchEvent(new CustomEvent('media-previoustrack'));
+    });
+    navigator.mediaSession.setActionHandler('seekto', function(details) {
+        var audio = document.getElementById('local-audio-player');
+        if (audio && details.seekTime !== undefined) {
+            audio.currentTime = details.seekTime;
+        }
+    });
+}
+
 // Apply saved (or system-preferred) theme as early as possible to avoid flash.
 (function() {
     applyTheme(getTheme());

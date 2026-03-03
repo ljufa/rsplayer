@@ -103,36 +103,4 @@ TODO
 ### TODO...
 
 -------
-
-# Roadmap
- 
-## Features
-* [x] MQTT or other homeassistant friendly communication channel 
-* [ ] Playlists by genre, year
-* [ ] New music mix dynamic playlist
-* [ ] Generate missing album cover image using album name
-* [ ] Remote file system management (nfs and samba)
-* [x] Synchronized Lyrics Support
-* [ ] Music Recommendations
-* [x] Web UI Themes
-* [ ] Windows support
-* [ ] MacOS support
-* [x] streaming to local device/browser (i.e. phone) for i.e. preview
-* [ ] MPD protocol for clients
-* [ ] Subsonic protocol for clients
-* [ ] Multi-room playback
-* [ ] MPRIS D-Bus integration on linux
-* [ ] Community plugin framework
-
-## Code improvements
-* [ ] replace bulma css with something modern and maitained
-* [ ] replace seed-rs with something newer and maintained
-* [ ] replace sled with native_db, redb, Fjall... (high memory usage)
-* [ ] get rid of `.unwrap()` calls
-* [ ] get rid of unnecessary `.clone()` calls
-* [ ] refactoring
-* [ ] replace `warp` with `axum` or `actix`
-* [ ] write generic fun and macros to reduce code duplication in UI
-
--------
  

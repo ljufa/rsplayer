@@ -31,13 +31,28 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - **Web UI Themes**: Support for customizable themes and dark/light modes.
 - **Synchronized Lyrics**: Real-time synchronized lyrics support via LRCLIB integration.
 
-### Planed features
+### Planned features
 - **Expanded Audio Codec Support**: Compatibility with a wider range of audio codecs.
 - **Intelligent Dynamic Playlists**: Advanced dynamic playlists that adapt based on user likes or playback counts for a personalized listening experience.
+- **Playlists by genre, year**: Browse and create playlists based on genre or year.
 - **Windows Compatibility**: Development of a Windows build to extend platform support.
 - **MacOS Compatibility**: Development of a MacOS build to extend platform support.
-- **Remote file system management**: Ability to mount and use remote file storage (nfs and samba) from UI. 
+- **Remote file system management**: Ability to mount and use remote file storage (nfs and samba) from UI.
 - **Music Recommendations**: Suggest similar tracks or artists based on listening history or current playback.
+- **Generate missing album cover image**: Auto-generate album art using album name.
+- **MPD protocol support**: Compatibility with MPD clients.
+- **Subsonic protocol support**: Compatibility with Subsonic clients.
+- **Multi-room playback**: Synchronized playback across multiple devices.
+- **MPRIS D-Bus integration**: Native Linux desktop media key and player integration.
+- **Community plugin framework**: Extensible architecture for third-party plugins.
+
+### Planned code improvements
+- Replace Bulma CSS with a modern, maintained alternative.
+- Replace seed-rs with a newer, maintained framework.
+- Replace sled with native_db, redb, or Fjall (high memory usage).
+- Remove unnecessary `.unwrap()` and `.clone()` calls.
+- Replace `warp` with `axum` or `actix`.
+- Reduce code duplication in UI with generic functions and macros.
 
 ## Installation 
 To install RSPlayer on debian based linux distro, execute the following script (requires curl):
