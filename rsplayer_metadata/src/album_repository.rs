@@ -1,7 +1,53 @@
 use chrono::DateTime;
 use sled::Db;
+use unicode_normalization::UnicodeNormalization;
 
 use api_models::{player::Song, playlist::Album};
+
+/// Produce a canonical grouping key from an artist or album name.
+///
+/// The transformations applied (in order):
+/// 1. NFD decompose → drop combining (diacritic) code-points → recompose as NFC
+///    e.g. "Beyoncé" → "Beyonce"
+/// 2. Lowercase
+/// 3. Collapse runs of whitespace to a single space and trim edges
+/// 4. Normalise common punctuation variants:
+///    - en-dash / em-dash / hyphen variants → ASCII hyphen '-'
+///    - smart/curly quotes → straight ASCII quote
+///    - forward-slash variants → '/'
+///
+/// The original display string is kept unchanged in the `Album` struct; only
+/// the *key* used for sled lookups and dedup is normalised.
+pub(crate) fn normalize_name(s: &str) -> String {
+    // Step 1: strip diacritics via NFD + filter combining chars + NFC
+    let without_diacritics: String = s
+        .nfd()
+        .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
+        .nfc()
+        .collect();
+
+    // Step 2: lowercase
+    let lower = without_diacritics.to_lowercase();
+
+    // Step 3: collapse internal whitespace, trim
+    let collapsed = lower.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    // Step 4: normalise punctuation
+    collapsed
+        .chars()
+        .map(|c| match c {
+            // dash variants → ASCII hyphen
+            '\u{2013}' | '\u{2014}' | '\u{2012}' | '\u{2015}' | '\u{FE58}' | '\u{FE63}' | '\u{FF0D}' => '-',
+            // smart/curly single quotes → apostrophe
+            '\u{2018}' | '\u{2019}' | '\u{02BC}' => '\'',
+            // smart/curly double quotes → straight double quote
+            '\u{201C}' | '\u{201D}' => '"',
+            // full-width slash → ASCII slash
+            '\u{FF0F}' => '/',
+            other => other,
+        })
+        .collect()
+}
 
 pub struct AlbumRepository {
     albums_db: Db,
@@ -17,14 +63,21 @@ impl AlbumRepository {
     }
 
     pub fn find_all_album_artists(&self) -> Vec<String> {
-        let mut result: Vec<String> = self
+        // Collect (normalized_key, original_display) pairs, then dedup on the key
+        // so that e.g. "Pink Floyd" and "pink floyd" collapse to one entry while
+        // the display string returned is the first one encountered (after sorting).
+        let mut pairs: Vec<(String, String)> = self
             .find_all()
-            .iter()
-            .map(|a| a.artist.clone().unwrap_or_default())
+            .into_iter()
+            .filter_map(|a| {
+                let display = a.artist?;
+                let key = normalize_name(&display);
+                Some((key, display))
+            })
             .collect();
-        result.sort();
-        result.dedup();
-        result
+        pairs.sort_by(|a, b| a.0.cmp(&b.0));
+        pairs.dedup_by(|a, b| a.0 == b.0);
+        pairs.into_iter().map(|(_, display)| display).collect()
     }
     pub fn find_all(&self) -> Vec<Album> {
         self.albums_db
@@ -39,14 +92,19 @@ impl AlbumRepository {
             .collect()
     }
     pub fn find_by_id(&self, album_id: &str) -> Option<Album> {
-        self.albums_db
-            .get(album_id.as_bytes())
+        // Try the normalized key first (new-style records written after the normalization fix).
+        // Fall back to the verbatim key for backwards compatibility with databases that were
+        // scanned before the fix and still use the raw album-title string as the sled key.
+        let normalized_key = normalize_name(album_id);
+        let bytes = self
+            .albums_db
+            .get(normalized_key.as_bytes())
             .expect("Album DB error")
-            .map(|bytes| {
-                let mut album = Album::from_bytes(&bytes);
-                album_id.clone_into(&mut album.id);
-                album
-            })
+            .or_else(|| self.albums_db.get(album_id.as_bytes()).expect("Album DB error"))?;
+
+        let mut album = Album::from_bytes(&bytes);
+        album_id.clone_into(&mut album.id);
+        Some(album)
     }
 
     pub fn find_all_sort_by_added_desc(&self, limit: usize) -> Vec<Album> {
@@ -62,21 +120,27 @@ impl AlbumRepository {
         albums
     }
     pub fn find_by_artist(&self, artist: &str) -> Vec<Album> {
+        let normalized_query = normalize_name(artist);
         self.albums_db
             .iter()
             .filter_map(std::result::Result::ok)
             .map_while(|s| Some(Album::from_bytes(&s.1)))
-            .filter(|a| a.artist.as_ref().is_some_and(|a| a == artist))
+            .filter(|a| a.artist.as_ref().is_some_and(|a| normalize_name(a) == normalized_query))
             .collect()
     }
 
     pub fn update_from_song(&self, song: Song) {
-        let key = song.album.as_ref().map_or(String::new(), std::clone::Clone::clone);
-        if key.is_empty() {
-            return;
-        }
-        let existing_album = self.albums_db.get(&key).expect("Album DB error");
+        let raw_album = match song.album.as_ref() {
+            Some(a) if !a.is_empty() => a.clone(),
+            _ => return,
+        };
+        // Use the normalized form as the DB key so that minor spelling/case/diacritic
+        // variants of the same album title all land in the same record.
+        let key = normalize_name(&raw_album);
+
+        let existing_album = self.albums_db.get(key.as_bytes()).expect("Album DB error");
         let mut album = existing_album.map_or_else(Album::default, |bytes| Album::from_bytes(&bytes));
+
         if !album.song_keys.contains(&song.file) {
             album.song_keys.push(song.file);
         }
@@ -109,11 +173,13 @@ impl AlbumRepository {
         if let Some(label) = song.label {
             album.label = Some(label);
         }
-        if let Some(title) = song.album {
-            album.title = title;
+        // Keep the first (prettiest) display title we saw; don't let a lowercase
+        // variant overwrite a properly-cased one that was stored earlier.
+        if album.title.is_empty() {
+            album.title = raw_album;
         }
         album.added = song.file_date;
-        _ = self.albums_db.insert(&key, album.to_json_string_bytes());
+        _ = self.albums_db.insert(key.as_bytes(), album.to_json_string_bytes());
         drop(album);
     }
 }
@@ -260,6 +326,163 @@ mod test {
         result = album_repository.find_by_artist("Artist 1");
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].title, "Album Two");
+    }
+
+    // --- Normalization tests ---
+
+    #[test]
+    fn normalize_name_case() {
+        use super::normalize_name;
+        assert_eq!(normalize_name("Pink Floyd"), normalize_name("pink floyd"));
+        assert_eq!(normalize_name("PINK FLOYD"), normalize_name("Pink Floyd"));
+    }
+
+    #[test]
+    fn normalize_name_whitespace() {
+        use super::normalize_name;
+        assert_eq!(normalize_name("  Pink  Floyd  "), normalize_name("Pink Floyd"));
+        assert_eq!(normalize_name("Pink\tFloyd"), normalize_name("Pink Floyd"));
+    }
+
+    #[test]
+    fn normalize_name_diacritics() {
+        use super::normalize_name;
+        assert_eq!(normalize_name("Beyoncé"), normalize_name("Beyonce"));
+        assert_eq!(normalize_name("Björk"), normalize_name("Bjork"));
+        assert_eq!(normalize_name("Sigur Rós"), normalize_name("Sigur Ros"));
+    }
+
+    #[test]
+    fn normalize_name_punctuation() {
+        use super::normalize_name;
+        // en-dash / em-dash → hyphen
+        assert_eq!(normalize_name("AC\u{2013}DC"), normalize_name("AC-DC"));
+        assert_eq!(normalize_name("AC\u{2014}DC"), normalize_name("AC-DC"));
+        // smart quotes → straight quotes
+        assert_eq!(normalize_name("\u{2018}Heroes\u{2019}"), normalize_name("'Heroes'"));
+        assert_eq!(normalize_name("\u{201C}Heroes\u{201D}"), normalize_name("\"Heroes\""));
+    }
+
+    #[test]
+    fn update_from_song_merges_case_variants() {
+        use api_models::player::Song;
+        use chrono::Utc;
+
+        let repo = create_album_repo();
+
+        let song1 = Song {
+            file: "artist/album/track1.flac".to_string(),
+            album: Some("Dark Side of the Moon".to_string()),
+            artist: Some("Pink Floyd".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        };
+        let song2 = Song {
+            file: "artist/album/track2.flac".to_string(),
+            album: Some("dark side of the moon".to_string()), // lowercase variant
+            artist: Some("Pink Floyd".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        };
+        let song3 = Song {
+            file: "artist/album/track3.flac".to_string(),
+            album: Some("Dark Side Of The Moon".to_string()), // title-case variant
+            artist: Some("Pink Floyd".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        };
+
+        repo.update_from_song(song1);
+        repo.update_from_song(song2);
+        repo.update_from_song(song3);
+
+        let all = repo.find_all();
+        // All three variants should have merged into a single album record
+        assert_eq!(
+            all.len(),
+            1,
+            "expected 1 album, got {}: {:?}",
+            all.len(),
+            all.iter().map(|a| &a.title).collect::<Vec<_>>()
+        );
+        // The display title should be the first one seen (properly cased)
+        assert_eq!(all[0].title, "Dark Side of the Moon");
+        // Use find_by_id to get the full record including song_keys (find_all clears them)
+        let full = repo.find_by_id("Dark Side of the Moon").expect("album not found");
+        assert_eq!(full.song_keys.len(), 3);
+    }
+
+    #[test]
+    fn find_all_album_artists_deduplicates_case_variants() {
+        use api_models::player::Song;
+        use chrono::Utc;
+
+        let repo = create_album_repo();
+
+        for (i, artist) in ["Pink Floyd", "pink floyd", "PINK FLOYD"].iter().enumerate() {
+            repo.update_from_song(Song {
+                file: format!("track{i}.flac"),
+                album: Some(format!("Album {i}")),
+                artist: Some(artist.to_string()),
+                file_date: Utc::now(),
+                ..Default::default()
+            });
+        }
+
+        let artists = repo.find_all_album_artists();
+        assert_eq!(artists.len(), 1, "expected 1 unique artist, got {:?}", artists);
+    }
+
+    #[test]
+    fn query_songs_by_album_roundtrip() {
+        // Simulates the exact sequence: scan songs → QueryAlbumsByArtist → QuerySongsByAlbum
+        use api_models::player::Song;
+        use chrono::Utc;
+
+        let repo = create_album_repo();
+        repo.update_from_song(Song {
+            file: "pink_floyd/dsotm/money.flac".to_string(),
+            album: Some("Dark Side of the Moon".to_string()),
+            artist: Some("Pink Floyd".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        });
+        repo.update_from_song(Song {
+            file: "pink_floyd/dsotm/time.flac".to_string(),
+            album: Some("Dark Side of the Moon".to_string()),
+            artist: Some("Pink Floyd".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        });
+
+        // Step 1: QueryAlbumsByArtist — get the album name the UI will use
+        let albums = repo.find_by_artist("Pink Floyd");
+        assert_eq!(albums.len(), 1);
+        let album_name_from_ui = albums[0].title.clone(); // this is what the UI sends back
+
+        // Step 2: QuerySongsByAlbum — find_by_id using the title the UI provided
+        let found = repo.find_by_id(&album_name_from_ui);
+        assert!(found.is_some(), "find_by_id({:?}) returned None", album_name_from_ui);
+        assert_eq!(found.unwrap().song_keys.len(), 2);
+    }
+
+    #[test]
+    fn find_by_artist_is_case_insensitive() {
+        use api_models::player::Song;
+        use chrono::Utc;
+
+        let repo = create_album_repo();
+        repo.update_from_song(Song {
+            file: "track1.flac".to_string(),
+            album: Some("Wish You Were Here".to_string()),
+            artist: Some("Pink Floyd".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        });
+
+        assert_eq!(repo.find_by_artist("pink floyd").len(), 1);
+        assert_eq!(repo.find_by_artist("PINK FLOYD").len(), 1);
+        assert_eq!(repo.find_by_artist("Pink Floyd").len(), 1);
     }
 
     #[test]

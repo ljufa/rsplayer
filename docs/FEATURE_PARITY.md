@@ -2,26 +2,26 @@
 
 This document provides a feature comparison between **rsplayer** and other popular music playback solutions as of January 2026.
 
-| Feature Category | Feature | **rsplayer** | **Volumio** | **Roon** | **MPD** | **Navidrome** | **LMS** |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Core** | **Architecture** | Headless Service + Web UI | OS / Headless + Web UI | Core + Remote + RAAT | Client-Server (Daemon) | Client-Server (Web/API) | Server + Squeezebox Clients |
-| | **Target Hardware** | SBCs (RPi), x86 Linux | SBCs, x86, Streamers | PC/Mac/Linux, Roon Ready | Linux, BSD, macOS, Win | PC, Server, NAS, SBCs | PC, NAS, SBCs |
-| | **License / Cost** | Open Source / **Free** | Freemium | Subscription ($$$) | Open Source / **Free** | Open Source / **Free** | Open Source / **Free** |
-| | **Setup Complexity** | **Low** (single binary + script) | Low/Complex (OS image, dedicated hardware) | Medium (Core + Remotes) | **High** (daemon + separate client) | Low (Docker/binary) | Medium (Perl server + clients) |
-| **Playback** | **Audio Engine** | Rust (Symphonia) | MPD (Customized) | RAAT | C++ (Native) | Go + FFmpeg | Perl + FLAC/FFmpeg |
-| | **Codecs** | **Comprehensive** | Comprehensive + DSD | Comprehensive + MQA | **Very Comprehensive** | Comprehensive | **Very Comprehensive** |
-| | **Audio Output** | ALSA, PipeWire, Web Browser, DSD Native/DoP | ALSA, I2S, USB | RAAT, AirPlay, USB | ALSA, Pulse, PipeWire | Web Browser, API Stream | Squeezebox, AirPlay, Chromecast |
-| | **Streaming Services**| **None** (Planned) | Spotify, Tidal, Qobuz | Tidal, Qobuz, KKBOX | Limited (via plugins) | **None** (Self-hosted) | Spotify, Deezer (via plugins) |
-| | **Internet Radio** | **Yes** | Yes | Yes | Yes | Yes | **Yes** |
-| **Library & Data** | **Library Source** | Local Files (USB/Storage) | Local, NAS, UPnP | Local, NAS, Streaming | Local, NAS, NFS/SMB | Local, NAS | Local, NAS, UPnP |
-| | **Metadata Quality** | Basic (ID3 tags), last.fm API | Good (Premium) | **Excellent** | Basic (ID3 tags) | Good (MusicBrainz/Art) | Good (MusicBrainz/Art) |
-| | **Discovery** | Good fuzzy search | AI Supersearch | "Valence" Recs | Basic | Good (Smart Playlists) | Good (Smart Playlists, Mix) |
-| | **Lyrics** | **Synchronized** (LRCLIB) | Yes (Plugins) | Yes (Native) | Client dependent | Yes | Yes (Plugins) |
-| **Advanced** | **Multi-room** | **No** | Yes (Premium) | **Yes** (Zone grouping) | Via Snapcast/Pulse | No (Client-side) | **Yes** (Native sync) |
-| | **DSP / EQ** | **Yes** (Parametric EQ, Filters) | Yes (Plugins) | **Yes** (MUSE) | Basic (via Sox/Plugins) | No | Basic (via plugins) |
-| | **Mobile App** | **Web UI** (PWA) | iOS / Android App | iOS / Android / ARC | Vast ecosystem (3rd party) | Subsonic-compatible | iPeng, Material Skin (Web) |
-| **Hardware / DIY** | **Integration** | **High** (OLED, VU, IR, HomeAssistant, USB) | High (Plugins) | Low (Software focused) | **Extreme** (Foundation for DIY) | Low (API-driven) | High (Squeezebox HW ecosystem) |
-| | **CD Playback/Rip** | No | Yes (Premium) | Yes (CD Ripper) | Yes | No | Yes (via plugins) |
+| Feature Category | Feature | **rsplayer** | **Volumio** | **Roon** | **MPD** | **Navidrome** | **LMS** | **moOde** | **Daphile** | **piCorePlayer** |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Core** | **Architecture** | Headless Service + Web UI | OS / Headless + Web UI | Core + Remote + RAAT | Client-Server (Daemon) | Client-Server (Web/API) | Server + Squeezebox Clients | OS / Headless + Web UI | OS / Headless + Web UI | OS + Squeezelite + optional LMS |
+| | **Target Hardware** | SBCs (RPi), x86 Linux | SBCs, x86, Streamers | PC/Mac/Linux, Roon Ready | Linux, BSD, macOS, Win | PC, Server, NAS, SBCs | PC, NAS, SBCs | **RPi only** | x86 Dedicated PC | **RPi only** |
+| | **License / Cost** | Open Source / **Free** | Freemium | Subscription ($$$) | Open Source / **Free** | Open Source / **Free** | Open Source / **Free** | Open Source / **Free** | **Free** (closed source) | Open Source / **Free** |
+| | **Setup Complexity** | **Low** (single binary + script) | Low/Complex (OS image, dedicated hardware) | Medium (Core + Remotes) | **High** (daemon + separate client) | Low (Docker/binary) | Medium (Perl server + clients) | Low (RPi Imager OS image) | Low (bootable ISO image) | Low (RPi Imager SD image) |
+| **Playback** | **Audio Engine** | Rust (Symphonia) | MPD (Customized) | RAAT | C++ (Native) | Go + FFmpeg | Perl + FLAC/FFmpeg | MPD + CamillaDSP | LMS + Squeezelite | Squeezelite (+ optional LMS) |
+| | **Codecs** | **Comprehensive** | Comprehensive + DSD | Comprehensive + MQA | **Very Comprehensive** | Comprehensive | **Very Comprehensive** | Comprehensive + DSD | Comprehensive + **DSD512** | Comprehensive |
+| | **Audio Output** | ALSA, PipeWire, Web Browser, DSD Native/DoP | ALSA, I2S, USB | RAAT, AirPlay, USB | ALSA, Pulse, PipeWire | Web Browser, API Stream | Squeezebox, AirPlay, Chromecast | ALSA, I2S, USB, HDMI, Bluetooth | **USB DAC** (plug & play), HDMI | ALSA, I2S/USB DAC, Bluetooth |
+| | **Streaming Services**| **None** (Planned) | Spotify, Tidal, Qobuz | Tidal, Qobuz, KKBOX | Limited (via plugins) | **None** (Self-hosted) | Spotify, Deezer (via plugins) | Spotify Connect, AirPlay 2 (renderer) | Tidal, Spotify, Deezer (via LMS plugins) | Tidal, Spotify, Deezer (via LMS plugins) |
+| | **Internet Radio** | **Yes** | Yes | Yes | Yes | Yes | **Yes** | Yes | Yes | Yes |
+| **Library & Data** | **Library Source** | Local Files (USB/Storage) | Local, NAS, UPnP | Local, NAS, Streaming | Local, NAS, NFS/SMB | Local, NAS | Local, NAS, UPnP | Local, NAS, SMB/NFS | Local, NAS, USB | Local, NAS, USB |
+| | **Metadata Quality** | Basic (ID3 tags), last.fm API | Good (Premium) | **Excellent** | Basic (ID3 tags) | Good (MusicBrainz/Art) | Good (MusicBrainz/Art) | Good (tags + art) | Good (auto-fetch on rip) | Basic (via LMS) |
+| | **Discovery** | Good fuzzy search | AI Supersearch | "Valence" Recs | Basic | Good (Smart Playlists) | Good (Smart Playlists, Mix) | Good (Tag/Album/Folder + Saved searches) | Basic | Basic (via LMS) |
+| | **Lyrics** | **Synchronized** (LRCLIB) | Yes (Plugins) | Yes (Native) | Client dependent | Yes | Yes (Plugins) | No | No | No |
+| **Advanced** | **Multi-room** | **No** | Yes (Premium) | **Yes** (Zone grouping) | Via Snapcast/Pulse | No (Client-side) | **Yes** (Native sync) | Yes (Snapcast) | Yes (multi USB DAC zones) | **Yes** (LMS native sync) |
+| | **DSP / EQ** | **Yes** (Parametric EQ, Filters) | Yes (Plugins) | **Yes** (MUSE) | Basic (via Sox/Plugins) | No | Basic (via plugins) | **Yes** (CamillaDSP pipeline, resampling) | Yes (Convolution, PCM-to-DSD, resampling) | Basic (via LMS plugins) |
+| | **Mobile App** | **Web UI** (PWA) | iOS / Android App | iOS / Android / ARC | Vast ecosystem (3rd party) | Subsonic-compatible | iPeng, Material Skin (Web) | **Web UI** (responsive PWA) | **Web UI** only | Web UI + Jivelite (touchscreen) |
+| **Hardware / DIY** | **Integration** | **High** (OLED, VU, IR, HomeAssistant, USB) | High (Plugins) | Low (Software focused) | **Extreme** (Foundation for DIY) | Low (API-driven) | High (Squeezebox HW ecosystem) | **High** (GPIO, HDMI/DSI/SPI displays, VU meter, IR, rotary) | Low (x86 PC, USB DAC only) | **High** (GPIO, I2S DAC HATs, IR, touchscreen, rotary) |
+| | **CD Playback/Rip** | No | Yes (Premium) | Yes (CD Ripper) | Yes | No | Yes (via plugins) | No | **Yes** (AccurateRip + auto metadata) | No |
 
 ## Summary
 
@@ -31,3 +31,6 @@ This document provides a feature comparison between **rsplayer** and other popul
 *   **MPD (Music Player Daemon)**: The industrial-strength foundation for DIY audio. Its simple, stable protocol and decoupled architecture make it the go-to for custom-built players. It is extremely hackable, allowing users to pipe audio, script interactions, and choose from a massive library of community-built clients and integrations. Setup complexity is the highest of the group — MPD itself is just a daemon; you must separately install and configure a client, and there is no built-in web UI.
 *   **Navidrome**: A modern, self-hosted music server focused on the "Personal Cloud" experience. By implementing the Subsonic API, it provides instant compatibility with dozens of high-quality mobile apps. It is best for users who want to stream their own collection to multiple devices with a polished, Spotify-like interface. Setup is straightforward via Docker or a single binary.
 *   **LMS (Logitech Media Server)**: A mature, feature-rich server originally built for Squeezebox hardware but now running on virtually any device via software players (Squeezelite). Native multi-room sync, a large plugin ecosystem (Spotify, Deezer, smart playlists), and good metadata make it a strong all-rounder. Setup requires running a Perl-based server and at least one client (hardware or software), which adds moderate complexity compared to all-in-one solutions.
+*   **moOde**: A free, open-source audiophile player exclusively for the Raspberry Pi. It builds on MPD and integrates CamillaDSP for a powerful, configurable signal processing pipeline (resampling, convolution, 64-bit volume). It supports Spotify Connect, AirPlay 2, Bluetooth, Squeezelite, RoonBridge, and PlexAmp as audio renderers, making it one of the most versatile RPi players. Hardware integration (GPIO, multiple display types, VU meters) is excellent. Setup is via the Raspberry Pi Imager.
+*   **Daphile**: An audiophile-focused OS image for **dedicated x86 PCs** (not SBCs). Its standout features are plug-and-play USB DAC support (up to DSD512), PCM-to-DSD conversion, convolution filtering, and integrated CD ripping with AccurateRip verification. Built on LMS/Squeezelite, it inherits the LMS plugin ecosystem for streaming services. The entire system is a compact ISO and requires no Linux expertise. It is the best choice when a dedicated x86 PC is the target hardware.
+*   **piCorePlayer (pCP)**: An extremely minimal (~12 MB) Raspberry Pi OS that runs entirely from RAM for maximum resilience — the SD card is never written to during operation, allowing safe power-off at any time. It runs Squeezelite as a player and optionally LMS as a server, inheriting the full LMS plugin ecosystem (Spotify, Tidal, Deezer, internet radio). Multi-room sync via LMS is native and robust. Hardware integration is strong: I2S DAC HATs, IR remotes, touchscreens (Jivelite), GPIO buttons, and rotary encoders are all supported. It is ideal for building dedicated, resilient Squeezebox-compatible endpoints.

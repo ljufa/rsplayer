@@ -58,6 +58,15 @@ impl SongRepository {
     pub fn find_by_key_prefix(&self, prefix: &str) -> impl Iterator<Item = (IVec, IVec)> {
         self.songs_db.scan_prefix(prefix.as_bytes()).filter_map(Result::ok)
     }
+
+    /// Returns all songs whose key (file path) starts with `prefix`.
+    /// Uses sled's `scan_prefix` — only reads the matching entries, not the whole DB.
+    pub fn find_songs_by_dir_prefix(&self, prefix: &str) -> impl Iterator<Item = Song> {
+        self.songs_db
+            .scan_prefix(prefix.as_bytes())
+            .filter_map(Result::ok)
+            .map_while(|s| Song::bytes_to_song(&s.1))
+    }
     pub fn flush(&self) {
         self.songs_db.flush().expect("Failed to flush db");
     }

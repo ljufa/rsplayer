@@ -1,5 +1,62 @@
 # Release Notes
 
+## v1.8.6 — 2026-03-04
+
+### Bug Fixes
+
+- **Queue — "Play Now" on directory causes high CPU/memory and queue.db bloat**: When clicking
+  "Play Now" on a high-level directory in the file tree, the queue service was performing a full
+  scan of the song database (`get_all_iterator()`) and deserializing every song into memory before
+  filtering. For large libraries this spiked RAM and CPU. In addition, each song was added to the
+  priority queue via a separate sled read-modify-write cycle, producing O(N²) write amplification
+  that caused `queue.db` to grow to hundreds of megabytes. Fixed by:
+  - Replacing the full-scan + in-memory filter with `sled::scan_prefix` (new
+    `SongRepository::find_songs_by_dir_prefix`), which reads only the matching key range.
+  - Batching all priority-queue updates into a single read-modify-write regardless of how many
+    songs are added (`add_songs_after_current` in `queue_service.rs`).
+  - Applying the same prefix-scan fix to `add_songs_from_dir` and `load_songs_from_dir`.
+
+- **Library artist/album view — name variants grouped separately**: Artists and albums with minor
+  tag differences (differing case, extra whitespace, diacritics, or punctuation variants such as
+  en-dashes or smart quotes) were stored under separate keys and appeared as duplicate entries in
+  the library. Fixed by introducing a `normalize_name` function applied to all album and artist
+  grouping keys at scan time and query time. Normalization covers: case folding, whitespace
+  collapsing, diacritic stripping (NFD + drop combining marks), and common punctuation variants
+  (en/em-dash → `-`, smart quotes → straight quotes). The original display title/artist is
+  preserved as the first-seen value, so the library still shows "Pink Floyd" not "pink floyd".
+  Backwards-compatible with existing databases: `find_by_id` tries the normalized key first and
+  falls back to the verbatim key for records scanned before the fix.
+
+- **Library artist/album view — "QuerySongsByAlbum" returns no results**: After the normalization
+  fix, `find_by_id` looked up only the normalized sled key. Existing databases written before the
+  fix still stored records under verbatim keys, so lookups returned nothing until a rescan.
+  Fixed with a verbatim-key fallback in `find_by_id` so songs are returned immediately without
+  requiring a rescan.
+
+---
+
+## v1.8.5 — 2026-03-03
+
+### New Features
+
+#### Media Key Support for Local Browser Playback
+When using Local Browser Playback mode, the browser's [Media Session API](https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API) is now fully integrated.
+
+- **Hardware media keys** (keyboard play/pause, next, previous) control rsplayer directly from the browser tab.
+- **OS-level controls** — lock screen controls on Android/iOS, desktop media overlays, and Bluetooth headset buttons — all work out of the box.
+- **Track metadata** (title, artist, album, artwork) is pushed to the OS media session so it appears in the system notification shade, lock screen, and connected media displays.
+- **Seek support**: scrubbing via OS controls seeks the `<audio>` element directly.
+
+### Improvements
+
+- **Browser Playback — Progress Tracking**: The `<audio>` element now drives playback progress independently of backend `SongTimeEvent` messages. Backend time events are ignored in browser playback mode to prevent drift. Infinite/NaN duration values (radio streams) are handled gracefully.
+- **Browser Playback — Playback State**: Pause, resume, and track-end events from the `<audio>` element are now reflected accurately in the UI player state, fixing cases where the UI showed stale state after the browser paused or buffered.
+- **Browser Playback — Lyrics Sync**: Synchronized lyrics now track `<audio>` element time directly in browser mode, with ring buffer latency offset correctly zeroed out.
+- **Ring Buffer Offset**: When Local Browser Playback is active, the ring buffer latency offset is set to zero (no hardware buffer to compensate for), preventing lyrics and progress from being offset.
+- **Auto-advance**: When a track ends in the browser audio player, the next track in the queue is automatically played.
+
+---
+
 ## v1.8.0 — 2026-03-02
 
 ### New Features

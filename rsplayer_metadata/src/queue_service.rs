@@ -388,22 +388,15 @@ impl QueueService {
     }
 
     pub fn add_songs_from_dir(&self, dir: &str) {
-        self.song_repository
-            .get_all_iterator()
-            .filter(|item| item.file.starts_with(dir))
-            .for_each(|song| {
-                self.add_song(&song);
-            });
+        self.song_repository.find_songs_by_dir_prefix(dir).for_each(|song| {
+            self.add_song(&song);
+        });
     }
 
-    pub fn add_songs_after_current(&self, songs: Vec<Song>) -> Option<IVec> {
-        if songs.is_empty() {
-            return None;
-        }
-
+    pub fn add_songs_after_current(&self, songs: impl IntoIterator<Item = Song>) -> Option<IVec> {
         // Append new songs to the end of the queue (avoids O(N) rewrites of existing
         // entries). The priority queue ensures they play immediately after the current song.
-        let mut new_keys: Vec<IVec> = Vec::with_capacity(songs.len());
+        let mut new_keys: Vec<IVec> = Vec::new();
         for song in songs {
             if let Ok(id) = self.queue_db.generate_id() {
                 let key = IVec::from(&id.to_be_bytes());
@@ -412,22 +405,27 @@ impl QueueService {
             }
         }
 
-        // Add to priority queue in reverse order so the first song plays first.
-        for key in new_keys.iter().rev() {
-            self.add_to_priority_queue(key.clone());
+        if new_keys.is_empty() {
+            return None;
         }
+
+        // Batch-update the priority queue with all new keys in a single read-modify-write,
+        // instead of one read-modify-write per song (which was O(N²) for large directories).
+        let mut pq = self.get_priority_queue();
+        for key in new_keys.iter().rev() {
+            if let Some(pos) = pq.iter().position(|k| k == key) {
+                pq.remove(pos);
+            }
+            pq.insert(0, key.clone());
+        }
+        self.save_priority_queue(&pq);
 
         new_keys.into_iter().next()
     }
 
     pub fn add_songs_from_dir_after_current(&self, dir: &str) -> Option<IVec> {
-        let songs: Vec<Song> = self
-            .song_repository
-            .get_all_iterator()
-            .filter(|item| item.file.starts_with(dir))
-            .collect();
-
-        self.add_songs_after_current(songs)
+        // Use sled's scan_prefix so only matching entries are read — not the full DB.
+        self.add_songs_after_current(self.song_repository.find_songs_by_dir_prefix(dir))
     }
 
     pub fn set_current_song(&self, key: IVec) {
@@ -515,10 +513,6 @@ impl QueueService {
     }
 
     pub fn load_songs_from_dir(&self, dir: &str) {
-        self.replace_all(
-            self.song_repository
-                .get_all_iterator()
-                .filter(|item| item.file.starts_with(dir)),
-        );
+        self.replace_all(self.song_repository.find_songs_by_dir_prefix(dir));
     }
 }

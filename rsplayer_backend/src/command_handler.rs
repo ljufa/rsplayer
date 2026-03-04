@@ -249,7 +249,7 @@ pub async fn handle_user_commands(
                     .iter()
                     .flat_map(|alb| alb.song_keys.iter())
                     .filter_map(|sk| song_repository.find_by_id(sk))
-                    .collect();
+                    .collect::<Vec<_>>();
                 queue_service.add_songs_after_current(songs);
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(
@@ -263,7 +263,7 @@ pub async fn handle_user_commands(
                     .iter()
                     .flat_map(|alb| alb.song_keys.iter())
                     .filter_map(|sk| song_repository.find_by_id(sk))
-                    .collect();
+                    .collect::<Vec<_>>();
                 if let Some(first_key) = queue_service.add_songs_after_current(songs) {
                     player_service.stop_current_song();
                     queue_service.set_current_song(first_key);
@@ -276,7 +276,7 @@ pub async fn handle_user_commands(
                 }
             }
             Queue(QueueCommand::AddAlbumAfterCurrent(album_id)) => {
-                let songs = album_repository
+                let songs: Vec<_> = album_repository
                     .find_by_id(&album_id)
                     .map(|alb| {
                         alb.song_keys
@@ -293,7 +293,7 @@ pub async fn handle_user_commands(
                     .unwrap();
             }
             Queue(QueueCommand::AddAlbumAndPlay(album_id)) => {
-                let songs = album_repository
+                let songs: Vec<_> = album_repository
                     .find_by_id(&album_id)
                     .map(|alb| {
                         alb.song_keys
