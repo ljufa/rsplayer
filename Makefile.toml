@@ -7,7 +7,8 @@ CARGO_TARGET_DIR = "target"
 # TARGET = "arm-unknown-linux-gnueabihf"
 
 RPI_HOST = "192.168.5.4"
-TARGET = "aarch64-unknown-linux-gnu"
+# TARGET = "aarch64-unknown-linux-gnu"
+TARGET = "x86_64-unknown-linux-gnu"
 
 RELEASE_VERSION = "1.8.6"
 RELEASE_BRANCH = "main_public"
@@ -48,6 +49,60 @@ script = [
     "mkdir -p target/release",
     "cp target/${TARGET}/release/rsplayer target/release/rsplayer",
     "cargo deb --no-build -p rsplayer --target=${TARGET} --deb-version ${RELEASE_VERSION}",
+]
+
+[tasks.package_rpm_release]
+script = [
+    "mkdir -p target/${TARGET}/rpm",
+    "cp target/${TARGET}/release/rsplayer target/${TARGET}/rpm/rsplayer",
+    "cp PKGS/debian/etc/systemd/system/rsplayer.service target/${TARGET}/rpm/rsplayer.service",
+    "cp PKGS/debian/etc/polkit-1/rules.d/99-rsplayer.rules target/${TARGET}/rpm/99-rsplayer.rules",
+    "cp PKGS/debian/opt/rsplayer/env target/${TARGET}/rpm/env",
+    "cp PKGS/debian/opt/rsplayer/self.crt target/${TARGET}/rpm/self.crt",
+    "cp PKGS/debian/opt/rsplayer/self.key target/${TARGET}/rpm/self.key",
+    "case ${TARGET} in",
+    "  arm-unknown-linux-gnueabihf) rpm_arch=armv6hl ;;",
+    "  armv7-unknown-linux-gnueabihf) rpm_arch=armv7hl ;;",
+    "  aarch64-unknown-linux-gnu) rpm_arch=aarch64 ;;",
+    "  x86_64-unknown-linux-gnu) rpm_arch=x86_64 ;;",
+    "  *) rpm_arch=${TARGET} ;;",
+    "esac",
+    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" -e \"s/@ARCH@/${rpm_arch}/g\" -e \"s/@DATE@/$(LC_ALL=C date +\"%a %b %d %Y\")/g\" PKGS/rpm/rsplayer.spec.in > target/${TARGET}/rpm/rsplayer.spec",
+    "cd target/${TARGET}/rpm",
+    "# Create source tarball",
+    "mkdir -p rsplayer-${RELEASE_VERSION}",
+    "cp rsplayer rsplayer-${RELEASE_VERSION}/",
+    "cp rsplayer.service rsplayer-${RELEASE_VERSION}/",
+    "cp 99-rsplayer.rules rsplayer-${RELEASE_VERSION}/",
+    "cp env rsplayer-${RELEASE_VERSION}/",
+    "cp self.crt rsplayer-${RELEASE_VERSION}/",
+    "cp self.key rsplayer-${RELEASE_VERSION}/",
+    "tar -czf rsplayer-${RELEASE_VERSION}.tar.gz rsplayer-${RELEASE_VERSION}",
+    "rm -rf rsplayer-${RELEASE_VERSION}",
+    "# Build RPM",
+    "rpmbuild -bb --define \"_topdir $(pwd)\" --define \"_builddir $(pwd)\" --define \"_sourcedir $(pwd)\" --define \"_srcrpmdir $(pwd)\" --define \"_rpmdir $(pwd)/RPMS\" rsplayer.spec",
+    "mv RPMS/*/*.rpm rsplayer_${RELEASE_VERSION}_${rpm_arch}.rpm 2>/dev/null || true",
+]
+
+[tasks.package_arch_release]
+script = [
+    "mkdir -p target/${TARGET}/arch",
+    "cp target/${TARGET}/release/rsplayer target/${TARGET}/arch/rsplayer",
+    "cp PKGS/debian/etc/systemd/system/rsplayer.service target/${TARGET}/arch/rsplayer.service",
+    "cp PKGS/debian/etc/polkit-1/rules.d/99-rsplayer.rules target/${TARGET}/arch/99-rsplayer.rules",
+    "cp PKGS/debian/opt/rsplayer/env target/${TARGET}/arch/env",
+    "cp PKGS/debian/opt/rsplayer/self.crt target/${TARGET}/arch/self.crt",
+    "cp PKGS/debian/opt/rsplayer/self.key target/${TARGET}/arch/self.key",
+    "case ${TARGET} in",
+    "  arm-unknown-linux-gnueabihf) arch_arch=armhfv6 ;;",
+    "  armv7-unknown-linux-gnueabihf) arch_arch=armhfv7 ;;",
+    "  aarch64-unknown-linux-gnu) arch_arch=arm64 ;;",
+    "  x86_64-unknown-linux-gnu) arch_arch=amd64 ;;",
+    "  *) arch_arch=${TARGET} ;;",
+    "esac",
+    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" -e \"s/@ARCH@/${arch_arch}/g\" PKGS/arch/PKGBUILD.in > target/${TARGET}/arch/PKGBUILD",
+    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" PKGS/arch/rsplayer.install.in > target/${TARGET}/arch/rsplayer.install",
+    "cd target/${TARGET}/arch && tar -czf rsplayer_${RELEASE_VERSION}_${arch_arch}.tgz rsplayer rsplayer.service 99-rsplayer.rules env self.crt self.key",
 ]
 
 # ---- LINT ----

@@ -1,0 +1,88 @@
+Name:           rsplayer
+Version:        @VERSION@
+Release:        1%{?dist}
+Summary:        RSPlayer - Music Player
+License:        MIT
+URL:            https://github.com/ljufa/rsplayer
+Source0:        %{name}-%{version}.tar.gz
+BuildArch:      @ARCH@
+BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+
+Requires:       alsa-lib >= 1.2.4
+Suggests:       nfs-utils >= 1:1.3.4-6
+Requires(pre):  shadow-utils
+
+%description
+RSPlayer - Music Player
+
+%prep
+%setup -q
+
+%build
+# No build step, binary is already built
+
+%install
+rm -rf %{buildroot}
+install -D -m 755 rsplayer %{buildroot}/usr/bin/rsplayer
+install -D -m 644 rsplayer.service %{buildroot}/etc/systemd/system/rsplayer.service
+install -D -m 644 99-rsplayer.rules %{buildroot}/etc/polkit-1/rules.d/99-rsplayer.rules
+install -D -m 644 env %{buildroot}/opt/rsplayer/env
+install -D -m 644 self.crt %{buildroot}/opt/rsplayer/self.crt
+install -D -m 644 self.key %{buildroot}/opt/rsplayer/self.key
+
+%pre
+getent group audio >/dev/null || groupadd -r audio
+getent group dialout >/dev/null || groupadd -r dialout
+getent group i2c >/dev/null || groupadd -r i2c
+getent group gpio >/dev/null || groupadd -r gpio
+getent group spi >/dev/null || groupadd -r spi
+getent group input >/dev/null || groupadd -r input
+if [ "$1" -eq 1 ]; then
+    # initial installation
+    # Create rsplayer group if it doesn't exist
+    getent group rsplayer >/dev/null || groupadd -r rsplayer
+    # Create rsplayer user
+    useradd -r -s /bin/false -d /opt/rsplayer -g rsplayer rsplayer || :
+    # Add to supplementary groups
+    usermod -a -G audio,dialout,i2c,gpio,spi,input rsplayer || true
+fi
+
+%post
+# Set ownership of /opt/rsplayer
+chown -R rsplayer:rsplayer /opt/rsplayer 2>/dev/null || :
+if [ "$1" -eq 1 ]; then
+    # initial installation
+    systemctl daemon-reload >/dev/null 2>&1 || :
+    systemctl enable rsplayer >/dev/null 2>&1 || :
+    systemctl start rsplayer >/dev/null 2>&1 || :
+elif [ "$1" -ge 2 ]; then
+    # upgrade
+    systemctl daemon-reload >/dev/null 2>&1 || :
+    systemctl try-restart rsplayer >/dev/null 2>&1 || :
+fi
+
+%preun
+if [ "$1" -eq 0 ]; then
+    # uninstallation
+    systemctl stop rsplayer >/dev/null 2>&1 || :
+    systemctl disable rsplayer >/dev/null 2>&1 || :
+fi
+
+%postun
+if [ "$1" -ge 1 ]; then
+    # upgrade
+    systemctl daemon-reload >/dev/null 2>&1 || :
+    systemctl try-restart rsplayer >/dev/null 2>&1 || :
+fi
+
+%files
+%attr(755,root,root) /usr/bin/rsplayer
+%config(noreplace) /etc/systemd/system/rsplayer.service
+%config(noreplace) /etc/polkit-1/rules.d/99-rsplayer.rules
+%config(noreplace) /opt/rsplayer/env
+%config(noreplace) /opt/rsplayer/self.crt
+%config(noreplace) /opt/rsplayer/self.key
+
+%changelog
+* @DATE@ Dragan Ljubojevic <dragan.ljubojevic@gmail.com> - @VERSION@-1
+- Initial package

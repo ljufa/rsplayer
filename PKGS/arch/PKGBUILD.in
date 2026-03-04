@@ -1,0 +1,23 @@
+# Maintainer: Dragan Ljubojevic <dragan.ljubojevic@gmail.com>
+pkgname=rsplayer
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="RSPlayer - Music Player"
+arch=('@ARCH@')
+url="https://github.com/ljufa/rsplayer"
+license=('MIT')
+depends=('alsa-lib')
+optdepends=('nfs-utils: NFS support')
+install=rsplayer.install
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+    cd "$srcdir/$pkgname-$pkgver"
+    install -Dm755 rsplayer "$pkgdir/usr/bin/rsplayer"
+    install -Dm644 rsplayer.service "$pkgdir/etc/systemd/system/rsplayer.service"
+    install -Dm644 99-rsplayer.rules "$pkgdir/etc/polkit-1/rules.d/99-rsplayer.rules"
+    install -Dm644 env "$pkgdir/opt/rsplayer/env"
+    install -Dm644 self.crt "$pkgdir/opt/rsplayer/self.crt"
+    install -Dm644 self.key "$pkgdir/opt/rsplayer/self.key"
+}

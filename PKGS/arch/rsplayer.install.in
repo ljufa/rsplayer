@@ -1,0 +1,46 @@
+post_install() {
+    # Add user and groups
+    if ! getent group audio >/dev/null; then
+        groupadd -r audio
+    fi
+    if ! getent group dialout >/dev/null; then
+        groupadd -r dialout
+    fi
+    if ! getent group i2c >/dev/null; then
+        groupadd -r i2c
+    fi
+    if ! getent group gpio >/dev/null; then
+        groupadd -r gpio
+    fi
+    if ! getent group spi >/dev/null; then
+        groupadd -r spi
+    fi
+    if ! getent group input >/dev/null; then
+        groupadd -r input
+    fi
+    if ! getent group rsplayer >/dev/null; then
+        groupadd -r rsplayer
+    fi
+    if ! getent passwd rsplayer >/dev/null; then
+        useradd -r -s /bin/false -d /opt/rsplayer -g rsplayer rsplayer || :
+        usermod -a -G audio,dialout,i2c,gpio,spi,input rsplayer || true
+    fi
+    chown -R rsplayer:rsplayer /opt/rsplayer
+    systemctl daemon-reload
+    systemctl enable rsplayer
+    systemctl start rsplayer
+}
+
+pre_upgrade() {
+    systemctl stop rsplayer
+}
+
+post_upgrade() {
+    systemctl daemon-reload
+    systemctl start rsplayer
+}
+
+pre_remove() {
+    systemctl stop rsplayer
+    systemctl disable rsplayer
+}
