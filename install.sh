@@ -1,13 +1,25 @@
 #!/usr/bin/env bash
-set -e
-device_arch=$(arch)
+set -ex
+
+echo "========================================"
+echo "RSPlayer Installer"
+echo "========================================"
+
+# Use sudo only if not already root
+if [ "$(id -u)" -eq 0 ]; then
+    SUDO=""
+else
+    SUDO="sudo"
+fi
+
+device_arch=$(uname -m)
+echo "[INFO] Device architecture: $device_arch"
 
 # Map device architecture to package suffix per distribution
-# Debian/Ubuntu suffixes
 if [ "$device_arch" = "x86_64" ]; then
     deb_arch_suffix="amd64"
     rpm_arch_suffix="x86_64"
-    arch_arch_suffix="x86_64"
+    arch_arch_suffix="amd64"
 elif [ "$device_arch" = "aarch64" ]; then
     deb_arch_suffix="arm64"
     rpm_arch_suffix="aarch64"
@@ -26,9 +38,13 @@ else
     arch_arch_suffix=$device_arch
 fi
 
+echo "[INFO] Architecture suffixes: deb=$deb_arch_suffix rpm=$rpm_arch_suffix arch=$arch_arch_suffix"
+
 # Detect distribution
+echo "[INFO] Detecting distribution..."
 if [ -f /etc/os-release ]; then
     . /etc/os-release
+    echo "[INFO] OS: $PRETTY_NAME (ID=$ID)"
     case $ID in
         debian|ubuntu|raspbian)
             pkg_type="deb"
@@ -46,20 +62,20 @@ if [ -f /etc/os-release ]; then
             pkg_ext="tgz"
             ;;
         *)
-            # Default to deb
+            echo "[WARN] Unknown distribution '$ID', defaulting to deb"
             pkg_type="deb"
             pkg_suffix="$deb_arch_suffix"
             pkg_ext="deb"
             ;;
     esac
 else
-    # Assume deb
+    echo "[WARN] /etc/os-release not found, assuming Debian-based"
     pkg_type="deb"
     pkg_suffix="$deb_arch_suffix"
     pkg_ext="deb"
 fi
 
-echo "Detected $pkg_type package for architecture $pkg_suffix"
+echo "[INFO] Selected package type: $pkg_type (suffix=$pkg_suffix, ext=$pkg_ext)"
 
 # Function to attempt download
 try_download() {
@@ -67,66 +83,97 @@ try_download() {
     local suffix=$2
     local ext=$3
     local file="rsplayer_${suffix}.${ext}"
-    
-    echo "Attempting to download $type package for $suffix..."
+
+    echo "[INFO] Querying GitHub API for latest release..."
     URL=$(curl -s https://api.github.com/repos/ljufa/rsplayer/releases/latest | grep browser_download_url | cut -d '"' -f 4 | grep "_${suffix}.${ext}" | head -n 1)
     if [ -z "$URL" ]; then
-        echo "No $type package found for architecture $suffix"
+        echo "[WARN] No $type package found for suffix=$suffix ext=$ext"
         return 1
     fi
-    echo "Downloading $type package from $URL..."
+    echo "[INFO] Downloading: $URL"
     if curl -L -o "$file" "$URL"; then
-        echo "Download successful"
+        echo "[INFO] Download OK: $file ($(du -h "$file" | cut -f1))"
         pkg_type="$type"
         pkg_suffix="$suffix"
         pkg_ext="$ext"
         pkg_file_name="$file"
         return 0
     else
-        echo "Download failed"
+        echo "[ERROR] Download failed"
         rm -f "$file"
         return 1
     fi
 }
 
 # Try primary package type
+echo "[INFO] Attempting primary package type: $pkg_type"
 if ! try_download "$pkg_type" "$pkg_suffix" "$pkg_ext"; then
-    echo "Primary package type $pkg_type not available, falling back to DEB"
-    # Fall back to DEB
+    echo "[WARN] Primary package type $pkg_type not available, falling back to DEB"
     if ! try_download "deb" "$deb_arch_suffix" "deb"; then
-        echo "ERROR: No suitable package found for architecture $device_arch"
+        echo "[ERROR] No suitable package found for architecture $device_arch"
         exit 1
     fi
 fi
 
+echo "[INFO] Installing $pkg_type package: $pkg_file_name"
 case $pkg_type in
     deb)
-        sudo dpkg -i --force-overwrite "${pkg_file_name}"
+        echo "[INFO] Installing deb with apt-get (resolves dependencies automatically)"
+        $SUDO apt-get update
+        $SUDO apt-get install "./${pkg_file_name}" || {
+            echo "[INFO] Retrying with dpkg + apt-get -f install to resolve dependencies"
+            $SUDO dpkg -i --force-overwrite "./${pkg_file_name}" || true
+            $SUDO apt-get install -f
+        }
         ;;
     rpm)
-        sudo rpm -i --force "${pkg_file_name}"
+        echo "[INFO] Installing rpm with dnf (resolves dependencies automatically)"
+        $SUDO dnf install "./${pkg_file_name}"
         ;;
     arch)
-        # Extract tarball to root
-        sudo tar -xzf "${pkg_file_name}" -C /
-        # Run post-install steps
-        # Add user and groups if not exist
-        getent group audio >/dev/null || sudo groupadd -r audio
-        getent group dialout >/dev/null || sudo groupadd -r dialout
-        getent group i2c >/dev/null || sudo groupadd -r i2c
-        getent group gpio >/dev/null || sudo groupadd -r gpio
-        getent group spi >/dev/null || sudo groupadd -r spi
-        getent group input >/dev/null || sudo groupadd -r input
-        getent group rsplayer >/dev/null || sudo groupadd -r rsplayer
+        echo "[INFO] Extracting tarball to / (files go to /usr/bin, /etc, /opt/rsplayer)"
+        $SUDO tar -xzvf "${pkg_file_name}" -C /
+        echo "[INFO] Creating groups..."
+        getent group audio >/dev/null || $SUDO groupadd -r audio
+        getent group dialout >/dev/null || $SUDO groupadd -r dialout
+        getent group i2c >/dev/null || $SUDO groupadd -r i2c
+        getent group gpio >/dev/null || $SUDO groupadd -r gpio
+        getent group spi >/dev/null || $SUDO groupadd -r spi
+        getent group input >/dev/null || $SUDO groupadd -r input
+        getent group rsplayer >/dev/null || $SUDO groupadd -r rsplayer
+        echo "[INFO] Creating rsplayer user..."
         if ! getent passwd rsplayer >/dev/null; then
-            sudo useradd -r -s /bin/false -d /opt/rsplayer -g rsplayer rsplayer || :
-            sudo usermod -a -G audio,dialout,i2c,gpio,spi,input rsplayer || true
+            $SUDO useradd -r -s /bin/false -d /opt/rsplayer -g rsplayer rsplayer || :
+            $SUDO usermod -a -G audio,dialout,i2c,gpio,spi,input rsplayer || true
+        else
+            echo "[INFO] rsplayer user already exists"
         fi
-        sudo chown -R rsplayer:rsplayer /opt/rsplayer
-        sudo systemctl daemon-reload
-        sudo systemctl enable rsplayer
-        sudo systemctl start rsplayer
+        echo "[INFO] Setting ownership on /opt/rsplayer"
+        $SUDO chown -R rsplayer /opt/rsplayer
+        echo "[INFO] Enabling and starting systemd service"
+        $SUDO systemctl daemon-reload
+        $SUDO systemctl enable rsplayer
+        $SUDO systemctl start rsplayer
         ;;
 esac
 
 rm "${pkg_file_name}"
+
+# Ensure /opt/rsplayer is owned by rsplayer regardless of package type
+echo "[INFO] Ensuring /opt/rsplayer ownership..."
+if getent passwd rsplayer >/dev/null 2>&1; then
+    $SUDO chown -R rsplayer /opt/rsplayer
+    echo "[INFO] /opt/rsplayer owned by rsplayer:rsplayer"
+else
+    echo "[WARN] rsplayer user not found, skipping chown"
+fi
+
+echo "========================================"
+echo "[INFO] Installation complete!"
+echo "[INFO] Package type: $pkg_type"
+echo "[INFO] Architecture: $device_arch ($pkg_suffix)"
+echo "========================================"
+echo "[INFO] Useful commands:"
+echo "  systemctl status rsplayer"
+echo "  journalctl -u rsplayer -f -n 50"
+echo "========================================"

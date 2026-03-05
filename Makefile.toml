@@ -10,7 +10,7 @@ RPI_HOST = "192.168.5.4"
 TARGET = "aarch64-unknown-linux-gnu"
 # TARGET = "x86_64-unknown-linux-gnu"
 
-RELEASE_VERSION = "1.8.61"
+RELEASE_VERSION = "1.8.63"
 RELEASE_BRANCH = "main_public"
 
 [config]
@@ -102,7 +102,16 @@ script = [
     "esac",
     "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" -e \"s/@ARCH@/${arch_arch}/g\" PKGS/arch/PKGBUILD.in > target/${TARGET}/arch/PKGBUILD",
     "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" PKGS/arch/rsplayer.install.in > target/${TARGET}/arch/rsplayer.install",
-    "cd target/${TARGET}/arch && tar -czf rsplayer_${RELEASE_VERSION}_${arch_arch}.tgz rsplayer rsplayer.service 99-rsplayer.rules env self.crt self.key",
+    "# Build tarball with full directory structure so tar -xzf -C / works",
+    "cd target/${TARGET}/arch && mkdir -p rootfs/usr/bin rootfs/etc/systemd/system rootfs/etc/polkit-1/rules.d rootfs/opt/rsplayer",
+    "cd target/${TARGET}/arch && cp rsplayer rootfs/usr/bin/rsplayer && chmod 755 rootfs/usr/bin/rsplayer",
+    "cd target/${TARGET}/arch && cp rsplayer.service rootfs/etc/systemd/system/rsplayer.service",
+    "cd target/${TARGET}/arch && cp 99-rsplayer.rules rootfs/etc/polkit-1/rules.d/99-rsplayer.rules",
+    "cd target/${TARGET}/arch && cp env rootfs/opt/rsplayer/env",
+    "cd target/${TARGET}/arch && cp self.crt rootfs/opt/rsplayer/self.crt",
+    "cd target/${TARGET}/arch && cp self.key rootfs/opt/rsplayer/self.key",
+    "cd target/${TARGET}/arch/rootfs && tar -czf ../rsplayer_${RELEASE_VERSION}_${arch_arch}.tgz .",
+    "rm -rf target/${TARGET}/arch/rootfs",
 ]
 
 # ---- LINT ----

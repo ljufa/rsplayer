@@ -5,7 +5,7 @@ set -e
 sudo systemctl stop rsplayer || true
 sudo systemctl disable rsplayer || true
 
-device_arch=$(arch)
+device_arch=$(uname -m)
 
 # Map device architecture to package suffix per distribution
 if [ "$device_arch" = "x86_64" ]; then
