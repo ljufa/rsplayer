@@ -7,10 +7,10 @@ CARGO_TARGET_DIR = "target"
 # TARGET = "arm-unknown-linux-gnueabihf"
 
 RPI_HOST = "192.168.5.4"
-# TARGET = "aarch64-unknown-linux-gnu"
-TARGET = "x86_64-unknown-linux-gnu"
+TARGET = "aarch64-unknown-linux-gnu"
+# TARGET = "x86_64-unknown-linux-gnu"
 
-RELEASE_VERSION = "1.8.6"
+RELEASE_VERSION = "1.8.61"
 RELEASE_BRANCH = "main_public"
 
 [config]
@@ -67,7 +67,7 @@ script = [
     "  x86_64-unknown-linux-gnu) rpm_arch=x86_64 ;;",
     "  *) rpm_arch=${TARGET} ;;",
     "esac",
-    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" -e \"s/@ARCH@/${rpm_arch}/g\" -e \"s/@DATE@/$(LC_ALL=C date +\"%a %b %d %Y\")/g\" PKGS/rpm/rsplayer.spec.in > target/${TARGET}/rpm/rsplayer.spec",
+    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" -e \"s/@DATE@/$(LC_ALL=C date +\"%a %b %d %Y\")/g\" PKGS/rpm/rsplayer.spec.in > target/${TARGET}/rpm/rsplayer.spec",
     "cd target/${TARGET}/rpm",
     "# Create source tarball",
     "mkdir -p rsplayer-${RELEASE_VERSION}",
@@ -79,9 +79,9 @@ script = [
     "cp self.key rsplayer-${RELEASE_VERSION}/",
     "tar -czf rsplayer-${RELEASE_VERSION}.tar.gz rsplayer-${RELEASE_VERSION}",
     "rm -rf rsplayer-${RELEASE_VERSION}",
-    "# Build RPM",
-    "rpmbuild -bb --define \"_topdir $(pwd)\" --define \"_builddir $(pwd)\" --define \"_sourcedir $(pwd)\" --define \"_srcrpmdir $(pwd)\" --define \"_rpmdir $(pwd)/RPMS\" rsplayer.spec",
-    "mv RPMS/*/*.rpm rsplayer_${RELEASE_VERSION}_${rpm_arch}.rpm 2>/dev/null || true",
+    "# Build RPM using --target to set the architecture without needing a native build env",
+    "rpmbuild -bb --target ${rpm_arch} --define \"_topdir $(pwd)\" --define \"_builddir $(pwd)\" --define \"_sourcedir $(pwd)\" --define \"_srcrpmdir $(pwd)\" --define \"_rpmdir $(pwd)/RPMS\" rsplayer.spec",
+    "mv RPMS/${rpm_arch}/*.rpm rsplayer_${RELEASE_VERSION}_${rpm_arch}.rpm 2>/dev/null || true",
 ]
 
 [tasks.package_arch_release]

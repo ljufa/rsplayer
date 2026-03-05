@@ -55,11 +55,11 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - Reduce code duplication in UI with generic functions and macros.
 
 ## Installation 
-To install RSPlayer on debian based linux distro, execute the following script (requires curl):
+To install RSPlayer, execute the following script (requires curl):
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)
 ```
-The installation script will install all the necessary files, configure and start the systemd service.
+The installation script detects your Linux distribution (Debian/Ubuntu, Fedora/RHEL/CentOS, Arch/Manjaro) and architecture, then installs the appropriate package. It will install all necessary files, configure and start the systemd service.
 
 To stop RSPlayer, run the following command:
 ```bash

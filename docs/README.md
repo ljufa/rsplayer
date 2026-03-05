@@ -13,19 +13,24 @@ RSPlayer can be installed on Linux systems with the following CPU architectures:
 ## Basic installation
 ### Install or upgrade
 RSPlayer can be installed using one of two methods:
-* Using installation script(it will detect your architecture)
+* Using installation script (automatically detects your distribution and architecture)
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)
 ```
-* Manually download and install deb package
-The latest package can be downloaded from [this page](https://github.com/ljufa/rsplayer/releases/latest).
+The installation script detects your Linux distribution (Debian/Ubuntu, Fedora/RHEL/CentOS, Arch/Manjaro) and installs the appropriate package type (.deb, .rpm, or .tgz tarball).
 
-* Download and manually install binary file (for non debian based linux)
-  - Under latest release page find `rsplayer_*` file for your system amd download
+* Manually download and install package
+The latest packages can be downloaded from [this page](https://github.com/ljufa/rsplayer/releases/latest). Available package types:
+- **DEB packages**: For Debian, Ubuntu, Raspbian (`rsplayer_*_amd64.deb`, `rsplayer_*_arm64.deb`, `rsplayer_*_armhfv7.deb`, `rsplayer_*_armhfv6.deb`)
+- **RPM packages**: For Fedora, RHEL, CentOS, openSUSE (`rsplayer_*_x86_64.rpm`, `rsplayer_*_aarch64.rpm`, `rsplayer_*_armv7hl.rpm`, `rsplayer_*_armv6hl.rpm`)
+- **Arch tarballs**: For Arch Linux, Manjaro (`rsplayer_*_amd64.tgz`, `rsplayer_*_arm64.tgz`, `rsplayer_*_armhfv7.tgz`, `rsplayer_*_armhfv6.tgz`)
+
+* Download and manually install binary file
+  - Under latest release page find `rsplayer_*` file for your system and download
   - rename file to `rsplayer`
   - make it executable using `chmod +x rsplayer`
   - run using command `./rsplayer`
-  - optionally if you need to run rsplayer automatically as as a service use [this systemd service file](../PKGS/debian/etc/systemd/system/rsplayer.service)
+  - optionally if you need to run rsplayer automatically as a service use [this systemd service file](../PKGS/debian/etc/systemd/system/rsplayer.service)
 
 ### Verify installation
 * Run systemd service by `sudo systemctl start rsplayer`

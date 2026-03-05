@@ -78,27 +78,23 @@ jobs:
         TARGET: ${{ matrix.target }}
         RELEASE_VERSION: ${{ github.ref_name }}
       run: |
-        # Try to build RPM, but continue if it fails (cross-architecture RPM building may not work)
-        if cargo make --env RELEASE_VERSION=$RELEASE_VERSION --env TARGET=$TARGET package_rpm_release; then
-          # Move RPM to consistent location for upload
-          case ${{ matrix.target }} in
-            arm-unknown-linux-gnueabihf) rpm_suffix=armv6hl ;;
-            armv7-unknown-linux-gnueabihf) rpm_suffix=armv7hl ;;
-            aarch64-unknown-linux-gnu) rpm_suffix=aarch64 ;;
-            x86_64-unknown-linux-gnu) rpm_suffix=x86_64 ;;
-            *) rpm_suffix=${{ matrix.target }} ;;
-          esac
-          mv target/$TARGET/rpm/rsplayer_*.rpm rsplayer_${{ github.ref_name }}_${rpm_suffix}.rpm 2>/dev/null || true
-        else
-          echo "RPM build failed for ${{ matrix.target }} (cross-architecture RPM building may not be supported)"
-        fi
+        cargo make --env RELEASE_VERSION=$RELEASE_VERSION --env TARGET=$TARGET package_rpm_release
+        # Move RPM to consistent location for upload
+        case ${{ matrix.target }} in
+          arm-unknown-linux-gnueabihf) rpm_suffix=armv6hl ;;
+          armv7-unknown-linux-gnueabihf) rpm_suffix=armv7hl ;;
+          aarch64-unknown-linux-gnu) rpm_suffix=aarch64 ;;
+          x86_64-unknown-linux-gnu) rpm_suffix=x86_64 ;;
+          *) rpm_suffix=${{ matrix.target }} ;;
+        esac
+        mv target/$TARGET/rpm/rsplayer_*.rpm rsplayer_${{ github.ref_name }}_${rpm_suffix}.rpm 2>/dev/null || true
 
     - name: Upload RPM artifact
       uses: actions/upload-artifact@v4
       with:
         name: rpm-${{ matrix.target }}
         path: rsplayer_${{ github.ref_name }}_*.rpm
-        if-no-files-found: ignore
+        if-no-files-found: error
 
     - name: Build Arch tarball
       env:
