@@ -76,6 +76,8 @@ case $pkg_type in
         ;;
     arch)
         # Manual removal for Arch tarball installation
+        # Remove binary
+        sudo rm -f /usr/bin/rsplayer
         # Remove systemd service
         sudo rm -f /etc/systemd/system/rsplayer.service
         # Remove Polkit rules

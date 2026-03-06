@@ -10,7 +10,7 @@ RPI_HOST = "192.168.5.4"
 TARGET = "aarch64-unknown-linux-gnu"
 # TARGET = "x86_64-unknown-linux-gnu"
 
-RELEASE_VERSION = "1.8.63"
+RELEASE_VERSION = "1.8.64"
 RELEASE_BRANCH = "main_public"
 
 [config]
@@ -77,11 +77,8 @@ script = [
     "cp ${RPM_DIR}/env ${RPM_DIR}/rsplayer-${RELEASE_VERSION}/",
     "cp ${RPM_DIR}/self.crt ${RPM_DIR}/rsplayer-${RELEASE_VERSION}/",
     "cp ${RPM_DIR}/self.key ${RPM_DIR}/rsplayer-${RELEASE_VERSION}/",
-    "cd ${RPM_DIR} && tar -czf rsplayer-${RELEASE_VERSION}.tar.gz rsplayer-${RELEASE_VERSION}",
-    "rm -rf ${RPM_DIR}/rsplayer-${RELEASE_VERSION}",
-    "# Build RPM using --target to set the architecture without needing a native build env",
-    "cd ${RPM_DIR} && rpmbuild -bb --target ${rpm_arch} --define \"_topdir $(pwd)\" --define \"_builddir $(pwd)\" --define \"_sourcedir $(pwd)\" --define \"_srcrpmdir $(pwd)\" --define \"_rpmdir $(pwd)/RPMS\" rsplayer.spec",
-    "mv ${RPM_DIR}/RPMS/${rpm_arch}/*.rpm ${RPM_DIR}/rsplayer_${RELEASE_VERSION}_${rpm_arch}.rpm 2>/dev/null || true",
+    "# Build source tarball, RPM, and move output — all in one cd to avoid cwd issues",
+    "cd ${RPM_DIR} && tar -czf rsplayer-${RELEASE_VERSION}.tar.gz rsplayer-${RELEASE_VERSION} && rm -rf rsplayer-${RELEASE_VERSION} && rpmbuild -bb --target ${rpm_arch} --define \"_topdir $(pwd)\" --define \"_builddir $(pwd)\" --define \"_sourcedir $(pwd)\" --define \"_srcrpmdir $(pwd)\" --define \"_rpmdir $(pwd)/RPMS\" rsplayer.spec && mv RPMS/${rpm_arch}/*.rpm rsplayer_${RELEASE_VERSION}_${rpm_arch}.rpm",
 ]
 
 [tasks.package_arch_release]
@@ -111,8 +108,7 @@ script = [
     "cp ${ARCH_DIR}/env ${ARCH_DIR}/rootfs/opt/rsplayer/env",
     "cp ${ARCH_DIR}/self.crt ${ARCH_DIR}/rootfs/opt/rsplayer/self.crt",
     "cp ${ARCH_DIR}/self.key ${ARCH_DIR}/rootfs/opt/rsplayer/self.key",
-    "cd ${ARCH_DIR}/rootfs && tar -czf ../rsplayer_${RELEASE_VERSION}_${arch_arch}.tgz .",
-    "rm -rf ${ARCH_DIR}/rootfs",
+    "cd ${ARCH_DIR}/rootfs && tar -czf ../rsplayer_${RELEASE_VERSION}_${arch_arch}.tgz . && cd .. && rm -rf rootfs",
 ]
 
 # ---- LINT ----
