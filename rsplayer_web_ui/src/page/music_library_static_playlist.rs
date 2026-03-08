@@ -1,4 +1,7 @@
+use std::collections::{HashMap, HashSet};
+
 use api_models::common::UserCommand;
+use api_models::playlist::Album;
 use api_models::state::StateChangeEvent;
 use api_models::{
     player::Song,
@@ -21,6 +24,9 @@ pub struct Model {
     pub selected_playlist_name: String,
     pub selected_playlist_is_album: bool,
     selected_playlist_current_page_no: usize,
+    expanded_sections: HashSet<String>,
+    /// Lazily loaded albums keyed by carousel_id (e.g. "genre-pl-rock", "decade-pl-1990s")
+    lazy_albums: HashMap<String, Vec<Album>>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -43,6 +49,7 @@ pub enum Msg {
     AddSongAndPlay(String),
     PlaySongFromPlaylist(String),
     LoadMorePlaylistItems,
+    ToggleSection(String),
     WebSocketOpen,
 }
 
@@ -55,6 +62,14 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
     orders.stream(streams::window_event(Ev::KeyDown, |event| {
         Msg::KeyPressed(event.unchecked_into())
     }));
+    let default_expanded: HashSet<String> = [
+        "featured-pl".to_string(),
+        "newreleases-pl".to_string(),
+        "saved-pl".to_string(),
+        "favorites-pl".to_string(),
+    ]
+    .into_iter()
+    .collect();
     Model {
         static_playlists: Playlists::default(),
         static_playlist_loading: true,
@@ -63,6 +78,8 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
         selected_playlist_id: String::default(),
         selected_playlist_name: String::default(),
         selected_playlist_current_page_no: 1,
+        expanded_sections: default_expanded,
+        lazy_albums: HashMap::new(),
     }
 }
 
@@ -90,11 +107,25 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::StatusChangeEventReceived(StateChangeEvent::PlaylistsEvent(playlists)) => {
             model.static_playlist_loading = false;
             model.static_playlists = playlists;
-            orders.after_next_render(|_| {
-                attachCarousel("#featured-pl");
-                attachCarousel("#saved-pl");
-                attachCarousel("#newreleases-pl");
-                attachCarousel("#favorites-pl");
+            let to_attach: Vec<String> = model.expanded_sections.iter().cloned().collect();
+            orders.after_next_render(move |_| {
+                for id in &to_attach {
+                    attachCarousel(&format!("#{id}"));
+                }
+            });
+        }
+        Msg::StatusChangeEventReceived(StateChangeEvent::GenreAlbumsEvent(genre, albums)) => {
+            let carousel_id = format!("genre-pl-{}", pl_slug(&genre));
+            model.lazy_albums.insert(carousel_id.clone(), albums);
+            orders.after_next_render(move |_| {
+                attachCarousel(&format!("#{carousel_id}"));
+            });
+        }
+        Msg::StatusChangeEventReceived(StateChangeEvent::DecadeAlbumsEvent(decade, albums)) => {
+            let carousel_id = format!("decade-pl-{}", pl_slug(&decade));
+            model.lazy_albums.insert(carousel_id.clone(), albums);
+            orders.after_next_render(move |_| {
+                attachCarousel(&format!("#{carousel_id}"));
             });
         }
         Msg::ShowPlaylistItemsClicked(_is_dynamic, playlist_id, playlist_name) => {
@@ -178,6 +209,59 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
                 api_models::common::QueueCommand::AddAlbumToQueue(album_id),
             )));
+        }
+        Msg::ToggleSection(section_id) => {
+            if model.expanded_sections.contains(&section_id) {
+                model.expanded_sections.remove(&section_id);
+            } else {
+                model.expanded_sections.insert(section_id.clone());
+
+                // For genre/decade sections, lazy-load album data if not yet fetched.
+                // The response handler will attach the carousel when data arrives.
+                let needs_fetch = if !model.lazy_albums.contains_key(&section_id) {
+                    if let Some(genre) = section_id.strip_prefix("genre-pl-") {
+                        if let Some((name, _)) = model
+                            .static_playlists
+                            .genre_headers()
+                            .into_iter()
+                            .find(|(g, _)| pl_slug(g) == genre)
+                        {
+                            orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
+                                api_models::common::PlaylistCommand::QueryAlbumsByGenre(name),
+                            )));
+                            true
+                        } else {
+                            false
+                        }
+                    } else if let Some(decade) = section_id.strip_prefix("decade-pl-") {
+                        if let Some((name, _)) = model
+                            .static_playlists
+                            .decade_headers()
+                            .into_iter()
+                            .find(|(d, _)| pl_slug(d) == decade)
+                        {
+                            orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
+                                api_models::common::PlaylistCommand::QueryAlbumsByDecade(name),
+                            )));
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+
+                // Re-attach carousel on the fresh DOM element (unless we're
+                // waiting for a fetch — the response handler will attach it).
+                if !needs_fetch {
+                    orders.after_next_render(move |_| {
+                        attachCarousel(&format!("#{section_id}"));
+                    });
+                }
+            }
         }
         Msg::WebSocketOpen => {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
@@ -324,67 +408,197 @@ fn view_static_playlists(model: &Model) -> Node<Msg> {
         C!["section"],
         div![
             C!["container"],
-            IF!(model.static_playlists.has_recently_added() => nodes![
-                span![C!["title is-3 has-text-light has-background-dark-transparent"], "Recently added"],
+            // -- Recently added --
+            IF!(model.static_playlists.has_recently_added() =>
+                view_collapsible_section(model, "featured-pl", "Recently added", &model
+                    .static_playlists
+                    .items
+                    .iter()
+                    .filter(|it| it.is_recently_added())
+                    .collect::<Vec<_>>())
+            ),
+            // -- New releases --
+            IF!(model.static_playlists.has_new_releases() =>
+                view_collapsible_section(model, "newreleases-pl", "New releases", &model
+                    .static_playlists
+                    .items
+                    .iter()
+                    .filter(|it| it.is_new_release())
+                    .collect::<Vec<_>>())
+            ),
+            // -- Saved --
+            IF!(model.static_playlists.has_saved() =>
+                view_collapsible_section(model, "saved-pl", "Saved", &model
+                    .static_playlists
+                    .items
+                    .iter()
+                    .filter(|it| it.is_saved())
+                    .collect::<Vec<_>>())
+            ),
+            // -- Favorites --
+            IF!(model.static_playlists.has_most_played() || model.static_playlists.has_liked() =>
+                view_collapsible_section(model, "favorites-pl", "Favorites", &model
+                    .static_playlists
+                    .items
+                    .iter()
+                    .filter(|it| it.is_most_played() || it.is_liked())
+                    .collect::<Vec<_>>())
+            ),
+            // -- By Genre (lazy loaded) --
+            IF!(model.static_playlists.has_genre_headers() =>
+                nodes![model.static_playlists.genre_headers().into_iter().map(|(genre, count)| {
+                    let carousel_id = format!("genre-pl-{}", pl_slug(&genre));
+                    view_lazy_section(model, &carousel_id, &genre, count)
+                }).collect::<Vec<_>>()]
+            ),
+            // -- By Decade (lazy loaded) --
+            IF!(model.static_playlists.has_decade_headers() =>
+                nodes![model.static_playlists.decade_headers().into_iter().map(|(decade, count)| {
+                    let carousel_id = format!("decade-pl-{}", pl_slug(&decade));
+                    view_lazy_section(model, &carousel_id, &decade, count)
+                }).collect::<Vec<_>>()]
+            ),
+        ]
+    ]
+}
+
+fn view_collapsible_section(model: &Model, carousel_id: &str, title: &str, items: &[&PlaylistType]) -> Node<Msg> {
+    let is_expanded = model.expanded_sections.contains(carousel_id);
+    let toggle_id = carousel_id.to_string();
+    let icon = if is_expanded { "expand_less" } else { "expand_more" };
+    let item_count = items.len();
+    div![
+        div![
+            style! {
+                St::Cursor => "pointer",
+                St::Display => "flex",
+                St::AlignItems => "center",
+                St::UserSelect => "none",
+                St::MarginBottom => "4px",
+            },
+            ev(Ev::Click, move |_| Msg::ToggleSection(toggle_id)),
+            i![
+                C!["material-icons", "has-text-light"],
+                style! { St::FontSize => "28px", St::MarginRight => "8px" },
+                icon,
+            ],
+            span![
+                C!["title is-3 has-text-light has-background-dark-transparent"],
+                style! { St::MarginBottom => "0" },
+                title,
+            ],
+            span![
+                C!["has-text-grey-light"],
+                style! { St::MarginLeft => "10px", St::FontSize => "0.9rem" },
+                format!("({item_count})"),
+            ],
+        ],
+        IF!(is_expanded => section![
+            C!["section"],
+            div![
+                C!["carousel"],
+                id!(carousel_id.to_string()),
+                items.iter().map(|it| view_static_playlist_carousel_item(it))
+            ],
+        ]),
+    ]
+}
+
+fn view_lazy_section(model: &Model, carousel_id: &str, title: &str, header_count: usize) -> Node<Msg> {
+    let is_expanded = model.expanded_sections.contains(carousel_id);
+    let toggle_id = carousel_id.to_string();
+    let icon = if is_expanded { "expand_less" } else { "expand_more" };
+    let albums = model.lazy_albums.get(carousel_id);
+    let item_count = albums.map_or(header_count, Vec::len);
+    div![
+        div![
+            style! {
+                St::Cursor => "pointer",
+                St::Display => "flex",
+                St::AlignItems => "center",
+                St::UserSelect => "none",
+                St::MarginBottom => "4px",
+            },
+            ev(Ev::Click, move |_| Msg::ToggleSection(toggle_id)),
+            i![
+                C!["material-icons", "has-text-light"],
+                style! { St::FontSize => "28px", St::MarginRight => "8px" },
+                icon,
+            ],
+            span![
+                C!["title is-3 has-text-light has-background-dark-transparent"],
+                style! { St::MarginBottom => "0" },
+                title,
+            ],
+            span![
+                C!["has-text-grey-light"],
+                style! { St::MarginLeft => "10px", St::FontSize => "0.9rem" },
+                format!("({item_count})"),
+            ],
+        ],
+        IF!(is_expanded =>
+            if let Some(albums) = albums {
                 section![
                     C!["section"],
                     div![
                         C!["carousel"],
-                        id!("featured-pl"),
-                        model
-                            .static_playlists
-                            .items
-                            .iter()
-                            .filter(|it| it.is_recently_added())
-                            .map(view_static_playlist_carousel_item)
+                        id!(carousel_id.to_string()),
+                        albums.iter().map(view_album_carousel_item)
                     ],
-                ]]
-            ),
-            IF!(model.static_playlists.has_new_releases() => nodes![
-            span![C!["title is-3 has-text-light has-background-dark-transparent"], "New releases"],
-            section![
-                C!["section"],
-                div![
-                    C!["carousel"],
-                    id!("newreleases-pl"),
-                    model
-                        .static_playlists
-                        .items
-                        .iter()
-                        .filter(|it| it.is_new_release())
-                        .map(view_static_playlist_carousel_item)
+                ]
+            } else {
+                section![
+                    C!["section"],
+                    progress![C!["progress", "is-small"], attrs!{ At::Max => "100"}],
+                ]
+            }
+        ),
+    ]
+}
+
+fn view_album_carousel_item(album: &Album) -> Node<Msg> {
+    let id = album.title.clone();
+    let id2 = album.title.clone();
+    let id3 = album.title.clone();
+    div![
+        C![format!("item-{id}")],
+        div![
+            C!["card"],
+            div![
+                C!["card-image"],
+                figure![
+                    C!["image", "is-square"],
+                    img![
+                        C!["image-center-half-size"],
+                        IF!(album.image_id.is_none() => attrs! {At::Src => "/no_album.svg"}),
+                        IF!(album.image_id.is_some() => attrs! {At::Src => format!("/artwork/{}", album.image_id.as_ref().unwrap())}),
+                    ]
                 ],
-            ]]),
-            IF!(model.static_playlists.has_saved() => nodes![
-            span![C!["title is-3 has-text-light has-background-dark-transparent"], "Saved"],
-            section![
-                C!["section"],
-                div![
-                    C!["carousel"],
-                    id!("saved-pl"),
-                    model
-                        .static_playlists
-                        .items
-                        .iter()
-                        .filter(|it| it.is_saved())
-                        .map(view_static_playlist_carousel_item)
+                span![
+                    C!["play-button-small"],
+                    attrs! {At::Title => "Load album into queue"},
+                    ev(Ev::Click, move |_| Msg::LoadAlbumIntoQueue(id))
                 ],
-            ]]),
-            IF!(model.static_playlists.has_most_played() || model.static_playlists.has_liked() => nodes![
-            span![C!["title is-3 has-text-light has-background-dark-transparent"], "Favorites"],
-            section![
-                C!["section"],
-                div![
-                    C!["carousel"],
-                    id!("favorites-pl"),
-                    model
-                        .static_playlists
-                        .items
-                        .iter()
-                        .filter(|it| it.is_most_played() || it.is_liked())
-                        .map(view_static_playlist_carousel_item)
-                ],
-            ]]),
+                span![
+                    C!["add-button-small"],
+                    attrs! {At::Title => "Add album to queue"},
+                    ev(Ev::Click, move |_| Msg::AddAlbumToQueue(id2))
+                ]
+            ],
+            div![a![
+                ev(Ev::Click, move |_| Msg::ShowAlbumItemsClicked(id3)),
+                C!["card-footer-item", "box"],
+                ul![
+                    style! {St::TextAlign => "center"},
+                    li![i![album.title.clone()]],
+                    li![album.artist.as_ref().map_or(String::new(), |art| art.clone())],
+                    li![album.genre.as_ref().map_or(String::new(), |genre| genre.clone())],
+                    li![album
+                        .released
+                        .as_ref()
+                        .map_or(String::new(), |rdate| format!("{}", rdate.format("%Y")))],
+                ]
+            ],]
         ]
     ]
 }
@@ -432,7 +646,10 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                 ]
             ]
         }
-        PlaylistType::LatestRelease(album) | PlaylistType::RecentlyAdded(album) => {
+        PlaylistType::LatestRelease(album)
+        | PlaylistType::RecentlyAdded(album)
+        | PlaylistType::ByGenre(album)
+        | PlaylistType::ByDecade(album) => {
             let id = album.title.clone();
             let id2 = album.title.clone();
             let id3 = album.title.clone();
@@ -478,5 +695,21 @@ fn view_static_playlist_carousel_item(playlist: &PlaylistType) -> Node<Msg> {
                 ]
             ]
         }
+        // Headers are not rendered as carousel items
+        PlaylistType::GenreHeader(_, _) | PlaylistType::DecadeHeader(_, _) => div![],
     }
+}
+
+/// Convert a label (genre name, decade string, etc.) into a safe CSS id fragment.
+fn pl_slug(label: &str) -> String {
+    label
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect()
 }

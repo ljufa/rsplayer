@@ -49,6 +49,250 @@ pub(crate) fn normalize_name(s: &str) -> String {
         .collect()
 }
 
+/// ID3v1 genre lookup table. Index = numeric genre code, value = genre name.
+/// See <https://en.wikipedia.org/wiki/List_of_ID3v1_genres>
+const ID3V1_GENRES: &[&str] = &[
+    "Blues",
+    "Classic Rock",
+    "Country",
+    "Dance",
+    "Disco",
+    "Funk",
+    "Grunge",
+    "Hip-Hop",
+    "Jazz",
+    "Metal",
+    "New Age",
+    "Oldies",
+    "Other",
+    "Pop",
+    "R&B",
+    "Rap",
+    "Reggae",
+    "Rock",
+    "Techno",
+    "Industrial",
+    "Alternative",
+    "Ska",
+    "Death Metal",
+    "Pranks",
+    "Soundtrack",
+    "Euro-Techno",
+    "Ambient",
+    "Trip-Hop",
+    "Vocal",
+    "Jazz+Funk",
+    "Fusion",
+    "Trance",
+    "Classical",
+    "Instrumental",
+    "Acid",
+    "House",
+    "Game",
+    "Sound Clip",
+    "Gospel",
+    "Noise",
+    "Alternative Rock",
+    "Bass",
+    "Soul",
+    "Punk",
+    "Space",
+    "Meditative",
+    "Instrumental Pop",
+    "Instrumental Rock",
+    "Ethnic",
+    "Gothic",
+    "Darkwave",
+    "Techno-Industrial",
+    "Electronic",
+    "Pop-Folk",
+    "Eurodance",
+    "Dream",
+    "Southern Rock",
+    "Comedy",
+    "Cult",
+    "Gangsta",
+    "Top 40",
+    "Christian Rap",
+    "Pop/Funk",
+    "Jungle",
+    "Native US",
+    "Cabaret",
+    "New Wave",
+    "Psychedelic",
+    "Rave",
+    "Showtunes",
+    "Trailer",
+    "Lo-Fi",
+    "Tribal",
+    "Acid Punk",
+    "Acid Jazz",
+    "Polka",
+    "Retro",
+    "Musical",
+    "Rock & Roll",
+    "Hard Rock",
+    // Extended (80+)
+    "Folk",
+    "Folk-Rock",
+    "National Folk",
+    "Swing",
+    "Fast Fusion",
+    "Bebop",
+    "Latin",
+    "Revival",
+    "Celtic",
+    "Bluegrass",
+    "Avantgarde",
+    "Gothic Rock",
+    "Progressive Rock",
+    "Psychedelic Rock",
+    "Symphonic Rock",
+    "Slow Rock",
+    "Big Band",
+    "Chorus",
+    "Easy Listening",
+    "Acoustic",
+    "Humour",
+    "Speech",
+    "Chanson",
+    "Opera",
+    "Chamber Music",
+    "Sonata",
+    "Symphony",
+    "Booty Bass",
+    "Primus",
+    "Porn Groove",
+    "Satire",
+    "Slow Jam",
+    "Club",
+    "Tango",
+    "Samba",
+    "Folklore",
+    "Ballad",
+    "Power Ballad",
+    "Rhythmic Soul",
+    "Freestyle",
+    "Duet",
+    "Punk Rock",
+    "Drum Solo",
+    "A Capella",
+    "Euro-House",
+    "Dance Hall",
+    "Goa",
+    "Drum & Bass",
+    "Club-House",
+    "Hardcore Techno",
+    "Terror",
+    "Indie",
+    "BritPop",
+    "Negerpunk",
+    "Polsk Punk",
+    "Beat",
+    "Christian Gangsta Rap",
+    "Heavy Metal",
+    "Black Metal",
+    "Crossover",
+    "Contemporary Christian",
+    "Christian Rock",
+    "Merengue",
+    "Salsa",
+    "Thrash Metal",
+    "Anime",
+    "JPop",
+    "Synthpop",
+    "Abstract",
+    "Art Rock",
+    "Baroque",
+    "Bhangra",
+    "Big Beat",
+    "Breakbeat",
+    "Chillout",
+    "Downtempo",
+    "Dub",
+    "EBM",
+    "Eclectic",
+    "Electro",
+    "Electroclash",
+    "Emo",
+    "Experimental",
+    "Garage",
+    "Global",
+    "IDM",
+    "Illbient",
+    "Industro-Goth",
+    "Jam Band",
+    "Krautrock",
+    "Leftfield",
+    "Lounge",
+    "Math Rock",
+    "New Romantic",
+    "Nu-Breakz",
+    "Post-Punk",
+    "Post-Rock",
+    "Psytrance",
+    "Shoegaze",
+    "Space Rock",
+    "Trop Rock",
+    "World Music",
+    "Neoclassical",
+    "Audiobook",
+    "Audio Theatre",
+    "Neue Deutsche Welle",
+    "Podcast",
+    "Indie-Rock",
+    "G-Funk",
+    "Dubstep",
+    "Garage Rock",
+    "Psybient",
+];
+
+/// Resolve a raw genre string that might be an ID3v1 numeric code like "(17)" or "17".
+fn resolve_id3v1_genre(raw: &str) -> Option<&'static str> {
+    let trimmed = raw.trim();
+    // Match "(N)" or just "N"
+    let num_str = trimmed
+        .strip_prefix('(')
+        .and_then(|s| s.strip_suffix(')'))
+        .unwrap_or(trimmed);
+    let idx: usize = num_str.parse().ok()?;
+    ID3V1_GENRES.get(idx).copied()
+}
+
+/// Genres to exclude from the category listing.
+fn is_junk_genre(normalized: &str) -> bool {
+    matches!(
+        normalized,
+        "other" | "unknown genre" | "unknown" | "misc" | "none" | "unclassified" | ""
+    )
+}
+
+/// Produce a normalized lowercase key for grouping genres.
+///
+/// - Strips diacritics (reuses the existing `normalize_name` pipeline)
+/// - Collapses whitespace
+/// - Normalises separators: " / ", "/", " - ", etc. to a single canonical form
+fn normalize_genre_key(genre: &str) -> String {
+    normalize_name(genre)
+}
+
+/// Title-case a genre string for display: "progressive rock" → "Progressive Rock".
+fn title_case_genre(s: &str) -> String {
+    s.split_whitespace()
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(first) => {
+                    let upper: String = first.to_uppercase().collect();
+                    upper + chars.as_str()
+                }
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub struct AlbumRepository {
     albums_db: Db,
 }
@@ -119,6 +363,73 @@ impl AlbumRepository {
         albums.truncate(limit);
         albums
     }
+    pub fn find_all_by_genre(&self, limit_per_genre: usize) -> Vec<(String, Vec<Album>)> {
+        let albums = self.find_all();
+        // Maps: normalized_key → (display_name, albums)
+        let mut genre_map: std::collections::HashMap<String, (String, Vec<Album>)> = std::collections::HashMap::new();
+        for album in albums {
+            if let Some(ref raw_genre) = album.genre {
+                // Resolve ID3v1 numeric codes like "(17)" → "Rock"
+                let genre_str = resolve_id3v1_genre(raw_genre)
+                    .map(String::from)
+                    .unwrap_or_else(|| raw_genre.clone());
+
+                if genre_str.is_empty() {
+                    continue;
+                }
+
+                let key = normalize_genre_key(&genre_str);
+                if is_junk_genre(&key) {
+                    continue;
+                }
+
+                let entry = genre_map.entry(key).or_insert_with(|| {
+                    // Use title-cased version of the first occurrence as display name
+                    (title_case_genre(&genre_str), Vec::new())
+                });
+                entry.1.push(album);
+            }
+        }
+        let mut result: Vec<(String, Vec<Album>)> = genre_map
+            .into_iter()
+            .filter(|(_, (_, albums))| albums.len() >= 2)
+            .map(|(_, (display_name, mut albums))| {
+                albums.sort_by(|a, b| b.added.cmp(&a.added));
+                albums.truncate(limit_per_genre);
+                (display_name, albums)
+            })
+            .collect();
+        result.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+        result
+    }
+
+    pub fn find_all_by_decade(&self, limit_per_decade: usize) -> Vec<(String, Vec<Album>)> {
+        let albums = self.find_all();
+        let mut decade_map: std::collections::HashMap<String, Vec<Album>> = std::collections::HashMap::new();
+        for album in albums {
+            if let Some(released) = album.released {
+                let year_str = released.format("%Y").to_string();
+                if let Ok(year) = year_str.parse::<u32>() {
+                    if year >= 1950 {
+                        let decade = format!("{}0s", &year_str[..3]);
+                        decade_map.entry(decade).or_default().push(album);
+                    }
+                }
+            }
+        }
+        let mut result: Vec<(String, Vec<Album>)> = decade_map
+            .into_iter()
+            .filter(|(_, albums)| albums.len() >= 2)
+            .map(|(decade, mut albums)| {
+                albums.sort_by(|a, b| b.released.cmp(&a.released));
+                albums.truncate(limit_per_decade);
+                (decade, albums)
+            })
+            .collect();
+        result.sort_by(|a, b| b.0.cmp(&a.0));
+        result
+    }
+
     pub fn find_by_artist(&self, artist: &str) -> Vec<Album> {
         let normalized_query = normalize_name(artist);
         self.albums_db
@@ -501,6 +812,102 @@ mod test {
         album_repository.delete_all();
         let result = album_repository.find_all();
         assert_eq!(result.len(), 0);
+    }
+
+    // --- Genre normalization tests ---
+
+    #[test]
+    fn resolve_id3v1_numeric_genres() {
+        use super::resolve_id3v1_genre;
+        assert_eq!(resolve_id3v1_genre("(17)"), Some("Rock"));
+        assert_eq!(resolve_id3v1_genre("(20)"), Some("Alternative"));
+        assert_eq!(resolve_id3v1_genre("(35)"), Some("House"));
+        assert_eq!(resolve_id3v1_genre("17"), Some("Rock"));
+        assert_eq!(resolve_id3v1_genre("(999)"), None);
+        assert_eq!(resolve_id3v1_genre("Rock"), None);
+    }
+
+    #[test]
+    fn junk_genres_are_filtered() {
+        use super::is_junk_genre;
+        assert!(is_junk_genre("other"));
+        assert!(is_junk_genre("unknown genre"));
+        assert!(is_junk_genre("unknown"));
+        assert!(!is_junk_genre("rock"));
+        assert!(!is_junk_genre("jazz"));
+    }
+
+    #[test]
+    fn genre_title_case() {
+        use super::title_case_genre;
+        assert_eq!(title_case_genre("progressive rock"), "Progressive Rock");
+        assert_eq!(title_case_genre("hip-hop"), "Hip-hop");
+        assert_eq!(title_case_genre("R&B"), "R&B");
+    }
+
+    #[test]
+    fn find_all_by_genre_merges_case_variants() {
+        let repo = create_album_repo();
+        #[rustfmt::skip]
+        insert_albums!(
+            &repo,
+            "a1", "Album One",   "Artist 1", Some("Electronic"),
+            "a2", "Album Two",   "Artist 2", Some("electronic"),
+            "a3", "Album Three", "Artist 3", Some("ELECTRONIC"),
+            "a4", "Album Four",  "Artist 4", Some("Rock"),
+            "a5", "Album Five",  "Artist 5", Some("rock")
+        );
+        let result = repo.find_all_by_genre(20);
+        // All three "electronic" variants should merge into one group
+        let electronic = result.iter().find(|(name, _)| name.to_lowercase() == "electronic");
+        assert!(
+            electronic.is_some(),
+            "expected 'Electronic' group, got: {:?}",
+            result.iter().map(|(n, _)| n).collect::<Vec<_>>()
+        );
+        assert_eq!(electronic.unwrap().1.len(), 3);
+        // Both "Rock" variants should merge
+        let rock = result.iter().find(|(name, _)| name.to_lowercase() == "rock");
+        assert!(rock.is_some());
+        assert_eq!(rock.unwrap().1.len(), 2);
+        // Should be exactly 2 groups, not 5
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn find_all_by_genre_resolves_id3v1_codes() {
+        let repo = create_album_repo();
+        #[rustfmt::skip]
+        insert_albums!(
+            &repo,
+            "a1", "Album One", "Artist 1", Some("(17)"),
+            "a2", "Album Two", "Artist 2", Some("Rock")
+        );
+        let result = repo.find_all_by_genre(20);
+        // "(17)" = Rock → should merge with "Rock"
+        let rock = result.iter().find(|(name, _)| name.to_lowercase() == "rock");
+        assert!(rock.is_some(), "expected 'Rock' group");
+        assert_eq!(rock.unwrap().1.len(), 2);
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn find_all_by_genre_filters_junk() {
+        let repo = create_album_repo();
+        #[rustfmt::skip]
+        insert_albums!(
+            &repo,
+            "a1", "Album One",   "Artist 1", Some("Other"),
+            "a2", "Album Two",   "Artist 2", Some("Other"),
+            "a3", "Album Three", "Artist 3", Some("Unknown genre"),
+            "a4", "Album Four",  "Artist 4", Some("Unknown genre"),
+            "a5", "Album Five",  "Artist 5", Some("Jazz"),
+            "a6", "Album Six",   "Artist 6", Some("Jazz")
+        );
+        let result = repo.find_all_by_genre(20);
+        // "Other" and "Unknown genre" should be filtered out, only Jazz remains
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].0, "Jazz");
     }
 
     fn create_album(

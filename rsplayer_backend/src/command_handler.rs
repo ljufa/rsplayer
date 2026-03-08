@@ -10,7 +10,9 @@ use api_models::common::PlayerCommand::{
     CyclePlaybackMode, Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, Seek, SeekBackward, SeekForward,
     Stop, TogglePlay,
 };
-use api_models::common::PlaylistCommand::{QueryAlbumItems, QueryPlaylist, QueryPlaylistItems, SaveQueueAsPlaylist};
+use api_models::common::PlaylistCommand::{
+    QueryAlbumItems, QueryAlbumsByDecade, QueryAlbumsByGenre, QueryPlaylist, QueryPlaylistItems, SaveQueueAsPlaylist,
+};
 use api_models::common::QueueCommand::{
     self, AddLocalLibDirectory, AddSongToQueue, ClearQueue, LoadAlbumInQueue, LoadArtistInQueue, LoadPlaylistInQueue,
     LoadSongToQueue, QueryCurrentQueue, QueryCurrentSong, RemoveItem,
@@ -181,8 +183,45 @@ pub async fn handle_user_commands(
                     pls.items.push(PlaylistType::Liked(pl));
                 }
 
+                // Send lightweight headers for genre/decade categories (no album data)
+                album_repository
+                    .find_all_by_genre(20)
+                    .into_iter()
+                    .for_each(|(genre, albums)| {
+                        pls.items.push(PlaylistType::GenreHeader(genre, albums.len()));
+                    });
+
+                album_repository
+                    .find_all_by_decade(20)
+                    .into_iter()
+                    .for_each(|(decade, albums)| {
+                        pls.items.push(PlaylistType::DecadeHeader(decade, albums.len()));
+                    });
+
                 state_changes_sender
                     .send(StateChangeEvent::PlaylistsEvent(pls))
+                    .unwrap();
+            }
+            Playlist(QueryAlbumsByGenre(genre)) => {
+                let albums: Vec<api_models::playlist::Album> = album_repository
+                    .find_all_by_genre(20)
+                    .into_iter()
+                    .find(|(g, _)| *g == genre)
+                    .map(|(_, a)| a)
+                    .unwrap_or_default();
+                state_changes_sender
+                    .send(StateChangeEvent::GenreAlbumsEvent(genre, albums))
+                    .unwrap();
+            }
+            Playlist(QueryAlbumsByDecade(decade)) => {
+                let albums: Vec<api_models::playlist::Album> = album_repository
+                    .find_all_by_decade(20)
+                    .into_iter()
+                    .find(|(d, _)| *d == decade)
+                    .map(|(_, a)| a)
+                    .unwrap_or_default();
+                state_changes_sender
+                    .send(StateChangeEvent::DecadeAlbumsEvent(decade, albums))
                     .unwrap();
             }
 

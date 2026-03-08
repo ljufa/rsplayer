@@ -166,6 +166,8 @@ pub enum PlaylistCommand {
     QueryPlaylistItems(String, usize),
     QueryAlbumItems(String, usize),
     QueryPlaylist,
+    QueryAlbumsByGenre(String),
+    QueryAlbumsByDecade(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]

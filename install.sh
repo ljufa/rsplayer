@@ -131,6 +131,8 @@ case $pkg_type in
         $SUDO dnf install "./${pkg_file_name}"
         ;;
     arch)
+        echo "[INFO] Installing alsa-lib dependency..."
+        $SUDO pacman -S --needed alsa-lib
         echo "[INFO] Extracting tarball to / (files go to /usr/bin, /etc, /opt/rsplayer)"
         $SUDO tar -xzvf "${pkg_file_name}" -C /
         echo "[INFO] Creating groups..."

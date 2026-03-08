@@ -1,5 +1,24 @@
 # Release Notes
 
+## v1.9.0 — 2026-03-08
+
+### New Features & Improvements
+
+- **Library Playlists Page Revamp**: 
+  - **Categorized Playlists**: The Static Playlists page now automatically groups your library into categorized carousels by "Genre" and "Decade".
+  - **Collapsible Lazy-Loaded Sections**: To improve page load performance and reduce memory usage on large libraries, all playlist categories are now organized into collapsible sections. The core sections (Recently Added, New Releases, Favorites, Saved) remain expanded by default, while Genre and Decade sections display the total album count but remain collapsed. The album data is only fetched and the carousel attached when the user explicitly expands the section, saving significant initial bandwidth.
+  - **Genre Normalization and Sanitization**: To avoid fragmenting the library with near-duplicate genres, a comprehensive genre normalization step has been added:
+    - Consolidates differing cases (e.g., "electronic", "Electronic", "ELECTRONIC").
+    - Translates numeric ID3v1 genre codes (e.g., "(17)", "(20)") into proper display names ("Rock", "Alternative").
+    - Automatically filters out junk/unclassified metadata (e.g., "Other", "Unknown genre", "misc").
+    - Applies title casing to ensure a clean, consistent display.
+  - **Decade Sanitization**: Decades are now strictly validated (only valid 4-digit years >= 1950 are shown) to avoid cluttering the view with malformed or ancient release date data.
+
+### Platform Support (From v1.8.x)
+- **Fedora and Arch Linux**: Native package building, installation scripts, and platform support have been expanded to include Fedora (RPM) and Arch Linux.
+
+---
+
 ## v1.8.6 — 2026-03-04
 
 ### Bug Fixes

@@ -48,6 +48,12 @@ pub enum PlaylistType {
     RecentlyAdded(Album),
     MostPlayed(Playlist),
     Liked(Playlist),
+    ByGenre(Album),
+    ByDecade(Album),
+    /// Lightweight header: genre name + album count (no album data).
+    GenreHeader(String, usize),
+    /// Lightweight header: decade label + album count (no album data).
+    DecadeHeader(String, usize),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
@@ -88,6 +94,77 @@ impl Playlists {
     pub fn has_liked(&self) -> bool {
         self.items.iter().any(PlaylistType::is_liked)
     }
+    pub fn has_by_genre(&self) -> bool {
+        self.items.iter().any(PlaylistType::is_by_genre)
+    }
+    pub fn has_by_decade(&self) -> bool {
+        self.items.iter().any(PlaylistType::is_by_decade)
+    }
+    pub fn has_genre_headers(&self) -> bool {
+        self.items.iter().any(PlaylistType::is_genre_header)
+    }
+    pub fn has_decade_headers(&self) -> bool {
+        self.items.iter().any(PlaylistType::is_decade_header)
+    }
+    pub fn genre_headers(&self) -> Vec<(String, usize)> {
+        self.items
+            .iter()
+            .filter_map(|it| {
+                if let PlaylistType::GenreHeader(name, count) = it {
+                    Some((name.clone(), *count))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+    pub fn decade_headers(&self) -> Vec<(String, usize)> {
+        self.items
+            .iter()
+            .filter_map(|it| {
+                if let PlaylistType::DecadeHeader(name, count) = it {
+                    Some((name.clone(), *count))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+    pub fn genres(&self) -> Vec<String> {
+        let mut genres: Vec<String> = self
+            .items
+            .iter()
+            .filter_map(|it| {
+                if let PlaylistType::ByGenre(album) = it {
+                    album.genre.clone()
+                } else {
+                    None
+                }
+            })
+            .collect();
+        genres.sort();
+        genres.dedup();
+        genres
+    }
+    pub fn decades(&self) -> Vec<String> {
+        let mut decades: Vec<String> = self
+            .items
+            .iter()
+            .filter_map(|it| {
+                if let PlaylistType::ByDecade(album) = it {
+                    album
+                        .released
+                        .map(|r| format!("{}s", r.format("%Y").to_string()[..3].to_string() + "0"))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        decades.sort();
+        decades.dedup();
+        decades.reverse();
+        decades
+    }
 }
 
 impl PlaylistType {
@@ -114,5 +191,21 @@ impl PlaylistType {
     #[must_use]
     pub const fn is_liked(&self) -> bool {
         matches!(*self, Self::Liked(_))
+    }
+    #[must_use]
+    pub const fn is_by_genre(&self) -> bool {
+        matches!(*self, Self::ByGenre(_))
+    }
+    #[must_use]
+    pub const fn is_by_decade(&self) -> bool {
+        matches!(*self, Self::ByDecade(_))
+    }
+    #[must_use]
+    pub const fn is_genre_header(&self) -> bool {
+        matches!(*self, Self::GenreHeader(_, _))
+    }
+    #[must_use]
+    pub const fn is_decade_header(&self) -> bool {
+        matches!(*self, Self::DecadeHeader(_, _))
     }
 }
