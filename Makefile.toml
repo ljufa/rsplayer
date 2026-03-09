@@ -1,7 +1,7 @@
 [env]
 # ram disk
-CARGO_TARGET_DIR = "/dev/shm/cargo_target"
-# CARGO_TARGET_DIR = "target"
+# CARGO_TARGET_DIR = "/dev/shm/cargo_target"
+CARGO_TARGET_DIR = "target"
 
 # RPI_HOST = "192.168.5.3"
 # TARGET = "arm-unknown-linux-gnueabihf"
@@ -10,7 +10,7 @@ RPI_HOST = "192.168.5.4"
 TARGET = "aarch64-unknown-linux-gnu"
 # TARGET = "x86_64-unknown-linux-gnu"
 
-RELEASE_VERSION = "1.8.65"
+RELEASE_VERSION = "1.9.0"
 RELEASE_BRANCH = "main_public"
 
 [config]
