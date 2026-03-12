@@ -1,4 +1,6 @@
 pub mod album_repository;
+pub mod loudness_repository;
+pub mod loudness_service;
 pub mod metadata_service;
 pub mod play_statistic_repository;
 pub mod playlist_service;

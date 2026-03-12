@@ -18,6 +18,8 @@ use album_repository::AlbumRepository;
 use rsplayer_config::Configuration;
 use rsplayer_hardware::audio_device::audio_service::AudioInterfaceService;
 use rsplayer_metadata::album_repository;
+use rsplayer_metadata::loudness_repository::LoudnessRepository;
+use rsplayer_metadata::loudness_service::LoudnessService;
 use rsplayer_metadata::metadata_service::MetadataService;
 use rsplayer_metadata::play_statistic_repository::PlayStatisticsRepository;
 use rsplayer_metadata::playlist_service::PlaylistService;
@@ -108,11 +110,21 @@ async fn main() {
 
     let (state_changes_tx, _) = broadcast::channel(20);
 
+    let loudness_repository = Arc::new(LoudnessRepository::default());
+    let loudness_service = LoudnessService::new(
+        loudness_repository.clone(),
+        song_repository.clone(),
+        config.get_settings().metadata_settings.music_directory.clone(),
+    );
+    loudness_service.start();
+    info!("Loudness scan service started.");
+
     let player_service = Arc::new(PlayerService::new(
         &config.get_settings(),
         metadata_service.clone(),
         queue_service.clone(),
         state_changes_tx.clone(),
+        loudness_service,
     ));
     info!("Player service successfully created.");
 
@@ -164,6 +176,7 @@ async fn main() {
                     queue_service.clone(),
                     album_repository.clone(),
                     song_repository.clone(),
+                    loudness_repository.clone(),
                     config.clone(),
                     player_commands_rx,
                     state_changes_tx.clone()))

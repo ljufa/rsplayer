@@ -25,7 +25,7 @@ use api_models::{
     common::{to_database_key, MetadataLibraryItem},
     player::Song,
     settings::MetadataStoreSettings,
-    stat::PlayItemStatistics,
+    stat::{LibraryStats, PlayItemStatistics},
     state::StateChangeEvent,
 };
 
@@ -98,6 +98,58 @@ impl MetadataService {
             .filter_map(|stat| self.song_repository.find_by_id(&stat.play_item_id))
             .take(limit)
             .collect()
+    }
+
+    pub fn get_library_stats(&self) -> LibraryStats {
+        let all_songs: Vec<Song> = self.song_repository.find_all();
+        let total_songs = all_songs.len();
+        let total_duration_secs = all_songs.iter().filter_map(|s| s.time).map(|d| d.as_secs()).sum();
+
+        // Genre counts from songs (not albums, so untagged-album songs are included)
+        let mut genre_map: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        for song in &all_songs {
+            if let Some(genre) = &song.genre {
+                *genre_map.entry(genre.clone()).or_insert(0) += 1;
+            }
+        }
+        let mut top_genres: Vec<(String, usize)> = genre_map.into_iter().collect();
+        top_genres.sort_by(|a, b| b.1.cmp(&a.1));
+        top_genres.truncate(10);
+
+        let total_albums = self.album_repository.find_all().len();
+        let total_artists = self.album_repository.find_all_album_artists().len();
+
+        // Decade distribution from albums
+        let albums_by_decade: Vec<(String, usize)> = self
+            .album_repository
+            .find_all_by_decade(usize::MAX)
+            .into_iter()
+            .map(|(decade, albums)| (decade, albums.len()))
+            .collect();
+
+        let all_stats = self.statistic_repository.get_all();
+        let total_plays = all_stats.iter().map(|s| s.play_count.max(0) as u32).sum();
+        let unique_songs_played = all_stats
+            .iter()
+            .filter(|s| s.play_count > 0 && !s.play_item_id.starts_with("radio_uuid_"))
+            .count();
+        let liked_songs = all_stats
+            .iter()
+            .filter(|s| s.liked_count > 0 && !s.play_item_id.starts_with("radio_uuid_"))
+            .count();
+
+        LibraryStats {
+            total_songs,
+            total_albums,
+            total_artists,
+            total_duration_secs,
+            total_plays,
+            unique_songs_played,
+            liked_songs,
+            songs_loudness_analysed: 0, // filled by the command handler
+            top_genres,
+            albums_by_decade,
+        }
     }
 
     pub fn like_media_item(&self, media_item_id: &str) {
@@ -282,29 +334,30 @@ impl MetadataService {
     }
 
     fn add_songs_to_db(&self, files: Vec<String>, state_changes_sender: &Sender<StateChangeEvent>) -> u32 {
-        let mut count = 0;
-        for file in files {
+        use rayon::prelude::*;
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        let count = AtomicU32::new(0);
+        files.par_iter().for_each(|file| {
+            let c = count.fetch_add(1, Ordering::Relaxed);
             state_changes_sender
                 .send(StateChangeEvent::MetadataSongScanned(format!(
-                    "Scanning: {count}. {file}"
+                    "Scanning: {c}. {file}"
                 )))
-                .expect("Status send failed");
-            {
-                if let Err(e) = self.scan_single_file(Path::new(&file)) {
-                    log::error!("Unable to scan file {file}. Error: {e}");
-                    self.ignored_files_db
-                        .insert(self.full_path_to_database_key(&file), e.to_string().as_bytes())
-                        .expect("DB error");
-                }
+                .ok();
+            if let Err(e) = self.scan_single_file(Path::new(file)) {
+                log::error!("Unable to scan file {file}. Error: {e}");
+                self.ignored_files_db
+                    .insert(self.full_path_to_database_key(file), e.to_string().as_bytes())
+                    .expect("DB error");
             }
-            if count % 100 == 0 {
+            if c % 100 == 0 {
                 self.song_repository.flush();
             }
-            count += 1;
-        }
+        });
         self.song_repository.flush();
         _ = self.ignored_files_db.flush();
-        count
+        count.load(Ordering::Relaxed)
     }
 
     fn scan_single_file(&self, file_path: &Path) -> Result<()> {

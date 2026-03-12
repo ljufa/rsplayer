@@ -147,6 +147,9 @@ pub struct DspHandle {
     /// Current DSP settings — shared so `update_settings` on the command
     /// thread is immediately visible to the playback thread's `rebuild`.
     settings: Arc<Mutex<DspSettings>>,
+    /// Per-song loudness normalization gain in dB.  Set by the playback loop
+    /// before each track starts; applied on top of user EQ filters in `rebuild`.
+    pub normalization_gain_db: Arc<Mutex<Option<f64>>>,
 }
 
 impl DspHandle {
@@ -157,6 +160,13 @@ impl DspHandle {
         if let Ok(settings) = self.settings.lock() {
             let mut eq = Equalizer::new(channels);
             apply_filters_with_settings(&settings, &mut eq, rate);
+            if let Ok(gain_opt) = self.normalization_gain_db.lock() {
+                if let Some(gain_db) = *gain_opt {
+                    if let Err(e) = eq.add_global_gain_filter(gain_db) {
+                        warn!("Failed to apply normalization gain: {e}");
+                    }
+                }
+            }
             let active = eq.has_filters();
             if let Ok(mut slot) = self.pending.lock() {
                 *slot = Some(eq);
@@ -189,6 +199,7 @@ impl DspProcessor {
                 pending: Arc::new(Mutex::new(None)),
                 has_filters: Arc::new(AtomicBool::new(false)),
                 settings: Arc::new(Mutex::new(dsp_settings)),
+                normalization_gain_db: Arc::new(Mutex::new(None)),
             },
         }
     }
@@ -200,6 +211,7 @@ impl DspProcessor {
             pending: self.handle.pending.clone(),
             has_filters: self.handle.has_filters.clone(),
             settings: self.handle.settings.clone(),
+            normalization_gain_db: self.handle.normalization_gain_db.clone(),
         }
     }
 
@@ -216,6 +228,13 @@ impl DspProcessor {
             );
             let mut eq = Equalizer::new(self.channels);
             apply_filters_with_settings(dsp_settings, &mut eq, self.rate);
+            if let Ok(gain_opt) = self.handle.normalization_gain_db.lock() {
+                if let Some(gain_db) = *gain_opt {
+                    if let Err(e) = eq.add_global_gain_filter(gain_db) {
+                        warn!("Failed to apply normalization gain: {e}");
+                    }
+                }
+            }
             let active = eq.has_filters();
             if let Ok(mut slot) = self.handle.pending.lock() {
                 *slot = Some(eq);

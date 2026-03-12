@@ -45,6 +45,10 @@ pub struct RsPlayerSettings {
     pub dsp_settings: DspSettings,
     #[serde(default = "default_vu_meter_enabled")]
     pub vu_meter_enabled: bool,
+    #[serde(default)]
+    pub loudness_normalization_enabled: bool,
+    #[serde(default = "default_normalization_target_lufs")]
+    pub loudness_normalization_target_lufs: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
@@ -163,6 +167,9 @@ const fn default_dsp_enabled() -> bool {
 const fn default_vu_meter_enabled() -> bool {
     true
 }
+const fn default_normalization_target_lufs() -> f64 {
+    -18.0
+}
 
 impl Default for RsPlayerSettings {
     fn default() -> Self {
@@ -174,6 +181,8 @@ impl Default for RsPlayerSettings {
             alsa_buffer_size: None,
             dsp_settings: DspSettings::default(),
             vu_meter_enabled: default_vu_meter_enabled(),
+            loudness_normalization_enabled: false,
+            loudness_normalization_target_lufs: default_normalization_target_lufs(),
         }
     }
 }

@@ -119,6 +119,54 @@ impl AlbumRepository {
         albums.truncate(limit);
         albums
     }
+    pub fn find_all_by_genre(&self, limit_per_genre: usize) -> Vec<(String, Vec<Album>)> {
+        let albums = self.find_all();
+        let mut genre_map: std::collections::HashMap<String, Vec<Album>> = std::collections::HashMap::new();
+        for album in albums {
+            if let Some(ref genre) = album.genre {
+                if !genre.is_empty() {
+                    genre_map.entry(genre.clone()).or_default().push(album);
+                }
+            }
+        }
+        let mut result: Vec<(String, Vec<Album>)> = genre_map
+            .into_iter()
+            .filter(|(_, albums)| albums.len() >= 2)
+            .map(|(genre, mut albums)| {
+                albums.sort_by(|a, b| b.added.cmp(&a.added));
+                albums.truncate(limit_per_genre);
+                (genre, albums)
+            })
+            .collect();
+        result.sort_by(|a, b| a.0.cmp(&b.0));
+        result
+    }
+
+    pub fn find_all_by_decade(&self, limit_per_decade: usize) -> Vec<(String, Vec<Album>)> {
+        let albums = self.find_all();
+        let mut decade_map: std::collections::HashMap<String, Vec<Album>> = std::collections::HashMap::new();
+        for album in albums {
+            if let Some(released) = album.released {
+                let year = released.format("%Y").to_string();
+                if year.len() == 4 {
+                    let decade = format!("{}0s", &year[..3]);
+                    decade_map.entry(decade).or_default().push(album);
+                }
+            }
+        }
+        let mut result: Vec<(String, Vec<Album>)> = decade_map
+            .into_iter()
+            .filter(|(_, albums)| albums.len() >= 2)
+            .map(|(decade, mut albums)| {
+                albums.sort_by(|a, b| b.released.cmp(&a.released));
+                albums.truncate(limit_per_decade);
+                (decade, albums)
+            })
+            .collect();
+        result.sort_by(|a, b| b.0.cmp(&a.0));
+        result
+    }
+
     pub fn find_by_artist(&self, artist: &str) -> Vec<Album> {
         let normalized_query = normalize_name(artist);
         self.albums_db

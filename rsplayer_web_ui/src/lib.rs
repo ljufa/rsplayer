@@ -32,6 +32,7 @@ const MUSIC_LIBRARY_FILES: &str = "files";
 const MUSIC_LIBRARY_ARTISTS: &str = "artists";
 const MUSIC_LIBRARY_RADIO: &str = "radio";
 const MUSIC_LIBRARY_PL_STATIC: &str = "playlists";
+const MUSIC_LIBRARY_STATS: &str = "stats";
 
 // ------ ------
 //     Model
@@ -90,6 +91,7 @@ pub enum Msg {
     MusicLibraryFiles(page::music_library_files::Msg),
     MusicLibraryArtists(page::music_library_artists::Msg),
     MusicLibraryRadio(page::music_library_radio::Msg),
+    LibraryStats(page::library_stats::Msg),
     Ignore,
 
     SendUserCommand(UserCommand),
@@ -156,6 +158,7 @@ enum Page {
     MusicLibraryFiles(page::music_library_files::Model),
     MusicLibraryArtists(page::music_library_artists::Model),
     MusicLibraryRadio(page::music_library_radio::Model),
+    LibraryStats(page::library_stats::Model),
     NotFound,
 }
 
@@ -186,6 +189,10 @@ impl Page {
                 MUSIC_LIBRARY_PL_STATIC => Self::MusicLibraryStaticPlaylist(page::music_library_static_playlist::init(
                     url,
                     &mut orders.proxy(Msg::MusicLibraryStaticPlaylist),
+                )),
+                MUSIC_LIBRARY_STATS => Self::LibraryStats(page::library_stats::init(
+                    url,
+                    &mut orders.proxy(Msg::LibraryStats),
                 )),
                 _ => Self::NotFound,
             },
@@ -361,6 +368,11 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     &mut orders.proxy(Msg::MusicLibraryStaticPlaylist),
                 );
             }
+            if let Page::LibraryStats(_) = &model.page {
+                orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(
+                    MetadataCommand::QueryLibraryStats,
+                )));
+            }
         }
 
         Msg::WebSocketClosed(close_event) => {
@@ -401,6 +413,7 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     | Page::MusicLibraryStaticPlaylist(_)
                     | Page::MusicLibraryArtists(_)
                     | Page::MusicLibraryRadio(_)
+                    | Page::LibraryStats(_)
             ) {
                 model.library_nav_open = false;
             }
@@ -656,6 +669,12 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     model,
                     &mut orders.proxy(Msg::MusicLibraryRadio),
                 );
+            } else if let Page::LibraryStats(model) = &mut model.page {
+                page::library_stats::update(
+                    page::library_stats::Msg::StatusChangeEventReceived(chg_ev),
+                    model,
+                    &mut orders.proxy(Msg::LibraryStats),
+                );
             }
         }
 
@@ -718,6 +737,14 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     _ = model.web_socket.send_string(&serde_json::to_string(cmd).unwrap());
                 }
                 page::music_library_radio::update(msg, music_lib_model, &mut orders.proxy(Msg::MusicLibraryRadio));
+            }
+        }
+        Msg::LibraryStats(msg) => {
+            if let Page::LibraryStats(stats_model) = &mut model.page {
+                if let page::library_stats::Msg::SendUserCommand(cmd) = &msg {
+                    _ = model.web_socket.send_string(&serde_json::to_string(cmd).unwrap());
+                }
+                page::library_stats::update(msg, stats_model, &mut orders.proxy(Msg::LibraryStats));
             }
         }
 
@@ -1163,6 +1190,7 @@ fn view_content(main_model: &Model, base_url: &Url) -> Node<Msg> {
             Page::MusicLibraryArtists(model) =>
                 page::music_library_artists::view(model).map_msg(Msg::MusicLibraryArtists),
             Page::MusicLibraryRadio(model) => page::music_library_radio::view(model).map_msg(Msg::MusicLibraryRadio),
+            Page::LibraryStats(model) => page::library_stats::view(model).map_msg(Msg::LibraryStats),
         }
     ]
 }
@@ -1256,6 +1284,12 @@ fn view_navigation_tabs(page: &Page, library_nav_open: bool) -> Node<Msg> {
                     i![C!["material-icons"], "radio"],
                     span!["Radio"],
                     attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_RADIO)},
+                ],
+                a![
+                    C!["app-nav__sublink", IF!(page_name == "LibraryStats" => "is-active")],
+                    i![C!["material-icons"], "bar_chart"],
+                    span!["Statistics"],
+                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_STATS)},
                 ],
             ]
         ),

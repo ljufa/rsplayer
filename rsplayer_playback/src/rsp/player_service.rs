@@ -12,6 +12,7 @@ use api_models::{
     settings::{DspSettings, RsPlayerSettings, Settings},
     state::{PlayerState, StateChangeEvent},
 };
+use rsplayer_metadata::loudness_service::LoudnessService;
 use rsplayer_metadata::metadata_service::MetadataService;
 use rsplayer_metadata::queue_service::QueueService;
 
@@ -41,6 +42,7 @@ pub struct PlayerService {
     /// `&self` / `Arc<PlayerService>` interior mutability — the playback thread
     /// never locks this.  `None` when DSP is disabled in settings.
     dsp_processor: Arc<Mutex<Option<DspProcessor>>>,
+    loudness_service: Arc<LoudnessService>,
 }
 
 const LAST_SONG_PAUSED_KEY: &str = "last_song_paused";
@@ -54,6 +56,7 @@ impl PlayerService {
         metadata_service: Arc<MetadataService>,
         queue_service: Arc<QueueService>,
         state_changes_tx: Sender<StateChangeEvent>,
+        loudness_service: Arc<LoudnessService>,
     ) -> Self {
         let db = sled::open("player_state").expect("Failed to open queue db");
         let state_db = db.clone();
@@ -156,6 +159,7 @@ impl PlayerService {
             music_dir: settings.metadata_settings.music_directory.clone(),
             local_browser_playback: settings.local_browser_playback,
             dsp_processor,
+            loudness_service,
         };
         let last_played_song_progress = ps.get_last_played_song_time();
         if last_played_song_progress > 0 {
@@ -251,6 +255,7 @@ impl PlayerService {
         let dsp_handle = self.dsp_processor.lock().ok().and_then(|g| g.as_ref().map(DspProcessor::handle));
         let current_volume = self.current_volume.clone();
         let vu_meter_enabled = self.rsp_settings.vu_meter_enabled;
+        let loudness_service = self.loudness_service.clone();
         let is_multi_core_platform = core_affinity::get_core_ids().is_some_and(|ids| ids.len() > 1);
         let local_browser_playback = self.local_browser_playback;
         let prio = if is_multi_core_platform {
@@ -262,6 +267,7 @@ impl PlayerService {
             .name("playback".to_string())
             .priority(prio)
             .spawn(move |prio| {
+                loudness_service.set_playback_active(true);
                 const MAX_RETRIES: i32 = 10;
                 if prio.is_ok() {
                     info!("Playback thread started with priority {playback_thread_prio:?}");
@@ -278,7 +284,7 @@ impl PlayerService {
                     }
                 }
                 let mut retry_count = 0;
-                loop {
+                let result = loop {
 
                     let Some(song) = queue.get_current_song() else {
                         changes_tx
@@ -297,6 +303,19 @@ impl PlayerService {
                     changes_tx
                         .send(StateChangeEvent::PlaybackStateEvent(PlayerState::PLAYING))
                         .expect("msg send failed");
+                    if let Some(ref dsp) = dsp_handle {
+                        let gain = if rsp_settings.loudness_normalization_enabled {
+                            loudness_service.get_loudness(&song.file).map(|lufs_hundredths| {
+                                let lufs = f64::from(lufs_hundredths) / 100.0;
+                                rsp_settings.loudness_normalization_target_lufs - lufs
+                            })
+                        } else {
+                            None
+                        };
+                        if let Ok(mut g) = dsp.normalization_gain_db.lock() {
+                            *g = gain;
+                        }
+                    }
                     let vu_meter = if vu_meter_enabled {
                         Some(VUMeter::new(current_volume.clone(), changes_tx.clone()))
                     } else {
@@ -356,7 +375,9 @@ impl PlayerService {
                     if !queue.move_current_to_next_song() {
                         break PlaybackResult::QueueFinished;
                     }
-                }
+                };
+                loudness_service.set_playback_active(false);
+                result
             })
             .unwrap()
     }

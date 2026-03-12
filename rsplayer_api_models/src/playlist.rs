@@ -48,6 +48,8 @@ pub enum PlaylistType {
     RecentlyAdded(Album),
     MostPlayed(Playlist),
     Liked(Playlist),
+    ByGenre(Album),
+    ByDecade(Album),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
@@ -88,6 +90,47 @@ impl Playlists {
     pub fn has_liked(&self) -> bool {
         self.items.iter().any(PlaylistType::is_liked)
     }
+    pub fn has_by_genre(&self) -> bool {
+        self.items.iter().any(PlaylistType::is_by_genre)
+    }
+    pub fn has_by_decade(&self) -> bool {
+        self.items.iter().any(PlaylistType::is_by_decade)
+    }
+    pub fn genres(&self) -> Vec<String> {
+        let mut genres: Vec<String> = self
+            .items
+            .iter()
+            .filter_map(|it| {
+                if let PlaylistType::ByGenre(album) = it {
+                    album.genre.clone()
+                } else {
+                    None
+                }
+            })
+            .collect();
+        genres.sort();
+        genres.dedup();
+        genres
+    }
+    pub fn decades(&self) -> Vec<String> {
+        let mut decades: Vec<String> = self
+            .items
+            .iter()
+            .filter_map(|it| {
+                if let PlaylistType::ByDecade(album) = it {
+                    album
+                        .released
+                        .map(|r| format!("{}s", r.format("%Y").to_string()[..3].to_string() + "0"))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        decades.sort();
+        decades.dedup();
+        decades.reverse();
+        decades
+    }
 }
 
 impl PlaylistType {
@@ -114,5 +157,13 @@ impl PlaylistType {
     #[must_use]
     pub const fn is_liked(&self) -> bool {
         matches!(*self, Self::Liked(_))
+    }
+    #[must_use]
+    pub const fn is_by_genre(&self) -> bool {
+        matches!(*self, Self::ByGenre(_))
+    }
+    #[must_use]
+    pub const fn is_by_decade(&self) -> bool {
+        matches!(*self, Self::ByDecade(_))
     }
 }

@@ -1,7 +1,7 @@
 [env]
 # ram disk
-# CARGO_TARGET_DIR = "/dev/shm/cargo_target"
-CARGO_TARGET_DIR = "target"
+CARGO_TARGET_DIR = "/dev/shm/cargo_target"
+# CARGO_TARGET_DIR = "target"
 
 # RPI_HOST = "192.168.5.3"
 # TARGET = "arm-unknown-linux-gnueabihf"
@@ -10,7 +10,7 @@ RPI_HOST = "192.168.5.4"
 TARGET = "aarch64-unknown-linux-gnu"
 # TARGET = "x86_64-unknown-linux-gnu"
 
-RELEASE_VERSION = "1.8.64"
+RELEASE_VERSION = "1.8.65"
 RELEASE_BRANCH = "main_public"
 
 [config]
@@ -198,7 +198,7 @@ script = "sudo pkill -9 rsplayer || true"
 
 [tasks.run_local]
 dependencies = ["kill_local"]
-env = { "RUST_LOG" = "rsplayer=info,rsplayer_playback=debug,warp=info", "RUST_BACKTRACE" = "full", "PORT" = "8000", "TLS_PORT" = "8443", "TLS_CERT_PATH" = "self.crt", "TLS_CERT_KEY_PATH" = "self.key" }
+env = { "RUST_LOG" = "rsplayer=info,rsplayer_playback=debug,rsplayer_metadata=debug,warp=info", "RUST_BACKTRACE" = "full", "PORT" = "8000", "TLS_PORT" = "8443", "TLS_CERT_PATH" = "self.crt", "TLS_CERT_KEY_PATH" = "self.key" }
 cwd = ".run"
 command = "cargo"
 args = ["run"]
