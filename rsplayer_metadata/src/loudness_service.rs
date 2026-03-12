@@ -39,7 +39,7 @@ pub struct LoudnessService {
 
 impl LoudnessService {
     pub fn new(repository: Arc<LoudnessRepository>, song_repository: Arc<SongRepository>, music_dir: String) -> Arc<Self> {
-        let cores = available_parallelism().map_or(1, |n| n.get());
+        let cores = available_parallelism().map_or(1, std::num::NonZero::get);
         let threads = (cores / 2).max(1);
         info!("Loudness scan: using {threads} threads ({cores} cores available)");
         let thread_pool = rayon::ThreadPoolBuilder::new()
@@ -125,20 +125,17 @@ impl LoudnessService {
 
                 let full_path = format!("{}/{}", self.music_dir, file_key);
                 debug!("Loudness scan: analysing {file_key}");
-                match measure_integrated_loudness(Path::new(&full_path)) {
-                    Some(lufs) => {
-                        let stored = (lufs * 100.0).round() as i32;
-                        debug!("Loudness scan: {file_key} => {lufs:.2} LUFS");
-                        self.repository.save_loudness(file_key, stored);
-                    }
-                    None => {
-                        warn!("Loudness scan: no loudness for {file_key} (DSD or unsupported)");
-                        self.repository.save_unavailable(file_key);
-                    }
+                if let Some(lufs) = measure_integrated_loudness(Path::new(&full_path)) {
+                    let stored = (lufs * 100.0).round() as i32;
+                    debug!("Loudness scan: {file_key} => {lufs:.2} LUFS");
+                    self.repository.save_loudness(file_key, stored);
+                } else {
+                    warn!("Loudness scan: no loudness for {file_key} (DSD or unsupported)");
+                    self.repository.save_unavailable(file_key);
                 }
 
                 let c = scanned.fetch_add(1, Ordering::Relaxed) + 1;
-                if c % 50 == 0 {
+                if c.is_multiple_of(50) {
                     info!("Loudness scan: {c} songs done so far");
                     self.repository.flush();
                 }
@@ -208,7 +205,7 @@ fn measure_from_probed(probed: &mut ProbeResult) -> Option<f64> {
         let spec = *audio_buf.spec();
         let frames = audio_buf.frames();
         let cap = audio_buf.capacity() as u64;
-        if sample_buf.as_ref().map_or(true, |sb| sb.capacity() < frames) {
+        if sample_buf.as_ref().is_none_or(|sb| sb.capacity() < frames) {
             sample_buf = Some(SampleBuffer::<f32>::new(cap, spec));
         }
         let sbuf = sample_buf.as_mut().unwrap();

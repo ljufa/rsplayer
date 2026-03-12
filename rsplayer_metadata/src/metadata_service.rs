@@ -351,7 +351,7 @@ impl MetadataService {
                     .insert(self.full_path_to_database_key(file), e.to_string().as_bytes())
                     .expect("DB error");
             }
-            if c % 100 == 0 {
+            if c.is_multiple_of(100) {
                 self.song_repository.flush();
             }
         });

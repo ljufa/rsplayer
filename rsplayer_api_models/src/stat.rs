@@ -14,9 +14,9 @@ pub struct LibraryStats {
     pub liked_songs: usize,
     /// Songs that have been analysed for loudness.
     pub songs_loudness_analysed: usize,
-    /// (genre_name, song_count), sorted by count descending.
+    /// (`genre_name`, `song_count`), sorted by count descending.
     pub top_genres: Vec<(String, usize)>,
-    /// (decade_label, album_count), sorted chronologically.
+    /// (`decade_label`, `album_count`), sorted chronologically.
     pub albums_by_decade: Vec<(String, usize)>,
 }
 

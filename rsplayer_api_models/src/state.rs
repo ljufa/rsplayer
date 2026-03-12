@@ -47,9 +47,9 @@ pub enum StateChangeEvent {
     ErrorEvent(String),
     PlaylistsEvent(Playlists),
     PlaylistItemsEvent(Vec<Song>, usize),
-    /// Albums for a specific genre, returned on demand. (genre_name, albums)
+    /// Albums for a specific genre, returned on demand. (`genre_name`, albums)
     GenreAlbumsEvent(String, Vec<Album>),
-    /// Albums for a specific decade, returned on demand. (decade_label, albums)
+    /// Albums for a specific decade, returned on demand. (`decade_label`, albums)
     DecadeAlbumsEvent(String, Vec<Album>),
     MetadataSongScanStarted,
     MetadataSongScanned(String),

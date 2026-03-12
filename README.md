@@ -31,6 +31,8 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - **Web UI Themes**: Support for customizable themes and dark/light modes.
 - **Synchronized Lyrics**: Real-time synchronized lyrics support via LRCLIB integration.
 - **Playlists by genre, year**: Browse and create playlists based on genre or year.
+- **Loudness Normalization**: Per-song EBU R128 loudness normalization, toggleable from the settings page. Analysis runs automatically in the background while playback is stopped and results are stored permanently.
+- **Library Statistics**: Dedicated statistics page showing song/album/artist counts, total duration, play history, top genres, albums by decade, and loudness analysis progress.
 
 ### Planned features
 - **Expanded Audio Codec Support**: Compatibility with a wider range of audio codecs.
@@ -46,7 +48,6 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - **MPRIS D-Bus integration**: Native Linux desktop media key and player integration.
 - **Community plugin framework**: Extensible architecture for third-party plugins.
 - **Improve playlists management create/modify/delete items and playlists**: Items can be added/removed to/from playlist from everywhere.
-- **Audio normalization**: Add option for user to enable auto loudness level normalization (maybe by DSP filters)
 
 
 ### Planned code improvements

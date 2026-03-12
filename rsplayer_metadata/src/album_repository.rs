@@ -49,7 +49,7 @@ pub(crate) fn normalize_name(s: &str) -> String {
         .collect()
 }
 
-/// ID3v1 genre lookup table. Index = numeric genre code, value = genre name.
+/// `ID3v1` genre lookup table. Index = numeric genre code, value = genre name.
 /// See <https://en.wikipedia.org/wiki/List_of_ID3v1_genres>
 const ID3V1_GENRES: &[&str] = &[
     "Blues",
@@ -247,7 +247,7 @@ const ID3V1_GENRES: &[&str] = &[
     "Psybient",
 ];
 
-/// Resolve a raw genre string that might be an ID3v1 numeric code like "(17)" or "17".
+/// Resolve a raw genre string that might be an `ID3v1` numeric code like "(17)" or "17".
 fn resolve_id3v1_genre(raw: &str) -> Option<&'static str> {
     let trimmed = raw.trim();
     // Match "(N)" or just "N"
@@ -370,9 +370,7 @@ impl AlbumRepository {
         for album in albums {
             if let Some(ref raw_genre) = album.genre {
                 // Resolve ID3v1 numeric codes like "(17)" → "Rock"
-                let genre_str = resolve_id3v1_genre(raw_genre)
-                    .map(String::from)
-                    .unwrap_or_else(|| raw_genre.clone());
+                let genre_str = resolve_id3v1_genre(raw_genre).map_or_else(|| raw_genre.clone(), String::from);
 
                 if genre_str.is_empty() {
                     continue;

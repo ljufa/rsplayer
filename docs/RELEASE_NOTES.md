@@ -1,5 +1,32 @@
 # Release Notes
 
+## v1.9.5 — 2026-03-12
+
+### New Features & Improvements
+
+#### EBU R128 Loudness Normalization
+Per-song loudness normalization based on the EBU R128 integrated loudness standard is now available.
+
+- **Toggleable in Settings**: Enable/disable normalization and configure the target loudness level (LUFS) on the Settings page under the new loudness normalization section.
+- **Background Analysis**: Each song is measured once using the EBU R128 standard. Analysis runs automatically in a dedicated background thread pool (capped at half the available CPU cores) only while playback is stopped, so it never competes with audio output.
+- **Persistent Storage**: Loudness values are stored in a dedicated sled database (`loudness.db`) separately from the main metadata store. Results survive restarts and rescans — each file is only measured once.
+- **Gain Applied via DSP**: At playback time, the per-song gain is applied through the existing CamillaDSP pipeline, composing correctly with any user EQ filters.
+
+#### Library Statistics Page
+A new **Library Statistics** page is available at `#/library/stats` (accessible from the library navigation menu via the bar chart icon).
+
+- **Library summary**: Total songs, albums, artists, and cumulative library duration.
+- **Playback stats**: Total play count, unique songs played, and liked songs count.
+- **Loudness analysis progress**: Shows how many songs have been analysed with a progress bar and percentage.
+- **Top Genres**: Horizontal bar chart of the most represented genres in your library.
+- **Albums by Decade**: Horizontal bar chart of album distribution across decades.
+
+#### UI Readability
+- **Semi-transparent dark backdrop** added to the Settings and Library Statistics pages so all labels, headings, and text remain legible when an album cover is displayed in the background behind them.
+- **Adaptive track title font size** on the player page: shorter titles use a larger font (`is-1`) and long titles scale down (`is-2` / `is-3`) to avoid overflow.
+
+---
+
 ## v1.9.0 — 2026-03-08
 
 ### New Features & Improvements

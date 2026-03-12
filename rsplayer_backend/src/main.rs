@@ -114,7 +114,7 @@ async fn main() {
     let loudness_service = LoudnessService::new(
         loudness_repository.clone(),
         song_repository.clone(),
-        config.get_settings().metadata_settings.music_directory.clone(),
+        config.get_settings().metadata_settings.music_directory,
     );
     loudness_service.start();
     info!("Loudness scan service started.");
