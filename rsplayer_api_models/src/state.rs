@@ -10,6 +10,7 @@ use crate::{
     common::{PlaybackMode, Volume},
     player::Song,
     playlist::{Album, PlaylistPage, Playlists},
+    stat::LibraryStats,
 };
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, Deserialize)]
@@ -62,6 +63,7 @@ pub enum StateChangeEvent {
     VUEvent(u8, u8),
     VuMeterEnabledEvent(bool),
     RSPlayerFirmwarePowerEvent(bool),
+    LibraryStatsEvent(LibraryStats),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

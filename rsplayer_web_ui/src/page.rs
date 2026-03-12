@@ -1,4 +1,5 @@
 pub mod home;
+pub mod library_stats;
 pub mod music_library_artists;
 pub mod music_library_files;
 pub mod music_library_radio;

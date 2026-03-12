@@ -106,7 +106,15 @@ fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Nod
             div![
                 C!["track-info", "has-text-centered"],
                 h1![
-                    C!["title", "is-1", "has-text-white"],
+                    C![
+                        "title",
+                        "has-text-white",
+                        match ps.title.as_ref().map_or(0, |t| t.len()) {
+                            0..=19 => "is-1",
+                            20..=31 => "is-2",
+                            _ => "is-3",
+                        }
+                    ],
                     ps.title.as_ref().map_or("NA", |f| f)
                 ],
                 ps.artist.as_ref().map_or_else(

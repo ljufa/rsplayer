@@ -26,6 +26,7 @@ use rsplayer_config::ArcConfiguration;
 use rsplayer_hardware::audio_device::audio_service::ArcAudioInterfaceSvc;
 use rsplayer_hardware::usb::ArcUsbService;
 use rsplayer_metadata::album_repository::AlbumRepository;
+use rsplayer_metadata::loudness_repository::LoudnessRepository;
 use rsplayer_metadata::metadata_service::MetadataService;
 use rsplayer_metadata::playlist_service::PlaylistService;
 use rsplayer_metadata::queue_service::QueueService;
@@ -40,6 +41,7 @@ pub async fn handle_user_commands(
     queue_service: Arc<QueueService>,
     album_repository: Arc<AlbumRepository>,
     song_repository: Arc<SongRepository>,
+    loudness_repository: Arc<LoudnessRepository>,
     config_store: ArcConfiguration,
     mut input_commands_rx: Receiver<UserCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
@@ -588,6 +590,13 @@ pub async fn handle_user_commands(
                 let favorites = metadata_service.get_favorite_radio_stations();
                 state_changes_sender
                     .send(StateChangeEvent::FavoriteRadioStations(favorites))
+                    .unwrap();
+            }
+            Metadata(MetadataCommand::QueryLibraryStats) => {
+                let mut stats = metadata_service.get_library_stats();
+                stats.songs_loudness_analysed = loudness_repository.count_analysed();
+                state_changes_sender
+                    .send(StateChangeEvent::LibraryStatsEvent(stats))
                     .unwrap();
             }
         }

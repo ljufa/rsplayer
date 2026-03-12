@@ -10,7 +10,7 @@ use gloo_console::{error, log};
 use gloo_file::futures::read_as_text;
 use gloo_file::File;
 use gloo_net::{http::Request, Error};
-use seed::{attrs, button, details, div, empty, h1, i, input, label, option, prelude::*, section, select, span, style, summary, C, IF};
+use seed::{a, attrs, button, details, div, empty, h1, i, input, label, option, p, prelude::*, section, select, span, style, summary, C, IF};
 use wasm_bindgen::JsCast;
 use web_sys::FileList;
 
@@ -54,6 +54,8 @@ pub enum Msg {
         // --- DSP ---
         ToggleDspEnabled,
         ToggleVuMeterEnabled,
+        ToggleLoudnessNormalization,
+        InputNormalizationTargetLufs(String),
         DspAddFilter,
         DspRemoveAllFilters,
         DspRemoveFilter(usize),
@@ -263,6 +265,15 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::ToggleVuMeterEnabled => {
             model.settings.rs_player_settings.vu_meter_enabled = !model.settings.rs_player_settings.vu_meter_enabled;
         }
+        Msg::ToggleLoudnessNormalization => {
+            model.settings.rs_player_settings.loudness_normalization_enabled =
+                !model.settings.rs_player_settings.loudness_normalization_enabled;
+        }
+        Msg::InputNormalizationTargetLufs(val) => {
+            if let Ok(v) = val.parse::<f64>() {
+                model.settings.rs_player_settings.loudness_normalization_target_lufs = v;
+            }
+        }
         Msg::DspAddFilter => {
             model.settings.rs_player_settings.dsp_settings.filters.push(FilterConfig {
                 filter: DspFilter::Peaking {
@@ -399,6 +410,10 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
     let settings = &model.settings;
     div![
+        style! {
+            St::Background => "rgba(0,0,0,0.72)",
+            St::BorderRadius => "8px",
+        },
         view_spinner_modal(model.waiting_response),
         // Appearance
         section![
@@ -500,6 +515,56 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
                         At::For => "vu_meter_enabled_cb"
                     }
                 ]
+            ],
+            div![
+                C!["field", "mt-5"],
+                ev(Ev::Click, |_| Msg::ToggleLoudnessNormalization),
+                input![
+                    C!["switch"],
+                    attrs! {
+                        At::Name => "loudness_norm_cb"
+                        At::Type => "checkbox"
+                        At::Checked => settings.rs_player_settings.loudness_normalization_enabled.as_at_value(),
+                    },
+                ],
+                label![
+                    C!["label","has-text-white"],
+                    "Enable loudness normalization (EBU R128)",
+                    attrs! {
+                        At::For => "loudness_norm_cb"
+                    }
+                ]
+            ],
+            IF!(settings.rs_player_settings.loudness_normalization_enabled =>
+                div![
+                    C!["field", "mt-2"],
+                    label![C!["label", "has-text-white"], "Target loudness (LUFS)"],
+                    div![
+                        C!["control"],
+                        input![
+                            C!["input", "is-small"],
+                            attrs! {
+                                At::Type => "number"
+                                At::Value => settings.rs_player_settings.loudness_normalization_target_lufs
+                                At::Step => "0.5"
+                                At::Min => "-30"
+                                At::Max => "-5"
+                            },
+                            input_ev(Ev::Change, Msg::InputNormalizationTargetLufs),
+                        ]
+                    ]
+                ]
+            ),
+            div![
+                C!["notification", "is-dark", "mt-4"],
+                i![C!["material-icons", "mr-2", "is-size-6"], "info"],
+                span![
+                    "Loudness analysis runs automatically in the background while playback is stopped. ",
+                    "Each song is measured once (EBU R128) and the result is stored permanently. ",
+                    "You can track progress on the ",
+                    a![attrs! { At::Href => "/#/library/stats" }, "Library Statistics"],
+                    " page."
+                ],
             ],
         ],
 
