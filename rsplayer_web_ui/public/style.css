@@ -376,6 +376,12 @@ body {
   font-weight: 700;
 }
 
+@media screen and (max-width: 480px) {
+  .track-info h1.title.is-1 { font-size: 1.75rem !important; }
+  .track-info h1.title.is-2 { font-size: 1.5rem !important; }
+  .track-info h1.title.is-3 { font-size: 1.25rem !important; }
+}
+
 /* Mobile: slightly larger touch targets */
 @media screen and (max-width: 480px) {
   .app-nav__link {
@@ -775,6 +781,10 @@ p.has-min-width {
 
 
 @media screen and (max-width: 700px) {
+  .track-info h1.title.is-1 { font-size: 2rem !important; }
+  .track-info h1.title.is-2 { font-size: 1.75rem !important; }
+  .track-info h1.title.is-3 { font-size: 1.5rem !important; }
+
   p.has-overflow-ellipsis-text {
     max-width: 160px;
   }
@@ -980,6 +990,9 @@ a:hover {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+.track-info .title { margin-bottom: 0.2rem !important; }
+.track-info .subtitle { margin-bottom: 0.1rem !important; }
 
 .player-controls {
   width: 100%;

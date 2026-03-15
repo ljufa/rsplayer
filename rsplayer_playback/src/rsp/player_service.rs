@@ -74,10 +74,20 @@ impl PlayerService {
         let last_known_time_clone = last_known_time.clone();
         let current_volume = Arc::new(AtomicU8::new(0));
         let current_volume_clone = current_volume.clone();
-        let dsp_processor = Arc::new(Mutex::new(if settings.rs_player_settings.dsp_settings.enabled {
-            Some(DspProcessor::new(settings.rs_player_settings.dsp_settings.clone()))
-        } else {
-            None
+        let dsp_processor = Arc::new(Mutex::new({
+            let rsp = &settings.rs_player_settings;
+            if rsp.dsp_settings.enabled || rsp.loudness_normalization_enabled {
+                // When only normalization is enabled (DSP off), create a processor
+                // with no EQ filters so the equalizer only applies the per-song gain.
+                let effective_dsp = if rsp.dsp_settings.enabled {
+                    rsp.dsp_settings.clone()
+                } else {
+                    DspSettings { enabled: false, filters: vec![] }
+                };
+                Some(DspProcessor::new(effective_dsp))
+            } else {
+                None
+            }
         }));
         let dsp_processor_clone = dsp_processor.clone();
 
@@ -303,19 +313,22 @@ impl PlayerService {
                     changes_tx
                         .send(StateChangeEvent::PlaybackStateEvent(PlayerState::PLAYING))
                         .expect("msg send failed");
+                    let track_loudness = loudness_service.get_loudness(&song.file);
+                    let normalization_gain_db: Option<f64> = if rsp_settings.loudness_normalization_enabled {
+                        track_loudness.map(|lufs_hundredths| {
+                            let lufs = f64::from(lufs_hundredths) / 100.0;
+                            rsp_settings.loudness_normalization_target_lufs - lufs
+                        })
+                    } else {
+                        None
+                    };
                     if let Some(ref dsp) = dsp_handle {
-                        let gain = if rsp_settings.loudness_normalization_enabled {
-                            loudness_service.get_loudness(&song.file).map(|lufs_hundredths| {
-                                let lufs = f64::from(lufs_hundredths) / 100.0;
-                                rsp_settings.loudness_normalization_target_lufs - lufs
-                            })
-                        } else {
-                            None
-                        };
                         if let Ok(mut g) = dsp.normalization_gain_db.lock() {
-                            *g = gain;
+                            *g = normalization_gain_db;
                         }
                     }
+                    #[allow(clippy::cast_possible_truncation)]
+                    let normalization_gain_hundredths = normalization_gain_db.map(|g| (g * 100.0) as i32);
                     let vu_meter = if vu_meter_enabled {
                         Some(VUMeter::new(current_volume.clone(), changes_tx.clone()))
                     } else {
@@ -339,6 +352,8 @@ impl PlayerService {
                             &changes_tx,
                             dsp_handle.as_ref(),
                             vu_meter,
+                            track_loudness,
+                            normalization_gain_hundredths,
                         )
                     };
                     match play_result {

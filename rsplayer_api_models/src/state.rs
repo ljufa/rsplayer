@@ -34,6 +34,17 @@ pub struct PlayerInfo {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub codec: Option<String>,
+
+    /// Measured integrated loudness of the track in hundredths of LUFS
+    /// (e.g. -1850 = -18.50 LUFS).  `None` if not yet analysed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub track_loudness_lufs: Option<i32>,
+
+    /// Normalization gain applied to this track in hundredths of dB
+    /// (e.g. 50 = +0.50 dB).  `None` when normalization is disabled or
+    /// loudness has not been measured yet.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub normalization_gain_db: Option<i32>,
 }
 
 #[allow(clippy::large_enum_variant)]

@@ -1203,6 +1203,7 @@ fn view_navigation_tabs(page: &Page, library_nav_open: bool) -> Node<Msg> {
             | Page::MusicLibraryStaticPlaylist(_)
             | Page::MusicLibraryArtists(_)
             | Page::MusicLibraryRadio(_)
+            | Page::LibraryStats(_)
     );
 
     nav![
@@ -1287,7 +1288,7 @@ fn view_navigation_tabs(page: &Page, library_nav_open: bool) -> Node<Msg> {
                 ],
                 a![
                     C!["app-nav__sublink", IF!(page_name == "LibraryStats" => "is-active")],
-                    i![C!["material-icons"], "bar_chart"],
+                    i![C!["material-icons"], "insert_chart"],
                     span!["Statistics"],
                     attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_STATS)},
                 ],

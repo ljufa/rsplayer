@@ -47,6 +47,8 @@ pub fn play_file(
     changes_tx: &Sender<StateChangeEvent>,
     dsp_handle: Option<&DspHandle>,
     vu_meter: Option<VUMeter>,
+    track_loudness_lufs: Option<i32>,
+    normalization_gain_db: Option<i32>,
 ) -> Result<PlaybackResult> {
     debug!("Playing file {path_str}");
     let mut hint = Hint::new();
@@ -111,6 +113,8 @@ pub fn play_file(
             audio_format_channels: chan_num,
             audio_format_rate: rate,
             codec: cd.map(|c| c.short_name.to_uppercase()),
+            track_loudness_lufs,
+            normalization_gain_db,
         }))
         .expect("msg send failed");
 

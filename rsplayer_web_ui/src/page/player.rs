@@ -143,16 +143,30 @@ fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Nod
                 ),
                 h3![
                     C!["subtitle", "is-5", "has-text-grey-light"],
-                    format!(
-                        "{}",
-                        player_info.map_or("NA".to_owned(), |pi| format!(
-                            "{} - {} / {} Hz",
-                            pi.codec.as_ref().map_or("", |c| c),
-                            pi.audio_format_bit.map_or(0, |af| af),
-                            pi.audio_format_rate.map_or(0, |r| r)
-                        ))
-                    )
+                    player_info.map_or("NA".to_owned(), |pi| format!(
+                        "{} - {} / {} Hz",
+                        pi.codec.as_ref().map_or("", |c| c),
+                        pi.audio_format_bit.map_or(0, |af| af),
+                        pi.audio_format_rate.map_or(0, |r| r)
+                    ))
                 ],
+                IF!(player_info.and_then(|pi| pi.track_loudness_lufs).is_some() =>
+                    h3![
+                        C!["subtitle", "is-6", "has-text-grey-light"],
+                        {
+                            let pi = player_info.unwrap();
+                            let lufs = pi.track_loudness_lufs.unwrap() as f64 / 100.0;
+                            match pi.normalization_gain_db {
+                                Some(gain_hundredths) => {
+                                    let gain = gain_hundredths as f64 / 100.0;
+                                    let effective = lufs + gain;
+                                    format!("{lufs:.1} LUFS  →  {gain:+.1} dB  →  {effective:.1} LUFS")
+                                }
+                                None => format!("{lufs:.1} LUFS"),
+                            }
+                        }
+                    ]
+                ),
             ]
         },
     )
