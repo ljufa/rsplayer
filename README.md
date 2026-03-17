@@ -128,7 +128,7 @@ See the [Hardware Integration documentation](https://ljufa.github.io/rsplayer/#/
 ## Contributing
 If you would like to contribute to RSPlayer, please submit a pull request or open an issue on the GitHub repository.
 
-For instructions on how to build the project from source, please see the [BUILD.md](BUILD.md) file.
+For instructions on how to build the project from source, please see the [Building from Source](https://ljufa.github.io/rsplayer/#/BUILD) documentation.
 
 ## License
 RSPlayer is licensed under the MIT license. See the LICENSE file for more information.
