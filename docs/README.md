@@ -98,7 +98,7 @@ journalctl -u rsplayer.service -f -n 300
 ```bash
 sudo systemctl restart rsplayer
 ```
-For configuration related troubleshooting you can find configuration file at `/opt/rsplayer/configuration.yaml`
+Configuration settings are managed through the web UI and stored internally in a database under `/opt/rsplayer/rsplayer.db/`. The environment variables (ports, TLS, logging) are configured in `/opt/rsplayer/env`.
 
 ## Music library scan finds no files from a mounted drive (Samba/NFS)
 
@@ -191,4 +191,3 @@ TODO
 ### TODO...
 
 -------
- 
