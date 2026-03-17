@@ -56,7 +56,19 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - Replace `warp` with `axum` or `actix`.
 - Reduce code duplication in UI with generic functions and macros.
 
-## Installation 
+## Supported Platforms
+
+RSPlayer runs on Linux. The Deb, RPM, and Arch packages include a systemd service for automatic startup.
+
+| Architecture | Rust Target | Binary | Deb | RPM | Arch | Docker |
+|---|---|---|---|---|---|---|
+| ARMv6 (Pi Zero/1) | `arm-unknown-linux-gnueabihf` | Yes | Yes | Yes | Yes | - |
+| ARMv7 (Pi 2-4) | `armv7-unknown-linux-gnueabihf` | Yes | Yes | Yes | Yes | - |
+| ARM64 (Pi 4 64-bit) | `aarch64-unknown-linux-gnu` | Yes | Yes | Yes | Yes | - |
+| x86_64 | `x86_64-unknown-linux-gnu` | Yes | Yes | Yes | Yes | Yes |
+| RISC-V 64 | `riscv64gc-unknown-linux-gnu` | Yes | Yes | Yes | Yes | - |
+
+## Installation
 To install RSPlayer, execute the following script (requires curl):
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)

@@ -15,6 +15,7 @@
 # Supported platforms (antmelekhin/docker-systemd only provides amd64 and arm64):
 #   - linux/amd64
 #   - linux/arm64
+#   - linux/riscv64
 #
 # Usage:
 #   ./test_install.sh <distro> [platform]
@@ -25,6 +26,7 @@
 #   ./test_install.sh arch                    # Arch Linux on native arch (no systemd)
 #   ./test_install.sh debian linux/arm64      # Debian 12 on aarch64
 #   ./test_install.sh fedora linux/arm64      # Fedora 40 on aarch64
+#   ./test_install.sh debian linux/riscv64    # Debian 12 on riscv64
 
 set -euo pipefail
 
@@ -34,10 +36,10 @@ PLATFORM="${2:-}"
 CONTAINER_NAME="rsplayer-test-${DISTRO:-none}"
 
 if [ -z "$DISTRO" ]; then
-    echo "Usage: $0 <debian|fedora|arch> [linux/amd64|linux/arm64]"
+    echo "Usage: $0 <debian|fedora|arch> [linux/amd64|linux/arm64|linux/riscv64]"
     echo
     echo "Supported distros:   debian, fedora, arch"
-    echo "Supported platforms: linux/amd64, linux/arm64 (default: native)"
+    echo "Supported platforms: linux/amd64, linux/arm64, linux/riscv64 (default: native)"
     echo
     echo "Note: arm/v7 and arm/v6 are NOT supported by the systemd docker images."
     echo "      Arch Linux runs without systemd (systemctl won't work)."
@@ -48,9 +50,9 @@ if [ -z "$DISTRO" ]; then
 fi
 
 # Validate platform
-if [ -n "$PLATFORM" ] && [ "$PLATFORM" != "linux/amd64" ] && [ "$PLATFORM" != "linux/arm64" ]; then
+if [ -n "$PLATFORM" ] && [ "$PLATFORM" != "linux/amd64" ] && [ "$PLATFORM" != "linux/arm64" ] && [ "$PLATFORM" != "linux/riscv64" ]; then
     echo "ERROR: Unsupported platform '$PLATFORM'"
-    echo "Only linux/amd64 and linux/arm64 are supported by the systemd docker images."
+    echo "Only linux/amd64, linux/arm64, and linux/riscv64 are supported."
     exit 1
 fi
 
@@ -124,7 +126,7 @@ if [ -n "$PLATFORM" ]; then
     echo
     echo "[WARN] Cross-arch via QEMU emulation — everything will be SLOW."
     echo "[WARN] Package installs (dnf/apt) can take 5-15 minutes."
-    echo "[WARN] For faster testing, use real arm64 hardware."
+    echo "[WARN] For faster testing, use real arm64/riscv64 hardware."
     echo
     echo "Skipping dependency install from host (too slow)."
     echo "Install deps manually inside the container."
