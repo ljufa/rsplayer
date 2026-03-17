@@ -1,13 +1,15 @@
-use sled::Db;
+use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 
 pub struct LoudnessRepository {
-    db: Db,
+    db: Keyspace,
 }
 
 impl LoudnessRepository {
-    pub fn new(db_path: &str) -> Self {
+    pub fn new(db: &Database) -> Self {
         Self {
-            db: sled::open(db_path).expect("Failed to open loudness db"),
+            db: db
+                .keyspace("loudness", KeyspaceCreateOptions::default)
+                .expect("Failed to open loudness keyspace"),
         }
     }
 
@@ -42,21 +44,31 @@ impl LoudnessRepository {
 
     /// Total number of songs that have been processed (includes unavailable sentinels).
     pub fn count_analysed(&self) -> usize {
-        self.db.len()
+        self.db.approximate_len()
     }
 
-    pub fn flush(&self) {
-        let _ = self.db.flush();
+    pub const fn flush(&self) {
+        // fjall handles persistence at the Database level; no-op here.
     }
 
     pub fn delete_all(&self) {
-        self.db.clear().expect("Failed to clear loudness db");
-        let _ = self.db.flush();
+        let keys: Vec<Vec<u8>> = self.db.iter()
+            .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
+            .collect();
+        for key in keys {
+            _ = self.db.remove(key);
+        }
     }
 }
 
-impl Default for LoudnessRepository {
-    fn default() -> Self {
-        Self::new("loudness.db")
+impl LoudnessRepository {
+    /// Standalone constructor for tests — opens its own fjall Database.
+    pub fn new_standalone(db_path: &str) -> Self {
+        let db = Database::builder(db_path).open().expect("Failed to open loudness db");
+        Self {
+            db: db
+                .keyspace("loudness", KeyspaceCreateOptions::default)
+                .expect("Failed to open loudness keyspace"),
+        }
     }
 }

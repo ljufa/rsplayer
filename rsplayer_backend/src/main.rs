@@ -4,7 +4,7 @@ extern crate log;
 
 use std::panic;
 use std::sync::Arc;
-#[cfg(debug_assertions)]
+#[cfg(feature = "console-subscriber")]
 use std::time::Duration;
 
 use env_logger::Env;
@@ -31,10 +31,10 @@ mod command_handler;
 mod server_warp;
 
 #[allow(clippy::redundant_pub_crate, clippy::too_many_lines)]
-#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "console-subscriber")]
     console_subscriber::ConsoleLayer::builder()
         .retention(Duration::from_secs(60))
         .server_addr(([0, 0, 0, 0], 6669))
@@ -42,7 +42,7 @@ async fn main() {
     let version = env!("CARGO_PKG_VERSION");
     info!("Starting RSPlayer {version}.");
     info!(
-        r" 
+        r"
         -------------------------------------------------------------------------
 
             ██████╗ ███████╗██████╗ ██╗      █████╗ ██╗   ██╗███████╗██████╗
@@ -51,23 +51,29 @@ async fn main() {
             ██╔══██╗╚════██║██╔═══╝ ██║     ██╔══██║  ╚██╔╝  ██╔══╝  ██╔══██╗
             ██║  ██║███████║██║     ███████╗██║  ██║   ██║   ███████╗██║  ██║
             ╚═╝  ╚═╝╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
-            /     /       
+            /     /
             by https://github.com/ljufa/rsplayer
-        
+
         -------------------------------------------------------------------------
     "
     );
 
-    let config = Arc::new(Configuration::new());
+    let shared_db = fjall::Database::builder("rsplayer.db")
+        .open()
+        .expect("Failed to open fjall database");
+    info!("Shared database opened.");
+
+    let config = Arc::new(Configuration::new(&shared_db));
     info!("Configuration successfully loaded.");
 
     let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate()).expect("failed to create signal future");
 
-    let album_repository = Arc::new(AlbumRepository::default());
-    let song_repository = Arc::new(SongRepository::default());
-    let statistics_repository = Arc::new(PlayStatisticsRepository::default());
+    let album_repository = Arc::new(AlbumRepository::new(&shared_db));
+    let song_repository = Arc::new(SongRepository::new(&shared_db));
+    let statistics_repository = Arc::new(PlayStatisticsRepository::new(&shared_db));
     let metadata_service = Arc::new(
         MetadataService::new(
+            &shared_db,
             &config.get_settings().metadata_settings,
             song_repository.clone(),
             album_repository.clone(),
@@ -77,10 +83,10 @@ async fn main() {
     );
     info!("Metadata service successfully created.");
 
-    let playlist_service = Arc::new(PlaylistService::new(&config.get_settings().playlist_settings));
+    let playlist_service = Arc::new(PlaylistService::new(&shared_db));
     info!("Playlist service successfully created.");
     let queue_service = Arc::new(QueueService::new(
-        &config.get_settings().playback_queue_settings,
+        &shared_db,
         song_repository.clone(),
         statistics_repository.clone(),
     ));
@@ -110,16 +116,21 @@ async fn main() {
 
     let (state_changes_tx, _) = broadcast::channel(20);
 
-    let loudness_repository = Arc::new(LoudnessRepository::default());
+    let loudness_repository = Arc::new(LoudnessRepository::new(&shared_db));
     let loudness_service = LoudnessService::new(
         loudness_repository.clone(),
         song_repository.clone(),
         config.get_settings().metadata_settings.music_directory,
     );
-    loudness_service.start();
-    info!("Loudness scan service started.");
+    if config.get_settings().rs_player_settings.loudness_normalization_enabled {
+        loudness_service.start();
+        info!("Loudness scan service started.");
+    } else {
+        info!("Loudness scan service disabled (loudness normalization is off).");
+    }
 
     let player_service = Arc::new(PlayerService::new(
+        &shared_db,
         &config.get_settings(),
         metadata_service.clone(),
         queue_service.clone(),
@@ -168,6 +179,10 @@ async fn main() {
         });
     }
 
+    if let Some(https_future) = https_server_future {
+        spawn(https_future);
+    }
+
     select! {
         _ = spawn(command_handler::handle_user_commands(
                     player_service.clone(),
@@ -194,7 +209,6 @@ async fn main() {
             }
 
         _ = spawn(http_server_future) => {}
-        _ = spawn(https_server_future) => {}
 
         _ = spawn(websocket_future) => {
             error!("Exit from websocket thread.");

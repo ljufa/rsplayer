@@ -25,6 +25,7 @@ pub struct Model {
     show_save_playlist_modal: bool,
     save_playlist_input: String,
     dragged_item_index: Option<usize>,
+    show_clear_queue_confirm: bool,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -47,6 +48,8 @@ pub enum Msg {
     AddUrlInputChanged(String),
     AddUrlToQueue,
     CloseAddUrlModal,
+    ShowClearQueueConfirm,
+    CancelClearQueueConfirm,
     ClearQueue,
     SaveAsPlaylistButtonClick,
     SaveAsPlaylistInputChanged(String),
@@ -79,6 +82,7 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
         show_save_playlist_modal: false,
         save_playlist_input: String::default(),
         dragged_item_index: None,
+        show_clear_queue_confirm: false,
     }
 }
 
@@ -262,7 +266,14 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 model.save_playlist_input = String::default();
             }
         }
+        Msg::ShowClearQueueConfirm => {
+            model.show_clear_queue_confirm = true;
+        }
+        Msg::CancelClearQueueConfirm => {
+            model.show_clear_queue_confirm = false;
+        }
         Msg::ClearQueue => {
+            model.show_clear_queue_confirm = false;
             orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
                 api_models::common::QueueCommand::ClearQueue,
             )));
@@ -284,7 +295,47 @@ pub fn view(model: &Model) -> Node<Msg> {
     div![
         view_add_url_modal(model),
         view_save_playlist_modal(model),
+        view_clear_queue_confirm_modal(model),
         view_queue_items(model)
+    ]
+}
+
+fn view_clear_queue_confirm_modal(model: &Model) -> Node<Msg> {
+    div![
+        C!["modal", IF!(model.show_clear_queue_confirm => "is-active")],
+        div![
+            C!["modal-background"],
+            ev(Ev::Click, |_| Msg::CancelClearQueueConfirm)
+        ],
+        div![
+            C!["modal-card"],
+            header![
+                C!["modal-card-head"],
+                p![C!["modal-card-title"], "Warning"],
+                button![
+                    C!["delete"],
+                    attrs! { At::AriaLabel => "close" },
+                    ev(Ev::Click, |_| Msg::CancelClearQueueConfirm)
+                ]
+            ],
+            section![
+                C!["modal-card-body"],
+                p!["This will remove all items from the current queue. Are you sure?"]
+            ],
+            footer![
+                C!["modal-card-foot"],
+                button![
+                    C!["button", "is-warning"],
+                    "Confirm",
+                    ev(Ev::Click, |_| Msg::ClearQueue)
+                ],
+                button![
+                    C!["button"],
+                    "Cancel",
+                    ev(Ev::Click, |_| Msg::CancelClearQueueConfirm)
+                ]
+            ]
+        ]
     ]
 }
 
@@ -461,7 +512,7 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                             a![
                                 attrs!(At::Title =>"Clear queue"),
                                 i![C!["pr-3", "material-icons","is-large-icon", "white-icon"], "clear"],
-                                ev(Ev::Click, move |_| Msg::ClearQueue)
+                                ev(Ev::Click, move |_| Msg::ShowClearQueueConfirm)
                             ],
                         ]
                     ],

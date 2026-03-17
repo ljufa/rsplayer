@@ -1,37 +1,39 @@
-use sled::{Db, Tree};
+use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 
 use api_models::{
     player::Song,
     playlist::{Playlist, PlaylistPage, PlaylistType, Playlists},
-    settings::PlaylistSetting,
 };
 
 pub struct PlaylistService {
-    main_db: Db,
-    pl_tree: Tree,
+    main_db: Keyspace,
+    pl_tree: Keyspace,
 }
 
 impl PlaylistService {
     #[must_use]
-    pub fn new(settings: &PlaylistSetting) -> Self {
-        let song_pl_db = sled::open(&settings.db_path).expect("Failed to open playlist database");
-        let pl_tree = song_pl_db.open_tree("pl_tree").expect("Failed to open pl_list_tree");
-        Self {
-            main_db: song_pl_db,
-            pl_tree,
-        }
+    pub fn new(db: &Database) -> Self {
+        let main_db = db
+            .keyspace("playlist", KeyspaceCreateOptions::default)
+            .expect("Failed to open playlist keyspace");
+        let pl_tree = db
+            .keyspace("playlist_list", KeyspaceCreateOptions::default)
+            .expect("Failed to open playlist_list keyspace");
+        Self { main_db, pl_tree }
     }
 
     pub fn save_new_playlist(&self, playlist_name: &str, songs: &[Song]) {
         if songs.is_empty() {
             return;
         }
-        self.main_db
-            .scan_prefix(playlist_name)
-            .filter_map(Result::ok)
-            .for_each(|ex| {
-                _ = self.main_db.remove(ex.0);
-            });
+        let keys_to_remove: Vec<Vec<u8>> = self
+            .main_db
+            .prefix(playlist_name)
+            .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
+            .collect();
+        for key in keys_to_remove {
+            _ = self.main_db.remove(key);
+        }
         for (idx, song) in songs.iter().enumerate() {
             _ = self
                 .main_db
@@ -50,21 +52,19 @@ impl PlaylistService {
     }
 
     pub fn get_playlist_page_by_name(&self, playlist_name: &str, offset: usize, limit: usize) -> PlaylistPage {
-        let total = self.main_db.scan_prefix(playlist_name).filter_map(Result::ok).count();
-        let songs: Vec<Song> = self
+        let entries: Vec<Vec<u8>> = self
             .main_db
-            .scan_prefix(playlist_name)
-            .filter_map(Result::ok)
+            .prefix(playlist_name)
+            .filter_map(|guard| guard.value().ok().map(|v| v.to_vec()))
+            .collect();
+        let total = entries.len();
+        let songs: Vec<Song> = entries
+            .into_iter()
             .skip(offset)
             .take(limit)
-            .map(|entry| Song::bytes_to_song(&entry.1).expect("Failed to deserialize song"))
+            .map(|value| Song::bytes_to_song(&value).expect("Failed to deserialize song"))
             .collect();
-        PlaylistPage {
-            total,
-            offset,
-            limit,
-            items: songs,
-        }
+        PlaylistPage { total, offset, limit, items: songs }
     }
 
     pub fn get_playlists(&self) -> Playlists {
@@ -72,8 +72,10 @@ impl PlaylistService {
             items: self
                 .pl_tree
                 .iter()
-                .filter_map(Result::ok)
-                .map(|ple| PlaylistType::Saved(serde_json::from_slice(&ple.1).ok().unwrap()))
+                .filter_map(|guard| {
+                    let value = guard.value().ok()?;
+                    Some(PlaylistType::Saved(serde_json::from_slice(&value).ok()?))
+                })
                 .collect(),
         }
     }

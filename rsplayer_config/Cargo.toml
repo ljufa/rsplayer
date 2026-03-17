@@ -8,5 +8,5 @@ log.workspace = true
 env_logger.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sled.workspace = true
+fjall.workspace = true
 api_models = { path = "../rsplayer_api_models"}

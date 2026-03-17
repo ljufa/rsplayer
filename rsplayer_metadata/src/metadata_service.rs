@@ -10,8 +10,8 @@ use std::{
 
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
+use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 use log::{info, warn};
-use sled::Db;
 use symphonia::core::{
     formats::FormatOptions,
     io::{MediaSourceStream, MediaSourceStreamOptions},
@@ -35,7 +35,7 @@ use crate::{album_repository::AlbumRepository, play_statistic_repository::PlaySt
 const ARTWORK_DIR: &str = "artwork";
 
 pub struct MetadataService {
-    ignored_files_db: Db,
+    ignored_files_db: Keyspace,
     pub settings: MetadataStoreSettings,
     scan_running: AtomicBool,
     song_repository: Arc<SongRepository>,
@@ -45,13 +45,16 @@ pub struct MetadataService {
 
 impl MetadataService {
     pub fn new(
+        db: &Database,
         settings: &MetadataStoreSettings,
         song_repository: Arc<SongRepository>,
         album_repository: Arc<AlbumRepository>,
         statistic_repository: Arc<PlayStatisticsRepository>,
     ) -> Result<Self> {
         let settings = settings.clone();
-        let ignored_files_db = sled::open(&settings.db_path)?;
+        let ignored_files_db = db
+            .keyspace("ignored_files", KeyspaceCreateOptions::default)
+            .expect("Failed to open ignored_files keyspace");
         Ok(Self {
             ignored_files_db,
             settings,
@@ -105,7 +108,6 @@ impl MetadataService {
         let total_songs = all_songs.len();
         let total_duration_secs = all_songs.iter().filter_map(|s| s.time).map(|d| d.as_secs()).sum();
 
-        // Genre counts from songs (not albums, so untagged-album songs are included)
         let mut genre_map: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
         for song in &all_songs {
             if let Some(genre) = &song.genre {
@@ -119,7 +121,6 @@ impl MetadataService {
         let total_albums = self.album_repository.find_all().len();
         let total_artists = self.album_repository.find_all_album_artists().len();
 
-        // Decade distribution from albums
         let albums_by_decade: Vec<(String, usize)> = self
             .album_repository
             .find_all_by_decade(usize::MAX)
@@ -184,7 +185,7 @@ impl MetadataService {
     pub fn search_local_files_by_dir(&self, dir: &str) -> Vec<MetadataLibraryItem> {
         let start_time = std::time::Instant::now();
         let result = self.song_repository.find_by_key_prefix(dir).map(|(key, value)| {
-            let key = String::from_utf8(key.to_vec()).unwrap();
+            let key = String::from_utf8(key).unwrap();
             let Some((_, right)) = key.split_once(dir) else {
                 return MetadataLibraryItem::Empty;
             };
@@ -212,7 +213,7 @@ impl MetadataService {
             .song_repository
             .find_by_key_contains(search_term)
             .map(|(key, value)| {
-                let key = String::from_utf8(key.to_vec()).unwrap();
+                let key = String::from_utf8(key).unwrap();
                 if let Some((path, _)) = key.rsplit_once('/') {
                     if path.to_lowercase().contains(search_term.to_lowercase().as_str()) {
                         MetadataLibraryItem::Directory { name: path.to_owned() }
@@ -244,8 +245,14 @@ impl MetadataService {
         if full_scan {
             self.song_repository.delete_all();
             self.album_repository.delete_all();
-            _ = self.ignored_files_db.clear();
-            _ = self.ignored_files_db.flush();
+            {
+                let keys: Vec<Vec<u8>> = self.ignored_files_db.iter()
+                    .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
+                    .collect();
+                for key in keys {
+                    _ = self.ignored_files_db.remove(key);
+                }
+            }
         }
 
         if !Path::new(ARTWORK_DIR).exists() {
@@ -356,7 +363,6 @@ impl MetadataService {
             }
         });
         self.song_repository.flush();
-        _ = self.ignored_files_db.flush();
         count.load(Ordering::Relaxed)
     }
 
@@ -377,7 +383,6 @@ impl MetadataService {
             enable_gapless: false,
             ..Default::default()
         };
-        // Use the default options for metadata readers.
         let metadata_opts = MetadataOptions::default();
         let file_p = &self.full_path_to_database_key(file_path.to_str().unwrap());
 

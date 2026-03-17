@@ -34,35 +34,36 @@ pub struct LoudnessService {
     /// The scan loop suspends itself whenever this is `true`.
     pub is_playing: Arc<AtomicBool>,
     stop: Arc<AtomicBool>,
-    thread_pool: rayon::ThreadPool,
 }
 
 impl LoudnessService {
     pub fn new(repository: Arc<LoudnessRepository>, song_repository: Arc<SongRepository>, music_dir: String) -> Arc<Self> {
-        let cores = available_parallelism().map_or(1, std::num::NonZero::get);
-        let threads = (cores / 2).max(1);
-        info!("Loudness scan: using {threads} threads ({cores} cores available)");
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(threads)
-            .thread_name(|i| format!("loudness-worker-{i}"))
-            .build()
-            .expect("Failed to build loudness thread pool");
         Arc::new(Self {
             repository,
             song_repository,
             music_dir,
             is_playing: Arc::new(AtomicBool::new(false)),
             stop: Arc::new(AtomicBool::new(false)),
-            thread_pool,
         })
     }
 
-    /// Spawn the background scan thread.  Safe to call once after construction.
+    /// Spawn the background scan thread and its rayon worker pool.
+    /// Safe to call once after construction. No threads are created until this is called.
     pub fn start(self: &Arc<Self>) {
         let svc = self.clone();
         thread::Builder::new()
             .name("loudness-scan".into())
-            .spawn(move || svc.scan_loop())
+            .spawn(move || {
+                let cores = available_parallelism().map_or(1, std::num::NonZero::get);
+                let threads = (cores / 2).max(1);
+                info!("Loudness scan: using {threads} threads ({cores} cores available)");
+                let thread_pool = rayon::ThreadPoolBuilder::new()
+                    .num_threads(threads)
+                    .thread_name(|i| format!("loudness-worker-{i}"))
+                    .build()
+                    .expect("Failed to build loudness thread pool");
+                svc.scan_loop(&thread_pool);
+            })
             .expect("Failed to spawn loudness-scan thread");
     }
 
@@ -76,7 +77,7 @@ impl LoudnessService {
         self.repository.get(file_key)
     }
 
-    fn scan_loop(&self) {
+    fn scan_loop(&self, thread_pool: &rayon::ThreadPool) {
         info!("Loudness scan thread started");
         loop {
             if self.stop.load(Ordering::Relaxed) {
@@ -112,7 +113,7 @@ impl LoudnessService {
             info!("Loudness scan: {} songs pending, analysing in parallel", pending.len());
             let scanned = AtomicU32::new(0);
 
-            self.thread_pool.install(|| pending.par_iter().for_each(|file_key| {
+            thread_pool.install(|| pending.par_iter().for_each(|file_key| {
                 if self.stop.load(Ordering::Relaxed) {
                     return;
                 }

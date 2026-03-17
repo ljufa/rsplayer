@@ -1,5 +1,5 @@
 use log::{debug, error, info, trace, warn};
-use sled::Db;
+use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 use std::sync::{
     atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, Ordering},
     Arc, Mutex,
@@ -22,9 +22,8 @@ use crate::rsp::vumeter::VUMeter;
 use super::symphonia::PlaybackResult;
 
 pub struct PlayerService {
-    state_db: Db,
+    state_db: Keyspace,
     queue_service: Arc<QueueService>,
-    #[allow(dead_code)]
     metadata_service: Arc<MetadataService>,
     playback_thread_handle: Arc<Mutex<Option<JoinHandle<PlaybackResult>>>>,
     stop_signal: Arc<AtomicBool>,
@@ -36,11 +35,6 @@ pub struct PlayerService {
     music_dir: String,
     local_browser_playback: bool,
     changes_tx: Sender<StateChangeEvent>,
-    /// DSP processor — owned by the command-handler side only.  The playback
-    /// thread receives a lightweight `DspHandle` instead (no `DspProcessor`
-    /// reference crosses the thread boundary).  The `Mutex` here is solely for
-    /// `&self` / `Arc<PlayerService>` interior mutability — the playback thread
-    /// never locks this.  `None` when DSP is disabled in settings.
     dsp_processor: Arc<Mutex<Option<DspProcessor>>>,
     loudness_service: Arc<LoudnessService>,
 }
@@ -52,14 +46,17 @@ impl PlayerService {
     #[must_use]
     #[allow(clippy::too_many_lines)]
     pub fn new(
+        db: &Database,
         settings: &Settings,
         metadata_service: Arc<MetadataService>,
         queue_service: Arc<QueueService>,
         state_changes_tx: Sender<StateChangeEvent>,
         loudness_service: Arc<LoudnessService>,
     ) -> Self {
-        let db = sled::open("player_state").expect("Failed to open queue db");
-        let state_db = db.clone();
+        let state_db = db
+            .keyspace("player_state", KeyspaceCreateOptions::default)
+            .expect("Failed to open player_state keyspace");
+        let state_db_async = state_db.clone();
         let mut rx = state_changes_tx.subscribe();
         let state_tx = state_changes_tx.clone();
 
@@ -77,8 +74,6 @@ impl PlayerService {
         let dsp_processor = Arc::new(Mutex::new({
             let rsp = &settings.rs_player_settings;
             if rsp.dsp_settings.enabled || rsp.loudness_normalization_enabled {
-                // When only normalization is enabled (DSP off), create a processor
-                // with no EQ filters so the equalizer only applies the per-song gain.
                 let effective_dsp = if rsp.dsp_settings.enabled {
                     rsp.dsp_settings.clone()
                 } else {
@@ -99,26 +94,24 @@ impl PlayerService {
                         let lt_secs = st.current_time.as_secs();
                         #[allow(clippy::cast_possible_truncation)]
                         last_known_time_clone.store(lt_secs as u32, Ordering::Relaxed);
-                        // Write to DB at most once per second to avoid saturating sled's
-                        // background compaction thread (SongTimeEvent fires per audio packet).
                         if lt_secs != last_saved_secs {
                             last_saved_secs = lt_secs;
                             let lt = lt_secs.to_string();
                             trace!("Save time state: {lt}");
-                            _ = state_db.insert(LAST_SONG_PROGRESS_KEY, lt.as_bytes());
+                            _ = state_db_async.insert(LAST_SONG_PROGRESS_KEY, lt.as_bytes());
                         }
                     }
                     Ok(StateChangeEvent::PlaybackStateEvent(ps)) => {
                         debug!("Save player state: {ps:?}");
                         match ps {
                             PlayerState::PLAYING => {
-                                _ = state_db.remove(LAST_SONG_PAUSED_KEY);
+                                _ = state_db_async.remove(LAST_SONG_PAUSED_KEY);
                                 state_tx
                                     .send(StateChangeEvent::NotificationSuccess("Playing".to_string()))
                                     .ok();
                             }
                             PlayerState::PAUSED | PlayerState::STOPPED => {
-                                _ = state_db.insert(LAST_SONG_PAUSED_KEY, "true");
+                                _ = state_db_async.insert(LAST_SONG_PAUSED_KEY, "true");
                                 state_tx
                                     .send(StateChangeEvent::NotificationSuccess("Playback paused".to_string()))
                                     .ok();
@@ -155,7 +148,7 @@ impl PlayerService {
         });
 
         let ps = PlayerService {
-            state_db: db,
+            state_db,
             changes_tx: state_changes_tx,
             queue_service,
             metadata_service,
@@ -234,11 +227,6 @@ impl PlayerService {
         self.play_from_current_queue_song();
     }
 
-    /// Update DSP settings and push a new equalizer to the playback thread.
-    ///
-    /// `DspProcessor` is exclusively owned here — no mutex needed.
-    /// The playback thread picks up the new equalizer via the shared `pending`
-    /// Arc on its next `write()` call.
     pub fn update_dsp_settings(&self, dsp_settings: &DspSettings) {
         if let Ok(mut guard) = self.dsp_processor.lock() {
             if let Some(ref mut dsp) = *guard {
@@ -261,7 +249,6 @@ impl PlayerService {
         let changes_tx = self.changes_tx.clone();
         let rsp_settings = self.rsp_settings.clone();
         let metadata_service = self.metadata_service.clone();
-        // Give the playback thread a lightweight handle — no DspProcessor ownership.
         let dsp_handle = self.dsp_processor.lock().ok().and_then(|g| g.as_ref().map(DspProcessor::handle));
         let current_volume = self.current_volume.clone();
         let vu_meter_enabled = self.rsp_settings.vu_meter_enabled;

@@ -162,10 +162,10 @@ const fn input_stream_buffer_size_default_value() -> usize {
     10
 }
 const fn default_dsp_enabled() -> bool {
-    true
+    false
 }
 const fn default_vu_meter_enabled() -> bool {
-    true
+    false
 }
 const fn default_normalization_target_lufs() -> f64 {
     -18.0

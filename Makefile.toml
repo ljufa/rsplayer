@@ -6,11 +6,13 @@ CARGO_TARGET_DIR = "target"
 # RPI_HOST = "192.168.5.3"
 # TARGET = "arm-unknown-linux-gnueabihf"
 
-RPI_HOST = "192.168.5.4"
-TARGET = "aarch64-unknown-linux-gnu"
-# TARGET = "x86_64-unknown-linux-gnu"
+# RPI_HOST = "192.168.5.4"
+# TARGET = "aarch64-unknown-linux-gnu"
 
-RELEASE_VERSION = "1.9.5"
+# TARGET = "x86_64-unknown-linux-gnu"
+# TARGET = "riscv64gc-unknown-linux-gnu"
+
+RELEASE_VERSION = "2.0.0"
 RELEASE_BRANCH = "main_public"
 
 [config]
@@ -18,7 +20,6 @@ default_to_workspace = false
 
 
 # ---- BUILD Backend----
-
 [tasks.build_release]
 command = "cross"
 args = [
@@ -31,9 +32,12 @@ args = [
     "--bin",
     "rsplayer",
 ]
+
 [tasks.build_dev]
 command = "cross"
 args = ["build", "--package", "rsplayer", "--bin", "rsplayer"]
+
+
 [tasks.build_ui_release]
 cwd = "rsplayer_web_ui"
 command = "cargo"
@@ -66,6 +70,7 @@ script = [
     "  armv7-unknown-linux-gnueabihf) rpm_arch=armv7hl ;;",
     "  aarch64-unknown-linux-gnu) rpm_arch=aarch64 ;;",
     "  x86_64-unknown-linux-gnu) rpm_arch=x86_64 ;;",
+    "  riscv64gc-unknown-linux-gnu) rpm_arch=riscv64 ;;",
     "  *) rpm_arch=${TARGET} ;;",
     "esac",
     "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" -e \"s/@DATE@/$(LC_ALL=C date +\"%a %b %d %Y\")/g\" PKGS/rpm/rsplayer.spec.in > ${RPM_DIR}/rsplayer.spec",
@@ -96,6 +101,7 @@ script = [
     "  armv7-unknown-linux-gnueabihf) arch_arch=armhfv7 ;;",
     "  aarch64-unknown-linux-gnu) arch_arch=arm64 ;;",
     "  x86_64-unknown-linux-gnu) arch_arch=amd64 ;;",
+    "  riscv64gc-unknown-linux-gnu) arch_arch=riscv64 ;;",
     "  *) arch_arch=${TARGET} ;;",
     "esac",
     "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" -e \"s/@ARCH@/${arch_arch}/g\" PKGS/arch/PKGBUILD.in > ${ARCH_DIR}/PKGBUILD",
@@ -198,7 +204,7 @@ script = "sudo pkill -9 rsplayer || true"
 
 [tasks.run_local]
 dependencies = ["kill_local"]
-env = { "RUST_LOG" = "rsplayer=info,rsplayer_playback=debug,rsplayer_metadata=debug,warp=info", "RUST_BACKTRACE" = "full", "PORT" = "8000", "TLS_PORT" = "8443", "TLS_CERT_PATH" = "self.crt", "TLS_CERT_KEY_PATH" = "self.key" }
+env = { "RUST_LOG" = "rsplayer=info,rsplayer_playback=debug,rsplayer_metadata=debug,warp=info", "RUST_BACKTRACE" = "full"}
 cwd = ".run"
 command = "cargo"
 args = ["run"]

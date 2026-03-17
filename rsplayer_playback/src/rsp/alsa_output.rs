@@ -4,9 +4,14 @@ use log::info;
 use std::sync::Arc;
 use symphonia::core::audio::{AudioBufferRef, SignalSpec};
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::thread;
 use std::time::Duration;
+
+/// Number of consecutive error callbacks before the stream is considered
+/// fatally broken.  Transient ALSA errors (xruns, timestamp glitches) on
+/// resource-constrained hardware like `RPi` Zero are common and recoverable.
+const ERROR_THRESHOLD: u32 = 5;
 
 use crate::rsp::dsd::DsdU32;
 use crate::rsp::vumeter::VUMeter;
@@ -28,7 +33,7 @@ trait AudioWriter: Send {
         decoded: AudioBufferRef<'_>,
         dsp: &mut Option<DspState>,
         vu_meter: &mut Option<VUMeter>,
-        error_flag: &AtomicBool,
+        error_count: &AtomicU32,
     ) -> Result<()>;
 }
 
@@ -49,7 +54,7 @@ where
         decoded: AudioBufferRef<'_>,
         dsp: &mut Option<DspState>,
         vu_meter: &mut Option<VUMeter>,
-        error_flag: &AtomicBool,
+        error_count: &AtomicU32,
     ) -> Result<()> {
         let channels = decoded.spec().channels.count();
         self.sample_buf.copy_interleaved_ref(decoded);
@@ -72,7 +77,7 @@ where
         let mut remaining = self.sample_buf.samples();
         while let Ok(Some(written)) = self.producer.write_blocking_timeout(remaining, Duration::from_secs(1)) {
             remaining = &remaining[written..];
-            if error_flag.load(Ordering::Relaxed) {
+            if error_count.load(Ordering::Relaxed) >= ERROR_THRESHOLD {
                 return Err(Error::msg("Audio output error detected during write"));
             }
         }
@@ -91,14 +96,14 @@ impl AudioWriter for DsdWriter {
         decoded: AudioBufferRef<'_>,
         _dsp: &mut Option<DspState>,
         _vu_meter: &mut Option<VUMeter>,
-        error_flag: &AtomicBool,
+        error_count: &AtomicU32,
     ) -> Result<()> {
         // DSD — copy straight to ring buffer, no DSP or VU conversion.
         self.sample_buf.copy_interleaved_ref(decoded);
         let mut remaining = self.sample_buf.samples();
         while let Ok(Some(written)) = self.producer.write_blocking_timeout(remaining, Duration::from_secs(1)) {
             remaining = &remaining[written..];
-            if error_flag.load(Ordering::Relaxed) {
+            if error_count.load(Ordering::Relaxed) >= ERROR_THRESHOLD {
                 return Err(Error::msg("Audio output error detected during write"));
             }
         }
@@ -120,7 +125,7 @@ struct DspState {
 pub struct AlsaOutput {
     writer: Box<dyn AudioWriter>,
     stream: cpal::Stream,
-    error_flag: Arc<AtomicBool>,
+    error_count: Arc<AtomicU32>,
     /// DSP processing state — `None` when DSP is disabled or format is DSD.
     dsp: Option<DspState>,
     /// VU meter — `None` when VU metering is disabled.
@@ -228,8 +233,8 @@ impl AlsaOutput {
         };
 
         let ring_len = ((rsp_settings.ring_buffer_size_ms * spec.rate as usize) / 1000) * num_channels;
-        let error_flag = Arc::new(AtomicBool::new(false));
-        let error_flag_clone = error_flag.clone();
+        let error_count = Arc::new(AtomicU32::new(0));
+        let error_count_clone = error_count.clone();
 
         // Build the stream and format-specific writer in one match.
         // Each arm creates its own typed ring buffer and sample buffer.
@@ -237,6 +242,7 @@ impl AlsaOutput {
             ($T:ty) => {{
                 let ring_buf = SpscRb::<$T>::new(ring_len);
                 let (producer, consumer) = (ring_buf.producer(), ring_buf.consumer());
+                let ec_data = error_count_clone.clone();
                 let stream = device
                     .build_output_stream(
                         &config,
@@ -245,13 +251,17 @@ impl AlsaOutput {
                             data[written..]
                                 .iter_mut()
                                 .for_each(|s| *s = <$T as cpal::Sample>::EQUILIBRIUM);
+                            // Successful callback — reset transient error counter.
+                            ec_data.store(0, Ordering::Relaxed);
                         },
                         {
-                            let ef = error_flag_clone.clone();
+                            let ec_err = error_count_clone.clone();
                             move |err| {
-                                error!("audio output error: {err}");
-                                ef.store(true, Ordering::Relaxed);
-                                thread::sleep(Duration::from_millis(800));
+                                let count = ec_err.fetch_add(1, Ordering::Relaxed) + 1;
+                                if count <= ERROR_THRESHOLD {
+                                    error!("audio output error ({count}/{ERROR_THRESHOLD}): {err}");
+                                }
+                                thread::sleep(Duration::from_millis(200));
                             }
                         },
                         None,
@@ -277,19 +287,23 @@ impl AlsaOutput {
             cpal::SampleFormat::DsdU32 => {
                 let ring_buf = SpscRb::<DsdU32>::new(ring_len);
                 let (producer, consumer) = (ring_buf.producer(), ring_buf.consumer());
+                let ec_data = error_count_clone.clone();
                 let stream = device
                     .build_output_stream(
                         &config,
                         move |data: &mut [DsdU32], _: &cpal::OutputCallbackInfo| {
                             let written = consumer.read(data).unwrap_or(0);
                             data[written..].iter_mut().for_each(|s| *s = DsdU32::MID);
+                            ec_data.store(0, Ordering::Relaxed);
                         },
                         {
-                            let ef = error_flag_clone;
+                            let ec_err = error_count_clone;
                             move |err| {
-                                error!("audio output error: {err}");
-                                ef.store(true, Ordering::Relaxed);
-                                thread::sleep(Duration::from_millis(800));
+                                let count = ec_err.fetch_add(1, Ordering::Relaxed) + 1;
+                                if count <= ERROR_THRESHOLD {
+                                    error!("audio output error ({count}/{ERROR_THRESHOLD}): {err}");
+                                }
+                                thread::sleep(Duration::from_millis(200));
                             }
                         },
                         None,
@@ -327,7 +341,7 @@ impl AlsaOutput {
         Ok(AlsaOutput {
             writer,
             stream,
-            error_flag,
+            error_count,
             dsp,
             vu_meter,
         })
@@ -336,7 +350,7 @@ impl AlsaOutput {
 
 impl AlsaOutput {
     pub fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<()> {
-        if self.error_flag.load(Ordering::Relaxed) {
+        if self.error_count.load(Ordering::Relaxed) >= ERROR_THRESHOLD {
             return Err(Error::msg("Audio output error detected"));
         }
         if decoded.frames() == 0 {
@@ -356,7 +370,7 @@ impl AlsaOutput {
 
         // Delegate writing to the format-specific writer.
         self.writer
-            .write(decoded, &mut self.dsp, &mut self.vu_meter, &self.error_flag)?;
+            .write(decoded, &mut self.dsp, &mut self.vu_meter, &self.error_count)?;
 
         if let Some(ref mut vu) = self.vu_meter {
             vu.maybe_send_event();

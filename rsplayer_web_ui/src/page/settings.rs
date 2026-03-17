@@ -10,7 +10,7 @@ use gloo_console::{error, log};
 use gloo_file::futures::read_as_text;
 use gloo_file::File;
 use gloo_net::{http::Request, Error};
-use seed::{a, attrs, button, details, div, empty, h1, i, input, label, option, p, prelude::*, section, select, span, style, summary, C, IF};
+use seed::{a, attrs, button, details, div, empty, footer, h1, header, i, input, label, option, p, prelude::*, section, select, span, style, summary, C, IF};
 use wasm_bindgen::JsCast;
 use web_sys::FileList;
 
@@ -22,11 +22,19 @@ const API_SETTINGS_PATH: &str = "/api/settings";
 // ------ ------
 //     Model
 
+#[derive(Debug, Clone)]
+pub enum ConfirmAction {
+    FullRescan,
+    RestartPlayer,
+    SaveAndRestartPlayer,
+}
+
 #[derive(Debug)]
 pub struct Model {
     settings: Settings,
     selected_audio_card_id: String,
     waiting_response: bool,
+    confirm_action: Option<ConfirmAction>,
 }
 
 #[derive(Debug)]
@@ -66,6 +74,11 @@ pub enum Msg {
         DspLoadPreset(usize),
         DspImportConfig(FileList),
         DspConfigLoaded(String),
+
+    // --- Confirm dialog ---
+    ShowConfirm(ConfirmAction),
+    ConfirmAccepted,
+    ConfirmCancelled,
 
     // --- Buttons ----
     SaveSettingsAndRestart,
@@ -149,6 +162,7 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
         settings: Settings::default(),
         selected_audio_card_id: String::new(),
         waiting_response: true,
+        confirm_action: None,
     }
 }
 
@@ -158,6 +172,27 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
 #[allow(clippy::too_many_lines)]
 pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
+        Msg::ShowConfirm(action) => {
+            model.confirm_action = Some(action);
+        }
+        Msg::ConfirmCancelled => {
+            model.confirm_action = None;
+        }
+        Msg::ConfirmAccepted => {
+            if let Some(action) = model.confirm_action.take() {
+                match action {
+                    ConfirmAction::FullRescan => {
+                        orders.send_msg(Msg::ClickRescanMetadataButton(true));
+                    }
+                    ConfirmAction::RestartPlayer => {
+                        orders.send_msg(Msg::SendSystemCommand(SystemCommand::RestartRSPlayer));
+                    }
+                    ConfirmAction::SaveAndRestartPlayer => {
+                        orders.send_msg(Msg::SaveSettingsAndRestart);
+                    }
+                }
+            }
+        }
         Msg::SaveSettingsAndRestart => {
             match model.settings.validate() {
                 Ok(_) => {
@@ -415,6 +450,7 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
             St::BorderRadius => "8px",
         },
         view_spinner_modal(model.waiting_response),
+        view_confirm_modal(&model.confirm_action),
         // Appearance
         section![
             C!["section"],
@@ -633,14 +669,12 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
                     IF!(model.settings.validate().is_err() => attrs!{ At::Disabled => ""}),
                     C!["button"],
                     "Save & restart player",
-                    ev(Ev::Click, |_| Msg::SaveSettingsAndRestart)
+                    ev(Ev::Click, |_| Msg::ShowConfirm(ConfirmAction::SaveAndRestartPlayer))
                 ],
                 button![
                     C!["button", "is-warning"],
                     "Restart player",
-                    ev(Ev::Click, |_| Msg::SendSystemCommand(
-                        SystemCommand::RestartRSPlayer
-                    ))
+                    ev(Ev::Click, |_| Msg::ShowConfirm(ConfirmAction::RestartPlayer))
                 ],
                 button![
                     C!["button", "is-danger"],
@@ -657,6 +691,53 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
         ]
     ]
 }
+fn view_confirm_modal(confirm_action: &Option<ConfirmAction>) -> Node<Msg> {
+    let Some(action) = confirm_action else {
+        return empty!();
+    };
+    let message = match action {
+        ConfirmAction::FullRescan => "Full rescan will destroy the current music database and rebuild it from scratch. All metadata and playback state will be lost. Are you sure?",
+        ConfirmAction::RestartPlayer => "If the player was not started via systemd, it will exit and must be started again manually. Are you sure you want to restart?",
+        ConfirmAction::SaveAndRestartPlayer => "Settings will be saved and the player will restart. If the player was not started via systemd, it will exit and must be started again manually. Are you sure?",
+    };
+    div![
+        C!["modal", "is-active"],
+        div![
+            C!["modal-background"],
+            ev(Ev::Click, |_| Msg::ConfirmCancelled)
+        ],
+        div![
+            C!["modal-card"],
+            header![
+                C!["modal-card-head"],
+                p![C!["modal-card-title"], "Warning"],
+                button![
+                    C!["delete"],
+                    attrs! { At::AriaLabel => "close" },
+                    ev(Ev::Click, |_| Msg::ConfirmCancelled)
+                ]
+            ],
+            section![
+                C!["modal-card-body"],
+                p![message]
+            ],
+            footer![
+                C!["modal-card-foot"],
+                button![
+                    C!["button", "is-warning"],
+                    "Confirm",
+                    ev(Ev::Click, |_| Msg::ConfirmAccepted)
+                ],
+                button![
+                    C!["button"],
+                    "Cancel",
+                    ev(Ev::Click, |_| Msg::ConfirmCancelled)
+                ]
+            ]
+        ]
+    ]
+}
+
 fn view_validation_icon<Ms>(val: &impl Validate, key: &str) -> Node<Ms> {
     let class = if let Err(errors) = val.validate() {
         if errors.errors().contains_key(key) {
@@ -750,7 +831,7 @@ fn view_metadata_storage(metadata_settings: &MetadataStoreSettings) -> Node<Msg>
                 C!["control"],
                 button![
                     C!["button", "is-warning"],
-                    ev(Ev::Click, move |_| Msg::ClickRescanMetadataButton(true)),
+                    ev(Ev::Click, move |_| Msg::ShowConfirm(ConfirmAction::FullRescan)),
                     "Full rescan"
                 ]
             ],

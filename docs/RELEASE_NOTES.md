@@ -1,5 +1,41 @@
 # Release Notes
 
+## v2.0.0 — 2026-03-17
+
+### Breaking Changes
+
+#### Database Engine: sled replaced with fjall
+The embedded database engine has been migrated from **sled** to **fjall**. This is a breaking change — existing sled databases (`metadata.db`, `queue.db`, `loudness.db`, `play_stats.db`) are not compatible and will be recreated on first launch. A full metadata rescan will be required after upgrading.
+
+**Why**: sled has been unmaintained and has known issues with data corruption and write amplification. fjall is an actively maintained LSM-tree storage engine with better write performance and reliability.
+
+### New Features & Improvements
+
+#### RISC-V 64-bit Support
+rsplayer now builds and runs on `riscv64gc-unknown-linux-gnu`, expanding support to RISC-V single-board computers and development boards.
+
+#### ALSA as a Feature Flag
+ALSA support is now behind a compile-time feature flag (`alsa`, enabled by default). This allows building rsplayer on platforms where ALSA is not available (e.g., RISC-V) without pulling in ALSA dependencies.
+
+#### SSL Made Optional
+TLS/SSL for the web server is now optional, simplifying deployment behind a reverse proxy or on local networks where HTTPS is not needed.
+
+#### Confirmation Modals
+Destructive actions in the UI now require explicit confirmation:
+- **Queue**: Clearing the queue shows a confirmation dialog before deleting all items.
+- **Settings**: Restarting the player, saving settings with restart, and triggering a full metadata rescan all prompt for confirmation, preventing accidental data loss or unintended restarts.
+
+### Bug Fixes
+
+- **Random playback mode**: Fixed a bug where random/shuffle mode could select incorrect tracks under certain queue states.
+
+### Platform Support
+
+- Added RISC-V 64-bit (`riscv64gc`) build target in CI/CD pipeline and Cross.toml configuration.
+- Fedora, Arch Linux, and Debian packaging continue to be supported.
+
+---
+
 ## v1.9.5 — 2026-03-12
 
 ### New Features & Improvements

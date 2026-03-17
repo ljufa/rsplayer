@@ -1,43 +1,41 @@
 use api_models::stat::PlayItemStatistics;
-use sled::Db;
+use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 
 pub struct PlayStatisticsRepository {
-    pub db: Db,
+    pub db: Keyspace,
 }
 
 impl PlayStatisticsRepository {
-    pub fn new(db_path: &str) -> Self {
-        let db = sled::open(db_path).expect("Failed to open statistics db");
-        Self { db }
+    pub fn new(db: &Database) -> Self {
+        Self {
+            db: db
+                .keyspace("play_statistics", KeyspaceCreateOptions::default)
+                .expect("Failed to open play_statistics keyspace"),
+        }
     }
 
     pub fn find_by_id(&self, play_item_id: &str) -> Option<PlayItemStatistics> {
-        let play_item_statistics_json = self.db.get(play_item_id).expect("Failed to get play item statistics");
-        play_item_statistics_json.map(|play_item_statistics_json| {
-            let play_item_statistics_json = play_item_statistics_json.to_vec();
-            let play_item_statistics_json = String::from_utf8(play_item_statistics_json).unwrap();
-            let play_item_statistics: PlayItemStatistics = serde_json::from_str(&play_item_statistics_json).unwrap();
-            play_item_statistics
-        })
+        let data = self.db.get(play_item_id).expect("Failed to get play item statistics")?;
+        let json = String::from_utf8(data.to_vec()).unwrap();
+        Some(serde_json::from_str(&json).unwrap())
     }
     pub fn find_by_key_prefix(&self, prefix: &str) -> Vec<PlayItemStatistics> {
-        let mut play_item_statistics = Vec::new();
-        for item in self.db.scan_prefix(prefix) {
-            let (_, value) = item.expect("Failed to get play item statistics");
-            let play_item_statistics_json = value.to_vec();
-            let play_item_statistics_json = String::from_utf8(play_item_statistics_json).unwrap();
-            let stat: PlayItemStatistics = serde_json::from_str(&play_item_statistics_json).unwrap();
-            play_item_statistics.push(stat);
-        }
-        play_item_statistics
+        self.db
+            .prefix(prefix)
+            .filter_map(|guard| {
+                let value = guard.value().ok()?;
+                let json = String::from_utf8(value.to_vec()).ok()?;
+                serde_json::from_str(&json).ok()
+            })
+            .collect()
     }
 
     pub fn get_all(&self) -> Vec<PlayItemStatistics> {
         self.db
             .iter()
-            .filter_map(Result::ok)
-            .filter_map(|(_, value)| {
-                let json = String::from_utf8(value.to_vec()).unwrap_or_default();
+            .filter_map(|guard| {
+                let value = guard.value().ok()?;
+                let json = String::from_utf8(value.to_vec()).ok()?;
                 serde_json::from_str::<PlayItemStatistics>(&json).ok()
             })
             .collect()
@@ -45,16 +43,20 @@ impl PlayStatisticsRepository {
 
     pub fn save(&self, play_item_statistics: &PlayItemStatistics) {
         let play_item_id = play_item_statistics.play_item_id.clone();
-        let play_item_statistics_json = serde_json::to_string(play_item_statistics).unwrap();
+        let json = serde_json::to_string(play_item_statistics).unwrap();
         self.db
-            .insert(play_item_id, play_item_statistics_json.as_bytes())
+            .insert(play_item_id, json.as_bytes())
             .expect("Failed to save play item statistics");
-        self.db.flush().expect("Failed to flush play item statistics");
     }
 }
-impl Default for PlayStatisticsRepository {
-    fn default() -> Self {
-        Self::new("play_statistics.db")
+impl PlayStatisticsRepository {
+    pub fn new_standalone(db_path: &str) -> Self {
+        let db = Database::builder(db_path).open().expect("Failed to open statistics db");
+        Self {
+            db: db
+                .keyspace("play_statistics", KeyspaceCreateOptions::default)
+                .expect("Failed to open play_statistics keyspace"),
+        }
     }
 }
 
@@ -69,7 +71,7 @@ mod test {
             skipped_count: 0,
             liked_count: 0,
         };
-        let play_statistics_repository = super::PlayStatisticsRepository::new("/tmp/test.db");
+        let play_statistics_repository = super::PlayStatisticsRepository::new_standalone("/tmp/test_stats_fjall.db");
         play_statistics_repository.save(&play_item_statistics);
         let play_item_statistics = play_statistics_repository.find_by_id("test");
         assert!(play_item_statistics.is_some());

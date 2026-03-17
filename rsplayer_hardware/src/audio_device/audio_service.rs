@@ -5,6 +5,7 @@ use api_models::common::Volume;
 
 use rsplayer_config::ArcConfiguration;
 
+#[cfg(feature = "alsa")]
 use super::alsa::AlsaMixer;
 use super::VolumeControlDevice;
 
@@ -25,21 +26,28 @@ use crate::usb::ArcUsbService;
 
 impl AudioInterfaceService {
     pub fn new(config: &ArcConfiguration, usb_service: Option<ArcUsbService>) -> Result<Self> {
-        let mut settings = config.get_settings();
-        let cards = crate::audio_device::alsa::get_all_cards();
-        let card_index = cards
-            .iter()
-            .find(|c| c.id == settings.alsa_settings.output_device.card_id)
-            .map_or(0, |card| card.index);
+        let settings = config.get_settings();
 
-        if let Some(mixer_name) = &settings.volume_ctrl_settings.alsa_mixer_name {
-            for card in &cards {
-                if let Some(mixer) = card.mixers.iter().find(|m| &m.name == mixer_name) {
-                    settings.volume_ctrl_settings.alsa_mixer = Some(mixer.clone());
-                    break;
+        #[cfg(feature = "alsa")]
+        let (settings, card_index) = {
+            let mut settings = settings;
+            let cards = crate::audio_device::alsa::get_all_cards();
+            let card_index = cards
+                .iter()
+                .find(|c| c.id == settings.alsa_settings.output_device.card_id)
+                .map_or(0, |card| card.index);
+
+            if let Some(mixer_name) = &settings.volume_ctrl_settings.alsa_mixer_name {
+                for card in &cards {
+                    if let Some(mixer) = card.mixers.iter().find(|m| &m.name == mixer_name) {
+                        settings.volume_ctrl_settings.alsa_mixer = Some(mixer.clone());
+                        break;
+                    }
                 }
             }
-        }
+            (settings, card_index)
+        };
+
         let volume_ctrl_device: Box<dyn VolumeControlDevice + Send + Sync> = if settings.usb_settings.enabled {
             if usb_service.is_none() {
                 return Err(anyhow::anyhow!(
@@ -49,7 +57,13 @@ impl AudioInterfaceService {
             Box::new(RSPlayerFirmwareVolumeControlDevice::new(usb_service.unwrap()))
         } else {
             match settings.volume_ctrl_settings.ctrl_device {
+                #[cfg(feature = "alsa")]
                 VolumeCrtlType::Alsa => AlsaMixer::new(card_index, settings.volume_ctrl_settings.alsa_mixer),
+                #[cfg(not(feature = "alsa"))]
+                VolumeCrtlType::Alsa => {
+                    log::warn!("ALSA volume control requested but ALSA support is not compiled in, using NoOp");
+                    Box::new(NoOpVolumeControlDevice)
+                }
                 VolumeCrtlType::Pipewire => Box::new(PipewireVolumeControlDevice::new()),
                 VolumeCrtlType::Off => Box::new(NoOpVolumeControlDevice),
             }

@@ -3,7 +3,6 @@ mod queue {
     use std::sync::Arc;
 
     use api_models::common::PlaybackMode;
-    use api_models::settings::PlaybackQueueSetting;
 
     use crate::play_statistic_repository::PlayStatisticsRepository;
     use crate::song_repository::SongRepository;
@@ -323,16 +322,10 @@ mod queue {
     }
 
     fn create_queue_with_ctx(ctx: &Context) -> QueueService {
-        let song_repo = Arc::new(SongRepository::new(&format!("{}_songrepo", ctx.db_dir)));
-        let stat_repo = Arc::new(PlayStatisticsRepository::new(&format!("{}_statrepo", ctx.db_dir)));
-
-        QueueService::new(
-            &PlaybackQueueSetting {
-                db_path: format!("{}_queue", ctx.db_dir.clone()),
-            },
-            song_repo,
-            stat_repo,
-        )
+        let db = fjall::Database::builder(&ctx.db_dir).open().expect("Failed to open test db");
+        let song_repo = Arc::new(SongRepository::new(&db));
+        let stat_repo = Arc::new(PlayStatisticsRepository::new(&db));
+        QueueService::new(&db, song_repo, stat_repo)
     }
 }
 
@@ -483,7 +476,7 @@ mod metadata {
 mod playlist {
     use std::vec;
 
-    use api_models::{player::Song, settings::PlaylistSetting};
+    use api_models::player::Song;
 
     use crate::playlist_service::PlaylistService;
 
@@ -527,9 +520,8 @@ mod playlist {
 
     fn create_pl_service() -> PlaylistService {
         let ctx = Context::default();
-        PlaylistService::new(&PlaylistSetting {
-            db_path: ctx.db_dir.to_string(),
-        })
+        let db = fjall::Database::builder(&ctx.db_dir).open().expect("Failed to open test db");
+        PlaylistService::new(&db)
     }
 }
 
@@ -609,14 +601,18 @@ pub mod test_shared {
                 music_directory: music_dir.clone(),
                 ..Default::default()
             };
-            let album_repository = Arc::new(AlbumRepository::new(&format!("{db_dir}_arp")));
-            let song_repository = Arc::new(SongRepository::new(&format!("{db_dir}_srp")));
-            let stat_repository = Arc::new(PlayStatisticsRepository::new(&format!("{db_dir}_pst")));
+            let db = fjall::Database::builder(&format!("{db_dir}_shared"))
+                .open()
+                .expect("Failed to open test db");
+            let album_repository = Arc::new(AlbumRepository::new(&db));
+            let song_repository = Arc::new(SongRepository::new(&db));
+            let stat_repository = Arc::new(PlayStatisticsRepository::new(&db));
             let sender = tokio::sync::broadcast::channel(20).0;
             let receiver = sender.subscribe();
 
             Self {
                 metadata_service: MetadataService::new(
+                    &db,
                     &settings,
                     song_repository.clone(),
                     album_repository.clone(),

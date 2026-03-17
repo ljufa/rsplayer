@@ -1,10 +1,10 @@
 use api_models::common::Volume;
 
+#[cfg(feature = "alsa")]
 pub mod alsa;
 pub mod audio_service;
 pub mod pipewire;
 pub mod rsp_firmware;
-// pub mod test;
 
 pub trait VolumeControlDevice {
     fn vol_up(&mut self) -> Volume;

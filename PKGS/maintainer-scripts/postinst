@@ -27,6 +27,21 @@ if [ "$1" = "configure" ]; then
         mv /opt/rsplayer/configuration.db /opt/rsplayer/configuration.db.backup_1
         echo "Go to player Settings page, configure it again and update library to scan dsd and dsf files"
     fi
+    if dpkg --compare-versions "$previous_version" lt "2.0.0"; then
+        echo "Upgrading from version $previous_version to 2.0.0"
+        echo "Database engine changed from sled to fjall. Moving old sled databases aside."
+        old_db_dir="/opt/rsplayer/old_sled_dbs_safe_to_delete"
+        mkdir -p "$old_db_dir"
+        for db in metadata.db queue.db loudness.db play_stats.db; do
+            if [ -d "/opt/rsplayer/$db" ]; then
+                echo "Moving /opt/rsplayer/$db to $old_db_dir/$db"
+                mv "/opt/rsplayer/$db" "$old_db_dir/$db"
+            fi
+        done
+        chown -R rsplayer:rsplayer "$old_db_dir"
+        echo "Old sled databases moved to $old_db_dir — delete this directory after verifying the upgrade."
+        echo "A full metadata rescan will be needed after first launch."
+    fi
     systemctl daemon-reload
     systemctl enable rsplayer
     systemctl start rsplayer

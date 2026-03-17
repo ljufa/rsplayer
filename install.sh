@@ -32,6 +32,10 @@ elif [ "$device_arch" = "armv6l" ]; then
     deb_arch_suffix="armhfv6"
     rpm_arch_suffix="armv6hl"
     arch_arch_suffix="armhfv6"
+elif [ "$device_arch" = "riscv64" ]; then
+    deb_arch_suffix="riscv64"
+    rpm_arch_suffix="riscv64"
+    arch_arch_suffix="riscv64"
 else
     deb_arch_suffix=$device_arch
     rpm_arch_suffix=$device_arch

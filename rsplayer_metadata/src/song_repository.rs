@@ -1,15 +1,17 @@
-use sled::{Db, IVec};
+use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 
 use api_models::player::Song;
 
 pub struct SongRepository {
-    songs_db: Db,
+    songs_db: Keyspace,
 }
 
 impl SongRepository {
-    pub fn new(db_path: &str) -> Self {
+    pub fn new(db: &Database) -> Self {
         Self {
-            songs_db: sled::open(db_path).expect("Failed to open song db"),
+            songs_db: db
+                .keyspace("songs", KeyspaceCreateOptions::default)
+                .expect("Failed to open songs keyspace"),
         }
     }
 
@@ -22,59 +24,88 @@ impl SongRepository {
         self.songs_db.remove(id).expect("Failed to delete song");
     }
     pub fn delete_all(&self) {
-        self.songs_db.clear().expect("Failed to delete all songs");
-        self.songs_db.flush().expect("Failed to flush db");
+        let keys: Vec<Vec<u8>> = self.songs_db.iter()
+            .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
+            .collect();
+        for key in keys {
+            _ = self.songs_db.remove(key);
+        }
     }
 
     pub fn find_by_id(&self, id: &str) -> Option<Song> {
         self.songs_db
             .get(id)
             .expect("Failed to get song")
-            .map(|v| Song::bytes_to_song(v.as_ref()).expect("Failed to convert bytes to song"))
+            .map(|v| Song::bytes_to_song(&v).expect("Failed to convert bytes to song"))
     }
     pub fn find_all(&self) -> Vec<Song> {
         self.songs_db
             .iter()
-            .map(|v| {
-                Song::bytes_to_song(v.expect("Failed to get song").1.as_ref()).expect("Failed to convert bytes to song")
+            .filter_map(|guard| {
+                let value = guard.value().ok()?;
+                Song::bytes_to_song(&value)
             })
             .collect()
     }
-    pub fn get_all_iterator(&self) -> impl Iterator<Item = Song> {
-        self.songs_db
-            .iter()
-            .filter_map(std::result::Result::ok)
-            .map_while(|s| Song::bytes_to_song(&s.1))
-    }
-
-    pub fn find_by_key_contains(&self, search_term: &str) -> impl Iterator<Item = (IVec, IVec)> {
-        let st = search_term.to_lowercase();
-        self.songs_db.iter().filter_map(Result::ok).filter(move |(key, _)| {
-            let key_s = String::from_utf8(key.to_vec()).unwrap();
-            key_s.to_lowercase().contains(&st)
+    pub fn get_all_iterator(&self) -> impl Iterator<Item = Song> + '_ {
+        self.songs_db.iter().filter_map(|guard| {
+            let value = guard.value().ok()?;
+            Song::bytes_to_song(&value)
         })
     }
 
-    pub fn find_by_key_prefix(&self, prefix: &str) -> impl Iterator<Item = (IVec, IVec)> {
-        self.songs_db.scan_prefix(prefix.as_bytes()).filter_map(Result::ok)
+    pub fn find_by_key_contains(&self, search_term: &str) -> impl Iterator<Item = (Vec<u8>, Vec<u8>)> {
+        let st = search_term.to_lowercase();
+        self.songs_db
+            .iter()
+            .filter_map(|guard| {
+                let (key, value) = guard.into_inner().ok()?;
+                Some((key.to_vec(), value.to_vec()))
+            })
+            .filter(move |(key, _)| {
+                let key_s = String::from_utf8(key.clone()).unwrap();
+                key_s.to_lowercase().contains(&st)
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+
+    pub fn find_by_key_prefix(&self, prefix: &str) -> impl Iterator<Item = (Vec<u8>, Vec<u8>)> {
+        self.songs_db
+            .prefix(prefix.as_bytes())
+            .filter_map(|guard| {
+                let (key, value) = guard.into_inner().ok()?;
+                Some((key.to_vec(), value.to_vec()))
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     /// Returns all songs whose key (file path) starts with `prefix`.
-    /// Uses sled's `scan_prefix` — only reads the matching entries, not the whole DB.
     pub fn find_songs_by_dir_prefix(&self, prefix: &str) -> impl Iterator<Item = Song> {
         self.songs_db
-            .scan_prefix(prefix.as_bytes())
-            .filter_map(Result::ok)
-            .map_while(|s| Song::bytes_to_song(&s.1))
+            .prefix(prefix.as_bytes())
+            .filter_map(|guard| {
+                let value = guard.value().ok()?;
+                Song::bytes_to_song(&value)
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
     }
-    pub fn flush(&self) {
-        self.songs_db.flush().expect("Failed to flush db");
+    pub const fn flush(&self) {
+        // fjall handles persistence at the Database level; this is a no-op.
     }
 }
 
-impl Default for SongRepository {
-    fn default() -> Self {
-        Self::new("songs.db")
+impl SongRepository {
+    /// Standalone constructor for tests — opens its own fjall Database.
+    pub fn new_standalone(db_path: &str) -> Self {
+        let db = Database::builder(db_path).open().expect("Failed to open song db");
+        Self {
+            songs_db: db
+                .keyspace("songs", KeyspaceCreateOptions::default)
+                .expect("Failed to open songs keyspace"),
+        }
     }
 }
 
@@ -91,7 +122,6 @@ mod test {
                 db.insert($file, create_song($title, $artist, $album, $file))
                     .expect("Failed to insert song");
             )*
-            db.flush().expect("Failed to flush DB");
         };
     }
     fn create_song(title: &str, artist: &str, album: &str, file: &str) -> Vec<u8> {
@@ -107,7 +137,7 @@ mod test {
 
     fn create_song_repo() -> SongRepository {
         let ctx = test_shared::Context::default();
-        SongRepository::new(&ctx.db_dir)
+        SongRepository::new_standalone(&ctx.db_dir)
     }
 
     #[test]

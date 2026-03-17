@@ -52,9 +52,7 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 
 ### Planned code improvements
 - Replace Bulma CSS with a modern, maintained alternative.
-- Replace seed-rs with a newer, maintained framework.
-- Replace sled with native_db, redb, or Fjall (high memory usage).
-- Remove unnecessary `.unwrap()` and `.clone()` calls.
+- Replace seed-rs with a newer, maintained framework.- Remove unnecessary `.unwrap()` and `.clone()` calls.
 - Replace `warp` with `axum` or `actix`.
 - Reduce code duplication in UI with generic functions and macros.
 

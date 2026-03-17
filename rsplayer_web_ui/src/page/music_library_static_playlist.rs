@@ -50,6 +50,10 @@ pub enum Msg {
     PlaySongFromPlaylist(String),
     LoadMorePlaylistItems,
     ToggleSection(String),
+    LoadGenreInQueue(String),
+    AddGenreToQueue(String),
+    LoadDecadeInQueue(String),
+    AddDecadeToQueue(String),
     WebSocketOpen,
 }
 
@@ -263,6 +267,26 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 }
             }
         }
+        Msg::LoadGenreInQueue(genre) => {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::LoadGenreInQueue(genre),
+            )));
+        }
+        Msg::AddGenreToQueue(genre) => {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::AddGenreToQueue(genre),
+            )));
+        }
+        Msg::LoadDecadeInQueue(decade) => {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::LoadDecadeInQueue(decade),
+            )));
+        }
+        Msg::AddDecadeToQueue(decade) => {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
+                api_models::common::QueueCommand::AddDecadeToQueue(decade),
+            )));
+        }
         Msg::WebSocketOpen => {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
                 api_models::common::PlaylistCommand::QueryPlaylist,
@@ -448,14 +472,14 @@ fn view_static_playlists(model: &Model) -> Node<Msg> {
             IF!(model.static_playlists.has_genre_headers() =>
                 nodes![model.static_playlists.genre_headers().into_iter().map(|(genre, count)| {
                     let carousel_id = format!("genre-pl-{}", pl_slug(&genre));
-                    view_lazy_section(model, &carousel_id, &genre, count)
+                    view_lazy_section(model, &carousel_id, &genre, count, CategoryKind::Genre)
                 }).collect::<Vec<_>>()]
             ),
             // -- By Decade (lazy loaded) --
             IF!(model.static_playlists.has_decade_headers() =>
                 nodes![model.static_playlists.decade_headers().into_iter().map(|(decade, count)| {
                     let carousel_id = format!("decade-pl-{}", pl_slug(&decade));
-                    view_lazy_section(model, &carousel_id, &decade, count)
+                    view_lazy_section(model, &carousel_id, &decade, count, CategoryKind::Decade)
                 }).collect::<Vec<_>>()]
             ),
         ]
@@ -469,12 +493,15 @@ fn view_collapsible_section(model: &Model, carousel_id: &str, title: &str, items
     let item_count = items.len();
     div![
         div![
+            C!["has-background-dark-transparent"],
             style! {
                 St::Cursor => "pointer",
                 St::Display => "flex",
                 St::AlignItems => "center",
                 St::UserSelect => "none",
                 St::MarginBottom => "4px",
+                St::Width => "100%",
+                St::Padding => "2px 8px",
             },
             ev(Ev::Click, move |_| Msg::ToggleSection(toggle_id)),
             i![
@@ -483,7 +510,7 @@ fn view_collapsible_section(model: &Model, carousel_id: &str, title: &str, items
                 icon,
             ],
             span![
-                C!["title is-3 has-text-light has-background-dark-transparent"],
+                C!["title is-3 has-text-light"],
                 style! { St::MarginBottom => "0" },
                 title,
             ],
@@ -504,20 +531,31 @@ fn view_collapsible_section(model: &Model, carousel_id: &str, title: &str, items
     ]
 }
 
-fn view_lazy_section(model: &Model, carousel_id: &str, title: &str, header_count: usize) -> Node<Msg> {
+#[derive(Clone, Copy)]
+enum CategoryKind {
+    Genre,
+    Decade,
+}
+
+fn view_lazy_section(model: &Model, carousel_id: &str, title: &str, header_count: usize, kind: CategoryKind) -> Node<Msg> {
     let is_expanded = model.expanded_sections.contains(carousel_id);
     let toggle_id = carousel_id.to_string();
     let icon = if is_expanded { "expand_less" } else { "expand_more" };
     let albums = model.lazy_albums.get(carousel_id);
     let item_count = albums.map_or(header_count, Vec::len);
+    let title_for_load = title.to_string();
+    let title_for_add = title.to_string();
     div![
         div![
+            C!["has-background-dark-transparent"],
             style! {
                 St::Cursor => "pointer",
                 St::Display => "flex",
                 St::AlignItems => "center",
                 St::UserSelect => "none",
                 St::MarginBottom => "4px",
+                St::Width => "100%",
+                St::Padding => "2px 8px",
             },
             ev(Ev::Click, move |_| Msg::ToggleSection(toggle_id)),
             i![
@@ -526,7 +564,7 @@ fn view_lazy_section(model: &Model, carousel_id: &str, title: &str, header_count
                 icon,
             ],
             span![
-                C!["title is-3 has-text-light has-background-dark-transparent"],
+                C!["title is-3 has-text-light"],
                 style! { St::MarginBottom => "0" },
                 title,
             ],
@@ -534,6 +572,38 @@ fn view_lazy_section(model: &Model, carousel_id: &str, title: &str, header_count
                 C!["has-text-grey-light"],
                 style! { St::MarginLeft => "10px", St::FontSize => "0.9rem" },
                 format!("({item_count})"),
+            ],
+            a![
+                style! { St::MarginLeft => "auto", St::MarginRight => "12px" },
+                attrs!(At::Title => "Replace queue & play all"),
+                i![
+                    C!["material-icons", "has-text-light"],
+                    style! { St::FontSize => "24px" },
+                    "play_circle_filled",
+                ],
+                ev(Ev::Click, move |event| {
+                    event.stop_propagation();
+                    match kind {
+                        CategoryKind::Genre => Msg::LoadGenreInQueue(title_for_load),
+                        CategoryKind::Decade => Msg::LoadDecadeInQueue(title_for_load),
+                    }
+                }),
+            ],
+            a![
+                style! { St::MarginRight => "8px" },
+                attrs!(At::Title => "Add all to queue"),
+                i![
+                    C!["material-icons", "has-text-light"],
+                    style! { St::FontSize => "24px" },
+                    "playlist_add",
+                ],
+                ev(Ev::Click, move |event| {
+                    event.stop_propagation();
+                    match kind {
+                        CategoryKind::Genre => Msg::AddGenreToQueue(title_for_add),
+                        CategoryKind::Decade => Msg::AddDecadeToQueue(title_for_add),
+                    }
+                }),
             ],
         ],
         IF!(is_expanded =>

@@ -12,14 +12,14 @@ jobs:
     name: Build UI
     runs-on: rsplayer-self-hosted
     steps:
-    - uses: actions/checkout@v4
-    - name: Build release
-      run: cargo make build_ui_release
-    - name: Upload pkg dir
-      uses: actions/upload-artifact@v4
-      with:
-        name: web_ui
-        path: rsplayer_web_ui/public/pkg
+      - uses: actions/checkout@v4
+      - name: Build release
+        run: cargo make build_ui_release
+      - name: Upload pkg dir
+        uses: actions/upload-artifact@v4
+        with:
+          name: web_ui
+          path: rsplayer_web_ui/public/pkg
 
   build_backend:
     needs: build_ui
@@ -30,140 +30,153 @@ jobs:
       max-parallel: 1
       fail-fast: false
       matrix:
-        target: ["arm-unknown-linux-gnueabihf", "armv7-unknown-linux-gnueabihf", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
+        target:
+          [
+            "arm-unknown-linux-gnueabihf",
+            "armv7-unknown-linux-gnueabihf",
+            "aarch64-unknown-linux-gnu",
+            "x86_64-unknown-linux-gnu",
+            "riscv64gc-unknown-linux-gnu",
+          ]
     steps:
-    - uses: actions/checkout@v4
-      with:
-        clean: true
-    
-    # Ensure no stale binary exists from a previous run or sibling job
-    - name: Clean Shared Target
-      run: rm -rf target/release || true
+      - uses: actions/checkout@v4
+        with:
+          clean: true
 
-    - name: Download web_ui
-      uses: actions/download-artifact@v4
-      with:
-        name: web_ui
-        path: rsplayer_web_ui/public/pkg
+      # Ensure no stale binary exists from a previous run or sibling job
+      - name: Clean Shared Target
+        run: rm -rf target/release || true
 
-    - name: Build and Package
-      env:
-        TARGET: ${{ matrix.target }}
-        RELEASE_VERSION: ${{ github.ref_name }}
-      run: |
-        cargo make --env TARGET=$TARGET build_release
-        cargo make --env RELEASE_VERSION=$RELEASE_VERSION --env TARGET=$TARGET package_deb_release
+      - name: Download web_ui
+        uses: actions/download-artifact@v4
+        with:
+          name: web_ui
+          path: rsplayer_web_ui/public/pkg
 
-    - name: Upload deb package
-      uses: actions/upload-artifact@v4
-      with:
-        name: deb-${{ matrix.target }}
-        path: target/${{ matrix.target }}/debian/*.deb
-        if-no-files-found: error
+      - name: Build and Package
+        env:
+          TARGET: ${{ matrix.target }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          cargo make --env TARGET=$TARGET build_release
+          cargo make --env RELEASE_VERSION=$RELEASE_VERSION --env TARGET=$TARGET package_deb_release
 
-    - name: Upload binary
-      uses: actions/upload-artifact@v4
-      with:
-        name: rsplayer-${{ matrix.target }}
-        path: target/${{ matrix.target }}/release/rsplayer
-        if-no-files-found: error
+      - name: Upload deb package
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.target }}
+          path: target/${{ matrix.target }}/debian/*.deb
+          if-no-files-found: error
 
-    - name: Install and rpm
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y rpm
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: rsplayer-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/rsplayer
+          if-no-files-found: error
 
-    - name: Build RPM package
-      env:
-        TARGET: ${{ matrix.target }}
-        RELEASE_VERSION: ${{ github.ref_name }}
-      run: |
-        cargo make --env RELEASE_VERSION=$RELEASE_VERSION --env TARGET=$TARGET package_rpm_release
-        # Move RPM to consistent location for upload
-        case ${{ matrix.target }} in
-          arm-unknown-linux-gnueabihf) rpm_suffix=armv6hl ;;
-          armv7-unknown-linux-gnueabihf) rpm_suffix=armv7hl ;;
-          aarch64-unknown-linux-gnu) rpm_suffix=aarch64 ;;
-          x86_64-unknown-linux-gnu) rpm_suffix=x86_64 ;;
-          *) rpm_suffix=${{ matrix.target }} ;;
-        esac
-        mv target/$TARGET/rpm/rsplayer_*.rpm rsplayer_${{ github.ref_name }}_${rpm_suffix}.rpm 2>/dev/null || true
+      - name: Install and rpm
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
 
-    - name: Upload RPM artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: rpm-${{ matrix.target }}
-        path: rsplayer_${{ github.ref_name }}_*.rpm
-        if-no-files-found: error
+      - name: Build RPM package
+        env:
+          TARGET: ${{ matrix.target }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          cargo make --env RELEASE_VERSION=$RELEASE_VERSION --env TARGET=$TARGET package_rpm_release
+          # Move RPM to consistent location for upload
+          case ${{ matrix.target }} in
+            arm-unknown-linux-gnueabihf) rpm_suffix=armv6hl ;;
+            armv7-unknown-linux-gnueabihf) rpm_suffix=armv7hl ;;
+            aarch64-unknown-linux-gnu) rpm_suffix=aarch64 ;;
+            x86_64-unknown-linux-gnu) rpm_suffix=x86_64 ;;
+            riscv64gc-unknown-linux-gnu) rpm_suffix=riscv64 ;;
+            *) rpm_suffix=${{ matrix.target }} ;;
+          esac
+          mv target/$TARGET/rpm/rsplayer_*.rpm rsplayer_${{ github.ref_name }}_${rpm_suffix}.rpm 2>/dev/null || true
 
-    - name: Build Arch tarball
-      env:
-        TARGET: ${{ matrix.target }}
-        RELEASE_VERSION: ${{ github.ref_name }}
-      run: |
-        cargo make --env RELEASE_VERSION=$RELEASE_VERSION --env TARGET=$TARGET package_arch_release
-        # Move tarball to consistent location for upload
-        case ${{ matrix.target }} in
-          arm-unknown-linux-gnueabihf) arch_suffix=armhfv6 ;;
-          armv7-unknown-linux-gnueabihf) arch_suffix=armhfv7 ;;
-          aarch64-unknown-linux-gnu) arch_suffix=arm64 ;;
-          x86_64-unknown-linux-gnu) arch_suffix=amd64 ;;
-          *) arch_suffix=${{ matrix.target }} ;;
-        esac
-        mv target/$TARGET/arch/rsplayer_*.tgz rsplayer_${{ github.ref_name }}_${arch_suffix}.tgz 2>/dev/null || true
+      - name: Upload RPM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-${{ matrix.target }}
+          path: rsplayer_${{ github.ref_name }}_*.rpm
+          if-no-files-found: error
 
-    - name: Upload Arch tarball artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: arch-${{ matrix.target }}
-        path: rsplayer_${{ github.ref_name }}_*.tgz
-        if-no-files-found: error
+      - name: Build Arch tarball
+        env:
+          TARGET: ${{ matrix.target }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          cargo make --env RELEASE_VERSION=$RELEASE_VERSION --env TARGET=$TARGET package_arch_release
+          # Move tarball to consistent location for upload
+          case ${{ matrix.target }} in
+            arm-unknown-linux-gnueabihf) arch_suffix=armhfv6 ;;
+            armv7-unknown-linux-gnueabihf) arch_suffix=armhfv7 ;;
+            aarch64-unknown-linux-gnu) arch_suffix=arm64 ;;
+            x86_64-unknown-linux-gnu) arch_suffix=amd64 ;;
+            riscv64gc-unknown-linux-gnu) arch_suffix=riscv64 ;;
+            *) arch_suffix=${{ matrix.target }} ;;
+          esac
+          mv target/$TARGET/arch/rsplayer_*.tgz rsplayer_${{ github.ref_name }}_${arch_suffix}.tgz 2>/dev/null || true
+
+      - name: Upload Arch tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-${{ matrix.target }}
+          path: rsplayer_${{ github.ref_name }}_*.tgz
+          if-no-files-found: error
 
   publish:
     needs: build_backend
     name: Create release
     runs-on: rsplayer-self-hosted
     steps:
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      
-    - name: Prepare Release Assets
-      run: |
-        mkdir -p release_assets
-        
-        # Move binaries (Robust checks for missing targets)
-        [ -d "rsplayer-aarch64-unknown-linux-gnu" ] && mv rsplayer-aarch64-unknown-linux-gnu/rsplayer release_assets/rsplayer_arm64 || true
-        [ -d "rsplayer-armv7-unknown-linux-gnueabihf" ] && mv rsplayer-armv7-unknown-linux-gnueabihf/rsplayer release_assets/rsplayer_armhfv7 || true
-        [ -d "rsplayer-arm-unknown-linux-gnueabihf" ] && mv rsplayer-arm-unknown-linux-gnueabihf/rsplayer release_assets/rsplayer_armhfv6 || true
-        [ -d "rsplayer-x86_64-unknown-linux-gnu" ] && mv rsplayer-x86_64-unknown-linux-gnu/rsplayer release_assets/rsplayer_amd64 || true
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
 
-        # Move debs
-        [ -d "deb-arm-unknown-linux-gnueabihf" ] && find deb-arm-unknown-linux-gnueabihf -name "*.deb" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_armhfv6.deb \; || true
-        [ -d "deb-armv7-unknown-linux-gnueabihf" ] && find deb-armv7-unknown-linux-gnueabihf -name "*.deb" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_armhfv7.deb \; || true
-        [ -d "deb-aarch64-unknown-linux-gnu" ] && find deb-aarch64-unknown-linux-gnu -name "*.deb" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_arm64.deb \; || true
-        [ -d "deb-x86_64-unknown-linux-gnu" ] && find deb-x86_64-unknown-linux-gnu -name "*.deb" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_amd64.deb \; || true
+      - name: Prepare Release Assets
+        run: |
+          mkdir -p release_assets
 
-        # Move RPMs
-        [ -d "rpm-arm-unknown-linux-gnueabihf" ] && find rpm-arm-unknown-linux-gnueabihf -name "*.rpm" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_armv6hl.rpm \; || true
-        [ -d "rpm-armv7-unknown-linux-gnueabihf" ] && find rpm-armv7-unknown-linux-gnueabihf -name "*.rpm" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_armv7hl.rpm \; || true
-        [ -d "rpm-aarch64-unknown-linux-gnu" ] && find rpm-aarch64-unknown-linux-gnu -name "*.rpm" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_aarch64.rpm \; || true
-        [ -d "rpm-x86_64-unknown-linux-gnu" ] && find rpm-x86_64-unknown-linux-gnu -name "*.rpm" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_x86_64.rpm \; || true
+          # Move binaries (Robust checks for missing targets)
+          [ -d "rsplayer-aarch64-unknown-linux-gnu" ] && mv rsplayer-aarch64-unknown-linux-gnu/rsplayer release_assets/rsplayer_arm64 || true
+          [ -d "rsplayer-armv7-unknown-linux-gnueabihf" ] && mv rsplayer-armv7-unknown-linux-gnueabihf/rsplayer release_assets/rsplayer_armhfv7 || true
+          [ -d "rsplayer-arm-unknown-linux-gnueabihf" ] && mv rsplayer-arm-unknown-linux-gnueabihf/rsplayer release_assets/rsplayer_armhfv6 || true
+          [ -d "rsplayer-x86_64-unknown-linux-gnu" ] && mv rsplayer-x86_64-unknown-linux-gnu/rsplayer release_assets/rsplayer_amd64 || true
+          [ -d "rsplayer-riscv64gc-unknown-linux-gnu" ] && mv rsplayer-riscv64gc-unknown-linux-gnu/rsplayer release_assets/rsplayer_riscv64 || true
 
-        # Move Arch tarballs
-        [ -d "arch-arm-unknown-linux-gnueabihf" ] && find arch-arm-unknown-linux-gnueabihf -name "*.tgz" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_armhfv6.tgz \; || true
-        [ -d "arch-armv7-unknown-linux-gnueabihf" ] && find arch-armv7-unknown-linux-gnueabihf -name "*.tgz" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_armhfv7.tgz \; || true
-        [ -d "arch-aarch64-unknown-linux-gnu" ] && find arch-aarch64-unknown-linux-gnu -name "*.tgz" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_arm64.tgz \; || true
-        [ -d "arch-x86_64-unknown-linux-gnu" ] && find arch-x86_64-unknown-linux-gnu -name "*.tgz" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_amd64.tgz \; || true
+          # Move debs
+          [ -d "deb-arm-unknown-linux-gnueabihf" ] && find deb-arm-unknown-linux-gnueabihf -name "*.deb" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_armhfv6.deb \; || true
+          [ -d "deb-armv7-unknown-linux-gnueabihf" ] && find deb-armv7-unknown-linux-gnueabihf -name "*.deb" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_armhfv7.deb \; || true
+          [ -d "deb-aarch64-unknown-linux-gnu" ] && find deb-aarch64-unknown-linux-gnu -name "*.deb" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_arm64.deb \; || true
+          [ -d "deb-x86_64-unknown-linux-gnu" ] && find deb-x86_64-unknown-linux-gnu -name "*.deb" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_amd64.deb \; || true
+          [ -d "deb-riscv64gc-unknown-linux-gnu" ] && find deb-riscv64gc-unknown-linux-gnu -name "*.deb" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_riscv64.deb \; || true
 
-        ls -R release_assets
+          # Move RPMs
+          [ -d "rpm-arm-unknown-linux-gnueabihf" ] && find rpm-arm-unknown-linux-gnueabihf -name "*.rpm" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_armv6hl.rpm \; || true
+          [ -d "rpm-armv7-unknown-linux-gnueabihf" ] && find rpm-armv7-unknown-linux-gnueabihf -name "*.rpm" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_armv7hl.rpm \; || true
+          [ -d "rpm-aarch64-unknown-linux-gnu" ] && find rpm-aarch64-unknown-linux-gnu -name "*.rpm" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_aarch64.rpm \; || true
+          [ -d "rpm-x86_64-unknown-linux-gnu" ] && find rpm-x86_64-unknown-linux-gnu -name "*.rpm" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_x86_64.rpm \; || true
+          [ -d "rpm-riscv64gc-unknown-linux-gnu" ] && find rpm-riscv64gc-unknown-linux-gnu -name "*.rpm" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_riscv64.rpm \; || true
 
-    - name: Create Release
-      uses: ncipollo/release-action@v1
-      if: startsWith(github.ref, 'refs/tags/')
-      with:
-        artifacts: "release_assets/*"
-        draft: true
-        prerelease: true
-        generateReleaseNotes: true
-        allowUpdates: true
-        token: ${{ secrets.GITHUB_TOKEN }}
+          # Move Arch tarballs
+          [ -d "arch-arm-unknown-linux-gnueabihf" ] && find arch-arm-unknown-linux-gnueabihf -name "*.tgz" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_armhfv6.tgz \; || true
+          [ -d "arch-armv7-unknown-linux-gnueabihf" ] && find arch-armv7-unknown-linux-gnueabihf -name "*.tgz" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_armhfv7.tgz \; || true
+          [ -d "arch-aarch64-unknown-linux-gnu" ] && find arch-aarch64-unknown-linux-gnu -name "*.tgz" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_arm64.tgz \; || true
+          [ -d "arch-x86_64-unknown-linux-gnu" ] && find arch-x86_64-unknown-linux-gnu -name "*.tgz" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_amd64.tgz \; || true
+          [ -d "arch-riscv64gc-unknown-linux-gnu" ] && find arch-riscv64gc-unknown-linux-gnu -name "*.tgz" -exec mv {} release_assets/rsplayer_${{ github.ref_name }}_riscv64.tgz \; || true
+
+          ls -R release_assets
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          artifacts: "release_assets/*"
+          draft: true
+          prerelease: true
+          generateReleaseNotes: true
+          allowUpdates: true
+          token: ${{ secrets.GITHUB_TOKEN }}

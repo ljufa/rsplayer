@@ -55,7 +55,7 @@ pub fn start(
     config: &Config,
 ) -> (
     impl Future<Output = ()>,
-    impl Future<Output = ()>,
+    Option<impl Future<Output = ()>>,
     impl Future<Output = ()>,
 ) {
     let player_commands_tx = warp::any().map(move || player_commands_tx.clone());
@@ -71,13 +71,9 @@ pub fn start(
         .and(warp::any().map(move || ws_bcast_tx_filter.subscribe()))
         .and(player_commands_tx)
         .and(system_commands_tx)
-        .map(
-            |ws: warp::ws::Ws, ws_rx, player_commands, system_commands| {
-                ws.on_upgrade(|websocket| {
-                    user_connected(websocket, ws_rx, player_commands, system_commands)
-                })
-            },
-        );
+        .map(|ws: warp::ws::Ws, ws_rx, player_commands, system_commands| {
+            ws.on_upgrade(|websocket| user_connected(websocket, ws_rx, player_commands, system_commands))
+        });
 
     let mut cache_headers = HeaderMap::new();
     cache_headers.insert(
@@ -95,8 +91,7 @@ pub fn start(
         .with(warp::reply::with::headers(cache_headers));
 
     let music_dir = config.get_settings().metadata_settings.music_directory;
-    let music_static_content = warp::path("music")
-        .and(warp::fs::dir(music_dir));
+    let music_static_content = warp::path("music").and(warp::fs::dir(music_dir));
 
     let routes = player_ws_path
         .or(filters::settings_save(config.clone()))
@@ -119,9 +114,7 @@ pub fn start(
                 Ok(ev) => {
                     trace!("Received state changed event {ev:?}");
                     let json_msg = serde_json::to_string(&ev).unwrap();
-                    if !json_msg.is_empty()
-                        && ws_bcast_tx_handle.send(Arc::new(json_msg)).is_err()
-                    {
+                    if !json_msg.is_empty() && ws_bcast_tx_handle.send(Arc::new(json_msg)).is_err() {
                         trace!("No active ws clients, not sending state change");
                     }
                 }
@@ -130,13 +123,21 @@ pub fn start(
     };
     let ports = get_ports();
     let http_handle = warp::serve(routes.clone()).run(([0, 0, 0, 0], ports.0));
-    let cert_path = env::var("TLS_CERT_PATH").expect("TLS_CERT_PATH is not set");
-    let key_path = env::var("TLS_CERT_KEY_PATH").expect("TLS_CERT_KEY_PATH is not set");
-    let https_handle = warp::serve(routes)
-        .tls()
-        .cert_path(cert_path)
-        .key_path(key_path)
-        .run(([0, 0, 0, 0], ports.1));
+    let https_handle = if let (Ok(cert_path), Ok(key_path)) =
+        (env::var("TLS_CERT_PATH"), env::var("TLS_CERT_KEY_PATH"))
+    {
+        info!("TLS enabled, starting HTTPS on port {}", ports.1);
+        Some(
+            warp::serve(routes)
+                .tls()
+                .cert_path(cert_path)
+                .key_path(key_path)
+                .run(([0, 0, 0, 0], ports.1)),
+        )
+    } else {
+        info!("TLS not configured, HTTPS disabled");
+        None
+    };
     (http_handle, https_handle, ws_handle)
 }
 
@@ -148,9 +149,7 @@ mod filters {
 
     use super::{handlers, Config};
 
-    pub fn settings_save(
-        config: Config,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    pub fn settings_save(config: Config) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::post()
             .and(warp::path!("api" / "settings"))
             .and(json_body())
@@ -159,9 +158,7 @@ mod filters {
             .and_then(handlers::save_settings)
     }
 
-    pub fn get_settings(
-        config: Config,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    pub fn get_settings(config: Config) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::get()
             .and(warp::path!("api" / "settings"))
             .and(with_config(config))
@@ -177,8 +174,7 @@ mod filters {
             .map(move || error_msg.clone())
     }
 
-    fn with_config(config: Config) -> impl Filter<Extract = (Config,), Error = std::convert::Infallible> + Clone
-    {
+    fn with_config(config: Config) -> impl Filter<Extract = (Config,), Error = std::convert::Infallible> + Clone {
         warp::any().map(move || config.clone())
     }
 
@@ -197,10 +193,6 @@ mod handlers {
     use warp::hyper::StatusCode;
 
     use api_models::settings::Settings;
-    use rsplayer_hardware::{
-        audio_device::alsa::{self},
-        usb,
-    };
 
     use super::Config;
 
@@ -223,16 +215,20 @@ mod handlers {
 
     pub async fn get_settings(config: Config) -> Result<impl warp::Reply, Infallible> {
         let mut settings = config.get_settings_mut();
-        let cards = alsa::get_all_cards();
-        if let Some(mixer_name) = &settings.volume_ctrl_settings.alsa_mixer_name {
-            for card in &cards {
-                if let Some(mixer) = card.mixers.iter().find(|m| &m.name == mixer_name) {
-                    settings.volume_ctrl_settings.alsa_mixer = Some(mixer.clone());
-                    break;
+
+        #[cfg(feature = "alsa")]
+        {
+            let cards = rsplayer_hardware::audio_device::alsa::get_all_cards();
+            if let Some(mixer_name) = &settings.volume_ctrl_settings.alsa_mixer_name {
+                for card in &cards {
+                    if let Some(mixer) = card.mixers.iter().find(|m| &m.name == mixer_name) {
+                        settings.volume_ctrl_settings.alsa_mixer = Some(mixer.clone());
+                        break;
+                    }
                 }
             }
+            settings.alsa_settings.available_audio_cards = cards;
         }
-        settings.alsa_settings.available_audio_cards = cards;
 
         Ok(warp::reply::json(&*settings))
     }
@@ -325,12 +321,12 @@ fn user_disconnected(my_id: usize) {
 
 fn get_ports() -> (u16, u16) {
     let http_port = env::var("PORT")
-        .expect("PORT is not set")
+        .unwrap_or("8000".to_string())
         .parse::<u16>()
         .expect("PORT is not a valid port number");
 
     let https_port = env::var("TLS_PORT")
-        .expect("TLS_PORT is not set")
+        .unwrap_or("8143".to_string())
         .parse::<u16>()
         .expect("TLS_PORT is not a valid port number");
     (http_port, https_port)

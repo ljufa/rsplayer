@@ -1,22 +1,24 @@
 use std::sync::{Arc, RwLock};
 
 use api_models::settings::Settings;
-use sled::{Db, IVec};
+use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 
 const SETTINGS_KEY: &str = "settings";
 
 pub type ArcConfiguration = Arc<Configuration>;
 
 pub struct Configuration {
-    db: Db,
+    tree: Keyspace,
     settings: RwLock<Settings>,
 }
 
 impl Configuration {
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        let db = sled::open("configuration.db").expect("Failed to open configuration db");
-        let settings = if let Ok(Some(data)) = db.get(SETTINGS_KEY) {
+    pub fn new(db: &Database) -> Self {
+        let tree = db
+            .keyspace("configuration", KeyspaceCreateOptions::default)
+            .expect("Failed to open configuration keyspace");
+        let settings = if let Ok(Some(data)) = tree.get(SETTINGS_KEY) {
             match serde_json::from_slice::<Settings>(&data) {
                 Ok(mut settings) => {
                     let value: serde_json::Value = serde_json::from_slice(&data).unwrap();
@@ -36,11 +38,11 @@ impl Configuration {
             }
         } else {
             let s = Settings::default();
-            _ = db.insert(SETTINGS_KEY, IVec::from(serde_json::to_vec(&s).unwrap()));
+            _ = tree.insert(SETTINGS_KEY, serde_json::to_vec(&s).unwrap());
             s
         };
         Self {
-            db,
+            tree,
             settings: RwLock::new(settings),
         }
     }
@@ -55,8 +57,7 @@ impl Configuration {
 
     pub fn save_settings(&self, settings: &Settings) {
         *self.settings.write().unwrap() = settings.clone();
-        _ = self.db.insert(SETTINGS_KEY, serde_json::to_vec(settings).unwrap());
-        _ = self.db.flush();
+        _ = self.tree.insert(SETTINGS_KEY, serde_json::to_vec(settings).unwrap());
     }
 }
 

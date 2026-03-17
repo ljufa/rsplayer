@@ -5,6 +5,7 @@ edition = "2021"
 
 
 [features]
+alsa = ["dep:alsa"]
 lirc = []
 
 [dependencies]
@@ -20,7 +21,7 @@ anyhow.workspace = true
 
 #other
 unidecode = "0.3.0"
-alsa = "0.9.1"
+alsa = { version = "0.9.1", optional = true }
 url = "2.5.0"
 
 

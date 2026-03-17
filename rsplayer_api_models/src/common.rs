@@ -195,6 +195,10 @@ pub enum QueueCommand {
     AddArtistAndPlay(String),
     AddAlbumAfterCurrent(String),
     AddAlbumAndPlay(String),
+    LoadGenreInQueue(String),
+    AddGenreToQueue(String),
+    LoadDecadeInQueue(String),
+    AddDecadeToQueue(String),
     MoveItem(usize, usize),
     MoveItemAfterCurrent(usize),
 }

@@ -354,6 +354,94 @@ pub async fn handle_user_commands(
                         .unwrap();
                 }
             }
+            Queue(QueueCommand::LoadGenreInQueue(genre)) => {
+                let songs: Vec<_> = album_repository
+                    .find_all_by_genre(20)
+                    .into_iter()
+                    .find(|(g, _)| *g == genre)
+                    .map(|(_, albums)| albums)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|alb| album_repository.find_by_id(&alb.title))
+                    .flat_map(|alb| alb.song_keys.into_iter())
+                    .filter_map(|sk| song_repository.find_by_id(&sk))
+                    .collect();
+                let count = songs.len();
+                player_service.stop_current_song();
+                queue_service.replace_all(songs.into_iter());
+                player_service.play_from_current_queue_song();
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(format!(
+                        "{count} songs from genre '{genre}' loaded into queue"
+                    )))
+                    .unwrap();
+            }
+            Queue(QueueCommand::AddGenreToQueue(genre)) => {
+                let songs: Vec<_> = album_repository
+                    .find_all_by_genre(20)
+                    .into_iter()
+                    .find(|(g, _)| *g == genre)
+                    .map(|(_, albums)| albums)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|alb| album_repository.find_by_id(&alb.title))
+                    .flat_map(|alb| alb.song_keys.into_iter())
+                    .filter_map(|sk| song_repository.find_by_id(&sk))
+                    .collect();
+                let count = songs.len();
+                for song in &songs {
+                    queue_service.add_song(song);
+                }
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(format!(
+                        "{count} songs from genre '{genre}' added to queue"
+                    )))
+                    .unwrap();
+            }
+            Queue(QueueCommand::LoadDecadeInQueue(decade)) => {
+                let songs: Vec<_> = album_repository
+                    .find_all_by_decade(20)
+                    .into_iter()
+                    .find(|(d, _)| *d == decade)
+                    .map(|(_, albums)| albums)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|alb| album_repository.find_by_id(&alb.title))
+                    .flat_map(|alb| alb.song_keys.into_iter())
+                    .filter_map(|sk| song_repository.find_by_id(&sk))
+                    .collect();
+                let count = songs.len();
+                player_service.stop_current_song();
+                queue_service.replace_all(songs.into_iter());
+                player_service.play_from_current_queue_song();
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(format!(
+                        "{count} songs from '{decade}' loaded into queue"
+                    )))
+                    .unwrap();
+            }
+            Queue(QueueCommand::AddDecadeToQueue(decade)) => {
+                let songs: Vec<_> = album_repository
+                    .find_all_by_decade(20)
+                    .into_iter()
+                    .find(|(d, _)| *d == decade)
+                    .map(|(_, albums)| albums)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|alb| album_repository.find_by_id(&alb.title))
+                    .flat_map(|alb| alb.song_keys.into_iter())
+                    .filter_map(|sk| song_repository.find_by_id(&sk))
+                    .collect();
+                let count = songs.len();
+                for song in &songs {
+                    queue_service.add_song(song);
+                }
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(format!(
+                        "{count} songs from '{decade}' added to queue"
+                    )))
+                    .unwrap();
+            }
             Queue(QueueCommand::MoveItem(from, to)) => {
                 queue_service.move_item(from, to);
             }
