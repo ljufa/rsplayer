@@ -11,6 +11,7 @@ const VU_UPDATE_INTERVAL: Duration = Duration::from_millis(50);
 ///
 /// When VU metering is disabled the caller should simply not create a
 /// `VUMeter` at all (use `Option<VUMeter>` in the owning struct).
+#[derive(Clone)]
 pub struct VUMeter {
     /// Last time a VU event was sent to the frontend.
     last_update: std::time::Instant,

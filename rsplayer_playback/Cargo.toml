@@ -24,6 +24,7 @@ fjall.workspace = true
 ureq.workspace = true
 serde_json.workspace = true
 rb = "0.4.1"
+rubato = "0.15"
 
 mockall_double = "0.3.1"
 

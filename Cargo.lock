@@ -689,7 +689,6 @@ dependencies = [
 [[package]]
 name = "cpal"
 version = "0.16.0"
-source = "git+https://github.com/ljufa/cpal.git?branch=master#e9cd3e735b004faae9c373af436079ee49061074"
 dependencies = [
  "alsa 0.10.0",
  "coreaudio-rs 0.13.0",
@@ -2830,6 +2829,7 @@ dependencies = [
  "rsplayer_config",
  "rsplayer_dsp",
  "rsplayer_metadata",
+ "rubato",
  "serde_json",
  "symphonia",
  "thread-priority",

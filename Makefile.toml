@@ -3,8 +3,8 @@
 # CARGO_TARGET_DIR = "/dev/shm/cargo_target"
 CARGO_TARGET_DIR = "target"
 
-# RPI_HOST = "192.168.5.3"
-# TARGET = "arm-unknown-linux-gnueabihf"
+RPI_HOST = "192.168.5.3"
+TARGET = "arm-unknown-linux-gnueabihf"
 
 # RPI_HOST = "192.168.5.4"
 # TARGET = "aarch64-unknown-linux-gnu"
@@ -12,7 +12,7 @@ CARGO_TARGET_DIR = "target"
 # TARGET = "x86_64-unknown-linux-gnu"
 # TARGET = "riscv64gc-unknown-linux-gnu"
 
-RELEASE_VERSION = "2.0.0"
+RELEASE_VERSION = "2.0.1"
 RELEASE_BRANCH = "main_public"
 
 [config]
