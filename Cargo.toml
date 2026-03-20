@@ -22,8 +22,8 @@ fjall = "3"
 # fix for radio stream blocking playback thread + dsd
 symphonia = { git = "https://github.com/ljufa/Symphonia.git", branch = "master", features = ["all"] }
 # symphonia = { path = "../Symphonia/symphonia", features = ["all"] }
-# cpal = { git = "https://github.com/ljufa/cpal.git", branch = "master"}
-cpal = { path = "../cpal" }
+cpal = { git = "https://github.com/ljufa/cpal.git", branch = "master"}
+# cpal = { path = "../cpal" }
 
 cfg-if = "1.0.0"
 tokio = { version = "1.40.0", features = ["full", "tracing"] }

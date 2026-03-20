@@ -50,7 +50,7 @@ pub fn get_all_cards() -> Vec<AudioCard> {
             });
         }
         // Sort hw: devices first so they appear at the top of the list.
-        pcm_devices.sort_by_key(|d| if d.name.starts_with("hw:") { 0 } else { 1 });
+        pcm_devices.sort_by_key(|d| i32::from(!d.name.starts_with("hw:")));
         result.push(AudioCard {
             id: card_name.clone(),
             index: card_index,

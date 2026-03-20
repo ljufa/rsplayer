@@ -158,7 +158,8 @@ where
         for frame in 0..out_frames {
             for ch in 0..self.channels {
                 let sample_f32 = self.channel_out[ch][frame];
-                self.interleaved_out.push(<T as FromSample<f32>>::from_sample(sample_f32));
+                self.interleaved_out
+                    .push(<T as FromSample<f32>>::from_sample(sample_f32));
             }
         }
 
@@ -221,7 +222,8 @@ impl AlsaOutput {
     ) -> Result<AlsaOutput> {
         let host = cpal::default_host();
         let device = if audio_device == "default" {
-            host.default_output_device().ok_or_else(|| Error::msg("Default audio device not found!"))?
+            host.default_output_device()
+                .ok_or_else(|| Error::msg("Default audio device not found!"))?
         } else {
             host.devices()?
                 .find(|d| d.name().unwrap_or_default() == audio_device)
@@ -262,9 +264,16 @@ impl AlsaOutput {
             (default.config(), default.sample_format())
         };
 
-        let device_rate = if is_dsd { None } else { find_device_rate(&device, spec.rate) };
+        let device_rate = if is_dsd {
+            None
+        } else {
+            find_device_rate(&device, spec.rate)
+        };
         if let Some(rate) = device_rate {
-            info!("Device does not support {}Hz natively, will resample to {}Hz", spec.rate, rate);
+            info!(
+                "Device does not support {}Hz natively, will resample to {}Hz",
+                spec.rate, rate
+            );
         }
 
         // Rebuild the equalizer for this track's spec.  Skip for DSD.
