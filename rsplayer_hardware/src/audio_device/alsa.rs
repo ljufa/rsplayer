@@ -36,12 +36,21 @@ pub fn get_all_cards() -> Vec<AudioCard> {
         let card_name = card.get_name().unwrap_or_default();
         let card_index = card.get_index();
         for hint in it {
+            let name = hint.name.unwrap_or_default();
+            let raw_desc = hint.desc.map_or(String::new(), |dsc| dsc.replace('\n', " "));
+            let description = if name.starts_with("hw:") {
+                format!("{raw_desc} (hw, recommended)")
+            } else {
+                raw_desc
+            };
             pcm_devices.push(PcmOutputDevice {
-                name: hint.name.unwrap_or_default(),
-                description: hint.desc.map_or(String::new(), |dsc| dsc.replace('\n', " ")),
+                name,
+                description,
                 card_id: card_name.clone(),
             });
         }
+        // Sort hw: devices first so they appear at the top of the list.
+        pcm_devices.sort_by_key(|d| if d.name.starts_with("hw:") { 0 } else { 1 });
         result.push(AudioCard {
             id: card_name.clone(),
             index: card_index,
