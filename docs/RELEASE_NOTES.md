@@ -1,5 +1,31 @@
 # Release Notes
 
+## v2.1.0 — 2026-03-20
+
+### New Features
+
+#### Automatic Sample Rate Resampling
+RSPlayer now automatically resamples audio when the output device doesn't support the source file's sample rate. Previously, playback would fail with an ALSA `snd_pcm_hw_params` error on devices with limited rate support (e.g. TAS58xx I2S DACs that only support 48kHz).
+
+- High-quality FFT-based resampling via [rubato](https://github.com/HEnquist/rubato)
+- Automatically detects the closest supported device rate — no user configuration needed
+- DSP equalizer and VU meter operate at the output rate for correct filter coefficients and metering
+- Zero overhead when no resampling is needed — the existing direct playback path is unchanged
+- Set `RSPLAYER_RESAMPLE_TO=<rate>` environment variable to force resampling for testing or debugging
+
+### Improvements
+
+#### Audio Device Selection
+- `hw:` (direct hardware) devices are now sorted first in the PCM device dropdown and labeled **(hw, recommended)** to guide users toward the most reliable option
+- All device types (`plughw:`, `default`, etc.) remain available for advanced users
+- Removed the non-functional `plughw:` fallback path — cpal cannot enumerate ALSA plugin devices, so the fallback could never find the target device
+
+### Bug Fixes
+
+- Fixed VU meter peak calculation for stereo sources
+
+---
+
 ## v2.0.0 — 2026-03-17
 
 ### Breaking Changes
