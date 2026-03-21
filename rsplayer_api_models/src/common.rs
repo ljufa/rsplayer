@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{player::Song, settings::DspSettings, state::CurrentQueueQuery};
+use crate::{player::Song, settings::{DspSettings, NetworkMountConfig}, state::CurrentQueueQuery};
 use chrono::{DateTime, Utc};
 use num_derive::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -112,6 +112,17 @@ pub enum UserCommand {
     Playlist(PlaylistCommand),
     Metadata(MetadataCommand),
     UpdateDsp(DspSettings),
+    Storage(StorageCommand),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub enum StorageCommand {
+    Mount(NetworkMountConfig),
+    Unmount(String),
+    Remove(String),
+    QueryMountStatus,
+    QueryMusicDirStatus,
+    SaveExternalMount(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, EnumString, EnumIter, IntoStaticStr)]

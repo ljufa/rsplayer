@@ -25,7 +25,9 @@ post_install() {
         useradd -r -s /bin/false -d /opt/rsplayer -g rsplayer rsplayer || :
         usermod -a -G audio,dialout,i2c,gpio,spi,input rsplayer || true
     fi
-    chown -R rsplayer:rsplayer /opt/rsplayer
+    chown -R rsplayer /opt/rsplayer
+    mkdir -p /mnt/rsplayer
+    chown rsplayer /mnt/rsplayer
     systemctl daemon-reload
     systemctl enable rsplayer
     systemctl start rsplayer

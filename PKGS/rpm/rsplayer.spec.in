@@ -7,6 +7,8 @@ URL:            https://github.com/ljufa/rsplayer
 Source0:        %{name}-%{version}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
+%define debug_package %{nil}
+
 Requires:       alsa-lib >= 1.2.4
 Suggests:       nfs-utils >= 1:1.3.4-6
 Requires(pre):  shadow-utils
@@ -48,7 +50,9 @@ fi
 
 %post
 # Set ownership of /opt/rsplayer
-chown -R rsplayer:rsplayer /opt/rsplayer 2>/dev/null || :
+chown -R rsplayer /opt/rsplayer 2>/dev/null || :
+mkdir -p /mnt/rsplayer
+chown rsplayer /mnt/rsplayer 2>/dev/null || :
 if [ "$1" -eq 1 ]; then
     # initial installation
     systemctl daemon-reload >/dev/null 2>&1 || :

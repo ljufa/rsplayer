@@ -1297,7 +1297,7 @@ a:hover {
 
 .settings-details__summary::-webkit-details-marker { display: none; }
 
-.settings-details__summary::after {
+details.settings-details > .settings-details__summary::after {
   content: 'expand_more';
   font-family: 'Material Icons';
   font-size: 20px;
@@ -1306,8 +1306,13 @@ a:hover {
   transition: transform 0.2s ease;
 }
 
-.settings-details[open] .settings-details__summary::after {
+details.settings-details[open] > .settings-details__summary::after {
   transform: rotate(180deg);
+}
+
+.settings-details__summary .material-icons {
+  margin-left: auto;
+  color: var(--secondary-text);
 }
 
 .settings-details__body {

@@ -75,6 +75,34 @@ pub enum StateChangeEvent {
     VuMeterEnabledEvent(bool),
     RSPlayerFirmwarePowerEvent(bool),
     LibraryStatsEvent(LibraryStats),
+    MountStatusEvent(Vec<MountStatus>),
+    MusicDirStatusEvent(Vec<MusicDirStatus>),
+    ExternalMountsEvent(Vec<ExternalMount>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MountStatus {
+    pub name: String,
+    pub mount_point: String,
+    pub is_mounted: bool,
+    pub readable: bool,
+    pub writable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MusicDirStatus {
+    pub path: String,
+    pub readable: bool,
+    pub writable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalMount {
+    pub source: String,
+    pub mount_point: String,
+    pub fs_type: String,
+    pub readable: bool,
+    pub writable: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

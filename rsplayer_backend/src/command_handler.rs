@@ -1,7 +1,7 @@
 use std::process::exit;
 use std::sync::Arc;
 
-use log::debug;
+use log::{debug, error};
 use tokio::sync::broadcast::Sender;
 use tokio::sync::mpsc::Receiver;
 
@@ -18,8 +18,8 @@ use api_models::common::QueueCommand::{
     LoadSongToQueue, QueryCurrentQueue, QueryCurrentSong, RemoveItem,
 };
 use api_models::common::SystemCommand::{PowerOff, RestartRSPlayer, RestartSystem, SetVol, VolDown, VolUp};
-use api_models::common::UserCommand::{Metadata, Player, Playlist, Queue, UpdateDsp};
-use api_models::common::{MetadataCommand, MetadataLibraryItem, SystemCommand, UserCommand};
+use api_models::common::UserCommand::{Metadata, Player, Playlist, Queue, Storage, UpdateDsp};
+use api_models::common::{MetadataCommand, MetadataLibraryItem, StorageCommand, SystemCommand, UserCommand};
 use api_models::playlist::PlaylistType;
 use api_models::state::StateChangeEvent;
 use rsplayer_config::ArcConfiguration;
@@ -257,7 +257,7 @@ pub async fn handle_user_commands(
                 player_service.stop_current_song();
                 queue_service.add_song_by_id(&song_id);
                 queue_service.set_current_to_last();
-                player_service.play_from_current_queue_song();
+                player_service.play_from_beginning();
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(
                         "Song added and playing".to_string(),
@@ -275,8 +275,8 @@ pub async fn handle_user_commands(
             Queue(QueueCommand::AddDirectoryAndPlay(dir)) => {
                 if let Some(first_key) = queue_service.add_songs_from_dir_after_current(&dir) {
                     player_service.stop_current_song();
-                    queue_service.set_current_song(first_key);
-                    player_service.play_from_current_queue_song();
+                    queue_service.set_current_song(&first_key);
+                    player_service.play_from_beginning();
                     state_changes_sender
                         .send(StateChangeEvent::NotificationSuccess(
                             "Directory added and playing".to_string(),
@@ -307,8 +307,8 @@ pub async fn handle_user_commands(
                     .collect::<Vec<_>>();
                 if let Some(first_key) = queue_service.add_songs_after_current(songs) {
                     player_service.stop_current_song();
-                    queue_service.set_current_song(first_key);
-                    player_service.play_from_current_queue_song();
+                    queue_service.set_current_song(&first_key);
+                    player_service.play_from_beginning();
                     state_changes_sender
                         .send(StateChangeEvent::NotificationSuccess(
                             "Artist added and playing".to_string(),
@@ -345,8 +345,8 @@ pub async fn handle_user_commands(
                     .unwrap_or_default();
                 if let Some(first_key) = queue_service.add_songs_after_current(songs) {
                     player_service.stop_current_song();
-                    queue_service.set_current_song(first_key);
-                    player_service.play_from_current_queue_song();
+                    queue_service.set_current_song(&first_key);
+                    player_service.play_from_beginning();
                     state_changes_sender
                         .send(StateChangeEvent::NotificationSuccess(
                             "Album added and playing".to_string(),
@@ -369,7 +369,7 @@ pub async fn handle_user_commands(
                 let count = songs.len();
                 player_service.stop_current_song();
                 queue_service.replace_all(songs.into_iter());
-                player_service.play_from_current_queue_song();
+                player_service.play_from_beginning();
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(format!(
                         "{count} songs from genre '{genre}' loaded into queue"
@@ -413,7 +413,7 @@ pub async fn handle_user_commands(
                 let count = songs.len();
                 player_service.stop_current_song();
                 queue_service.replace_all(songs.into_iter());
-                player_service.play_from_current_queue_song();
+                player_service.play_from_beginning();
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(format!(
                         "{count} songs from '{decade}' loaded into queue"
@@ -457,7 +457,7 @@ pub async fn handle_user_commands(
                 player_service.stop_current_song();
                 let pl_songs = playlist_service.get_playlist_page_by_name(&pl_id, 0, 20000).items;
                 queue_service.replace_all(pl_songs.into_iter());
-                player_service.play_from_current_queue_song();
+                player_service.play_from_beginning();
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(
                         "Playlist loaded into queue".to_string(),
@@ -480,7 +480,7 @@ pub async fn handle_user_commands(
                     player_service.stop_current_song();
                     let songs = album.song_keys.iter().filter_map(|sk| song_repository.find_by_id(sk));
                     queue_service.replace_all(songs);
-                    player_service.play_from_current_queue_song();
+                    player_service.play_from_beginning();
                     state_changes_sender
                         .send(StateChangeEvent::NotificationSuccess(
                             "Album loaded into queue".to_string(),
@@ -498,7 +498,7 @@ pub async fn handle_user_commands(
                     .for_each(|sk| {
                         queue_service.add_song_by_id(sk);
                     });
-                player_service.play_from_current_queue_song();
+                player_service.play_from_beginning();
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(
                         "All artist's albums loaded into queue".to_string(),
@@ -539,7 +539,7 @@ pub async fn handle_user_commands(
                 player_service.stop_current_song();
                 queue_service.clear();
                 queue_service.add_song_by_id(&song_id);
-                player_service.play_from_current_queue_song();
+                player_service.play_from_beginning();
                 state_changes_sender
                     .send(StateChangeEvent::NotificationSuccess(
                         "Queue replaced with one song".to_string(),
@@ -575,7 +575,7 @@ pub async fn handle_user_commands(
                         "Dir {dir} loaded to queue"
                     )))
                     .unwrap();
-                player_service.play_from_current_queue_song();
+                player_service.play_from_beginning();
             }
             UpdateDsp(dsp_settings) => {
                 player_service.update_dsp_settings(&dsp_settings);
@@ -593,6 +593,7 @@ pub async fn handle_user_commands(
              * Metadata commands
              */
             Metadata(RescanMetadata(_music_dir, full_scan)) => {
+                metadata_service.update_settings(config_store.get_settings().metadata_settings);
                 let mtds = metadata_service.clone();
                 let state_changes_sender = state_changes_sender.clone();
                 std::thread::Builder::new()
@@ -686,6 +687,201 @@ pub async fn handle_user_commands(
                 state_changes_sender
                     .send(StateChangeEvent::LibraryStatsEvent(stats))
                     .unwrap();
+            }
+
+            /*
+             * Storage commands
+             */
+            Storage(StorageCommand::Mount(mount_config)) => {
+                match crate::mount_service::mount_share(&mount_config) {
+                    Ok(mount_point) => {
+                        // Save mount config (without password) to settings
+                        let mut settings = config_store.get_settings();
+                        let existing = settings
+                            .network_storage_settings
+                            .mounts
+                            .iter()
+                            .position(|m| m.name == mount_config.name);
+                        let mut saved_config = mount_config.clone();
+                        saved_config.password = None;
+                        if let Some(idx) = existing {
+                            settings.network_storage_settings.mounts[idx] = saved_config;
+                        } else {
+                            settings.network_storage_settings.mounts.push(saved_config);
+                        }
+                        // Auto-register mount point as music directory
+                        if !settings.metadata_settings.music_directories.contains(&mount_point) {
+                            settings.metadata_settings.music_directories.push(mount_point.clone());
+                        }
+                        config_store.save_settings(&settings);
+                        let statuses = crate::mount_service::query_mount_status(&settings.network_storage_settings);
+                        state_changes_sender.send(StateChangeEvent::MountStatusEvent(statuses)).unwrap();
+                        state_changes_sender
+                            .send(StateChangeEvent::NotificationSuccess(format!(
+                                "Mounted at {mount_point}"
+                            )))
+                            .unwrap();
+                    }
+                    Err(e) => {
+                        error!("Mount failed: {e}");
+                        state_changes_sender
+                            .send(StateChangeEvent::NotificationError(format!("Mount failed: {e}")))
+                            .unwrap();
+                    }
+                }
+            }
+            Storage(StorageCommand::Unmount(name)) => {
+                let settings = config_store.get_settings();
+                let config = settings
+                    .network_storage_settings
+                    .mounts
+                    .iter()
+                    .find(|m| m.name == name);
+                
+                let ext_mount = config.and_then(|c| c.mount_point.as_deref());
+
+                match crate::mount_service::unmount_share(&name, ext_mount) {
+                    Ok(()) => {
+                        let statuses =
+                            crate::mount_service::query_mount_status(&settings.network_storage_settings);
+                        state_changes_sender
+                            .send(StateChangeEvent::MountStatusEvent(statuses))
+                            .unwrap();
+                        state_changes_sender
+                            .send(StateChangeEvent::NotificationSuccess(format!("Unmounted {name}")))
+                            .unwrap();
+                    }
+                    Err(e) => {
+                        error!("Unmount failed: {e}");
+                        state_changes_sender
+                            .send(StateChangeEvent::NotificationError(format!("Unmount failed: {e}")))
+                            .unwrap();
+                    }
+                }
+            }
+            Storage(StorageCommand::Remove(name)) => {
+                let mut settings = config_store.get_settings();
+                // Find config to determine mount_point before removing
+                let config = settings
+                    .network_storage_settings
+                    .mounts
+                    .iter()
+                    .find(|m| m.name == name)
+                    .cloned();
+                let is_rsplayer_managed = config.as_ref().is_some_and(|c| c.mount_point.is_none());
+                let mount_point = config
+                    .as_ref()
+                    .and_then(|c| c.mount_point.clone())
+                    .unwrap_or_else(|| format!("/mnt/rsplayer/{name}"));
+
+                // Only unmount rsplayer-managed mounts
+                if is_rsplayer_managed {
+                    let _ = crate::mount_service::unmount_share(&name, None);
+                }
+
+                settings.network_storage_settings.mounts.retain(|m| m.name != name);
+                settings
+                    .metadata_settings
+                    .music_directories
+                    .retain(|d| d != &mount_point);
+                config_store.save_settings(&settings);
+                let statuses = crate::mount_service::query_mount_status(&settings.network_storage_settings);
+                state_changes_sender
+                    .send(StateChangeEvent::MountStatusEvent(statuses))
+                    .unwrap();
+                let external = crate::mount_service::discover_external_mounts(&settings.network_storage_settings);
+                state_changes_sender
+                    .send(StateChangeEvent::ExternalMountsEvent(external))
+                    .unwrap();
+                state_changes_sender
+                    .send(StateChangeEvent::NotificationSuccess(format!("Removed {name}")))
+                    .unwrap();
+            }
+            Storage(StorageCommand::QueryMountStatus) => {
+                let settings = config_store.get_settings();
+                let statuses = crate::mount_service::query_mount_status(&settings.network_storage_settings);
+                state_changes_sender
+                    .send(StateChangeEvent::MountStatusEvent(statuses))
+                    .unwrap();
+                let dir_statuses = crate::mount_service::query_music_dir_status(&settings.metadata_settings);
+                state_changes_sender
+                    .send(StateChangeEvent::MusicDirStatusEvent(dir_statuses))
+                    .unwrap();
+                let external =
+                    crate::mount_service::discover_external_mounts(&settings.network_storage_settings);
+                state_changes_sender
+                    .send(StateChangeEvent::ExternalMountsEvent(external))
+                    .unwrap();
+            }
+            Storage(StorageCommand::QueryMusicDirStatus) => {
+                let settings = config_store.get_settings();
+                let dir_statuses = crate::mount_service::query_music_dir_status(&settings.metadata_settings);
+                state_changes_sender
+                    .send(StateChangeEvent::MusicDirStatusEvent(dir_statuses))
+                    .unwrap();
+            }
+            Storage(StorageCommand::SaveExternalMount(mount_point)) => {
+                let mut settings = config_store.get_settings();
+                let externals =
+                    crate::mount_service::discover_external_mounts(&settings.network_storage_settings);
+                if let Some(ext) = externals.iter().find(|e| e.mount_point == mount_point) {
+                    if let Some(mut config) =
+                        crate::mount_service::parse_external_mount_to_config(ext)
+                    {
+                        // Ensure unique name
+                        let base_name = config.name.clone();
+                        let mut suffix = 0u32;
+                        while settings
+                            .network_storage_settings
+                            .mounts
+                            .iter()
+                            .any(|m| m.name == config.name)
+                        {
+                            suffix += 1;
+                            config.name = format!("{base_name}_{suffix}");
+                        }
+
+                        let mp = config
+                            .mount_point
+                            .clone()
+                            .unwrap_or_default();
+                        settings.network_storage_settings.mounts.push(config);
+                        if !settings.metadata_settings.music_directories.contains(&mp) {
+                            settings.metadata_settings.music_directories.push(mp);
+                        }
+                        config_store.save_settings(&settings);
+
+                        let statuses = crate::mount_service::query_mount_status(
+                            &settings.network_storage_settings,
+                        );
+                        state_changes_sender
+                            .send(StateChangeEvent::MountStatusEvent(statuses))
+                            .unwrap();
+                        let external = crate::mount_service::discover_external_mounts(
+                            &settings.network_storage_settings,
+                        );
+                        state_changes_sender
+                            .send(StateChangeEvent::ExternalMountsEvent(external))
+                            .unwrap();
+                        state_changes_sender
+                            .send(StateChangeEvent::NotificationSuccess(format!(
+                                "External mount saved: {mount_point}"
+                            )))
+                            .unwrap();
+                    } else {
+                        state_changes_sender
+                            .send(StateChangeEvent::NotificationError(
+                                "Failed to parse external mount".to_string(),
+                            ))
+                            .unwrap();
+                    }
+                } else {
+                    state_changes_sender
+                        .send(StateChangeEvent::NotificationError(format!(
+                            "External mount not found: {mount_point}"
+                        )))
+                        .unwrap();
+                }
             }
         }
     }

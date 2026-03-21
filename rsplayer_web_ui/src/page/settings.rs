@@ -1,7 +1,8 @@
 
 use api_models::{
-    common::{MetadataCommand::RescanMetadata, SystemCommand, UserCommand, VolumeCrtlType},
-    settings::{DspFilter, FilterConfig, MetadataStoreSettings, RsPlayerSettings, Settings},
+    common::{MetadataCommand::RescanMetadata, StorageCommand, SystemCommand, UserCommand, VolumeCrtlType},
+    settings::{DspFilter, FilterConfig, MetadataStoreSettings, NetworkMountConfig, NetworkMountType, RsPlayerSettings, Settings},
+    state::{ExternalMount, MountStatus, MusicDirStatus},
     validator::Validate,
 };
 use strum::IntoEnumIterator;
@@ -27,6 +28,8 @@ pub enum ConfirmAction {
     FullRescan,
     RestartPlayer,
     SaveAndRestartPlayer,
+    RemoveMusicDirectory(usize),
+    RemoveNetworkMount(String),
 }
 
 #[derive(Debug)]
@@ -35,6 +38,18 @@ pub struct Model {
     selected_audio_card_id: String,
     waiting_response: bool,
     confirm_action: Option<ConfirmAction>,
+    // Network mount form
+    mount_form_name: String,
+    mount_form_type: NetworkMountType,
+    mount_form_server: String,
+    mount_form_share: String,
+    mount_form_username: String,
+    mount_form_password: String,
+    mount_statuses: Vec<MountStatus>,
+    music_dir_statuses: Vec<MusicDirStatus>,
+    new_music_dir: String,
+    external_mounts: Vec<ExternalMount>,
+    network_mounts_open: bool,
 }
 
 #[derive(Debug)]
@@ -45,7 +60,9 @@ pub enum Msg {
     ToggleResumePlayback,
     ToggleRspAlsaBufferSize,
     // ---- Input capture ----
-    InputMetadataMusicDirectoryChanged(String),
+    InputNewMusicDir(String),
+    AddMusicDirectory,
+    RemoveMusicDirectory(usize),
     InputAlsaCardChange(String),
     InputAlsaPcmChange(String),
     InputVolumeStepChanged(String),
@@ -87,6 +104,23 @@ pub enum Msg {
     SettingsFetched(Settings),
     SendSystemCommand(SystemCommand),
     SendUserCommand(UserCommand),
+
+    // --- Network Storage ---
+    InputMountName(String),
+    InputMountType(String),
+    InputMountServer(String),
+    InputMountShare(String),
+    InputMountUsername(String),
+    InputMountPassword(String),
+    MountAdd,
+    MountRemove(String),
+    MountShare(String),
+    UnmountShare(String),
+    MountStatusReceived(Vec<MountStatus>),
+    MusicDirStatusReceived(Vec<MusicDirStatus>),
+    ExternalMountsReceived(Vec<ExternalMount>),
+    SaveExternalMount(String),
+    ToggleNetworkMounts,
 
     // --- Appearance ---
     /// Emitted when the user picks a theme in the settings page.
@@ -163,6 +197,17 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
         selected_audio_card_id: String::new(),
         waiting_response: true,
         confirm_action: None,
+        mount_form_name: String::new(),
+        mount_form_type: NetworkMountType::Smb,
+        mount_form_server: String::new(),
+        mount_form_share: String::new(),
+        mount_form_username: String::new(),
+        mount_form_password: String::new(),
+        mount_statuses: Vec::new(),
+        music_dir_statuses: Vec::new(),
+        new_music_dir: String::new(),
+        external_mounts: Vec::new(),
+        network_mounts_open: false,
     }
 }
 
@@ -189,6 +234,12 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     }
                     ConfirmAction::SaveAndRestartPlayer => {
                         orders.send_msg(Msg::SaveSettingsAndRestart);
+                    }
+                    ConfirmAction::RemoveMusicDirectory(idx) => {
+                        orders.send_msg(Msg::RemoveMusicDirectory(idx));
+                    }
+                    ConfirmAction::RemoveNetworkMount(name) => {
+                        orders.send_msg(Msg::MountRemove(name));
                     }
                 }
             }
@@ -222,8 +273,29 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             }
         }
 
-        Msg::InputMetadataMusicDirectoryChanged(value) => {
-            model.settings.metadata_settings.music_directory = value;
+        Msg::InputNewMusicDir(value) => {
+            model.new_music_dir = value;
+        }
+        Msg::AddMusicDirectory => {
+            let dir = model.new_music_dir.trim().to_string();
+            if !dir.is_empty() && !model.settings.metadata_settings.music_directories.contains(&dir) {
+                model.settings.metadata_settings.music_directories.push(dir);
+                model.new_music_dir.clear();
+                let settings = model.settings.clone();
+                orders.perform_cmd(async move {
+                    _ = save_settings(settings, "reload=false".to_string()).await;
+                    Msg::SendUserCommand(UserCommand::Storage(StorageCommand::QueryMusicDirStatus))
+                });
+            }
+        }
+        Msg::RemoveMusicDirectory(idx) => {
+            if idx < model.settings.metadata_settings.music_directories.len() {
+                model.settings.metadata_settings.music_directories.remove(idx);
+                let settings = model.settings.clone();
+                orders.perform_cmd(async move {
+                    _ = save_settings(settings, "reload=false".to_string()).await;
+                });
+            }
         }
 
         Msg::InputAlsaCardChange(value) => {
@@ -280,6 +352,8 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.waiting_response = false;
             model.selected_audio_card_id = sett.alsa_settings.output_device.card_id.clone();
             model.settings = sett;
+            // Query mount status on load
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(StorageCommand::QueryMountStatus)));
         }
         Msg::SettingsSaved(_saved) => {
             model.waiting_response = false;
@@ -290,7 +364,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 _ = save_settings(settings, "reload=false".to_string()).await;
             });
             orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(RescanMetadata(
-                model.settings.metadata_settings.music_directory.clone(),
+                String::new(),
                 full_scan,
             ))));
         }
@@ -430,6 +504,93 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     model.settings.rs_player_settings.dsp_settings.filters = filters;
                 }
             }
+        }
+        // --- Network Storage ---
+        Msg::InputMountName(val) => { model.mount_form_name = val; }
+        Msg::InputMountType(val) => {
+            model.mount_form_type = if val == "Nfs" { NetworkMountType::Nfs } else { NetworkMountType::Smb };
+        }
+        Msg::InputMountServer(val) => { model.mount_form_server = val; }
+        Msg::InputMountShare(val) => { model.mount_form_share = val; }
+        Msg::InputMountUsername(val) => { model.mount_form_username = val; }
+        Msg::InputMountPassword(val) => { model.mount_form_password = val; }
+        Msg::MountAdd => {
+            if model.mount_form_name.is_empty() || model.mount_form_server.is_empty() || model.mount_form_share.is_empty() {
+                return;
+            }
+            let config = NetworkMountConfig {
+                name: model.mount_form_name.clone(),
+                mount_type: model.mount_form_type.clone(),
+                server: model.mount_form_server.clone(),
+                share: model.mount_form_share.clone(),
+                username: if model.mount_form_username.is_empty() { None } else { Some(model.mount_form_username.clone()) },
+                password: if model.mount_form_password.is_empty() { None } else { Some(model.mount_form_password.clone()) },
+                mount_point: None,
+            };
+            let mount_point = format!("/mnt/rsplayer/{}", config.name);
+            model.settings.network_storage_settings.mounts.push(config.clone());
+            if !model.settings.metadata_settings.music_directories.contains(&mount_point) {
+                model.settings.metadata_settings.music_directories.push(mount_point);
+            }
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(StorageCommand::Mount(config))));
+            // Clear form
+            model.mount_form_name.clear();
+            model.mount_form_server.clear();
+            model.mount_form_share.clear();
+            model.mount_form_username.clear();
+            model.mount_form_password.clear();
+        }
+        Msg::UnmountShare(name) => {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(StorageCommand::Unmount(name))));
+        }
+        Msg::MountRemove(name) => {
+            let mount_point = model
+                .settings
+                .network_storage_settings
+                .mounts
+                .iter()
+                .find(|m| m.name == name)
+                .and_then(|m| m.mount_point.clone())
+                .unwrap_or_else(|| format!("/mnt/rsplayer/{name}"));
+            model.settings.network_storage_settings.mounts.retain(|m| m.name != name);
+            model.mount_statuses.retain(|s| s.name != name);
+            model.settings.metadata_settings.music_directories.retain(|d| d != &mount_point);
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(StorageCommand::Remove(name))));
+        }
+        Msg::MountShare(name) => {
+            if let Some(mount_config) = model.settings.network_storage_settings.mounts.iter().find(|m| m.name == name) {
+                orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(StorageCommand::Mount(mount_config.clone()))));
+            }
+        }
+        Msg::MountStatusReceived(statuses) => {
+            model.mount_statuses = statuses;
+        }
+        Msg::MusicDirStatusReceived(statuses) => {
+            model.music_dir_statuses = statuses;
+        }
+        Msg::ExternalMountsReceived(mounts) => {
+            model.external_mounts = mounts;
+        }
+        Msg::SaveExternalMount(mount_point) => {
+            orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(
+                StorageCommand::SaveExternalMount(mount_point),
+            )));
+            // Re-fetch settings so the model reflects the newly saved mount
+            orders.perform_cmd(async {
+                let response = Request::get(API_SETTINGS_PATH)
+                    .send()
+                    .await
+                    .expect("Failed to get settings from backend");
+
+                let sett = response
+                    .json::<Settings>()
+                    .await
+                    .expect("failed to deserialize to Configuration");
+                Msg::SettingsFetched(sett)
+            });
+        }
+        Msg::ToggleNetworkMounts => {
+            model.network_mounts_open = !model.network_mounts_open;
         }
         Msg::SelectTheme(_) => {
             // Handled by the parent (lib.rs) — nothing to do here.
@@ -573,33 +734,70 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
             ],
             IF!(settings.rs_player_settings.loudness_normalization_enabled =>
                 div![
-                    C!["field", "mt-2"],
-                    label![C!["label", "has-text-white"], "Target loudness (LUFS)"],
                     div![
-                        C!["control"],
-                        input![
-                            C!["input", "is-small"],
-                            attrs! {
-                                At::Type => "number"
-                                At::Value => settings.rs_player_settings.loudness_normalization_target_lufs
-                                At::Step => "0.5"
-                                At::Min => "-30"
-                                At::Max => "-5"
-                            },
-                            input_ev(Ev::Change, Msg::InputNormalizationTargetLufs),
+                        C!["field", "mt-2"],
+                        label![C!["label", "has-text-white"], "Target loudness (LUFS)"],
+                        div![
+                            C!["control"],
+                            input![
+                                C!["input", "is-small"],
+                                attrs! {
+                                    At::Type => "number"
+                                    At::Value => settings.rs_player_settings.loudness_normalization_target_lufs
+                                    At::Step => "0.5"
+                                    At::Min => "-30"
+                                    At::Max => "-5"
+                                },
+                                input_ev(Ev::Change, Msg::InputNormalizationTargetLufs),
+                            ]
                         ]
+                    ],
+                    div![
+                        C!["notification", "is-dark", "mt-4"],
+                        i![C!["material-icons", "mr-2", "is-size-6"], "info"],
+                        span![
+                            "Loudness analysis runs automatically in the background while playback is stopped. ",
+                            "Each song is measured once (EBU R128) and the result is stored permanently. ",
+                            "You can track progress on the ",
+                            a![attrs! { At::Href => "/#/library/stats" }, "Library Statistics"],
+                            " page."
+                        ],
                     ]
                 ]
             ),
-            div![
-                C!["notification", "is-dark", "mt-4"],
-                i![C!["material-icons", "mr-2", "is-size-6"], "info"],
-                span![
-                    "Loudness analysis runs automatically in the background while playback is stopped. ",
-                    "Each song is measured once (EBU R128) and the result is stored permanently. ",
-                    "You can track progress on the ",
-                    a![attrs! { At::Href => "/#/library/stats" }, "Library Statistics"],
-                    " page."
+        ],
+
+        // music sources
+        section![
+            C!["section"],
+            details![
+                C!["settings-details"],
+                attrs! { At::Open => true },
+                summary![C!["settings-details__summary"], "Music Sources"],
+                div![
+                    C!["settings-details__body"],
+                    view_music_directories(model),
+                    view_network_storage(model),
+                    // Scan buttons - below all sources, right-aligned
+                    div![
+                        C!["field", "is-grouped", "is-grouped-right", "mt-4"],
+                        div![
+                            C!["control"],
+                            button![
+                                C!["button"],
+                                ev(Ev::Click, move |_| Msg::ClickRescanMetadataButton(false)),
+                                "Update library"
+                            ],
+                        ],
+                        div![
+                            C!["control"],
+                            button![
+                                C!["button", "is-warning"],
+                                ev(Ev::Click, move |_| Msg::ShowConfirm(ConfirmAction::FullRescan)),
+                                "Full rescan"
+                            ],
+                        ],
+                    ],
                 ],
             ],
         ],
@@ -688,6 +886,18 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
                     "Shutdown system",
                     ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::PowerOff))
                 ]
+        ],
+
+        // version
+        div![
+            style! {
+                St::TextAlign => "center",
+                St::Padding => "1rem",
+                St::Opacity => "0.6",
+            },
+            p![C!["has-text-grey-light", "is-size-7"],
+                &format!("RSPlayer v{}", settings.version)
+            ]
         ]
     ]
 }
@@ -699,6 +909,8 @@ fn view_confirm_modal(confirm_action: &Option<ConfirmAction>) -> Node<Msg> {
         ConfirmAction::FullRescan => "Full rescan will destroy the current music database and rebuild it from scratch. All metadata and playback state will be lost. Are you sure?",
         ConfirmAction::RestartPlayer => "If the player was not started via systemd, it will exit and must be started again manually. Are you sure you want to restart?",
         ConfirmAction::SaveAndRestartPlayer => "Settings will be saved and the player will restart. If the player was not started via systemd, it will exit and must be started again manually. Are you sure?",
+        ConfirmAction::RemoveMusicDirectory(_) => "This will remove the directory from music sources. Songs from this directory will no longer be scanned. No data or directory will be deleted. Are you sure?",
+        ConfirmAction::RemoveNetworkMount(_) => "This will unmount and remove the network share. Songs from this mount will no longer be accessible. No data or directory will be deleted. Are you sure?",
     };
     div![
         C!["modal", "is-active"],
@@ -802,41 +1014,8 @@ fn view_volume_control(model: &Model) -> Node<Msg> {
     ]
 }
 
-fn view_metadata_storage(metadata_settings: &MetadataStoreSettings) -> Node<Msg> {
-    div![
-        label!["Music directory path", C!["label", "has-text-white"]],
-        div![
-            C!["field", "is-grouped"],
-            div![
-                C!["control", "is-expanded"],
-                input![
-                    C!["input"],
-                    attrs! {
-                        At::Value => metadata_settings.music_directory
-                    },
-                    input_ev(Ev::Input, move |value| {
-                        Msg::InputMetadataMusicDirectoryChanged(value)
-                    }),
-                ],
-            ],
-            div![
-                C!["control"],
-                button![
-                    C!["button"],
-                    ev(Ev::Click, move |_| Msg::ClickRescanMetadataButton(false)),
-                    "Update library"
-                ]
-            ],
-            div![
-                C!["control"],
-                button![
-                    C!["button", "is-warning"],
-                    ev(Ev::Click, move |_| Msg::ShowConfirm(ConfirmAction::FullRescan)),
-                    "Full rescan"
-                ]
-            ],
-        ]
-    ]
+fn view_metadata_storage(_metadata_settings: &MetadataStoreSettings) -> Node<Msg> {
+    empty!()
 }
 
 fn view_rsp(rsp_settings: &RsPlayerSettings, local_browser_playback: bool) -> Node<Msg> {
@@ -1200,7 +1379,325 @@ fn view_theme_picker(current_theme: &str) -> Node<Msg> {
     ]
 }
 
+fn view_music_directories(model: &Model) -> Node<Msg> {
+    let mount_points: Vec<String> = model.settings.network_storage_settings.mounts
+        .iter()
+        .map(|m| {
+            m.mount_point
+                .clone()
+                .unwrap_or_else(|| format!("/mnt/rsplayer/{}", m.name))
+        })
+        .collect();
+    div![
+        // Local directory entries (same style as network mounts)
+        model.settings.metadata_settings.music_directories.iter().enumerate()
+            .filter(|(_, dir)| !mount_points.contains(dir))
+            .map(|(idx, dir)| {
+                let dir_status = model.music_dir_statuses.iter().find(|s| s.path == *dir);
+                let status_label = match dir_status {
+                    Some(s) if s.readable && s.writable => "Read/Write",
+                    Some(s) if s.readable => "Read only",
+                    Some(_) => "Not accessible",
+                    None => "Unknown",
+                };
+                let status_class = match dir_status {
+                    Some(s) if s.readable => "is-success",
+                    Some(_) => "is-danger",
+                    None => "is-warning",
+                };
+                div![
+                    C!["field", "is-grouped", "is-grouped-multiline", "p-3", "mb-3"],
+                    style! { St::Border => "1px solid #4a4a4a", St::BorderRadius => "4px" },
+                    div![
+                        C!["control"],
+                        span![
+                            C!["tag", status_class, "mr-2"],
+                            status_label
+                        ],
+                    ],
+                    div![
+                        C!["control", "is-expanded"],
+                        label![C!["label", "has-text-white"], format!("{dir}")],
+                        p![C!["has-text-grey-light"], "Local directory"],
+                    ],
+                    div![
+                        C!["control"],
+                        button![
+                            C!["button", "is-danger", "is-small"],
+                            "Remove",
+                            ev(Ev::Click, move |_| Msg::ShowConfirm(ConfirmAction::RemoveMusicDirectory(idx)))
+                        ],
+                    ],
+                ]
+            }),
+    ]
+}
+
+fn view_network_storage(model: &Model) -> Node<Msg> {
+    div![
+        // Existing mounts
+        model.settings.network_storage_settings.mounts.iter().map(|mount| {
+            let mount_name2 = mount.name.clone();
+            let status = model.mount_statuses.iter().find(|s| s.name == mount.name);
+            let is_mounted = status.map_or(false, |s| s.is_mounted);
+            let mount_point = mount
+                .mount_point
+                .clone()
+                .unwrap_or_else(|| format!("/mnt/rsplayer/{}", mount.name));
+            let type_label = match mount.mount_type { NetworkMountType::Smb => "SMB", NetworkMountType::Nfs => "NFS" };
+            let source = match mount.mount_type {
+                NetworkMountType::Smb => format!("//{}/{}", mount.server, mount.share),
+                NetworkMountType::Nfs => format!("{}:{}", mount.server, mount.share),
+            };
+            let (status_label, status_class) = match status {
+                Some(s) if s.readable && s.writable => ("Read/Write", "is-success"),
+                Some(s) if s.readable => ("Read only", "is-warning"),
+                Some(s) if s.is_mounted => ("Not accessible", "is-danger"),
+                Some(_) => ("Not mounted", "is-danger"),
+                None => ("Unknown", "is-light"),
+            };
+            div![
+                C!["field", "is-grouped", "is-grouped-multiline", "p-3", "mb-3"],
+                style! { St::Border => "1px solid #4a4a4a", St::BorderRadius => "4px" },
+                div![
+                    C!["control"],
+                    span![
+                        C!["tag", status_class, "mr-2"],
+                        status_label
+                    ],
+                ],
+                div![
+                    C!["control", "is-expanded"],
+                    label![C!["label", "has-text-white"], format!("{} ({})", mount.name, type_label)],
+                    p![C!["has-text-grey-light"], format!("{source} → {mount_point}")],
+                ],
+                div![
+                    C!["control"],
+                    div![
+                        C!["buttons"],
+                        {
+                            let mount_name = mount.name.clone();
+                            if is_mounted {
+                                button![
+                                    C!["button", "is-warning", "is-small"],
+                                    "Unmount",
+                                    ev(Ev::Click, move |_| Msg::UnmountShare(mount_name))
+                                ]
+                            } else {
+                                button![
+                                    C!["button", "is-success", "is-small"],
+                                    "Mount",
+                                    ev(Ev::Click, move |_| Msg::MountShare(mount_name))
+                                ]
+                            }
+                        },
+                        button![
+                            C!["button", "is-danger", "is-small"],
+                            "Remove",
+                            ev(Ev::Click, move |_| Msg::ShowConfirm(ConfirmAction::RemoveNetworkMount(mount_name2)))
+                        ],
+                    ]
+                ],
+            ]
+        }),
+
+        // Add local directory form
+        div![
+            C!["box", "has-background-dark", "mt-4"],
+            h1![C!["title", "is-6", "has-text-white"], "Add Local Directory"],
+            div![
+                C!["field", "has-addons"],
+                div![
+                    C!["control", "is-expanded"],
+                    input![
+                        C!["input", "is-small"],
+                        attrs! { At::Type => "text", At::Value => &model.new_music_dir, At::Placeholder => "/path/to/music" },
+                        input_ev(Ev::Input, Msg::InputNewMusicDir),
+                    ],
+                ],
+                div![
+                    C!["control"],
+                    button![
+                        C!["button", "is-small", "is-primary"],
+                        ev(Ev::Click, |_| Msg::AddMusicDirectory),
+                        "Add"
+                    ],
+                ],
+            ],
+        ],
+
+        // Network mount management (collapsible)
+        div![
+            C!["settings-details", "mt-4"],
+            div![
+                C!["settings-details__summary"],
+                "Network Mounts",
+                i![
+                    C!["material-icons"],
+                    style! { St::MarginLeft => "auto", St::Transition => "transform 0.2s ease",
+                             St::Transform => if model.network_mounts_open { "rotate(180deg)" } else { "rotate(0deg)" } },
+                    "expand_more"
+                ],
+                ev(Ev::Click, |_| Msg::ToggleNetworkMounts),
+            ],
+            IF!(model.network_mounts_open =>
+            div![
+                C!["settings-details__body"],
+                div![
+                    C!["box", "has-background-dark", "mt-3"],
+            h1![C!["title", "is-6", "has-text-white"], "Add Network Mount"],
+            div![
+                C!["field", "is-grouped", "is-grouped-multiline"],
+                div![
+                    C!["control"],
+                    label![C!["label", "has-text-white"], "Name"],
+                    input![
+                        C!["input", "is-small"],
+                        attrs! { At::Type => "text", At::Value => &model.mount_form_name, At::Placeholder => "e.g. nas-music" },
+                        input_ev(Ev::Input, Msg::InputMountName),
+                    ],
+                ],
+                div![
+                    C!["control"],
+                    label![C!["label", "has-text-white"], "Type"],
+                    div![
+                        C!["select", "is-small"],
+                        select![
+                            option![
+                                attrs! { At::Value => "Smb" },
+                                IF!(matches!(model.mount_form_type, NetworkMountType::Smb) => attrs!(At::Selected => "")),
+                                "SMB/CIFS"
+                            ],
+                            option![
+                                attrs! { At::Value => "Nfs" },
+                                IF!(matches!(model.mount_form_type, NetworkMountType::Nfs) => attrs!(At::Selected => "")),
+                                "NFS"
+                            ],
+                            input_ev(Ev::Change, Msg::InputMountType),
+                        ],
+                    ],
+                ],
+                div![
+                    C!["control"],
+                    label![C!["label", "has-text-white"], "Server"],
+                    input![
+                        C!["input", "is-small"],
+                        attrs! { At::Type => "text", At::Value => &model.mount_form_server, At::Placeholder => "192.168.1.100" },
+                        input_ev(Ev::Input, Msg::InputMountServer),
+                    ],
+                ],
+                div![
+                    C!["control"],
+                    label![C!["label", "has-text-white"], "Share"],
+                    input![
+                        C!["input", "is-small"],
+                        attrs! { At::Type => "text", At::Value => &model.mount_form_share, At::Placeholder => "music" },
+                        input_ev(Ev::Input, Msg::InputMountShare),
+                    ],
+                ],
+            ],
+            IF!(matches!(model.mount_form_type, NetworkMountType::Smb) =>
+                div![
+                    C!["field", "is-grouped", "is-grouped-multiline", "mt-3"],
+                    div![
+                        C!["control"],
+                        label![C!["label", "has-text-white"], "Username"],
+                        input![
+                            C!["input", "is-small"],
+                            attrs! { At::Type => "text", At::Value => &model.mount_form_username, At::Placeholder => "guest" },
+                            input_ev(Ev::Input, Msg::InputMountUsername),
+                        ],
+                    ],
+                    div![
+                        C!["control"],
+                        label![C!["label", "has-text-white"], "Password"],
+                        input![
+                            C!["input", "is-small"],
+                            attrs! { At::Type => "password", At::Value => &model.mount_form_password },
+                            input_ev(Ev::Input, Msg::InputMountPassword),
+                        ],
+                    ],
+                ]
+            ),
+            div![
+                C!["field", "mt-3"],
+                button![
+                    C!["button", "is-primary", "is-small"],
+                    "Mount",
+                    ev(Ev::Click, |_| Msg::MountAdd),
+                ],
+            ],
+            div![
+                C!["notification", "is-dark", "mt-3", "p-3"],
+                i![C!["material-icons", "mr-2", "is-size-6"], "info"],
+                span![
+                    "Mounts are created under /mnt/rsplayer/<name> and automatically added as music directories.",
+                ],
+            ],
+        ],
+        view_external_mounts(model),
+        ] // settings-details__body
+        ), // IF
+        ] // div settings-details
+    ]
+}
+
 #[allow(clippy::future_not_send)]
+fn view_external_mounts(model: &Model) -> Node<Msg> {
+    if model.external_mounts.is_empty() {
+        return empty![];
+    }
+    div![
+        C!["box", "mt-4"],
+        style! {
+            St::Background => "rgba(32, 64, 100, 0.4)",
+            St::Border => "1px solid #3273dc",
+            St::BorderRadius => "6px",
+        },
+        h1![
+            C!["title", "is-6", "has-text-white"],
+            "Detected External Network Mounts"
+        ],
+        p![
+            C!["has-text-grey-light", "mb-3", "is-size-7"],
+            "These network mounts were found on the system but are not managed by rsplayer. ",
+            "Click Save to add them as music sources."
+        ],
+        model.external_mounts.iter().map(|ext| {
+            let mp = ext.mount_point.clone();
+            let (status_label, status_class) = match (ext.readable, ext.writable) {
+                (true, true) => ("Read/Write", "is-success"),
+                (true, false) => ("Read only", "is-warning"),
+                _ => ("Not accessible", "is-danger"),
+            };
+            div![
+                C!["field", "is-grouped", "is-grouped-multiline", "p-3", "mb-3"],
+                style! { St::Border => "1px solid #4a6a8a", St::BorderRadius => "4px" },
+                div![
+                    C!["control"],
+                    span![C!["tag", status_class, "mr-2"], status_label],
+                ],
+                div![
+                    C!["control", "is-expanded"],
+                    label![
+                        C!["label", "has-text-white"],
+                        format!("{} ({})", ext.source, ext.fs_type.to_uppercase())
+                    ],
+                    p![C!["has-text-grey-light"], &ext.mount_point],
+                ],
+                div![
+                    C!["control"],
+                    button![
+                        C!["button", "is-info", "is-small"],
+                        "Save",
+                        ev(Ev::Click, move |_| Msg::SaveExternalMount(mp))
+                    ],
+                ],
+            ]
+        }),
+    ]
+}
+
 async fn save_settings(settings: Settings, query: String) -> Result<String, Error> {
     let response = Request::post(format!("{API_SETTINGS_PATH}?{query}").as_str())
         .json(&settings)?

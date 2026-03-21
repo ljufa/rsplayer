@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 use validator::Validate;
 
 use crate::common::{AudioCard, CardMixer, PcmOutputDevice, VolumeCrtlType};
@@ -21,7 +22,12 @@ pub struct Settings {
     #[validate]
     pub usb_settings: UsbCmdChannelSettings,
     #[serde(default)]
+    #[validate]
+    pub network_storage_settings: NetworkStorageSettings,
+    #[serde(default)]
     pub local_browser_playback: bool,
+    #[serde(default)]
+    pub version: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
@@ -146,6 +152,35 @@ pub enum DspFilter {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, EnumIter, EnumString, IntoStaticStr)]
+pub enum NetworkMountType {
+    #[default]
+    Smb,
+    Nfs,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+pub struct NetworkMountConfig {
+    #[validate(length(min = 1))]
+    pub name: String,
+    pub mount_type: NetworkMountType,
+    #[validate(length(min = 1))]
+    pub server: String,
+    #[validate(length(min = 1))]
+    pub share: String,
+    pub username: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub mount_point: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate, Default)]
+pub struct NetworkStorageSettings {
+    #[serde(default)]
+    pub mounts: Vec<NetworkMountConfig>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
 pub struct UsbCmdChannelSettings {
     pub enabled: bool,
@@ -199,10 +234,31 @@ pub struct VolumeControlSettings {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
 pub struct MetadataStoreSettings {
+    /// Legacy field kept for backward compat deserialization only.
+    #[serde(default, skip_serializing)]
     pub music_directory: String,
+    #[serde(default)]
+    pub music_directories: Vec<String>,
     pub follow_links: bool,
+    #[serde(skip)]
     pub supported_extensions: Vec<String>,
     pub db_path: String,
+}
+
+impl MetadataStoreSettings {
+    /// Returns the effective list of music directories.
+    /// Falls back to the legacy single `music_directory` if `music_directories` is empty.
+    pub fn effective_directories(&self) -> Vec<String> {
+        if self.music_directories.is_empty() {
+            if self.music_directory.is_empty() {
+                vec![]
+            } else {
+                vec![self.music_directory.clone()]
+            }
+        } else {
+            self.music_directories.clone()
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
@@ -253,10 +309,11 @@ impl AlsaSettings {
 impl Default for MetadataStoreSettings {
     fn default() -> Self {
         Self {
-            music_directory: "/music".into(),
+            music_directory: String::new(),
+            music_directories: vec![],
             follow_links: true,
             supported_extensions: vec![
-                "flac", "wav", "mp3", "m4a", "aac", "aiff", "alac", "ogg", "wma", "mp4", "dsd", "dsf",
+                "flac", "wav", "mp3", "m4a", "ogg", "dsf", "dff", "caf", "mka",
             ]
             .into_iter()
             .map(std::borrow::ToOwned::to_owned)
@@ -306,7 +363,9 @@ impl Default for Settings {
             playlist_settings: PlaylistSetting::default(),
             rs_player_settings: RsPlayerSettings::default(),
             usb_settings: UsbCmdChannelSettings::default(),
+            network_storage_settings: NetworkStorageSettings::default(),
             local_browser_playback: false,
+            version: String::new(),
         }
     }
 }

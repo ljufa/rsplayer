@@ -29,18 +29,29 @@ type SystemCommandSender = mpsc::Sender<SystemCommand>;
 
 #[derive(RustEmbed)]
 #[folder = "../rsplayer_web_ui/public"]
+#[exclude = "index.html"]
 struct StaticContentDir;
+
+static INDEX_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
 
 pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Output = ()> {
     let cors = warp::cors()
         .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
         .allow_any_origin();
 
+    let index_html = warp::get()
+        .and(warp::path::end())
+        .map(|| {
+                let reply = warp::reply::html(INDEX_HTML);
+                let reply = warp::reply::with_header(reply, "Cache-Control", "no-cache, must-revalidate");
+                warp::reply::with_header(reply, "ETag", concat!("\"", env!("CARGO_PKG_VERSION"), "\""))
+            });
     let ui_static_content = warp::get().and(warp_embed::embed(&StaticContentDir));
 
     let routes = filters::settings_save(config.clone())
         .or(filters::settings_save(config.clone()))
         .or(filters::get_settings(config.clone()))
+        .or(index_html)
         .or(ui_static_content)
         .or(filters::get_startup_error(error))
         .with(cors);
@@ -81,6 +92,13 @@ pub fn start(
         HeaderValue::from_static("max-age=259200"), // 3 days
     );
 
+    let index_html = warp::get()
+        .and(warp::path::end())
+        .map(|| {
+                let reply = warp::reply::html(INDEX_HTML);
+                let reply = warp::reply::with_header(reply, "Cache-Control", "no-cache, must-revalidate");
+                warp::reply::with_header(reply, "ETag", concat!("\"", env!("CARGO_PKG_VERSION"), "\""))
+            });
     let ui_static_content = warp::get()
         .and(warp_embed::embed(&StaticContentDir))
         .with(warp::compression::gzip())
@@ -90,12 +108,24 @@ pub fn start(
         .with(warp::compression::gzip())
         .with(warp::reply::with::headers(cache_headers));
 
-    let music_dir = config.get_settings().metadata_settings.music_directory;
-    let music_static_content = warp::path("music").and(warp::fs::dir(music_dir));
+    let music_dirs = config.get_settings().metadata_settings.effective_directories();
+    let music_static_content = {
+        // Build a filter that tries each music directory in order.
+        // Start with the first directory, then chain the rest with .or()
+        let mut dirs_iter = music_dirs.into_iter();
+        let first = dirs_iter.next().unwrap_or_else(|| "/music".to_string());
+        let base = warp::path("music").and(warp::fs::dir(first)).boxed();
+        dirs_iter.fold(base, |acc, dir| {
+            acc.or(warp::path("music").and(warp::fs::dir(dir)))
+                .unify()
+                .boxed()
+        })
+    };
 
     let routes = player_ws_path
         .or(filters::settings_save(config.clone()))
         .or(filters::get_settings(config.clone()))
+        .or(index_html)
         .or(ui_static_content)
         .or(artwork_static_content)
         .or(music_static_content)
@@ -215,6 +245,7 @@ mod handlers {
 
     pub async fn get_settings(config: Config) -> Result<impl warp::Reply, Infallible> {
         let mut settings = config.get_settings_mut();
+        settings.version = env!("CARGO_PKG_VERSION").to_string();
 
         #[cfg(feature = "alsa")]
         {
@@ -321,12 +352,12 @@ fn user_disconnected(my_id: usize) {
 
 fn get_ports() -> (u16, u16) {
     let http_port = env::var("PORT")
-        .unwrap_or("8000".to_string())
+        .unwrap_or_else(|_| "8000".to_string())
         .parse::<u16>()
         .expect("PORT is not a valid port number");
 
     let https_port = env::var("TLS_PORT")
-        .unwrap_or("8143".to_string())
+        .unwrap_or_else(|_| "8143".to_string())
         .parse::<u16>()
         .expect("TLS_PORT is not a valid port number");
     (http_port, https_port)

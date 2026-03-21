@@ -438,9 +438,10 @@ fn view_tree(node_id: NodeId, arena: &Arena<TreeNode>, filter_type: &FilterType)
             is_dir = true;
         }
         TreeNode::Station(station) => {
+            let truncated_name: String = station.name.chars().take(80).collect();
             label = format!(
                 "{} (votes:{} / codec:{} / bitrate:{})",
-                station.name, station.votes, station.codec, station.bitrate
+                truncated_name, station.votes, station.codec, station.bitrate
             );
             favicon.clone_from(&station.favicon);
         }

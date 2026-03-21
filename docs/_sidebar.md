@@ -1,4 +1,9 @@
 - [Home](/)
-- [Building from Source](BUILD.md)
-- [Release Notes](RELEASE_NOTES.md)
-- [Feature Parity](FEATURE_PARITY.md)
+- **Getting Started**
+  - [Installation](installation.md)
+  - [Configuration](configuration.md)
+  - [Troubleshooting](troubleshooting.md)
+- **Development**
+  - [Building from Source](build.md)
+  - [Release Notes](release_notes.md)
+  - [Feature Parity](feature_parity.md)

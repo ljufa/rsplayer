@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 if [ "$1" = "configure" ]; then
     if [ -z $2 ]
-    then 
+    then
         # this is clean install
         previous_version="0.0.0"
     else
@@ -14,12 +14,15 @@ if [ "$1" = "configure" ]; then
         usermod -a -G audio,dialout rsplayer || true
         # optional for hardware access
         usermod -a -G i2c,gpio,spi,audio,input rsplayer || true
-        chown -R rsplayer:rsplayer /opt/rsplayer
+        chown -R rsplayer /opt/rsplayer
     fi
+    # Ensure network mount base directory exists
+    mkdir -p /mnt/rsplayer
+    chown rsplayer /mnt/rsplayer
     if dpkg --compare-versions "$previous_version" lt "0.9.7"; then
         echo "Upgrading from version $previous_version to 0.9.7"
-        chown rsplayer:rsplayer /opt/rsplayer/env
-        chown rsplayer:rsplayer /opt/rsplayer/self.*
+        chown rsplayer /opt/rsplayer/env
+        chown rsplayer /opt/rsplayer/self.*
     fi
     if dpkg --compare-versions "$previous_version" lt "1.5.0"; then
         echo "Upgrading from version $previous_version to 1.5.0"
@@ -38,7 +41,7 @@ if [ "$1" = "configure" ]; then
                 mv "/opt/rsplayer/$db" "$old_db_dir/$db"
             fi
         done
-        chown -R rsplayer:rsplayer "$old_db_dir"
+        chown -R rsplayer "$old_db_dir"
         echo "Old sled databases moved to $old_db_dir — delete this directory after verifying the upgrade."
         echo "A full metadata rescan will be needed after first launch."
     fi

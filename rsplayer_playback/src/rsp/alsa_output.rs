@@ -44,6 +44,10 @@ where
 {
     producer: rb::Producer<T>,
     sample_buf: SampleBuffer<T>,
+    source_channels: usize,
+    output_channels: usize,
+    /// Reused buffer for mono→stereo (or other) channel mapping.
+    channel_buf: Vec<T>,
 }
 
 impl<T> AudioWriter for PcmWriter<T>
@@ -57,25 +61,45 @@ where
         vu_meter: &mut Option<VUMeter>,
         error_count: &AtomicU32,
     ) -> Result<()> {
-        let channels = decoded.spec().channels.count();
         self.sample_buf.copy_interleaved_ref(decoded);
+        let needs_channel_map = self.source_channels != self.output_channels;
+
+        if needs_channel_map {
+            // Map channels (e.g. mono → stereo) into reusable buffer.
+            self.channel_buf.clear();
+            for frame in self.sample_buf.samples().chunks(self.source_channels) {
+                for ch in 0..self.output_channels {
+                    self.channel_buf.push(frame[ch.min(self.source_channels - 1)]);
+                }
+            }
+        }
 
         // Equalizer — skipped entirely when no filters are configured.
         if let Some(ref mut dsp) = dsp {
             if dsp.handle.has_filters.load(Ordering::Acquire) {
-                let samples_mut = self.sample_buf.samples_mut();
-                dsp.equalizer.process_samples(samples_mut);
+                if needs_channel_map {
+                    dsp.equalizer.process_samples(&mut self.channel_buf);
+                } else {
+                    dsp.equalizer.process_samples(self.sample_buf.samples_mut());
+                }
             }
         }
 
         // VU metering.
         if let Some(ref mut vu) = vu_meter {
-            let samples = self.sample_buf.samples();
-            vu.update_peaks(channels, samples);
+            if needs_channel_map {
+                vu.update_peaks(self.output_channels, &self.channel_buf);
+            } else {
+                vu.update_peaks(self.output_channels, self.sample_buf.samples());
+            }
         }
 
         // Push to ring buffer.
-        let mut remaining = self.sample_buf.samples();
+        let mut remaining: &[T] = if needs_channel_map {
+            &self.channel_buf
+        } else {
+            self.sample_buf.samples()
+        };
         while let Ok(Some(written)) = self.producer.write_blocking_timeout(remaining, Duration::from_secs(1)) {
             remaining = &remaining[written..];
             if error_count.load(Ordering::Relaxed) >= ERROR_THRESHOLD {
@@ -120,6 +144,7 @@ where
     sample_buf: SampleBuffer<f32>,
     resampler: rubato::FftFixedIn<f32>,
     channels: usize,
+    output_channels: usize,
     channel_in: Vec<Vec<f32>>,
     channel_out: Vec<Vec<f32>>,
     interleaved_out: Vec<T>,
@@ -153,11 +178,13 @@ where
             .process_partial_into_buffer(Some(&self.channel_in), &mut self.channel_out, None)
             .map_err(|e| Error::msg(format!("resample error: {e}")))?;
 
-        // Re-interleave and convert to target sample type.
+        // Re-interleave and convert to target sample type, mapping
+        // channels if the device requires a different count (e.g. mono→stereo).
         self.interleaved_out.clear();
         for frame in 0..out_frames {
-            for ch in 0..self.channels {
-                let sample_f32 = self.channel_out[ch][frame];
+            for ch in 0..self.output_channels {
+                let src_ch = ch.min(self.channels - 1);
+                let sample_f32 = self.channel_out[src_ch][frame];
                 self.interleaved_out
                     .push(<T as FromSample<f32>>::from_sample(sample_f32));
             }
@@ -172,7 +199,7 @@ where
 
         // VU metering.
         if let Some(ref mut vu) = vu_meter {
-            vu.update_peaks(self.channels, &self.interleaved_out);
+            vu.update_peaks(self.output_channels, &self.interleaved_out);
         }
 
         // Push to ring buffer.
@@ -232,6 +259,15 @@ impl AlsaOutput {
 
         debug!("Spec: {spec:?}");
 
+        if let Ok(default_cfg) = device.default_output_config() {
+            debug!("Device default output config: {default_cfg:?}");
+        }
+        if let Ok(supported) = device.supported_output_configs() {
+            for cfg in supported {
+                debug!("Device supported config: {cfg:?}");
+            }
+        }
+
         let supported_configs_range = device
             .supported_output_configs()
             .map_err(|e| Error::msg(format!("failed to get supported configs: {e}")))?;
@@ -276,13 +312,27 @@ impl AlsaOutput {
             );
         }
 
+        let device_channels = if is_dsd {
+            None
+        } else {
+            find_device_channels(&device, spec.channels.count() as u16)
+        };
+        if let Some(ch) = device_channels {
+            info!(
+                "Device does not support {} channels, will map to {} channels",
+                spec.channels.count(),
+                ch
+            );
+        }
+
         // Rebuild the equalizer for this track's spec.  Skip for DSD.
-        // Use the output rate so filter coefficients are correct.
+        // Use the output rate and output channels so filter coefficients are correct.
         let effective_dsp = if is_dsd {
             None
         } else if let Some(handle) = dsp_handle {
             let dsp_rate = device_rate.unwrap_or(spec.rate) as usize;
-            handle.rebuild(spec.channels.count(), dsp_rate);
+            let dsp_channels = device_channels.map_or(spec.channels.count(), |ch| ch as usize);
+            handle.rebuild(dsp_channels, dsp_rate);
             Some(handle.clone())
         } else {
             None
@@ -300,6 +350,7 @@ impl AlsaOutput {
             effective_vu,
             sample_format,
             device_rate,
+            device_channels,
         )
     }
 
@@ -313,20 +364,22 @@ impl AlsaOutput {
         vu_meter: Option<VUMeter>,
         sample_format: cpal::SampleFormat,
         device_rate: Option<u32>,
+        device_channels: Option<u16>,
     ) -> Result<AlsaOutput> {
-        let num_channels = spec.channels.count();
+        let source_channels = spec.channels.count();
+        let output_channels = device_channels.map_or(source_channels, |ch| ch as usize);
         let output_rate = device_rate.unwrap_or(spec.rate);
 
         #[allow(clippy::cast_possible_truncation)]
         let config = cpal::StreamConfig {
-            channels: num_channels as cpal::ChannelCount,
+            channels: output_channels as cpal::ChannelCount,
             sample_rate: output_rate,
             buffer_size: rsp_settings
                 .alsa_buffer_size
                 .map_or(cpal::BufferSize::Default, cpal::BufferSize::Fixed),
         };
 
-        let ring_len = ((rsp_settings.ring_buffer_size_ms * output_rate as usize) / 1000) * num_channels;
+        let ring_len = ((rsp_settings.ring_buffer_size_ms * output_rate as usize) / 1000) * output_channels;
         let error_count = Arc::new(AtomicU32::new(0));
         let error_count_clone = error_count.clone();
 
@@ -366,11 +419,14 @@ impl AlsaOutput {
                     })?;
                 let writer: Box<dyn AudioWriter> = if let Some(dev_rate) = device_rate {
                     let resampler = rubato::FftFixedIn::<f32>::new(
-                        spec.rate as usize,
-                        dev_rate as usize,
-                        duration as usize,
+                        #[allow(clippy::cast_possible_truncation)]
+                        {spec.rate as usize},
+                        #[allow(clippy::cast_possible_truncation)]
+                        {dev_rate as usize},
+                        #[allow(clippy::cast_possible_truncation)]
+                        {duration as usize},
                         2,
-                        num_channels,
+                        source_channels,
                     )
                     .map_err(|e| Error::msg(format!("failed to create resampler: {e}")))?;
                     let channel_in = resampler.input_buffer_allocate(true);
@@ -379,12 +435,13 @@ impl AlsaOutput {
                     for ch in &mut channel_out {
                         ch.resize(resampler.output_frames_max(), 0.0);
                     }
-                    let max_out_samples = resampler.output_frames_max() * num_channels;
+                    let max_out_samples = resampler.output_frames_max() * output_channels;
                     Box::new(ResamplingPcmWriter {
                         producer,
                         sample_buf: SampleBuffer::<f32>::new(duration, spec),
                         resampler,
-                        channels: num_channels,
+                        channels: source_channels,
+                        output_channels,
                         channel_in,
                         channel_out,
                         interleaved_out: Vec::with_capacity(max_out_samples),
@@ -393,6 +450,9 @@ impl AlsaOutput {
                     Box::new(PcmWriter {
                         producer,
                         sample_buf: SampleBuffer::<$T>::new(duration, spec),
+                        source_channels,
+                        output_channels,
+                        channel_buf: Vec::new(),
                     })
                 };
                 (stream, writer)
@@ -506,7 +566,10 @@ impl AlsaOutput {
 }
 
 /// Check if the device supports `source_rate` natively.
-/// Returns `None` if supported, or `Some(closest_rate)` to resample to.
+/// Returns `None` if supported, or `Some(best_rate)` to resample to.
+///
+/// Prefers integer multiples of the source rate (e.g. 22050→44100 at 2×)
+/// for cleaner resampling, falling back to the closest supported rate.
 ///
 /// Set `RSPLAYER_RESAMPLE_TO=<rate>` to force resampling (e.g. for testing).
 fn find_device_rate(device: &cpal::Device, source_rate: u32) -> Option<u32> {
@@ -519,13 +582,15 @@ fn find_device_rate(device: &cpal::Device, source_rate: u32) -> Option<u32> {
         }
     }
 
-    let configs = match device.supported_output_configs() {
-        Ok(c) => c,
-        Err(_) => return None,
-    };
+    let Ok(configs) = device.supported_output_configs() else { return None };
 
     let mut closest_rate: Option<u32> = None;
     let mut min_distance = u32::MAX;
+    // Prefer integer multiples of source_rate (smallest factor first)
+    // for better resampling quality (e.g. 22050→44100 at 2× instead of
+    // 22050→32000 at ~1.45×).
+    let mut best_multiple: Option<u32> = None;
+    let mut best_factor = u32::MAX;
 
     for config in configs {
         if matches!(
@@ -548,8 +613,54 @@ fn find_device_rate(device: &cpal::Device, source_rate: u32) -> Option<u32> {
                 min_distance = distance;
                 closest_rate = Some(rate);
             }
+            if rate > source_rate && rate % source_rate == 0 {
+                let factor = rate / source_rate;
+                if factor < best_factor {
+                    best_factor = factor;
+                    best_multiple = Some(rate);
+                }
+            }
         }
     }
 
-    closest_rate
+    best_multiple.or(closest_rate)
+}
+
+/// Check if the device supports `source_channels` natively.
+/// Returns `None` if supported, or `Some(closest_channels)` to map to.
+fn find_device_channels(device: &cpal::Device, source_channels: u16) -> Option<u16> {
+    let Ok(configs) = device.supported_output_configs() else {
+        return None;
+    };
+
+    let mut supported = false;
+    let mut closest: Option<u16> = None;
+    let mut min_distance = u16::MAX;
+
+    for config in configs {
+        if matches!(
+            config.sample_format(),
+            cpal::SampleFormat::DsdU32 | cpal::SampleFormat::DsdU16 | cpal::SampleFormat::DsdU8
+        ) {
+            continue;
+        }
+
+        let ch = config.channels();
+        if ch == source_channels {
+            supported = true;
+            break;
+        }
+
+        let distance = source_channels.abs_diff(ch);
+        if distance < min_distance {
+            min_distance = distance;
+            closest = Some(ch);
+        }
+    }
+
+    if supported {
+        None
+    } else {
+        closest
+    }
 }

@@ -29,7 +29,7 @@ use crate::song_repository::SongRepository;
 pub struct LoudnessService {
     repository: Arc<LoudnessRepository>,
     song_repository: Arc<SongRepository>,
-    music_dir: String,
+    music_dirs: Vec<String>,
     /// Set to `true` by `PlayerService` while the playback thread is running.
     /// The scan loop suspends itself whenever this is `true`.
     pub is_playing: Arc<AtomicBool>,
@@ -37,11 +37,11 @@ pub struct LoudnessService {
 }
 
 impl LoudnessService {
-    pub fn new(repository: Arc<LoudnessRepository>, song_repository: Arc<SongRepository>, music_dir: String) -> Arc<Self> {
+    pub fn new(repository: Arc<LoudnessRepository>, song_repository: Arc<SongRepository>, music_dirs: Vec<String>) -> Arc<Self> {
         Arc::new(Self {
             repository,
             song_repository,
-            music_dir,
+            music_dirs,
             is_playing: Arc::new(AtomicBool::new(false)),
             stop: Arc::new(AtomicBool::new(false)),
         })
@@ -124,9 +124,16 @@ impl LoudnessService {
                     return;
                 }
 
-                let full_path = format!("{}/{}", self.music_dir, file_key);
+                let full_path = self.music_dirs.iter()
+                    .map(|dir| format!("{dir}/{file_key}"))
+                    .find(|p| Path::new(p).exists());
+                let Some(full_path) = full_path else {
+                    warn!("Loudness scan: file not found in any music directory: {file_key}");
+                    return;
+                };
                 debug!("Loudness scan: analysing {file_key}");
                 if let Some(lufs) = measure_integrated_loudness(Path::new(&full_path)) {
+                    #[allow(clippy::cast_possible_truncation)]
                     let stored = (lufs * 100.0).round() as i32;
                     debug!("Loudness scan: {file_key} => {lufs:.2} LUFS");
                     self.repository.save_loudness(file_key, stored);
@@ -174,7 +181,7 @@ fn measure_from_probed(probed: &mut ProbeResult) -> Option<f64> {
         return None;
     }
 
-    let channels = track.codec_params.channels?.count() as u32;
+    let channels = u32::try_from(track.codec_params.channels?.count()).ok()?;
     let sample_rate = track.codec_params.sample_rate?;
 
     let mut decoder = symphonia::default::get_codecs()
@@ -198,10 +205,7 @@ fn measure_from_probed(probed: &mut ProbeResult) -> Option<f64> {
             continue;
         }
 
-        let audio_buf = match decoder.decode(&packet) {
-            Ok(buf) => buf,
-            Err(_) => continue,
-        };
+        let Ok(audio_buf) = decoder.decode(&packet) else { continue };
 
         let spec = *audio_buf.spec();
         let frames = audio_buf.frames();

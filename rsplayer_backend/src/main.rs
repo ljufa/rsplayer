@@ -28,6 +28,7 @@ use rsplayer_metadata::song_repository::SongRepository;
 use rsplayer_playback::rsp::player_service::PlayerService;
 
 mod command_handler;
+mod mount_service;
 mod server_warp;
 
 #[allow(clippy::redundant_pub_crate, clippy::too_many_lines)]
@@ -65,6 +66,9 @@ async fn main() {
 
     let config = Arc::new(Configuration::new(&shared_db));
     info!("Configuration successfully loaded.");
+
+    // Auto-mount configured network storage shares
+    mount_service::mount_all(&config.get_settings().network_storage_settings);
 
     let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate()).expect("failed to create signal future");
 
@@ -120,7 +124,7 @@ async fn main() {
     let loudness_service = LoudnessService::new(
         loudness_repository.clone(),
         song_repository.clone(),
-        config.get_settings().metadata_settings.music_directory,
+        config.get_settings().metadata_settings.effective_directories(),
     );
     if config.get_settings().rs_player_settings.loudness_normalization_enabled {
         loudness_service.start();

@@ -32,7 +32,6 @@ pub struct PlayerService {
     current_volume: Arc<AtomicU8>,
     audio_device: String,
     rsp_settings: RsPlayerSettings,
-    music_dir: String,
     local_browser_playback: bool,
     changes_tx: Sender<StateChangeEvent>,
     dsp_processor: Arc<Mutex<Option<DspProcessor>>>,
@@ -159,7 +158,6 @@ impl PlayerService {
             current_volume,
             audio_device: settings.alsa_settings.output_device.name.clone(),
             rsp_settings: settings.rs_player_settings.clone(),
-            music_dir: settings.metadata_settings.music_directory.clone(),
             local_browser_playback: settings.local_browser_playback,
             dsp_processor,
             loudness_service,
@@ -177,6 +175,11 @@ impl PlayerService {
             self.seek_current_song(last_song_time);
         }
 
+        *self.playback_thread_handle.lock().unwrap() = Some(self.play_all_in_queue());
+    }
+
+    pub fn play_from_beginning(&self) {
+        _ = self.state_db.remove(LAST_SONG_PAUSED_KEY);
         *self.playback_thread_handle.lock().unwrap() = Some(self.play_all_in_queue());
     }
 
@@ -224,6 +227,7 @@ impl PlayerService {
     pub fn play_song(&self, song_id: &str) {
         self.stop_current_song();
         self.queue_service.move_current_to(song_id);
+        _ = self.state_db.remove(LAST_SONG_PAUSED_KEY);
         self.play_from_current_queue_song();
     }
 
@@ -245,7 +249,7 @@ impl PlayerService {
         let queue = self.queue_service.clone();
         let audio_device = self.audio_device.clone();
         let playback_thread_prio = self.rsp_settings.player_threads_priority;
-        let music_dir = self.music_dir.clone();
+        let music_dirs = self.metadata_service.effective_directories();
         let changes_tx = self.changes_tx.clone();
         let rsp_settings = self.rsp_settings.clone();
         let metadata_service = self.metadata_service.clone();
@@ -264,8 +268,8 @@ impl PlayerService {
             .name("playback".to_string())
             .priority(prio)
             .spawn(move |prio| {
+                const MAX_RETRIES: i32 = 5;
                 loudness_service.set_playback_active(true);
-                const MAX_RETRIES: i32 = 10;
                 if prio.is_ok() {
                     info!("Playback thread started with priority {playback_thread_prio:?}");
                 } else {
@@ -335,7 +339,7 @@ impl PlayerService {
                             &skip_to_time,
                             &audio_device,
                             &rsp_settings,
-                            &music_dir,
+                            &music_dirs,
                             &changes_tx,
                             dsp_handle.as_ref(),
                             vu_meter,
@@ -351,15 +355,29 @@ impl PlayerService {
                             break PlaybackResult::PlaybackStopped;
                         }
                         Err(err) => {
-                            if retry_count < MAX_RETRIES {
-                                warn!(
-                                    "Playback failed, retrying ({}/{}) in 1s... Error: {:?}",
-                                    retry_count + 1,
-                                    MAX_RETRIES,
-                                    err
-                                );
+                            if retry_count < MAX_RETRIES && !stop_signal.load(Ordering::Relaxed) {
                                 retry_count += 1;
-                                std::thread::sleep(std::time::Duration::from_secs(1));
+                                warn!(
+                                    "Playback failed, retrying ({retry_count}/{MAX_RETRIES}) in 1s... Error: {err:?}"
+                                );
+                                changes_tx
+                                    .send(StateChangeEvent::NotificationError(format!(
+                                        "Retrying ({retry_count}/{MAX_RETRIES})..."
+                                    )))
+                                    .ok();
+                                // Sleep in small increments so we can respond to stop_signal quickly.
+                                for _ in 0..10 {
+                                    if stop_signal.load(Ordering::Relaxed) {
+                                        break;
+                                    }
+                                    std::thread::sleep(std::time::Duration::from_millis(100));
+                                }
+                                if stop_signal.load(Ordering::Relaxed) {
+                                    changes_tx
+                                        .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
+                                        .ok();
+                                    break PlaybackResult::PlaybackStopped;
+                                }
                                 continue;
                             }
                             error!("Failed to play file {}. Error: {:?}", song.file, err);

@@ -3,7 +3,7 @@ use std::{
     path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, RwLock,
     },
     time::{self, Duration},
 };
@@ -36,7 +36,7 @@ const ARTWORK_DIR: &str = "artwork";
 
 pub struct MetadataService {
     ignored_files_db: Keyspace,
-    pub settings: MetadataStoreSettings,
+    settings: RwLock<MetadataStoreSettings>,
     scan_running: AtomicBool,
     song_repository: Arc<SongRepository>,
     album_repository: Arc<AlbumRepository>,
@@ -57,12 +57,20 @@ impl MetadataService {
             .expect("Failed to open ignored_files keyspace");
         Ok(Self {
             ignored_files_db,
-            settings,
+            settings: RwLock::new(settings),
             scan_running: AtomicBool::new(false),
             song_repository,
             album_repository,
             statistic_repository,
         })
+    }
+
+    pub fn update_settings(&self, settings: MetadataStoreSettings) {
+        *self.settings.write().unwrap() = settings;
+    }
+
+    pub fn effective_directories(&self) -> Vec<String> {
+        self.settings.read().unwrap().effective_directories()
     }
 
     pub fn get_favorite_radio_stations(&self) -> Vec<String> {
@@ -129,7 +137,7 @@ impl MetadataService {
             .collect();
 
         let all_stats = self.statistic_repository.get_all();
-        let total_plays = all_stats.iter().map(|s| s.play_count.max(0) as u32).sum();
+        let total_plays = all_stats.iter().map(|s| s.play_count.max(0).cast_unsigned()).sum();
         let unique_songs_played = all_stats
             .iter()
             .filter(|s| s.play_count > 0 && !s.play_item_id.starts_with("radio_uuid_"))
@@ -238,6 +246,7 @@ impl MetadataService {
             return;
         }
         self.scan_running.store(true, Ordering::Relaxed);
+        let settings = self.settings.read().unwrap().clone();
         let start_time = time::Instant::now();
         state_changes_sender
             .send(StateChangeEvent::MetadataSongScanStarted)
@@ -246,7 +255,9 @@ impl MetadataService {
             self.song_repository.delete_all();
             self.album_repository.delete_all();
             {
-                let keys: Vec<Vec<u8>> = self.ignored_files_db.iter()
+                let keys: Vec<Vec<u8>> = self
+                    .ignored_files_db
+                    .iter()
                     .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
                     .collect();
                 for key in keys {
@@ -258,13 +269,13 @@ impl MetadataService {
         if !Path::new(ARTWORK_DIR).exists() {
             _ = std::fs::create_dir(ARTWORK_DIR);
         }
-        let (new_files, deleted_db_keys) = self.get_diff();
+        let (new_files, deleted_db_keys) = self.get_diff(&settings);
         info!(
             "New files found: {} / Deleted files found: {}",
             new_files.len(),
             deleted_db_keys.len()
         );
-        let count = self.add_songs_to_db(new_files, state_changes_sender);
+        let count = self.add_songs_to_db(&new_files, state_changes_sender, &settings);
 
         if !full_scan {
             info!("Deleting {} files from database", deleted_db_keys.len());
@@ -291,8 +302,8 @@ impl MetadataService {
         self.scan_running.store(false, Ordering::Relaxed);
     }
 
-    fn full_path_to_database_key(&self, input: &str) -> String {
-        let mut music_dir_pref = self.settings.music_directory.clone();
+    fn full_path_to_database_key_for_dir(music_dir: &str, input: &str) -> String {
+        let mut music_dir_pref = music_dir.to_string();
         if !music_dir_pref.ends_with('/') {
             music_dir_pref.push('/');
         }
@@ -300,36 +311,55 @@ impl MetadataService {
         to_database_key(file_path.as_str())
     }
 
-    fn get_diff(&self) -> (Vec<String>, Vec<String>) {
+    fn full_path_to_database_key(settings: &MetadataStoreSettings, input: &str) -> String {
+        for dir in &settings.effective_directories() {
+            let mut prefix = dir.clone();
+            if !prefix.ends_with('/') {
+                prefix.push('/');
+            }
+            if input.starts_with(&prefix) {
+                return Self::full_path_to_database_key_for_dir(dir, input);
+            }
+        }
+        to_database_key(input)
+    }
+
+    fn get_diff(&self, settings: &MetadataStoreSettings) -> (Vec<String>, Vec<String>) {
         let mut added_files: Vec<String> = Vec::new();
         let mut deleted_keys: Vec<String> = Vec::new();
         let mut unchanged_keys: Vec<String> = Vec::new();
 
-        for entry in WalkDir::new(&self.settings.music_directory)
-            .follow_links(self.settings.follow_links)
-            .sort_by_file_name()
-            .into_iter()
-            .filter_map(std::result::Result::ok)
-            .filter(|de| de.file_type().is_file())
-            .filter(|de| {
-                let ext = de
-                    .path()
-                    .extension()
-                    .map_or_else(|| "no_ext".to_string(), |ex| ex.to_str().unwrap().to_lowercase());
-                self.settings.supported_extensions.contains(&ext)
-            })
-            .map(|de| {
-                (
-                    de.path().to_str().unwrap().to_owned(),
-                    self.full_path_to_database_key(de.path().to_str().unwrap()),
-                )
-            })
-            .filter(|de| !self.ignored_files_db.contains_key(&de.1).unwrap_or(false))
-        {
-            if self.song_repository.find_by_id(&entry.1).is_some() {
-                unchanged_keys.push(entry.1.clone());
-            } else {
-                added_files.push(entry.0.clone());
+        for music_dir in &settings.effective_directories() {
+            if !Path::new(music_dir).exists() {
+                warn!("Music directory does not exist, skipping: {music_dir}");
+                continue;
+            }
+            for entry in WalkDir::new(music_dir)
+                .follow_links(settings.follow_links)
+                .sort_by_file_name()
+                .into_iter()
+                .filter_map(std::result::Result::ok)
+                .filter(|de| de.file_type().is_file())
+                .filter(|de| {
+                    let ext = de
+                        .path()
+                        .extension()
+                        .map_or_else(|| "no_ext".to_string(), |ex| ex.to_str().unwrap().to_lowercase());
+                    MetadataStoreSettings::default().supported_extensions.contains(&ext)
+                })
+                .map(|de| {
+                    (
+                        de.path().to_str().unwrap().to_owned(),
+                        Self::full_path_to_database_key_for_dir(music_dir, de.path().to_str().unwrap()),
+                    )
+                })
+                .filter(|de| !self.ignored_files_db.contains_key(&de.1).unwrap_or(false))
+            {
+                if self.song_repository.find_by_id(&entry.1).is_some() {
+                    unchanged_keys.push(entry.1.clone());
+                } else {
+                    added_files.push(entry.0.clone());
+                }
             }
         }
         for song in self.song_repository.get_all_iterator() {
@@ -340,7 +370,7 @@ impl MetadataService {
         (added_files, deleted_keys)
     }
 
-    fn add_songs_to_db(&self, files: Vec<String>, state_changes_sender: &Sender<StateChangeEvent>) -> u32 {
+    fn add_songs_to_db(&self, files: &[String], state_changes_sender: &Sender<StateChangeEvent>, settings: &MetadataStoreSettings) -> u32 {
         use rayon::prelude::*;
         use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -348,14 +378,12 @@ impl MetadataService {
         files.par_iter().for_each(|file| {
             let c = count.fetch_add(1, Ordering::Relaxed);
             state_changes_sender
-                .send(StateChangeEvent::MetadataSongScanned(format!(
-                    "Scanning: {c}. {file}"
-                )))
+                .send(StateChangeEvent::MetadataSongScanned(format!("Scanning: {c}. {file}")))
                 .ok();
-            if let Err(e) = self.scan_single_file(Path::new(file)) {
+            if let Err(e) = self.scan_single_file(Path::new(file), settings) {
                 log::error!("Unable to scan file {file}. Error: {e}");
                 self.ignored_files_db
-                    .insert(self.full_path_to_database_key(file), e.to_string().as_bytes())
+                    .insert(Self::full_path_to_database_key(settings, file), e.to_string().as_bytes())
                     .expect("DB error");
             }
             if c.is_multiple_of(100) {
@@ -366,7 +394,7 @@ impl MetadataService {
         count.load(Ordering::Relaxed)
     }
 
-    fn scan_single_file(&self, file_path: &Path) -> Result<()> {
+    fn scan_single_file(&self, file_path: &Path, settings: &MetadataStoreSettings) -> Result<()> {
         info!("Scanning file:\t{}", file_path.display());
 
         let file = Box::new(File::open(file_path).unwrap());
@@ -384,7 +412,7 @@ impl MetadataService {
             ..Default::default()
         };
         let metadata_opts = MetadataOptions::default();
-        let file_p = &self.full_path_to_database_key(file_path.to_str().unwrap());
+        let file_p = &Self::full_path_to_database_key(settings, file_path.to_str().unwrap());
 
         info!("Scanning file:\t{file_p}");
         match symphonia::default::get_probe().format(&hint, mss, &format_opts, &metadata_opts) {

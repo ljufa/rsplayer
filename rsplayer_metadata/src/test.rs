@@ -322,7 +322,9 @@ mod queue {
     }
 
     fn create_queue_with_ctx(ctx: &Context) -> QueueService {
-        let db = fjall::Database::builder(&ctx.db_dir).open().expect("Failed to open test db");
+        let db = fjall::Database::builder(&ctx.db_dir)
+            .open()
+            .expect("Failed to open test db");
         let song_repo = Arc::new(SongRepository::new(&db));
         let stat_repo = Arc::new(PlayStatisticsRepository::new(&db));
         QueueService::new(&db, song_repo, stat_repo)
@@ -333,7 +335,7 @@ mod queue {
 mod metadata {
     use std::{fs, process::Command, vec};
 
-    use api_models::state::StateChangeEvent;
+    use api_models::{settings::MetadataStoreSettings, state::StateChangeEvent};
 
     use crate::test::test_shared::TestContext;
 
@@ -360,11 +362,10 @@ mod metadata {
         let mut context = TestContext::new();
         std::fs::create_dir_all(&context.db_dir).expect("failed to create dir");
         context.music_dir.clone_from(&context.db_dir);
-        context
-            .metadata_service
-            .settings
-            .music_directory
-            .clone_from(&context.db_dir);
+        context.metadata_service.update_settings(MetadataStoreSettings {
+            music_directory: context.db_dir.clone(),
+            ..Default::default()
+        });
         std::fs::create_dir_all(&context.music_dir).expect("failed to create dir");
 
         // copy content of assets into /tmp
@@ -520,7 +521,9 @@ mod playlist {
 
     fn create_pl_service() -> PlaylistService {
         let ctx = Context::default();
-        let db = fjall::Database::builder(&ctx.db_dir).open().expect("Failed to open test db");
+        let db = fjall::Database::builder(&ctx.db_dir)
+            .open()
+            .expect("Failed to open test db");
         PlaylistService::new(&db)
     }
 }
@@ -601,7 +604,7 @@ pub mod test_shared {
                 music_directory: music_dir.clone(),
                 ..Default::default()
             };
-            let db = fjall::Database::builder(&format!("{db_dir}_shared"))
+            let db = fjall::Database::builder(format!("{db_dir}_shared"))
                 .open()
                 .expect("Failed to open test db");
             let album_repository = Arc::new(AlbumRepository::new(&db));

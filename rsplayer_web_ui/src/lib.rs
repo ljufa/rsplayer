@@ -675,6 +675,31 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     model,
                     &mut orders.proxy(Msg::LibraryStats),
                 );
+            } else if let Page::Settings(sett_model) = &mut model.page {
+                match chg_ev {
+                    StateChangeEvent::MountStatusEvent(statuses) => {
+                        page::settings::update(
+                            page::settings::Msg::MountStatusReceived(statuses),
+                            sett_model,
+                            &mut orders.proxy(Msg::Settings),
+                        );
+                    }
+                    StateChangeEvent::MusicDirStatusEvent(statuses) => {
+                        page::settings::update(
+                            page::settings::Msg::MusicDirStatusReceived(statuses),
+                            sett_model,
+                            &mut orders.proxy(Msg::Settings),
+                        );
+                    }
+                    StateChangeEvent::ExternalMountsEvent(mounts) => {
+                        page::settings::update(
+                            page::settings::Msg::ExternalMountsReceived(mounts),
+                            sett_model,
+                            &mut orders.proxy(Msg::Settings),
+                        );
+                    }
+                    _ => {}
+                }
             }
         }
 

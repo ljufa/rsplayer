@@ -1,5 +1,39 @@
 # Release Notes
 
+## v2.5.0 — 2026-03-21
+
+### New Features
+
+#### Network Storage Management
+RSPlayer can now discover and manage network mounts (SMB/CIFS and NFS) directly from the settings page.
+
+- **Add Network Mounts**: Configure SMB or NFS shares with server, share, and optional credentials. Mounts are created under `/mnt/rsplayer/<name>` and automatically added as music directories.
+- **Discover Existing Mounts**: Network filesystems already mounted on the system (via `/proc/mounts` and `/etc/fstab`) are automatically detected and shown in a separate list. Click "Save" to add them as music sources without re-mounting.
+- **Mount/Unmount Controls**: Mount and unmount saved shares directly from the UI with real-time status indicators (Read/Write, Read only, Not mounted, Not accessible).
+- **Multiple Music Directories**: The music library now supports multiple source directories. Add local paths or network mounts — all are scanned together.
+
+#### Frontend Cache Busting
+Static assets (CSS, JS, WASM) are now served with version-tagged query strings (e.g. `?v=2.5.0`). Browser caches are automatically invalidated on every release — no more stale UI after upgrading. The `index.html` is served with `Cache-Control: no-cache, must-revalidate` to ensure the browser always fetches the latest asset references.
+
+> **Upgrade note:** When upgrading from a version prior to 2.5.0, you may need to hard-refresh your browser (`Ctrl+Shift+R` / `Cmd+Shift+R`) once to clear the previously cached `index.html`. This is a one-time step — future upgrades will invalidate caches automatically.
+
+#### Version Display
+The current RSPlayer version is now shown at the bottom of the settings page.
+
+### Improvements
+
+- **Music source hot-reload**: Newly added music directories are now immediately available for playback after scanning, without requiring a player restart.
+- **Random playback**: The shuffle algorithm now properly excludes the currently playing song when picking the next track, preventing back-to-back repeats. The current song is also correctly marked as "played" from the start of each shuffle cycle.
+- **Queue load actions**: Loading a directory, album, artist, playlist, or song into the queue now always starts playback from the beginning of the first track, instead of incorrectly resuming from the previous song's progress position.
+
+### Bug Fixes
+
+- Fixed metadata scanner using stale settings after configuration changes — scanner now reads fresh settings before each scan.
+- Fixed AAC radio stream playback.
+- Fixed random playback state not being properly restored after player restart.
+
+---
+
 ## v2.1.0 — 2026-03-20
 
 ### New Features

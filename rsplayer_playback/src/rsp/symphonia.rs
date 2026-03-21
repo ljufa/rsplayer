@@ -43,7 +43,7 @@ pub fn play_file(
     skip_to_time: &Arc<AtomicU16>,
     audio_device: &str,
     rsp_settings: &RsPlayerSettings,
-    music_dir: &str,
+    music_dirs: &[String],
     changes_tx: &Sender<StateChangeEvent>,
     dsp_handle: Option<&DspHandle>,
     vu_meter: Option<VUMeter>,
@@ -52,7 +52,7 @@ pub fn play_file(
 ) -> Result<PlaybackResult> {
     debug!("Playing file {path_str}");
     let mut hint = Hint::new();
-    let (media_source, radio_meta) = get_source(music_dir, path_str, &mut hint, changes_tx);
+    let (media_source, radio_meta) = get_source(music_dirs, path_str, &mut hint, changes_tx);
     let Ok(source) = media_source else {
         return Err(format_err!("Failed to get source: {:?}", media_source.err()));
     };
@@ -70,15 +70,22 @@ pub fn play_file(
     }
 
     let is_seekable = source.is_seekable();
+    // For non-seekable streams (HTTP), cap the buffer at 256KB.  The large
+    // configured buffer (often 10+ MB) is designed for local file I/O.
+    // For streams, Symphonia keeps ALL probe data in memory until a format
+    // is identified, so a huge buffer means the probe can block for tens of
+    // seconds on unsupported formats before giving up.
+    let buffer_len = if is_seekable {
+        (rsp_settings.input_stream_buffer_size_mb * 1024 * 1024).next_power_of_two()
+    } else {
+        (256 * 1024).min(
+            (rsp_settings.input_stream_buffer_size_mb * 1024 * 1024).next_power_of_two(),
+        )
+    };
     // Probe the media source stream for metadata and get the format reader.
     let Ok(probed) = get_probe().format(
         &hint,
-        MediaSourceStream::new(
-            source,
-            MediaSourceStreamOptions {
-                buffer_len: (rsp_settings.input_stream_buffer_size_mb * 1024 * 1024).next_power_of_two(),
-            },
-        ),
+        MediaSourceStream::new(source, MediaSourceStreamOptions { buffer_len }),
         &FormatOptions::default(),
         &MetadataOptions::default(),
     ) else {
@@ -230,7 +237,7 @@ pub fn play_file(
 }
 
 fn get_source(
-    music_dir: &str,
+    music_dirs: &[String],
     path_str: &str,
     hint: &mut Hint,
     changes_tx: &Sender<StateChangeEvent>,
@@ -238,9 +245,9 @@ fn get_source(
     let mut radio_meta = None;
     let source = if path_str.starts_with("http") {
         let agent = ureq::AgentBuilder::new()
-            .timeout_connect(Duration::from_secs(5))
-            .timeout_read(Duration::from_secs(5))
-            .timeout_write(Duration::from_secs(5))
+            .timeout_connect(Duration::from_secs(3))
+            .timeout_read(Duration::from_secs(3))
+            .timeout_write(Duration::from_secs(3))
             .build();
         let Ok(resp) = agent.get(path_str).set("accept", "*/*").set("Icy-Metadata", "1").call() else {
             return (Err(format_err!("Failed to get url {path_str}")), None);
@@ -253,6 +260,23 @@ fn get_source(
             .for_each(|header| info!("{header} = {:?}", resp.header(header).unwrap_or("")));
 
         radio_meta = radio_meta::get_external_radio_meta(&agent, &resp);
+
+        // Set format hint from content-type so Symphonia probes the right
+        // reader first (or fails fast for unsupported formats).
+        if let Some(ct) = resp.header("content-type") {
+            let ext = match ct {
+                "audio/mpeg" => Some("mp3"),
+                "audio/aac" | "audio/aacp" | "audio/x-aac" => Some("aac"),
+                "audio/ogg" | "application/ogg" => Some("ogg"),
+                "audio/flac" | "audio/x-flac" => Some("flac"),
+                "audio/wav" | "audio/x-wav" => Some("wav"),
+                "audio/mp4" | "audio/x-m4a" => Some("m4a"),
+                _ => None,
+            };
+            if let Some(ext) = ext {
+                hint.with_extension(ext);
+            }
+        }
 
         if status == 200 {
             let metaint_str = resp.header("icy-metaint");
@@ -273,14 +297,22 @@ fn get_source(
             return (Err(format_err!("Invalid streaming url {path_str}")), None);
         }
     } else {
-        let path = Path::new(music_dir).join(path_str);
-        if let Some(extension) = path.extension() {
-            if let Some(extension_str) = extension.to_str() {
-                hint.with_extension(extension_str);
+        // Try each music directory to find the file
+        let mut found = None;
+        for dir in music_dirs {
+            let path = Path::new(dir).join(path_str);
+            if let Some(extension) = path.extension() {
+                if let Some(extension_str) = extension.to_str() {
+                    hint.with_extension(extension_str);
+                }
+            }
+            if let Ok(p) = File::open(&path) {
+                found = Some(Box::new(p) as Box<dyn MediaSource>);
+                break;
             }
         }
-        if let Ok(p) = File::open(path) {
-            Box::new(p)
+        if let Some(f) = found {
+            f
         } else {
             return (Err(format_err!("Unable to open file: {path_str}")), None);
         }

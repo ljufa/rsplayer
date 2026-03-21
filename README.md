@@ -39,7 +39,7 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - **Intelligent Dynamic Playlists**: Advanced dynamic playlists that adapt based on user likes or playback counts for a personalized listening experience.
 - **Windows Compatibility**: Development of a Windows build to extend platform support.
 - **MacOS Compatibility**: Development of a MacOS build to extend platform support.
-- **Remote file system management**: Ability to mount and use remote file storage (nfs and samba) from UI.
+- **Remote file system management**: Abil2ity to mount and use remote file storage (nfs and samba) from UI.
 - **Music Recommendations**: Suggest similar tracks or artists based on listening history or current playback.
 - **Generate missing album cover image**: Auto-generate album art using album name.
 - **MPD protocol support**: Compatibility with MPD clients.

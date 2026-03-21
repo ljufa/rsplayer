@@ -29,6 +29,18 @@ impl Configuration {
                             }
                         }
                     }
+                    // Migrate legacy single music_directory to music_directories
+                    if settings.metadata_settings.music_directories.is_empty()
+                        && !settings.metadata_settings.music_directory.is_empty()
+                    {
+                        settings.metadata_settings.music_directories =
+                            vec![settings.metadata_settings.music_directory.clone()];
+                        _ = tree.insert(SETTINGS_KEY, serde_json::to_vec(&settings).unwrap());
+                        log::info!(
+                            "Migrated legacy music_directory '{}' to music_directories",
+                            settings.metadata_settings.music_directory
+                        );
+                    }
                     settings
                 }
                 Err(e) => {

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::ops::Bound;
 use std::str::FromStr;
 use std::sync::{
@@ -21,6 +22,7 @@ pub struct QueueService {
     playback_mode: RwLock<PlaybackMode>,
     random_history_db: Keyspace,
     random_history_index: AtomicU16,
+    random_played_keys: RwLock<HashSet<Vec<u8>>>,
     next_id: AtomicU64,
     song_repository: Arc<SongRepository>,
     statistics_repository: Arc<PlayStatisticsRepository>,
@@ -45,14 +47,6 @@ impl QueueService {
         let random_history_db = db
             .keyspace("queue_random_history", KeyspaceCreateOptions::default)
             .expect("Failed to open queue_random_history keyspace");
-        {
-            let keys: Vec<Vec<u8>> = random_history_db.iter()
-                .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
-                .collect();
-            for key in keys {
-                _ = random_history_db.remove(key);
-            }
-        }
 
         let playback_mode = if let Ok(Some(mode_bytes)) = status_db.get("playback_mode") {
             PlaybackMode::from_str(std::str::from_utf8(&mode_bytes).unwrap_or("Sequential")).unwrap_or_default()
@@ -70,16 +64,19 @@ impl QueueService {
             })
             .unwrap_or(0);
 
-        Self {
+        let service = Self {
             queue_db,
             status_db,
             playback_mode: RwLock::new(playback_mode),
             random_history_db,
             random_history_index: AtomicU16::new(0),
+            random_played_keys: RwLock::new(HashSet::new()),
             next_id: AtomicU64::new(next_id),
             song_repository,
             statistics_repository,
-        }
+        };
+        service.reset_random_state();
+        service
     }
 
     fn generate_id(&self) -> u64 {
@@ -90,6 +87,17 @@ impl QueueService {
         id
     }
 
+    fn reset_random_state(&self) {
+        let keys: Vec<Vec<u8>> = self.random_history_db.iter()
+            .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
+            .collect();
+        for key in keys {
+            _ = self.random_history_db.remove(key);
+        }
+        self.random_history_index.store(0, Ordering::Relaxed);
+        self.random_played_keys.write().unwrap().clear();
+    }
+
     pub fn cycle_playback_mode(&self) -> PlaybackMode {
         let mut mode_lock = self.playback_mode.write().unwrap();
         let modes: Vec<_> = PlaybackMode::all();
@@ -98,6 +106,7 @@ impl QueueService {
         *mode_lock = next_mode;
         let mode_str: &'static str = next_mode.into();
         _ = self.status_db.insert("playback_mode", mode_str);
+        self.reset_random_state();
         next_mode
     }
 
@@ -155,41 +164,59 @@ impl QueueService {
         match mode {
             PlaybackMode::LoopSingle => self.get_current_or_first_song_key().is_some(),
             PlaybackMode::Random => {
-                let keys: Vec<Vec<u8>> = self.queue_db.iter()
+                let all_keys: Vec<Vec<u8>> = self.queue_db.iter()
                     .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
                     .collect();
-                if keys.len() < 2 { return false; }
+                if all_keys.len() < 2 { return false; }
+                let current_key = self.get_current_or_first_song_key();
+                let mut played = self.random_played_keys.write().unwrap();
+                // Mark current song as played
+                if let Some(ref ck) = current_key {
+                    played.insert(ck.clone());
+                }
+                let unplayed: Vec<&Vec<u8>> = all_keys.iter()
+                    .filter(|k| !played.contains(*k))
+                    .collect();
+                let candidates = if unplayed.is_empty() {
+                    // All songs played — reset but exclude current to avoid repeat
+                    played.clear();
+                    if let Some(ref ck) = current_key {
+                        played.insert(ck.clone());
+                    }
+                    all_keys.iter()
+                        .filter(|k| current_key.as_ref() != Some(*k))
+                        .collect::<Vec<_>>()
+                } else {
+                    unplayed
+                };
+                if candidates.is_empty() { return false; }
                 let mut rnd = rand::rng();
-                let rand_position = rnd.random_range(0..keys.len());
-                let rand_key = &keys[rand_position];
-                _ = self.status_db.insert(CURRENT_SONG_KEY, rand_key);
+                let rand_position = rnd.random_range(0..candidates.len());
+                let rand_key = candidates[rand_position].clone();
+                played.insert(rand_key.clone());
+                _ = self.status_db.insert(CURRENT_SONG_KEY, &rand_key);
                 let ridx = self.random_history_index.fetch_add(1, Ordering::Relaxed) + 1;
-                _ = self.random_history_db.insert(ridx.to_ne_bytes(), rand_key);
+                _ = self.random_history_db.insert(ridx.to_ne_bytes(), &rand_key);
                 true
             }
             PlaybackMode::LoopQueue => {
                 let Some(current_key) = self.get_current_or_first_song_key() else { return false; };
-                if let Some(guard) = self.queue_db.range::<&[u8], _>((Bound::Excluded(current_key.as_slice()), Bound::Unbounded)).next() {
-                    let key = guard.key().expect("Failed to get key").to_vec();
-                    _ = self.status_db.insert(CURRENT_SONG_KEY, &key);
-                    true
-                } else if let Some(guard) = self.queue_db.first_key_value() {
-                    let key = guard.key().expect("Failed to get key").to_vec();
-                    _ = self.status_db.insert(CURRENT_SONG_KEY, &key);
-                    true
-                } else {
-                    false
-                }
+                self.queue_db.range::<&[u8], _>((Bound::Excluded(current_key.as_slice()), Bound::Unbounded)).next()
+                    .or_else(|| self.queue_db.first_key_value())
+                    .is_some_and(|guard| {
+                        let key = guard.key().expect("Failed to get key").to_vec();
+                        _ = self.status_db.insert(CURRENT_SONG_KEY, &key);
+                        true
+                    })
             }
             PlaybackMode::Sequential => {
                 let Some(current_key) = self.get_current_or_first_song_key() else { return false; };
-                if let Some(guard) = self.queue_db.range::<&[u8], _>((Bound::Excluded(current_key.as_slice()), Bound::Unbounded)).next() {
-                    let key = guard.key().expect("Failed to get key").to_vec();
-                    _ = self.status_db.insert(CURRENT_SONG_KEY, &key);
-                    true
-                } else {
-                    false
-                }
+                self.queue_db.range::<&[u8], _>((Bound::Excluded(current_key.as_slice()), Bound::Unbounded)).next()
+                    .is_some_and(|guard| {
+                        let key = guard.key().expect("Failed to get key").to_vec();
+                        _ = self.status_db.insert(CURRENT_SONG_KEY, &key);
+                        true
+                    })
             }
         }
     }
@@ -281,6 +308,7 @@ impl QueueService {
         }
         _ = self.status_db.remove(CURRENT_SONG_KEY);
         _ = self.status_db.remove("priority_queue");
+        self.reset_random_state();
         iter.for_each(|song| {
             let key = self.generate_id().to_be_bytes();
             _ = self.queue_db.insert(key, song.to_json_string_bytes());
@@ -293,12 +321,9 @@ impl QueueService {
     {
         let total = self.queue_db.approximate_len();
         if total == 0 { return (0, vec![]); }
-        let from = match self.queue_db.iter().nth(offset)
+        let Some(from) = self.queue_db.iter().nth(offset)
             .and_then(|guard| guard.key().ok().map(|k| k.to_vec()))
-            .or_else(|| self.get_current_or_first_song_key()) {
-            Some(key) => key,
-            None => return (0, vec![]),
-        };
+            .or_else(|| self.get_current_or_first_song_key()) else { return (0, vec![]) };
         (
             total,
             self.queue_db
@@ -344,6 +369,7 @@ impl QueueService {
         }
         _ = self.status_db.remove(CURRENT_SONG_KEY);
         _ = self.status_db.remove("priority_queue");
+        self.reset_random_state();
     }
 
     pub fn query_current_queue(&self, query: CurrentQueueQuery) -> Option<PlaylistPage> {
@@ -397,8 +423,8 @@ impl QueueService {
         self.add_songs_after_current(self.song_repository.find_songs_by_dir_prefix(dir))
     }
 
-    pub fn set_current_song(&self, key: Vec<u8>) {
-        _ = self.status_db.insert(CURRENT_SONG_KEY, &key);
+    pub fn set_current_song(&self, key: &[u8]) {
+        _ = self.status_db.insert(CURRENT_SONG_KEY, key);
     }
 
     pub fn add_song_after_current(&self, song_id: &str) {

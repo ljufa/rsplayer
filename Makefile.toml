@@ -9,10 +9,11 @@ CARGO_TARGET_DIR = "target"
 RPI_HOST = "192.168.5.4"
 TARGET = "aarch64-unknown-linux-gnu"
 
+# RPI_HOST = "127.0.0.1"
 # TARGET = "x86_64-unknown-linux-gnu"
 # TARGET = "riscv64gc-unknown-linux-gnu"
 
-RELEASE_VERSION = "2.1.0"
+RELEASE_VERSION = "2.5.0"
 RELEASE_BRANCH = "main_public"
 
 [config]
@@ -204,10 +205,14 @@ script = "sudo pkill -9 rsplayer || true"
 
 [tasks.run_local]
 dependencies = ["kill_local"]
-env = { "RUST_LOG" = "rsplayer=info,rsplayer_playback=debug,rsplayer_metadata=debug,warp=info", "RUST_BACKTRACE" = "full"}
-cwd = ".run"
-command = "cargo"
-args = ["run"]
+env = { "RUST_LOG" = "rsplayer=debug,rsplayer_playback=debug,rsplayer_metadata=debug,symphonia=info,warp=info", "RUST_BACKTRACE" = "full"}
+script = [
+    "set -e",
+    "cargo build --package rsplayer --bin rsplayer",
+    "sudo /usr/bin/setcap 'cap_net_bind_service,cap_sys_boot,cap_sys_nice,cap_sys_admin,cap_dac_read_search+ep' target/debug/rsplayer",
+    "cd .run && exec ../target/debug/rsplayer"
+]
+
 
 [tasks.copy_remote]
 dependencies = ["build_release"]
@@ -229,4 +234,12 @@ script = "rsync -avvP target/${TARGET}/debian/*.deb pi@${RPI_HOST}:~"
 script = [
     "git tag ${RELEASE_VERSION} ${RELEASE_BRANCH}",
     "git push originpublic ${RELEASE_VERSION}",
+]
+
+[tasks.run_as_rsplayer]
+script = [
+    "sudo systemctl stop rsplayer",
+    "cargo make build_release",
+    "sudo cp target/x86_64-unknown-linux-gnu/release/rsplayer /usr/bin",
+    "sudo systemctl start rsplayer",
 ]
