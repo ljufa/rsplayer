@@ -18,28 +18,33 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 ## Features
 - **Low Latency Output**: Direct output to ALSA or PipeWire minimizes latency.
 - **Local Browser Playback**: Stream audio directly to your web browser for local playback.
+- **Automatic Resampling**: High-quality FFT-based resampling (via rubato) when the output device doesn't support the source sample rate — no configuration needed.
+- **Multiple Music Sources**: Configure multiple local directories and network mounts as music sources, all scanned together.
+- **Network Storage Management**: Discover, mount, and manage SMB/CIFS and NFS shares directly from the settings page.
 - **Adjustable Playback Thread Priority**: Customize the priority of the playback thread up to a real-time rating of 99 via the settings page.
 - **Dedicated CPU Core for Playback**: By default, the playback thread is pinned to a single CPU core for optimized performance.
 - **Web UI Remote Control**: Manage your playback remotely with an intuitive web interface.
-- **Flexible Volume Control**: Control the volume using software (alsa mixer) or hardware control (Dac chip instuctions via GPIO).
+- **Flexible Volume Control**: Control the volume using software (alsa mixer) or hardware control (Dac chip instructions via GPIO).
 - **Written in Rust**: Enjoy the benefits of minimal dependencies and high performance, thanks to the Rust native implementation.
 - **Comprehensive Music Library Management**: Scan, search, and browse your music library and online radio stations with ease.
-- **Dynamic Playlists**: Automaticaly create dynamic playlists for personalized listening experiences.
-- **DSP Integration**: Advanced Digital Signal Processing with filters and presets.
+- **Dynamic Playlists**: Automatically create dynamic playlists for personalized listening experiences.
+- **DSP Integration**: Advanced Digital Signal Processing with parametric EQ, filters, and presets.
 - **Web UI VU Meter**: Real-time audio visualization in the web interface.
 - **Extended Hardware Control**: Support for seek and power management via firmware interactions.
-- **Web UI Themes**: Support for customizable themes and dark/light modes.
+- **Web UI Themes**: Support for customizable themes and dark/light modes (10+ built-in themes).
 - **Synchronized Lyrics**: Real-time synchronized lyrics support via LRCLIB integration.
 - **Playlists by genre, year**: Browse and create playlists based on genre or year.
 - **Loudness Normalization**: Per-song EBU R128 loudness normalization, toggleable from the settings page. Analysis runs automatically in the background while playback is stopped and results are stored permanently.
 - **Library Statistics**: Dedicated statistics page showing song/album/artist counts, total duration, play history, top genres, albums by decade, and loudness analysis progress.
+- **Priority Queue**: Add songs, albums, artists, or directories to play next without disrupting the queue order.
+- **Drag-and-Drop Queue Reordering**: Reorder queue items by dragging them directly in the queue view.
+- **Automatic Cache Busting**: Browser caches are automatically invalidated on every release — no stale UI after upgrading.
 
 ### Planned features
 - **Expanded Audio Codec Support**: Compatibility with a wider range of audio codecs.
 - **Intelligent Dynamic Playlists**: Advanced dynamic playlists that adapt based on user likes or playback counts for a personalized listening experience.
 - **Windows Compatibility**: Development of a Windows build to extend platform support.
 - **MacOS Compatibility**: Development of a MacOS build to extend platform support.
-- **Remote file system management**: Abil2ity to mount and use remote file storage (nfs and samba) from UI.
 - **Music Recommendations**: Suggest similar tracks or artists based on listening history or current playback.
 - **Generate missing album cover image**: Auto-generate album art using album name.
 - **MPD protocol support**: Compatibility with MPD clients.
@@ -48,6 +53,8 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - **MPRIS D-Bus integration**: Native Linux desktop media key and player integration.
 - **Community plugin framework**: Extensible architecture for third-party plugins.
 - **Improve playlists management create/modify/delete items and playlists**: Items can be added/removed to/from playlist from everywhere.
+- **New version detection and upgrade from the app**
+- **Problem(bug) report with diagnostic**
 
 
 ### Planned code improvements

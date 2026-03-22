@@ -14,6 +14,8 @@ Configuration settings are managed through the web UI and stored internally in a
 
 ## Music library scan finds no files from a mounted drive (Samba/NFS)
 
+> **Tip:** As of v2.5.0, rsplayer can mount and manage SMB/NFS shares directly from the Settings page under **Music Sources > Network Mounts**. Mounts created through the UI are automatically configured with the correct permissions. The manual steps below apply to mounts configured outside of rsplayer (e.g., via `/etc/fstab`).
+
 If the library scan completes immediately with no files found, it is most likely a file permission issue. The `rsplayer` service runs as the `rsplayer` user, which may not have read access to your mount point.
 
 **Verify the issue:**

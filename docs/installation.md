@@ -6,6 +6,7 @@ RSPlayer can be installed on Linux systems with the following CPU architectures:
 * [x] Linux aarch64(aarch64-unknown-linux-gnu) - ARM 64-bit CPUs: RPI 5, RPI 4 and other ARMv8 based boards
 * [x] Linux armv7(armv7-unknown-linux-gnueabihf) - ARM 32-bit CPUs: RPI 4 (32-bit), RPI 3, RPI 2
 * [x] Linux armv6(arm-unknown-linux-gnueabihf) - ARM 32-bit CPUs: RPI Zero, RPI Zero W, RPI 1
+* [x] Linux riscv64(riscv64gc-unknown-linux-gnu) - RISC-V 64-bit CPUs
 * [ ] Android
 * [ ] Windows x86_64
 * [ ] Windows aarch64
