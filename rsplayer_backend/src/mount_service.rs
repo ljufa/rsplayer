@@ -34,15 +34,21 @@ pub fn mount_share(config: &NetworkMountConfig) -> Result<String, String> {
 }
 
 fn mount_smb(config: &NetworkMountConfig, mount_point: &str) -> Result<(), String> {
-    let has_credentials = config.username.as_deref().is_some_and(|u| !u.is_empty());
-
     let source = format!("//{}/{}", config.server, config.share);
     let uid = Uid::current();
     let gid = Gid::current();
-    let options = if has_credentials {
-        let username = config.username.as_deref().unwrap_or("guest");
+    let creds_path = format!("{CREDS_BASE}/creds_{}", config.name);
+
+    // Persist credentials to file so auto-mount on restart works without stored password
+    if let Some(username) = config.username.as_deref().filter(|u| !u.is_empty()) {
         let password = config.password.as_deref().unwrap_or("");
-        format!("user={username},pass={password},uid={uid},gid={gid},file_mode=0644,dir_mode=0755")
+        let creds_content = format!("username={username}\npassword={password}\n");
+        fs::create_dir_all(CREDS_BASE).map_err(|e| format!("Failed to create creds dir: {e}"))?;
+        fs::write(&creds_path, &creds_content).map_err(|e| format!("Failed to write creds file: {e}"))?;
+    }
+
+    let options = if std::path::Path::new(&creds_path).exists() {
+        format!("credentials={creds_path},uid={uid},gid={gid},file_mode=0644,dir_mode=0755")
     } else {
         format!("user=,pass=,sec=none,uid={uid},gid={gid},file_mode=0644,dir_mode=0755")
     };
@@ -188,9 +194,26 @@ pub fn mount_all(settings: &NetworkStorageSettings) {
             continue;
         }
         info!("Auto-mounting network share: {}", mount_config.name);
-        match mount_share(mount_config) {
-            Ok(mp) => info!("Auto-mounted {} at {mp}", mount_config.name),
-            Err(e) => warn!("Failed to auto-mount {}: {e}", mount_config.name),
+        let mut last_err = String::new();
+        let mut mounted = false;
+        for attempt in 1..=3 {
+            match mount_share(mount_config) {
+                Ok(mp) => {
+                    info!("Auto-mounted {} at {mp}", mount_config.name);
+                    mounted = true;
+                    break;
+                }
+                Err(e) => {
+                    last_err = e;
+                    if attempt < 3 {
+                        warn!("Auto-mount attempt {attempt} failed for {}: {last_err}. Retrying in 5s...", mount_config.name);
+                        std::thread::sleep(std::time::Duration::from_secs(5));
+                    }
+                }
+            }
+        }
+        if !mounted {
+            warn!("Failed to auto-mount {} after 3 attempts: {last_err}", mount_config.name);
         }
     }
 }
