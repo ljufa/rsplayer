@@ -1,5 +1,22 @@
 # Release Notes
 
+## v2.5.1 — 2026-03-22
+
+### Improvements
+
+#### Reliable Network Share Auto-Mount on Startup
+Managed network shares (SMB/CIFS, NFS) are now mounted automatically when RSPlayer starts, with two reliability improvements:
+
+- **Retry logic**: If a mount fails at startup (e.g. the server isn't yet reachable), RSPlayer retries up to 3 times with a 5-second delay between attempts before giving up and logging a warning.
+- **SMB credential persistence**: SMB credentials are now written to a credentials file (`/opt/rsplayer/creds_<name>`) at mount time. On restart, the credentials file is used directly so shares with passwords remount without requiring the password to be stored in the settings file.
+
+#### Systemd Service: Wait for Network Online
+The systemd unit now declares `After=network-online.target` (previously `network.target`), ensuring RSPlayer starts only after the network stack is fully ready. This prevents auto-mount failures on systems where shares are reachable only once routes and DNS are configured.
+
+> **Upgrade note:** The updated systemd unit is included in the `.deb`, `.rpm`, and `.tgz` packages. If you installed manually, replace `/etc/systemd/system/rsplayer.service` and run `sudo systemctl daemon-reload`.
+
+---
+
 ## v2.5.0 — 2026-03-21
 
 ### New Features
