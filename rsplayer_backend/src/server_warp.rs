@@ -44,7 +44,7 @@ pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Out
         .map(|| {
                 let reply = warp::reply::html(INDEX_HTML);
                 let reply = warp::reply::with_header(reply, "Cache-Control", "no-cache, must-revalidate");
-                warp::reply::with_header(reply, "ETag", concat!("\"", env!("CARGO_PKG_VERSION"), "\""))
+                warp::reply::with_header(reply, "ETag", concat!("\"", env!("APP_VERSION"), "\""))
             });
     let ui_static_content = warp::get().and(warp_embed::embed(&StaticContentDir));
 
@@ -97,7 +97,7 @@ pub fn start(
         .map(|| {
                 let reply = warp::reply::html(INDEX_HTML);
                 let reply = warp::reply::with_header(reply, "Cache-Control", "no-cache, must-revalidate");
-                warp::reply::with_header(reply, "ETag", concat!("\"", env!("CARGO_PKG_VERSION"), "\""))
+                warp::reply::with_header(reply, "ETag", concat!("\"", env!("APP_VERSION"), "\""))
             });
     let ui_static_content = warp::get()
         .and(warp_embed::embed(&StaticContentDir))
@@ -245,7 +245,7 @@ mod handlers {
 
     pub async fn get_settings(config: Config) -> Result<impl warp::Reply, Infallible> {
         let mut settings = config.get_settings_mut();
-        settings.version = env!("CARGO_PKG_VERSION").to_string();
+        settings.version = env!("APP_VERSION").to_string();
 
         #[cfg(feature = "alsa")]
         {

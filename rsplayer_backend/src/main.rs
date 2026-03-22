@@ -40,7 +40,7 @@ async fn main() {
         .retention(Duration::from_secs(60))
         .server_addr(([0, 0, 0, 0], 6669))
         .init();
-    let version = env!("CARGO_PKG_VERSION");
+    let version = env!("APP_VERSION");
     info!("Starting RSPlayer {version}.");
     info!(
         r"
