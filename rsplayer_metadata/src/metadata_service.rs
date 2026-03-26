@@ -480,7 +480,7 @@ fn build_song(format: &mut dyn FormatReader) -> (Song, Option<Visual>) {
                             song.composer = from_tag_value_to_option(tag);
                         }
                     }
-                    StandardTag::RecordingDate(_) | StandardTag::ReleaseDate(_) => {
+                    StandardTag::RecordingDate(_) | StandardTag::ReleaseDate(_) | StandardTag::RecordingYear(_) | StandardTag::ReleaseYear(_) => {
                         if song.date.is_none() {
                             song.date = from_tag_value_to_option(tag);
                         }
