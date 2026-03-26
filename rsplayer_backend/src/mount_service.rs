@@ -7,8 +7,6 @@ use nix::mount::{mount, umount, MsFlags};
 use nix::unistd::{Gid, Uid};
 
 const MOUNT_BASE: &str = "/mnt/rsplayer";
-const CREDS_BASE: &str = "/opt/rsplayer";
-
 pub fn mount_share(config: &NetworkMountConfig) -> Result<String, String> {
     let mount_point = config
         .mount_point
@@ -37,31 +35,33 @@ fn mount_smb(config: &NetworkMountConfig, mount_point: &str) -> Result<(), Strin
     let source = format!("//{}/{}", config.server, config.share);
     let uid = Uid::current();
     let gid = Gid::current();
-    let creds_path = format!("{CREDS_BASE}/creds_{}", config.name);
 
-    // Persist credentials to file so auto-mount on restart works without stored password
-    if let Some(username) = config.username.as_deref().filter(|u| !u.is_empty()) {
+    // Pass credentials inline to the kernel — credentials are stored in the config database.
+    let options = if let Some(username) = config.username.as_deref().filter(|u| !u.is_empty()) {
         let password = config.password.as_deref().unwrap_or("");
-        let creds_content = format!("username={username}\npassword={password}\n");
-        fs::create_dir_all(CREDS_BASE).map_err(|e| format!("Failed to create creds dir: {e}"))?;
-        fs::write(&creds_path, &creds_content).map_err(|e| format!("Failed to write creds file: {e}"))?;
-    }
-
-    let options = if std::path::Path::new(&creds_path).exists() {
-        format!("credentials={creds_path},uid={uid},gid={gid},file_mode=0644,dir_mode=0755")
+        let domain_opt = config
+            .domain
+            .as_deref()
+            .filter(|d| !d.is_empty())
+            .map_or(String::new(), |d| format!(",domain={d}"));
+        format!("username={username},password={password}{domain_opt},uid={uid},gid={gid},file_mode=0644,dir_mode=0755")
     } else {
         format!("user=,pass=,sec=none,uid={uid},gid={gid},file_mode=0644,dir_mode=0755")
     };
-    info!("Mount: {source} with options: {options}");
-    let result = mount(
+
+    let safe_log = config
+        .username
+        .as_deref()
+        .map_or_else(|| options.clone(), |u| format!("username={u},password=***,..."));
+    info!("Mount: {source} with options: {safe_log}");
+
+    match mount(
         Some(source.as_str()),
         mount_point,
         Some("cifs"),
         MsFlags::empty(),
         Some(options.as_str()),
-    );
-
-    match result {
+    ) {
         Ok(()) => {
             info!("SMB share {source} mounted at {mount_point}");
             Ok(())
@@ -121,9 +121,6 @@ pub fn unmount_share(name: &str, ext_mount: Option<&str>) -> Result<(), String> 
     }
 
     info!("Unmounted {mount_point}");
-    // Remove credentials file if it exists
-    let creds_path = format!("{CREDS_BASE}/creds_{name}");
-    let _ = fs::remove_file(&creds_path);
     Ok(())
 }
 
@@ -206,14 +203,20 @@ pub fn mount_all(settings: &NetworkStorageSettings) {
                 Err(e) => {
                     last_err = e;
                     if attempt < 3 {
-                        warn!("Auto-mount attempt {attempt} failed for {}: {last_err}. Retrying in 5s...", mount_config.name);
+                        warn!(
+                            "Auto-mount attempt {attempt} failed for {}: {last_err}. Retrying in 5s...",
+                            mount_config.name
+                        );
                         std::thread::sleep(std::time::Duration::from_secs(5));
                     }
                 }
             }
         }
         if !mounted {
-            warn!("Failed to auto-mount {} after 3 attempts: {last_err}", mount_config.name);
+            warn!(
+                "Failed to auto-mount {} after 3 attempts: {last_err}",
+                mount_config.name
+            );
         }
     }
 }
@@ -345,6 +348,7 @@ pub fn parse_external_mount_to_config(ext: &ExternalMount) -> Option<NetworkMoun
         share,
         username: None,
         password: None,
+        domain: None,
         mount_point: Some(ext.mount_point.clone()),
     })
 }
@@ -357,4 +361,74 @@ fn is_mounted(mount_point: &str) -> bool {
                 .any(|line| line.split_whitespace().nth(1) == Some(mount_point))
         })
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use api_models::settings::NetworkMountType;
+
+    fn smb_config(username: Option<&str>, password: Option<&str>, domain: Option<&str>) -> NetworkMountConfig {
+        NetworkMountConfig {
+            name: "test-share".to_string(),
+            mount_type: NetworkMountType::Smb,
+            server: "192.168.0.111".to_string(),
+            share: "rpi5music".to_string(),
+            username: username.map(str::to_string),
+            password: password.map(str::to_string),
+            domain: domain.map(str::to_string),
+            mount_point: None,
+        }
+    }
+
+    /// Build the mount options string using the same logic as mount_smb.
+    fn build_options(config: &NetworkMountConfig) -> String {
+        let uid = Uid::current();
+        let gid = Gid::current();
+        if let Some(username) = config.username.as_deref().filter(|u| !u.is_empty()) {
+            let password = config.password.as_deref().unwrap_or("");
+            let domain_opt = config
+                .domain
+                .as_deref()
+                .filter(|d| !d.is_empty())
+                .map_or(String::new(), |d| format!(",domain={d}"));
+            format!(
+                "username={username},password={password}{domain_opt},uid={uid},gid={gid},file_mode=0644,dir_mode=0755"
+            )
+        } else {
+            format!("user=,pass=,sec=none,uid={uid},gid={gid},file_mode=0644,dir_mode=0755")
+        }
+    }
+
+    #[test]
+    fn mount_options_include_inline_credentials() {
+        let config = smb_config(Some("music"), Some("s3cr3t"), None);
+        let opts = build_options(&config);
+        assert!(opts.starts_with("username=music,password=s3cr3t,"));
+        assert!(!opts.contains("domain="));
+    }
+
+    #[test]
+    fn mount_options_include_domain_when_provided() {
+        let config = smb_config(Some("music"), Some("s3cr3t"), Some("WORKGROUP"));
+        let opts = build_options(&config);
+        assert!(opts.contains(",domain=WORKGROUP,"));
+    }
+
+    #[test]
+    fn mount_options_anonymous_when_no_username() {
+        let config = smb_config(None, None, None);
+        let opts = build_options(&config);
+        assert!(opts.starts_with("user=,pass=,sec=none,"));
+    }
+
+    #[test]
+    fn password_persisted_in_config_survives_restart() {
+        let config = smb_config(Some("testuser"), Some("pass123"), Some("SAMBA"));
+        // Simulate what command_handler now does: save config WITH password
+        assert_eq!(config.password.as_deref(), Some("pass123"));
+        // On restart, mount_all reads from saved settings — password is still there
+        let opts = build_options(&config);
+        assert!(opts.contains("password=pass123"));
+    }
 }

@@ -3,7 +3,7 @@ use api_models::settings::RsPlayerSettings;
 use log::info;
 use rubato::Resampler;
 use std::sync::Arc;
-use symphonia::core::audio::{AudioBufferRef, SignalSpec};
+use symphonia::core::audio::{AudioSpec, GenericAudioBufferRef};
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::thread;
@@ -19,19 +19,18 @@ use crate::rsp::vumeter::VUMeter;
 use rsplayer_dsp::DspHandle;
 use rsplayer_dsp::Equalizer;
 
-use symphonia::core::audio::SampleBuffer;
-use symphonia::core::conv::{ConvertibleSample, FromSample, IntoSample};
-use symphonia::core::sample::Sample;
+use symphonia::core::audio::conv::{ConvertibleSample, FromSample, IntoSample};
+use symphonia::core::audio::sample::Sample;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use rb::{RbConsumer, RbProducer, SpscRb, RB};
 
-use log::{debug, error};
+use log::{debug, error, warn};
 
 trait AudioWriter: Send {
     fn write(
         &mut self,
-        decoded: AudioBufferRef<'_>,
+        decoded: GenericAudioBufferRef<'_>,
         dsp: &mut Option<DspState>,
         vu_meter: &mut Option<VUMeter>,
         error_count: &AtomicU32,
@@ -43,7 +42,7 @@ where
     T: Sample,
 {
     producer: rb::Producer<T>,
-    sample_buf: SampleBuffer<T>,
+    samples: Vec<T>,
     source_channels: usize,
     output_channels: usize,
     /// Reused buffer for mono→stereo (or other) channel mapping.
@@ -56,18 +55,21 @@ where
 {
     fn write(
         &mut self,
-        decoded: AudioBufferRef<'_>,
+        decoded: GenericAudioBufferRef<'_>,
         dsp: &mut Option<DspState>,
         vu_meter: &mut Option<VUMeter>,
         error_count: &AtomicU32,
     ) -> Result<()> {
-        self.sample_buf.copy_interleaved_ref(decoded);
         let needs_channel_map = self.source_channels != self.output_channels;
+        let samples_needed = decoded.frames() * self.source_channels;
+        self.samples.clear();
+        self.samples.resize(samples_needed, T::MID);
+        decoded.copy_to_slice_interleaved(&mut self.samples);
 
         if needs_channel_map {
             // Map channels (e.g. mono → stereo) into reusable buffer.
             self.channel_buf.clear();
-            for frame in self.sample_buf.samples().chunks(self.source_channels) {
+            for frame in self.samples.chunks(self.source_channels) {
                 for ch in 0..self.output_channels {
                     self.channel_buf.push(frame[ch.min(self.source_channels - 1)]);
                 }
@@ -80,7 +82,7 @@ where
                 if needs_channel_map {
                     dsp.equalizer.process_samples(&mut self.channel_buf);
                 } else {
-                    dsp.equalizer.process_samples(self.sample_buf.samples_mut());
+                    dsp.equalizer.process_samples(&mut self.samples);
                 }
             }
         }
@@ -90,7 +92,7 @@ where
             if needs_channel_map {
                 vu.update_peaks(self.output_channels, &self.channel_buf);
             } else {
-                vu.update_peaks(self.output_channels, self.sample_buf.samples());
+                vu.update_peaks(self.output_channels, &self.samples);
             }
         }
 
@@ -98,7 +100,7 @@ where
         let mut remaining: &[T] = if needs_channel_map {
             &self.channel_buf
         } else {
-            self.sample_buf.samples()
+            &self.samples
         };
         while let Ok(Some(written)) = self.producer.write_blocking_timeout(remaining, Duration::from_secs(1)) {
             remaining = &remaining[written..];
@@ -112,20 +114,23 @@ where
 
 struct DsdWriter {
     producer: rb::Producer<DsdU32>,
-    sample_buf: SampleBuffer<DsdU32>,
+    samples: Vec<DsdU32>,
 }
 
 impl AudioWriter for DsdWriter {
     fn write(
         &mut self,
-        decoded: AudioBufferRef<'_>,
+        decoded: GenericAudioBufferRef<'_>,
         _dsp: &mut Option<DspState>,
         _vu_meter: &mut Option<VUMeter>,
         error_count: &AtomicU32,
     ) -> Result<()> {
         // DSD — copy straight to ring buffer, no DSP or VU conversion.
-        self.sample_buf.copy_interleaved_ref(decoded);
-        let mut remaining = self.sample_buf.samples();
+        let samples_needed = decoded.frames() * decoded.spec().channels().count();
+        self.samples.clear();
+        self.samples.resize(samples_needed, DsdU32::MID);
+        decoded.copy_to_slice_interleaved(&mut self.samples);
+        let mut remaining: &[DsdU32] = &self.samples;
         while let Ok(Some(written)) = self.producer.write_blocking_timeout(remaining, Duration::from_secs(1)) {
             remaining = &remaining[written..];
             if error_count.load(Ordering::Relaxed) >= ERROR_THRESHOLD {
@@ -141,7 +146,7 @@ where
     T: Sample,
 {
     producer: rb::Producer<T>,
-    sample_buf: SampleBuffer<f32>,
+    samples: Vec<f32>,
     resampler: rubato::FftFixedIn<f32>,
     channels: usize,
     output_channels: usize,
@@ -156,19 +161,21 @@ where
 {
     fn write(
         &mut self,
-        decoded: AudioBufferRef<'_>,
+        decoded: GenericAudioBufferRef<'_>,
         dsp: &mut Option<DspState>,
         vu_meter: &mut Option<VUMeter>,
         error_count: &AtomicU32,
     ) -> Result<()> {
-        self.sample_buf.copy_interleaved_ref(decoded);
-        let samples = self.sample_buf.samples();
+        let samples_needed = decoded.frames() * self.channels;
+        self.samples.clear();
+        self.samples.resize(samples_needed, f32::MID);
+        decoded.copy_to_slice_interleaved(&mut self.samples);
 
         // De-interleave into per-channel buffers.
         for ch in &mut self.channel_in {
             ch.clear();
         }
-        for (i, &s) in samples.iter().enumerate() {
+        for (i, &s) in self.samples.iter().enumerate() {
             self.channel_in[i % self.channels].push(s);
         }
 
@@ -239,7 +246,7 @@ pub struct AlsaOutput {
 impl AlsaOutput {
     #[allow(clippy::too_many_arguments, deprecated)]
     pub fn new(
-        spec: SignalSpec,
+        spec: AudioSpec,
         duration: u64,
         audio_device: &str,
         rsp_settings: &RsPlayerSettings,
@@ -280,12 +287,12 @@ impl AlsaOutput {
                         c.sample_format(),
                         cpal::SampleFormat::DsdU32 | cpal::SampleFormat::DsdU16 | cpal::SampleFormat::DsdU8
                     );
-                    is_dsd_fmt && c.min_sample_rate() <= spec.rate && c.max_sample_rate() >= spec.rate
+                    is_dsd_fmt && c.min_sample_rate() <= spec.rate() && c.max_sample_rate() >= spec.rate()
                 });
 
             if let Some(dsd_c) = dsd_config {
                 info!("Using DSD format: {}", dsd_c.sample_format());
-                (dsd_c.with_sample_rate(spec.rate).config(), dsd_c.sample_format())
+                (dsd_c.with_sample_rate(spec.rate()).config(), dsd_c.sample_format())
             } else {
                 info!("DSD requested but DSD format not found, falling back to default.");
                 let default = device
@@ -302,25 +309,33 @@ impl AlsaOutput {
 
         let device_rate = if is_dsd {
             None
+        } else if let Some(fixed) = rsp_settings.fixed_output_sample_rate.filter(|&r| r != spec.rate()) {
+            info!(
+                "Fixed output sample rate {}Hz configured, will resample from {}Hz",
+                fixed,
+                spec.rate()
+            );
+            Some(fixed)
         } else {
-            find_device_rate(&device, spec.rate)
+            find_device_rate(&device, spec.rate())
         };
         if let Some(rate) = device_rate {
             info!(
                 "Device does not support {}Hz natively, will resample to {}Hz",
-                spec.rate, rate
+                spec.rate(),
+                rate
             );
         }
 
         let device_channels = if is_dsd {
             None
         } else {
-            find_device_channels(&device, spec.channels.count() as u16)
+            find_device_channels(&device, spec.channels().count() as u16)
         };
         if let Some(ch) = device_channels {
             info!(
                 "Device does not support {} channels, will map to {} channels",
-                spec.channels.count(),
+                spec.channels().count(),
                 ch
             );
         }
@@ -330,8 +345,8 @@ impl AlsaOutput {
         let effective_dsp = if is_dsd {
             None
         } else if let Some(handle) = dsp_handle {
-            let dsp_rate = device_rate.unwrap_or(spec.rate) as usize;
-            let dsp_channels = device_channels.map_or(spec.channels.count(), |ch| ch as usize);
+            let dsp_rate = device_rate.unwrap_or(spec.rate()) as usize;
+            let dsp_channels = device_channels.map_or(spec.channels().count(), |ch| ch as usize);
             handle.rebuild(dsp_channels, dsp_rate);
             Some(handle.clone())
         } else {
@@ -340,23 +355,59 @@ impl AlsaOutput {
 
         // For DSD streams, VU metering is also skipped.
         let effective_vu = if is_dsd { None } else { vu_meter };
+        let spec_clone = spec.clone();
 
-        AlsaOutput::open_with_format(
+        let result = AlsaOutput::open_with_format(
             spec,
             duration,
             &device,
             rsp_settings,
-            effective_dsp,
-            effective_vu,
+            effective_dsp.clone(),
+            effective_vu.clone(),
             sample_format,
             device_rate,
             device_channels,
-        )
+        );
+
+        // Some ALSA drivers (e.g. Merus MA12070P) report a continuous rate
+        // range like [44100, 192000] but only accept specific discrete rates.
+        // When the stream open fails and we assumed native rate support
+        // (device_rate == None), probe candidate rates until one succeeds.
+        if result.is_err() && device_rate.is_none() && !is_dsd {
+            for fallback_rate in fallback_rate_candidates(&device, spec_clone.rate()) {
+                let spec_for_call = spec_clone.clone();
+                warn!(
+                    "{}Hz rejected by device, trying resampling to {}Hz",
+                    spec_clone.rate(),
+                    fallback_rate
+                );
+                if let Some(handle) = dsp_handle {
+                    let dsp_channels = device_channels.map_or(spec_clone.channels().count(), |ch| ch as usize);
+                    handle.rebuild(dsp_channels, fallback_rate as usize);
+                }
+                let retry = AlsaOutput::open_with_format(
+                    spec_for_call,
+                    duration,
+                    &device,
+                    rsp_settings,
+                    effective_dsp.clone(),
+                    effective_vu.clone(),
+                    sample_format,
+                    Some(fallback_rate),
+                    device_channels,
+                );
+                if retry.is_ok() {
+                    return retry;
+                }
+            }
+        }
+
+        result
     }
 
     #[allow(clippy::too_many_lines)]
     fn open_with_format(
-        spec: SignalSpec,
+        spec: AudioSpec,
         duration: u64,
         device: &cpal::Device,
         rsp_settings: &RsPlayerSettings,
@@ -366,9 +417,9 @@ impl AlsaOutput {
         device_rate: Option<u32>,
         device_channels: Option<u16>,
     ) -> Result<AlsaOutput> {
-        let source_channels = spec.channels.count();
+        let source_channels = spec.channels().count();
         let output_channels = device_channels.map_or(source_channels, |ch| ch as usize);
-        let output_rate = device_rate.unwrap_or(spec.rate);
+        let output_rate = device_rate.unwrap_or(spec.rate());
 
         #[allow(clippy::cast_possible_truncation)]
         let config = cpal::StreamConfig {
@@ -420,11 +471,17 @@ impl AlsaOutput {
                 let writer: Box<dyn AudioWriter> = if let Some(dev_rate) = device_rate {
                     let resampler = rubato::FftFixedIn::<f32>::new(
                         #[allow(clippy::cast_possible_truncation)]
-                        {spec.rate as usize},
+                        {
+                            spec.rate() as usize
+                        },
                         #[allow(clippy::cast_possible_truncation)]
-                        {dev_rate as usize},
+                        {
+                            dev_rate as usize
+                        },
                         #[allow(clippy::cast_possible_truncation)]
-                        {duration as usize},
+                        {
+                            duration as usize
+                        },
                         2,
                         source_channels,
                     )
@@ -438,7 +495,7 @@ impl AlsaOutput {
                     let max_out_samples = resampler.output_frames_max() * output_channels;
                     Box::new(ResamplingPcmWriter {
                         producer,
-                        sample_buf: SampleBuffer::<f32>::new(duration, spec),
+                        samples: Vec::with_capacity(duration as usize * source_channels),
                         resampler,
                         channels: source_channels,
                         output_channels,
@@ -449,7 +506,7 @@ impl AlsaOutput {
                 } else {
                     Box::new(PcmWriter {
                         producer,
-                        sample_buf: SampleBuffer::<$T>::new(duration, spec),
+                        samples: Vec::with_capacity(duration as usize * source_channels),
                         source_channels,
                         output_channels,
                         channel_buf: Vec::new(),
@@ -495,7 +552,7 @@ impl AlsaOutput {
                     })?;
                 let writer = Box::new(DsdWriter {
                     producer,
-                    sample_buf: SampleBuffer::<DsdU32>::new(duration, spec),
+                    samples: Vec::with_capacity(duration as usize * spec.channels().count()),
                 });
                 (stream, writer as Box<dyn AudioWriter>)
             }
@@ -530,7 +587,7 @@ impl AlsaOutput {
 }
 
 impl AlsaOutput {
-    pub fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<()> {
+    pub fn write(&mut self, decoded: GenericAudioBufferRef<'_>) -> Result<()> {
         if self.error_count.load(Ordering::Relaxed) >= ERROR_THRESHOLD {
             return Err(Error::msg("Audio output error detected"));
         }
@@ -573,16 +630,9 @@ impl AlsaOutput {
 ///
 /// Set `RSPLAYER_RESAMPLE_TO=<rate>` to force resampling (e.g. for testing).
 fn find_device_rate(device: &cpal::Device, source_rate: u32) -> Option<u32> {
-    if let Ok(val) = std::env::var("RSPLAYER_RESAMPLE_TO") {
-        if let Ok(rate) = val.parse::<u32>() {
-            if rate != source_rate {
-                info!("RSPLAYER_RESAMPLE_TO={rate} override active");
-                return Some(rate);
-            }
-        }
-    }
-
-    let Ok(configs) = device.supported_output_configs() else { return None };
+    let Ok(configs) = device.supported_output_configs() else {
+        return None;
+    };
 
     let mut closest_rate: Option<u32> = None;
     let mut min_distance = u32::MAX;
@@ -624,6 +674,75 @@ fn find_device_rate(device: &cpal::Device, source_rate: u32) -> Option<u32> {
     }
 
     best_multiple.or(closest_rate)
+}
+
+/// Return a prioritised list of fallback rates to try when the device rejects
+/// `source_rate` at stream-open time despite claiming to support it via a range.
+///
+/// Some ALSA drivers (e.g. Merus MA12070P) advertise a continuous range like
+/// [44100, 192000] but only accept specific discrete rates.  We cannot know
+/// which rates actually work without probing, so the caller should iterate this
+/// list and use the first rate for which stream open succeeds.
+///
+/// Priority order:
+///   1. Integer multiples of `source_rate` (ascending factor) that fall within
+///      any reported range — cleanest resampling ratio.
+///   2. The range boundary rates (min/max of each config) sorted by distance
+///      from `source_rate` — most likely to be actually accepted by the driver.
+///   3. Well-known standard rates that fall within any reported range, sorted
+///      by distance — handles devices that only support e.g. 48000 Hz.
+fn fallback_rate_candidates(device: &cpal::Device, source_rate: u32) -> Vec<u32> {
+    const STANDARD_RATES: &[u32] = &[192_000, 176_400, 96_000, 88_200, 48_000, 44_100, 32_000, 22_050, 16_000];
+
+    let Ok(configs) = device.supported_output_configs() else {
+        return vec![];
+    };
+
+    let ranges: Vec<(u32, u32)> = configs
+        .filter(|c| {
+            !matches!(
+                c.sample_format(),
+                cpal::SampleFormat::DsdU32 | cpal::SampleFormat::DsdU16 | cpal::SampleFormat::DsdU8
+            )
+        })
+        .map(|c| (c.min_sample_rate(), c.max_sample_rate()))
+        .collect();
+
+    let in_any_range = |rate: u32| ranges.iter().any(|&(lo, hi)| rate >= lo && rate <= hi);
+
+    let mut candidates: Vec<u32> = Vec::new();
+
+    // 1. Integer multiples of source_rate (ascending factor: 2×, 3×, 4×).
+    for factor in 2..=4u32 {
+        let rate = source_rate.saturating_mul(factor);
+        if rate != source_rate && in_any_range(rate) {
+            candidates.push(rate);
+        }
+    }
+
+    // 2. Range boundary rates sorted by distance from source_rate.
+    let mut boundaries: Vec<u32> = ranges
+        .iter()
+        .flat_map(|&(lo, hi)| [lo, hi])
+        .filter(|&r| r != source_rate)
+        .collect();
+    boundaries.sort_by_key(|&r| source_rate.abs_diff(r));
+    boundaries.dedup();
+    candidates.extend(boundaries);
+
+    // 3. Standard rates that fall within a range, sorted by distance.
+    let mut standard: Vec<u32> = STANDARD_RATES
+        .iter()
+        .copied()
+        .filter(|&r| r != source_rate && in_any_range(r))
+        .collect();
+    standard.sort_by_key(|&r| source_rate.abs_diff(r));
+    candidates.extend(standard);
+
+    // Deduplicate while preserving order.
+    let mut seen = std::collections::HashSet::new();
+    candidates.retain(|r| seen.insert(*r));
+    candidates
 }
 
 /// Check if the device supports `source_channels` natively.

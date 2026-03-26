@@ -45,6 +45,7 @@ pub struct Model {
     mount_form_share: String,
     mount_form_username: String,
     mount_form_password: String,
+    mount_form_domain: String,
     mount_statuses: Vec<MountStatus>,
     music_dir_statuses: Vec<MusicDirStatus>,
     new_music_dir: String,
@@ -71,6 +72,7 @@ pub enum Msg {
     InputRspAudioBufferSizeChange(String),
     InputRspAlsaBufferSizeChange(String),
     InputRspThreadPriorityChange(String),
+    InputRspFixedSampleRateChange(String),
     InputVolumeAlsaMixerChanged(String),
     ClickRescanMetadataButton(bool),
 
@@ -112,6 +114,7 @@ pub enum Msg {
     InputMountShare(String),
     InputMountUsername(String),
     InputMountPassword(String),
+    InputMountDomain(String),
     MountAdd,
     MountRemove(String),
     MountShare(String),
@@ -203,6 +206,7 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
         mount_form_share: String::new(),
         mount_form_username: String::new(),
         mount_form_password: String::new(),
+        mount_form_domain: String::new(),
         mount_statuses: Vec::new(),
         music_dir_statuses: Vec::new(),
         new_music_dir: String::new(),
@@ -347,6 +351,9 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     model.settings.rs_player_settings.player_threads_priority = num;
                 }
             };
+        }
+        Msg::InputRspFixedSampleRateChange(value) => {
+            model.settings.rs_player_settings.fixed_output_sample_rate = value.parse::<u32>().ok().filter(|&r| r > 0);
         }
         Msg::SettingsFetched(sett) => {
             model.waiting_response = false;
@@ -514,17 +521,25 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::InputMountShare(val) => { model.mount_form_share = val; }
         Msg::InputMountUsername(val) => { model.mount_form_username = val; }
         Msg::InputMountPassword(val) => { model.mount_form_password = val; }
+        Msg::InputMountDomain(val) => { model.mount_form_domain = val; }
         Msg::MountAdd => {
-            if model.mount_form_name.is_empty() || model.mount_form_server.is_empty() || model.mount_form_share.is_empty() {
+            if model.mount_form_server.is_empty() || model.mount_form_share.is_empty() {
                 return;
             }
+            // Auto-derive name from share if not provided
+            let name = if model.mount_form_name.is_empty() {
+                model.mount_form_share.replace('/', "_").replace(' ', "_")
+            } else {
+                model.mount_form_name.clone()
+            };
             let config = NetworkMountConfig {
-                name: model.mount_form_name.clone(),
+                name,
                 mount_type: model.mount_form_type.clone(),
                 server: model.mount_form_server.clone(),
                 share: model.mount_form_share.clone(),
                 username: if model.mount_form_username.is_empty() { None } else { Some(model.mount_form_username.clone()) },
                 password: if model.mount_form_password.is_empty() { None } else { Some(model.mount_form_password.clone()) },
+                domain: if model.mount_form_domain.is_empty() { None } else { Some(model.mount_form_domain.clone()) },
                 mount_point: None,
             };
             let mount_point = format!("/mnt/rsplayer/{}", config.name);
@@ -539,6 +554,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.mount_form_share.clear();
             model.mount_form_username.clear();
             model.mount_form_password.clear();
+            model.mount_form_domain.clear();
         }
         Msg::UnmountShare(name) => {
             orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(StorageCommand::Unmount(name))));
@@ -607,178 +623,236 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
     let settings = &model.settings;
     div![
         style! {
-            St::Background => "rgba(0,0,0,0.72)",
+            St::Background => "var(--overlay-bg)",
             St::BorderRadius => "8px",
         },
         view_spinner_modal(model.waiting_response),
         view_confirm_modal(&model.confirm_action),
         // Appearance
         section![
-            C!["section"],
+            style!{St::Padding => "0.5rem 0"},
             details![
                 C!["settings-details"],
                 summary![C!["settings-details__summary"], "Appearance"],
                 div![C!["settings-details__body"], view_theme_picker(current_theme)],
             ],
         ],
-        // players
+        // Playback
         section![
-            C!["section"],
-            h1![C!["title","has-text-white"], "General"],
-            div![
-                C!["field", "is-grouped","is-grouped-multiline"],
-                div![C!["control"],
-                    label!["Audio interface", C!["label","has-text-white"]],
-                    div![
-                        C!["select"],
-                        select![
-                            option!["-- Select audio interface --"],
-                            option![
-                                IF!(model.settings.local_browser_playback => attrs!(At::Selected => "")),
-                                attrs! {At::Value => "browser"},
-                                "Local Browser Playback"
-                            ],
-                            model
-                            .settings
-                            .alsa_settings
-                            .available_audio_cards
-                            .iter()
-                            .map(|card| option![
-                                IF!(model.settings.alsa_settings.output_device.card_id == card.id && !model.settings.local_browser_playback => attrs!(At::Selected => "")),
-                                attrs! {At::Value => card.id},
-                                card.name.clone()
-                            ])],
-                        input_ev(Ev::Change, |v| {
-                            Msg::InputAlsaCardChange(v)
-                        }),
-                    ],
-                ],
-                IF!(!model.settings.local_browser_playback => div![C!["control"],
-                    label!["PCM Device", C!["label","has-text-white"]],
-                    div![
-                        C!["select"],
-                        select![
-                            option!["-- Select pcm device --"],
-                            model.settings.alsa_settings.find_pcms_by_card_id(&model.selected_audio_card_id)
-                            .iter()
-                            .map(|pcmd|
-                                option![
-                                    IF!(model.settings.alsa_settings.output_device.name == pcmd.name => attrs!(At::Selected => "")),
-                                    attrs! {At::Value => pcmd.name},
-                                    pcmd.description.clone()
-                                ]
-                            )
-                        ],
-                        input_ev(Ev::Change, Msg::InputAlsaPcmChange),
-                    ],
-            ]),
-            ],
-            view_rsp(&settings.rs_player_settings, settings.local_browser_playback),
-            view_metadata_storage(&model.settings.metadata_settings),
-            div![
-                C!["field", "mt-5"],
-                ev(Ev::Click, |_| Msg::ToggleResumePlayback),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "resume_playback_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.auto_resume_playback.as_at_value(),
-                    },
-                ],
-                label![
-                    C!["label","has-text-white"],
-                    "Auto resume playback on start",
-                    attrs! {
-                        At::For => "resume_playback_cb"
-                    }
-                ]
-            ],
-            div![
-                C!["field", "mt-5"],
-                ev(Ev::Click, |_| Msg::ToggleVuMeterEnabled),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "vu_meter_enabled_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.rs_player_settings.vu_meter_enabled.as_at_value(),
-                    },
-                ],
-                label![
-                    C!["label","has-text-white"],
-                    "Enable VU meter",
-                    attrs! {
-                        At::For => "vu_meter_enabled_cb"
-                    }
-                ]
-            ],
-            div![
-                C!["field", "mt-5"],
-                ev(Ev::Click, |_| Msg::ToggleLoudnessNormalization),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "loudness_norm_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.rs_player_settings.loudness_normalization_enabled.as_at_value(),
-                    },
-                ],
-                label![
-                    C!["label","has-text-white"],
-                    "Enable loudness normalization (EBU R128)",
-                    attrs! {
-                        At::For => "loudness_norm_cb"
-                    }
-                ]
-            ],
-            IF!(settings.rs_player_settings.loudness_normalization_enabled =>
+            style!{St::Padding => "0.5rem 0"},
+            details![
+                C!["settings-details"],
+                summary![C!["settings-details__summary"], "Playback"],
                 div![
+                    C!["settings-details__body"],
+                    // Audio interface
                     div![
-                        C!["field", "mt-2"],
-                        label![C!["label", "has-text-white"], "Target loudness (LUFS)"],
+                        C!["field", "is-grouped", "is-grouped-multiline"],
+                        div![C!["control"],
+                            label!["Audio interface", C!["label","has-text-white"]],
+                            div![
+                                C!["select"],
+                                select![
+                                    option!["-- Select audio interface --"],
+                                    option![
+                                        IF!(model.settings.local_browser_playback => attrs!(At::Selected => "")),
+                                        attrs! {At::Value => "browser"},
+                                        "Local Browser Playback"
+                                    ],
+                                    model
+                                    .settings
+                                    .alsa_settings
+                                    .available_audio_cards
+                                    .iter()
+                                    .map(|card| option![
+                                        IF!(model.settings.alsa_settings.output_device.card_id == card.id && !model.settings.local_browser_playback => attrs!(At::Selected => "")),
+                                        attrs! {At::Value => card.id},
+                                        card.name.clone()
+                                    ])],
+                                input_ev(Ev::Change, |v| {
+                                    Msg::InputAlsaCardChange(v)
+                                }),
+                            ],
+                        ],
+                        IF!(!model.settings.local_browser_playback => div![C!["control"],
+                            label!["PCM Device", C!["label","has-text-white"]],
+                            div![
+                                C!["select"],
+                                select![
+                                    option!["-- Select pcm device --"],
+                                    model.settings.alsa_settings.find_pcms_by_card_id(&model.selected_audio_card_id)
+                                    .iter()
+                                    .map(|pcmd|
+                                        option![
+                                            IF!(model.settings.alsa_settings.output_device.name == pcmd.name => attrs!(At::Selected => "")),
+                                            attrs! {At::Value => pcmd.name},
+                                            pcmd.description.clone()
+                                        ]
+                                    )
+                                ],
+                                input_ev(Ev::Change, Msg::InputAlsaPcmChange),
+                            ],
+                        ]),
+                    ],
+                    // Alsa mixer + Volume step
+                    IF!(!settings.usb_settings.enabled =>
                         div![
-                            C!["control"],
-                            input![
-                                C!["input", "is-small"],
-                                attrs! {
-                                    At::Type => "number"
-                                    At::Value => settings.rs_player_settings.loudness_normalization_target_lufs
-                                    At::Step => "0.5"
-                                    At::Min => "-30"
-                                    At::Max => "-5"
-                                },
-                                input_ev(Ev::Change, Msg::InputNormalizationTargetLufs),
-                            ]
+                            C!["field", "is-grouped", "is-grouped-multiline", "mt-5"],
+                            IF!(model.settings.volume_ctrl_settings.ctrl_device == VolumeCrtlType::Alsa =>
+                                div![C!["control"],
+                                    label!["Alsa mixer", C!["label","has-text-white"]],
+                                    div![
+                                        C!["select"],
+                                        select![
+                                            option!["-- Select mixer --"],
+                                            model.settings.alsa_settings.find_mixers_by_card_id(&model.selected_audio_card_id)
+                                            .iter()
+                                            .map(|pcmd|
+                                                option![
+                                                    IF!(model.settings.volume_ctrl_settings.alsa_mixer_name.as_ref().is_some_and(|name| &pcmd.name == name) => attrs!(At::Selected => "")),
+                                                    attrs! {At::Value => pcmd.name.clone()},
+                                                    pcmd.name.clone()
+                                                ]
+                                            ),
+                                            input_ev(Ev::Change, Msg::InputVolumeAlsaMixerChanged),
+                                        ],
+                                    ],
+                                ]
+                            ),
+                            div![C!["control"],
+                                label!["Volume step", C!["label","has-text-white"]],
+                                input![
+                                    C!["input"],
+                                    attrs! {
+                                        At::Value => model.settings.volume_ctrl_settings.volume_step
+                                        At::Type => "number"
+                                    },
+                                    input_ev(Ev::Input, move |value| { Msg::InputVolumeStepChanged(value) }),
+                                ],
+                            ],
+                        ]
+                    ),
+                    // Auto resume
+                    div![
+                        C!["field", "mt-5"],
+                        ev(Ev::Click, |_| Msg::ToggleResumePlayback),
+                        input![
+                            C!["switch"],
+                            attrs! {
+                                At::Name => "resume_playback_cb"
+                                At::Type => "checkbox"
+                                At::Checked => settings.auto_resume_playback.as_at_value(),
+                            },
+                        ],
+                        label![
+                            C!["label","has-text-white"],
+                            "Auto resume playback on start",
+                            attrs! {
+                                At::For => "resume_playback_cb"
+                            }
+                        ]
+                    ],
+                    view_rsp(&settings.rs_player_settings, settings.local_browser_playback),
+                    view_metadata_storage(&model.settings.metadata_settings),
+                ],
+            ],
+        ],
+
+        // Audio Processing
+        section![
+            style!{St::Padding => "0.5rem 0"},
+            details![
+                C!["settings-details"],
+                summary![C!["settings-details__summary"], "Audio Processing"],
+                div![
+                    C!["settings-details__body"],
+                    div![
+                        C!["field", "mt-5"],
+                        ev(Ev::Click, |_| Msg::ToggleVuMeterEnabled),
+                        input![
+                            C!["switch"],
+                            attrs! {
+                                At::Name => "vu_meter_enabled_cb"
+                                At::Type => "checkbox"
+                                At::Checked => settings.rs_player_settings.vu_meter_enabled.as_at_value(),
+                            },
+                        ],
+                        label![
+                            C!["label","has-text-white"],
+                            "Enable VU meter",
+                            attrs! {
+                                At::For => "vu_meter_enabled_cb"
+                            }
                         ]
                     ],
                     div![
-                        C!["notification", "is-dark", "mt-4"],
-                        i![C!["material-icons", "mr-2", "is-size-6"], "info"],
-                        span![
-                            "Loudness analysis runs automatically in the background while playback is stopped. ",
-                            "Each song is measured once (EBU R128) and the result is stored permanently. ",
-                            "You can track progress on the ",
-                            a![attrs! { At::Href => "/#/library/stats" }, "Library Statistics"],
-                            " page."
+                        C!["field", "mt-5"],
+                        ev(Ev::Click, |_| Msg::ToggleLoudnessNormalization),
+                        input![
+                            C!["switch"],
+                            attrs! {
+                                At::Name => "loudness_norm_cb"
+                                At::Type => "checkbox"
+                                At::Checked => settings.rs_player_settings.loudness_normalization_enabled.as_at_value(),
+                            },
                         ],
-                    ]
-                ]
-            ),
+                        label![
+                            C!["label","has-text-white"],
+                            "Enable loudness normalization (EBU R128)",
+                            attrs! {
+                                At::For => "loudness_norm_cb"
+                            }
+                        ]
+                    ],
+                    IF!(settings.rs_player_settings.loudness_normalization_enabled =>
+                        div![
+                            div![
+                                C!["field", "mt-2"],
+                                label![C!["label", "has-text-white"], "Target loudness (LUFS)"],
+                                div![
+                                    C!["control"],
+                                    input![
+                                        C!["input", "is-small"],
+                                        attrs! {
+                                            At::Type => "number"
+                                            At::Value => settings.rs_player_settings.loudness_normalization_target_lufs
+                                            At::Step => "0.5"
+                                            At::Min => "-30"
+                                            At::Max => "-5"
+                                        },
+                                        input_ev(Ev::Change, Msg::InputNormalizationTargetLufs),
+                                    ]
+                                ]
+                            ],
+                            div![
+                                C!["notification", "mt-4"],
+                                i![C!["material-icons", "mr-2", "is-size-6"], "info"],
+                                span![
+                                    "Loudness analysis runs automatically in the background while playback is stopped. ",
+                                    "Each song is measured once (EBU R128) and the result is stored permanently. ",
+                                    "You can track progress on the ",
+                                    a![attrs! { At::Href => "/#/library/stats" }, "Library Statistics"],
+                                    " page."
+                                ],
+                            ]
+                        ]
+                    ),
+                    view_dsp_settings(&settings.rs_player_settings),
+                ],
+            ],
         ],
 
-        // music sources
+        // Music Library
         section![
-            C!["section"],
+            style!{St::Padding => "0.5rem 0"},
             details![
                 C!["settings-details"],
                 attrs! { At::Open => true },
-                summary![C!["settings-details__summary"], "Music Sources"],
+                summary![C!["settings-details__summary"], "Music Library"],
                 div![
                     C!["settings-details__body"],
                     view_music_directories(model),
                     view_network_storage(model),
-                    // Scan buttons - below all sources, right-aligned
                     div![
                         C!["field", "is-grouped", "is-grouped-right", "mt-4"],
                         div![
@@ -802,63 +876,53 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
             ],
         ],
 
-        // dsp
+        // Hardware
         section![
-            C!["section"],
-            h1![C!["title","has-text-white"], "DSP Settings"],
-            view_dsp_settings(&settings.rs_player_settings),
-        ],
-
-        // usb
-        section![
-            C!["section"],
-            h1![C!["title","has-text-white"], "RSPlayer firmware(control board) USB link"],
-            div![
-                C!["field"],
-                ev(Ev::Click, |_| Msg::ToggleUsbEnabled),
-                input![
-                    C!["switch"],
-                    attrs! {
-                        At::Name => "usb_cb"
-                        At::Type => "checkbox"
-                        At::Checked => settings.usb_settings.enabled.as_at_value(),
-                    },
+            style!{St::Padding => "0.5rem 0"},
+            details![
+                C!["settings-details"],
+                summary![C!["settings-details__summary"], "Hardware"],
+                div![
+                    C!["settings-details__body"],
+                    div![
+                        C!["field"],
+                        ev(Ev::Click, |_| Msg::ToggleUsbEnabled),
+                        input![
+                            C!["switch"],
+                            attrs! {
+                                At::Name => "usb_cb"
+                                At::Type => "checkbox"
+                                At::Checked => settings.usb_settings.enabled.as_at_value(),
+                            },
+                        ],
+                        label![
+                            C!["label","has-text-white"],
+                            "Enable link with rsplayer firmware",
+                            attrs! {
+                                At::For => "usb_cb"
+                            }
+                        ]
+                    ],
+                    div![
+                        C!["buttons", "mt-4"],
+                        IF!(model.settings.usb_settings.enabled =>
+                            button![
+                                C!["button", "is-danger", "is-small"],
+                                "Power Off",
+                                ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::SetFirmwarePower(false)))
+                            ]
+                        ),
+                        IF!(model.settings.usb_settings.enabled =>
+                            button![
+                                C!["button", "is-success", "is-small"],
+                                "Power On",
+                                ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::SetFirmwarePower(true)))
+                            ]
+                        )
+                    ],
                 ],
-                label![
-                    C!["label","has-text-white"],
-                    "Enable link with rsplayer firmware",
-                    attrs! {
-                        At::For => "usb_cb"
-                    }
-                ]
             ],
-            div![
-                C!["buttons", "mt-4"],
-                IF!(model.settings.usb_settings.enabled =>
-                    button![
-                        C!["button", "is-danger", "is-small"],
-                        "Power Off",
-                        ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::SetFirmwarePower(false)))
-                    ]
-                ),
-                IF!(model.settings.usb_settings.enabled =>
-                    button![
-                        C!["button", "is-success", "is-small"],
-                        "Power On",
-                        ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::SetFirmwarePower(true)))
-                    ]
-                )
-            ]
         ],
-
-        // volume control
-        IF!(!settings.usb_settings.enabled =>
-            section![
-                C!["section"],
-                h1![C!["title","has-text-white"], "Volume control"],
-                view_volume_control(model)
-            ]
-        ),
 
         // buttons
         div![
@@ -966,54 +1030,6 @@ fn view_validation_icon<Ms>(val: &impl Validate, key: &str) -> Node<Ms> {
 
 // ------ sub view functions ------
 
-#[allow(clippy::too_many_lines)]
-fn view_volume_control(model: &Model) -> Node<Msg> {
-    let volume_settings = &model.settings.volume_ctrl_settings;
-    let alsa_settings = &model.settings.alsa_settings;
-    div![
-        IF!(volume_settings.ctrl_device == VolumeCrtlType::Alsa =>
-           div![
-               C!["field"],
-               label!["Alsa mixer:", C!["label","has-text-white"]],
-               div![
-                   C!["control"],
-                   div![
-                       C!["select"],
-                           select![
-                               option!["-- Select mixer --"],
-                               alsa_settings.find_mixers_by_card_id(&model.selected_audio_card_id)
-                               .iter()
-                               .map(|pcmd|
-                                   option![
-                                       IF!(volume_settings.alsa_mixer_name.as_ref().is_some_and(|name| &pcmd.name == name) => attrs!(At::Selected => "")),
-                                       attrs! {At::Value => pcmd.name.clone()},
-                                       pcmd.name.clone()
-                                   ]
-                               ),
-                               input_ev(Ev::Change, Msg::InputVolumeAlsaMixerChanged),
-                           ],
-                   ],
-               ],
-           ]
-        ),
-        div![
-            C!["field"],
-            label!["Volume step", C!["label", "has-text-white"]],
-            div![
-                C!["control"],
-                input![
-                    C!["input"],
-                    attrs! {
-                        At::Value => volume_settings.volume_step
-                        At::Type => "number"
-                    },
-                    input_ev(Ev::Input, move |value| { Msg::InputVolumeStepChanged(value) }),
-                ],
-            ],
-        ],
-    ]
-}
-
 fn view_metadata_storage(_metadata_settings: &MetadataStoreSettings) -> Node<Msg> {
     empty!()
 }
@@ -1024,80 +1040,107 @@ fn view_rsp(rsp_settings: &RsPlayerSettings, local_browser_playback: bool) -> No
     }
     div![
         C!["field"],
-        label!["Input buffer size (MB) (1-200)", C!["label", "has-text-white", "mt-5"]],
-        div![
-            C!["control", "has-icons-right"],
-            style! {St::Width => "max-content"},
-            input![
-                C!["input"],
-                attrs! {At::Value => rsp_settings.input_stream_buffer_size_mb, At::Type => "number"},
-                input_ev(Ev::Input, move |value| { Msg::InputRspInputBufferSizeChange(value) }),
-            ],
-            view_validation_icon(rsp_settings, "input_stream_buffer_size_mb")
-        ],
-        label!["Ring buffer size (1-10000ms)", C!["label", "has-text-white", "mt-5"]],
-        div![
-            C!["control", "has-icons-right"],
-            style! {St::Width => "max-content"},
-            input![
-                C!["input"],
-                attrs! {At::Value => rsp_settings.ring_buffer_size_ms, At::Type => "number"},
-                input_ev(Ev::Input, move |value| { Msg::InputRspAudioBufferSizeChange(value) }),
-            ],
-            view_validation_icon(rsp_settings, "ring_buffer_size_ms")
-        ],
-        label!["Player thread priority (1-99)", C!["label", "has-text-white", "mt-5"]],
-        div![
-            C!["control", "has-icons-right"],
-            style! {St::Width => "max-content"},
-            input![
-                C!["input"],
-                attrs! {At::Value => rsp_settings.player_threads_priority, At::Type => "number"},
-                input_ev(Ev::Input, move |value| { Msg::InputRspThreadPriorityChange(value) }),
-            ],
-            view_validation_icon(rsp_settings, "player_threads_priority")
-        ],
-        div![
-            C!["field", "mt-5"],
-            ev(Ev::Click, |_| Msg::ToggleRspAlsaBufferSize),
-            input![
-                C!["switch"],
-                attrs! {
-                    At::Name => "alsabufsize_cb"
-                    At::Type => "checkbox"
-                    At::Checked => rsp_settings.alsa_buffer_size.is_some().as_at_value(),
-                },
-            ],
-            label![
-                C!["label", "has-text-white"],
-                "Set alsa buffer frame size (Experimental!)",
-                attrs! {
-                    At::For => "alsabufsize_cb"
-                }
-            ]
-        ],
-        IF!(rsp_settings.alsa_buffer_size.is_some()  =>
+        details![
+            C!["settings-details", "mt-5"],
+            summary![C!["settings-details__summary"], "Advanced"],
             div![
-                C!["field"],
+                C!["settings-details__body"],
+                label!["Input buffer size (MB) (1-200)", C!["label", "has-text-white", "mt-5"]],
                 div![
-                    C!["control"],
+                    C!["control", "has-icons-right"],
+                    style! {St::Width => "max-content"},
                     input![
                         C!["input"],
-                        attrs! {
-                            At::Value => rsp_settings.alsa_buffer_size.unwrap_or(10000),
-                            At::Type => "number"
-                        },
-                        input_ev(Ev::Input, move |value| { Msg::InputRspAlsaBufferSizeChange(value) }),
+                        attrs! {At::Value => rsp_settings.input_stream_buffer_size_mb, At::Type => "number"},
+                        input_ev(Ev::Input, move |value| { Msg::InputRspInputBufferSizeChange(value) }),
+                    ],
+                    view_validation_icon(rsp_settings, "input_stream_buffer_size_mb")
+                ],
+                label!["Ring buffer size (1-10000ms)", C!["label", "has-text-white", "mt-5"]],
+                div![
+                    C!["control", "has-icons-right"],
+                    style! {St::Width => "max-content"},
+                    input![
+                        C!["input"],
+                        attrs! {At::Value => rsp_settings.ring_buffer_size_ms, At::Type => "number"},
+                        input_ev(Ev::Input, move |value| { Msg::InputRspAudioBufferSizeChange(value) }),
+                    ],
+                    view_validation_icon(rsp_settings, "ring_buffer_size_ms")
+                ],
+                label!["Player thread priority (1-99)", C!["label", "has-text-white", "mt-5"]],
+                div![
+                    C!["control", "has-icons-right"],
+                    style! {St::Width => "max-content"},
+                    input![
+                        C!["input"],
+                        attrs! {At::Value => rsp_settings.player_threads_priority, At::Type => "number"},
+                        input_ev(Ev::Input, move |value| { Msg::InputRspThreadPriorityChange(value) }),
+                    ],
+                    view_validation_icon(rsp_settings, "player_threads_priority")
+                ],
+                label!["Fixed output sample rate", C!["label", "has-text-white", "mt-5"]],
+                p![
+                    C!["help", "has-text-grey-light", "mb-2"],
+                    "Force all tracks to be resampled to this rate. Use only if auto-detection fails for your device."
+                ],
+                div![
+                    C!["select"],
+                    select![
+                        input_ev(Ev::Input, |value| Msg::InputRspFixedSampleRateChange(value)),
+                        option![
+                            attrs! { At::Value => "" },
+                            IF!(rsp_settings.fixed_output_sample_rate.is_none() => attrs! { At::Selected => true }),
+                            "Auto (recommended)"
+                        ],
+                        [44100u32, 48000, 88200, 96000, 176400, 192000].iter().map(|&rate| {
+                            option![
+                                attrs! { At::Value => rate },
+                                IF!(rsp_settings.fixed_output_sample_rate == Some(rate) => attrs! { At::Selected => true }),
+                                format!("{} Hz", rate),
+                            ]
+                        }),
                     ],
                 ],
-            ]
-        )
+                div![
+                    C!["field", "mt-5"],
+                    ev(Ev::Click, |_| Msg::ToggleRspAlsaBufferSize),
+                    input![
+                        C!["switch"],
+                        attrs! {
+                            At::Name => "alsabufsize_cb"
+                            At::Type => "checkbox"
+                            At::Checked => rsp_settings.alsa_buffer_size.is_some().as_at_value(),
+                        },
+                    ],
+                    label![
+                        C!["label", "has-text-white"],
+                        "Set ALSA buffer frame size (Experimental!)",
+                        attrs! { At::For => "alsabufsize_cb" }
+                    ]
+                ],
+                IF!(rsp_settings.alsa_buffer_size.is_some() =>
+                    div![
+                        C!["field"],
+                        div![
+                            C!["control"],
+                            input![
+                                C!["input"],
+                                attrs! {
+                                    At::Value => rsp_settings.alsa_buffer_size.unwrap_or(10000),
+                                    At::Type => "number"
+                                },
+                                input_ev(Ev::Input, move |value| { Msg::InputRspAlsaBufferSizeChange(value) }),
+                            ],
+                        ],
+                    ]
+                ),
+            ],
+        ],
     ]
 }
 
 fn view_dsp_settings(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
     div![
-        C!["box", "has-background-dark"],
         div![
             C!["field", "mt-5"],
             ev(Ev::Click, |_| Msg::ToggleDspEnabled),
@@ -1119,6 +1162,7 @@ fn view_dsp_settings(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
         ],
         IF!(rsp_settings.dsp_settings.enabled =>
             div![
+                C!["box", "has-background-dark", "mt-4"],
                 div![
                     C!["field", "mb-4"],
                     label!["Load Preset", C!["label", "has-text-white"]],
@@ -1550,10 +1594,10 @@ fn view_network_storage(model: &Model) -> Node<Msg> {
                 C!["field", "is-grouped", "is-grouped-multiline"],
                 div![
                     C!["control"],
-                    label![C!["label", "has-text-white"], "Name"],
+                    label![C!["label", "has-text-white"], "Name (optional)"],
                     input![
                         C!["input", "is-small"],
-                        attrs! { At::Type => "text", At::Value => &model.mount_form_name, At::Placeholder => "e.g. nas-music" },
+                        attrs! { At::Type => "text", At::Value => &model.mount_form_name, At::Placeholder => "auto from share" },
                         input_ev(Ev::Input, Msg::InputMountName),
                     ],
                 ],
@@ -1579,19 +1623,19 @@ fn view_network_storage(model: &Model) -> Node<Msg> {
                 ],
                 div![
                     C!["control"],
-                    label![C!["label", "has-text-white"], "Server"],
+                    label![C!["label", "has-text-white"], "Server *"],
                     input![
                         C!["input", "is-small"],
-                        attrs! { At::Type => "text", At::Value => &model.mount_form_server, At::Placeholder => "192.168.1.100" },
+                        attrs! { At::Type => "text", At::Value => &model.mount_form_server, At::Placeholder => "192.168.1.100", At::Required => true },
                         input_ev(Ev::Input, Msg::InputMountServer),
                     ],
                 ],
                 div![
                     C!["control"],
-                    label![C!["label", "has-text-white"], "Share"],
+                    label![C!["label", "has-text-white"], "Share *"],
                     input![
                         C!["input", "is-small"],
-                        attrs! { At::Type => "text", At::Value => &model.mount_form_share, At::Placeholder => "music" },
+                        attrs! { At::Type => "text", At::Value => &model.mount_form_share, At::Placeholder => "music", At::Required => true },
                         input_ev(Ev::Input, Msg::InputMountShare),
                     ],
                 ],
@@ -1601,7 +1645,7 @@ fn view_network_storage(model: &Model) -> Node<Msg> {
                     C!["field", "is-grouped", "is-grouped-multiline", "mt-3"],
                     div![
                         C!["control"],
-                        label![C!["label", "has-text-white"], "Username"],
+                        label![C!["label", "has-text-white"], "Username (optional)"],
                         input![
                             C!["input", "is-small"],
                             attrs! { At::Type => "text", At::Value => &model.mount_form_username, At::Placeholder => "guest" },
@@ -1610,11 +1654,20 @@ fn view_network_storage(model: &Model) -> Node<Msg> {
                     ],
                     div![
                         C!["control"],
-                        label![C!["label", "has-text-white"], "Password"],
+                        label![C!["label", "has-text-white"], "Password (optional)"],
                         input![
                             C!["input", "is-small"],
                             attrs! { At::Type => "password", At::Value => &model.mount_form_password },
                             input_ev(Ev::Input, Msg::InputMountPassword),
+                        ],
+                    ],
+                    div![
+                        C!["control"],
+                        label![C!["label", "has-text-white"], "Domain (optional)"],
+                        input![
+                            C!["input", "is-small"],
+                            attrs! { At::Type => "text", At::Value => &model.mount_form_domain, At::Placeholder => "WORKGROUP" },
+                            input_ev(Ev::Input, Msg::InputMountDomain),
                         ],
                     ],
                 ]
@@ -1628,7 +1681,7 @@ fn view_network_storage(model: &Model) -> Node<Msg> {
                 ],
             ],
             div![
-                C!["notification", "is-dark", "mt-3", "p-3"],
+                C!["notification", "mt-3", "p-3"],
                 i![C!["material-icons", "mr-2", "is-size-6"], "info"],
                 span![
                     "Mounts are created under /mnt/rsplayer/<name> and automatically added as music directories.",

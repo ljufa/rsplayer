@@ -47,6 +47,8 @@ pub struct RsPlayerSettings {
     pub player_threads_priority: u8,
     pub alsa_buffer_size: Option<u32>,
     #[serde(default)]
+    pub fixed_output_sample_rate: Option<u32>,
+    #[serde(default)]
     #[validate]
     pub dsp_settings: DspSettings,
     #[serde(default = "default_vu_meter_enabled")]
@@ -172,6 +174,8 @@ pub struct NetworkMountConfig {
     #[serde(default)]
     pub password: Option<String>,
     #[serde(default)]
+    pub domain: Option<String>,
+    #[serde(default)]
     pub mount_point: Option<String>,
 }
 
@@ -214,6 +218,7 @@ impl Default for RsPlayerSettings {
             ring_buffer_size_ms: 200,
             player_threads_priority: 1,
             alsa_buffer_size: None,
+            fixed_output_sample_rate: None,
             dsp_settings: DspSettings::default(),
             vu_meter_enabled: default_vu_meter_enabled(),
             loudness_normalization_enabled: false,
@@ -230,6 +235,8 @@ pub struct VolumeControlSettings {
     pub alsa_mixer_name: Option<String>,
     #[serde(skip)]
     pub alsa_mixer: Option<CardMixer>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved_volume: Option<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
@@ -313,7 +320,16 @@ impl Default for MetadataStoreSettings {
             music_directories: vec![],
             follow_links: true,
             supported_extensions: vec![
-                "flac", "wav", "mp3", "m4a", "ogg", "dsf", "dff", "caf", "mka",
+                // Lossless
+                "flac", "wav", "aiff", "aif",
+                // Lossy
+                "mp3", "mp2", "mp1", "m4a", "ogg", "oga",
+                // Lossless containers
+                "caf",
+                // Matroska / WebM (audio-only containers)
+                "mka", "weba",
+                // DSD
+                "dsf", "dff",
             ]
             .into_iter()
             .map(std::borrow::ToOwned::to_owned)

@@ -21,7 +21,10 @@
         <progress class="progress is-large is-success"/>
     </section>
     <script src="/custom.js?v=__VERSION__"></script>
-    <script src="/index.js?v=__VERSION__" type="module"></script>
+    <script type="module">
+        import init from '/pkg/package.js?v=__VERSION__';
+        init('/pkg/package_bg.wasm?v=__VERSION__');
+    </script>
     <script src="/bulma/bulma-carousel.min.js?v=__VERSION__"></script>
 </body>
 

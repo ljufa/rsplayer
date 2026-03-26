@@ -991,7 +991,7 @@ a:hover {
   text-overflow: ellipsis;
 }
 
-.track-info .title { margin-bottom: 0.2rem !important; }
+.track-info .title { margin-bottom: 0.5rem !important; }
 .track-info .subtitle { margin-bottom: 0.1rem !important; }
 
 .player-controls {
@@ -1039,7 +1039,7 @@ a:hover {
   padding: 20px;
   border-radius: 10px;
   margin-bottom: 1rem;
-  height: 340px;
+  height: auto;
   display: flex;
   flex-direction: column;
   justify-content: center;

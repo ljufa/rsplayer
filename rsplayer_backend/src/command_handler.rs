@@ -695,19 +695,17 @@ pub async fn handle_user_commands(
             Storage(StorageCommand::Mount(mount_config)) => {
                 match crate::mount_service::mount_share(&mount_config) {
                     Ok(mount_point) => {
-                        // Save mount config (without password) to settings
+                        // Save mount config to settings
                         let mut settings = config_store.get_settings();
                         let existing = settings
                             .network_storage_settings
                             .mounts
                             .iter()
                             .position(|m| m.name == mount_config.name);
-                        let mut saved_config = mount_config.clone();
-                        saved_config.password = None;
                         if let Some(idx) = existing {
-                            settings.network_storage_settings.mounts[idx] = saved_config;
+                            settings.network_storage_settings.mounts[idx] = mount_config.clone();
                         } else {
-                            settings.network_storage_settings.mounts.push(saved_config);
+                            settings.network_storage_settings.mounts.push(mount_config.clone());
                         }
                         // Auto-register mount point as music directory
                         if !settings.metadata_settings.music_directories.contains(&mount_point) {
@@ -890,6 +888,7 @@ pub async fn handle_user_commands(
 pub async fn handle_system_commands(
     ai_service: ArcAudioInterfaceSvc,
     usb_service: Option<ArcUsbService>,
+    config: ArcConfiguration,
     mut input_commands_rx: Receiver<SystemCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) {
@@ -906,6 +905,10 @@ pub async fn handle_system_commands(
                 }
                 SetVol(val) => {
                     let nv = ai_service.set_volume(val);
+                    // Persist so the same level is restored after service restart
+                    let mut settings = config.get_settings().clone();
+                    settings.volume_ctrl_settings.saved_volume = Some(val);
+                    config.save_settings(&settings);
                     state_changes_sender
                         .send(StateChangeEvent::VolumeChangeEvent(nv))
                         .expect("Send event failed.");

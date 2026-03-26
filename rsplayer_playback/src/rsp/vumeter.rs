@@ -2,7 +2,7 @@ use api_models::state::StateChangeEvent;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use symphonia::core::conv::IntoSample;
+use symphonia::core::audio::conv::IntoSample;
 use tokio::sync::broadcast::Sender;
 
 const VU_UPDATE_INTERVAL: Duration = Duration::from_millis(50);

@@ -13,10 +13,10 @@ use chrono::{DateTime, Utc};
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 use log::{info, warn};
 use symphonia::core::{
-    formats::FormatOptions,
+    formats::{FormatOptions, FormatReader, TrackType},
+    formats::probe::Hint,
     io::{MediaSourceStream, MediaSourceStreamOptions},
-    meta::{MetadataOptions, StandardTagKey, Tag, Visual},
-    probe::{Hint, ProbeResult},
+    meta::{MetadataOptions, StandardTag, Tag, Visual},
 };
 use tokio::sync::broadcast::Sender;
 use walkdir::WalkDir;
@@ -407,17 +407,14 @@ impl MetadataService {
             let ext = ext.to_str().unwrap().to_lowercase();
             hint.with_extension(&ext);
         }
-        let format_opts = FormatOptions {
-            enable_gapless: false,
-            ..Default::default()
-        };
+        let format_opts = FormatOptions::default();
         let metadata_opts = MetadataOptions::default();
         let file_p = &Self::full_path_to_database_key(settings, file_path.to_str().unwrap());
 
         info!("Scanning file:\t{file_p}");
-        match symphonia::default::get_probe().format(&hint, mss, &format_opts, &metadata_opts) {
+        match crate::dsd_bundle::build_probe().probe(&hint, mss, format_opts, metadata_opts) {
             Ok(mut probed) => {
-                let (mut song, image_data) = build_song(&mut probed);
+                let (mut song, image_data) = build_song(&mut *probed);
 
                 if let Some(image_data) = &image_data {
                     let image_id = uuid::Uuid::new_v4();
@@ -445,98 +442,97 @@ impl MetadataService {
     }
 }
 
-fn build_song(probed: &mut ProbeResult) -> (Song, Option<Visual>) {
+fn build_song(format: &mut dyn FormatReader) -> (Song, Option<Visual>) {
     let mut song = Song::default();
     let mut image_data: Option<Visual> = None;
-    if let Some(track) = probed.format.default_track() {
-        let params = &track.codec_params;
-        if let Some(n_frames) = params.n_frames {
-            if let Some(tb) = params.time_base {
-                let time = tb.calc_time(n_frames);
-                song.time = Some(Duration::from_secs(time.seconds));
+    if let Some(track) = format.default_track(TrackType::Audio) {
+        if let Some(num_frames) = track.num_frames {
+            if let Some(tb) = track.time_base {
+                if let Some(time) = tb.calc_time(symphonia::core::units::Timestamp::new(num_frames as i64)) {
+                    song.time = Some(Duration::from_secs(time.as_secs().unsigned_abs()));
+                }
             }
         }
     }
 
     let mut fill_song_from_metadata = |metadata_rev: &symphonia::core::meta::MetadataRevision| {
-        let tags = metadata_rev.tags();
-        for known_tag in tags.iter().filter(|t| t.is_known()) {
-            match known_tag.std_key.unwrap_or(StandardTagKey::Version) {
-                StandardTagKey::Album => {
-                    if song.album.is_none() {
-                        song.album = from_tag_value_to_option(known_tag);
+        let tags = &metadata_rev.media.tags;
+        for tag in tags.iter().filter(|t| t.has_std_tag()) {
+            if let Some(std_tag) = &tag.std {
+                match std_tag {
+                    StandardTag::Album(_) => {
+                        if song.album.is_none() {
+                            song.album = from_tag_value_to_option(tag);
+                        }
                     }
-                }
-                StandardTagKey::AlbumArtist => {
-                    if song.album_artist.is_none() {
-                        song.album_artist = from_tag_value_to_option(known_tag);
+                    StandardTag::AlbumArtist(_) => {
+                        if song.album_artist.is_none() {
+                            song.album_artist = from_tag_value_to_option(tag);
+                        }
                     }
-                }
-                StandardTagKey::Artist => {
-                    if song.artist.is_none() {
-                        song.artist = from_tag_value_to_option(known_tag);
+                    StandardTag::Artist(_) => {
+                        if song.artist.is_none() {
+                            song.artist = from_tag_value_to_option(tag);
+                        }
                     }
-                }
-                StandardTagKey::Composer => {
-                    if song.composer.is_none() {
-                        song.composer = from_tag_value_to_option(known_tag);
+                    StandardTag::Composer(_) => {
+                        if song.composer.is_none() {
+                            song.composer = from_tag_value_to_option(tag);
+                        }
                     }
-                }
-                StandardTagKey::Date => {
-                    if song.date.is_none() {
-                        song.date = from_tag_value_to_option(known_tag);
+                    StandardTag::RecordingDate(_) | StandardTag::ReleaseDate(_) => {
+                        if song.date.is_none() {
+                            song.date = from_tag_value_to_option(tag);
+                        }
                     }
-                }
-                StandardTagKey::DiscNumber => {
-                    if song.disc.is_none() {
-                        song.disc = from_tag_value_to_option(known_tag);
+                    StandardTag::DiscNumber(_) => {
+                        if song.disc.is_none() {
+                            song.disc = from_tag_value_to_option(tag);
+                        }
                     }
-                }
-                StandardTagKey::Genre => {
-                    if song.genre.is_none() {
-                        song.genre = from_tag_value_to_option(known_tag);
+                    StandardTag::Genre(_) => {
+                        if song.genre.is_none() {
+                            song.genre = from_tag_value_to_option(tag);
+                        }
                     }
-                }
-                StandardTagKey::Label => {
-                    if song.label.is_none() {
-                        song.label = from_tag_value_to_option(known_tag);
+                    StandardTag::Label(_) => {
+                        if song.label.is_none() {
+                            song.label = from_tag_value_to_option(tag);
+                        }
                     }
-                }
-                StandardTagKey::Performer => {
-                    if song.performer.is_none() {
-                        song.performer = from_tag_value_to_option(known_tag);
+                    StandardTag::Performer(_) => {
+                        if song.performer.is_none() {
+                            song.performer = from_tag_value_to_option(tag);
+                        }
                     }
-                }
-                StandardTagKey::TrackNumber => {
-                    if song.track.is_none() {
-                        song.track = from_tag_value_to_option(known_tag);
+                    StandardTag::TrackNumber(_) => {
+                        if song.track.is_none() {
+                            song.track = from_tag_value_to_option(tag);
+                        }
                     }
-                }
-                StandardTagKey::TrackTitle => {
-                    if song.title.is_none() {
-                        song.title = from_tag_value_to_option(known_tag);
+                    StandardTag::TrackTitle(_) => {
+                        if song.title.is_none() {
+                            song.title = from_tag_value_to_option(tag);
+                        }
                     }
+                    _ => {}
                 }
-                _ => {}
             }
         }
-        for unknown_tag in tags.iter().filter(|t| !t.is_known()) {
+        for tag in tags.iter().filter(|t| !t.has_std_tag()) {
             song.tags
-                .entry(unknown_tag.key.clone())
-                .or_insert_with(|| from_tag_value_to_option(unknown_tag).unwrap_or_default());
+                .entry(tag.raw.key.clone())
+                .or_insert_with(|| from_tag_value_to_option(tag).unwrap_or_default());
         }
         if image_data.is_none() {
-            if let Some(v) = metadata_rev.visuals().iter().next() {
+            if let Some(v) = metadata_rev.media.visuals.first() {
                 image_data = Some(v.clone());
             }
         }
     };
 
-    if let Some(metadata_rev) = probed.format.metadata().skip_to_latest() {
+    if let Some(metadata_rev) = format.metadata().skip_to_latest() {
         fill_song_from_metadata(metadata_rev);
-    }
-    if let Some(metadata_rev) = probed.metadata.get() {
-        fill_song_from_metadata(metadata_rev.current().unwrap());
     }
 
     (song, image_data)
@@ -544,5 +540,5 @@ fn build_song(probed: &mut ProbeResult) -> (Song, Option<Visual>) {
 
 #[allow(clippy::unnecessary_wraps)]
 fn from_tag_value_to_option(tag: &Tag) -> Option<String> {
-    Some(tag.value.to_string())
+    Some(tag.raw.value.to_string())
 }

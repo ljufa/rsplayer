@@ -6,8 +6,8 @@ pub use camilladsp::config::{self, BiquadParameters};
 use camilladsp::filters::Filter;
 use log::error;
 
-use symphonia::core::conv::{FromSample, IntoSample};
-use symphonia::core::sample::Sample;
+use symphonia::core::audio::conv::{FromSample, IntoSample};
+use symphonia::core::audio::sample::Sample;
 
 mod dsp_processor;
 pub use dsp_processor::{DspHandle, DspProcessor};

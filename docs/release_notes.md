@@ -1,5 +1,59 @@
 # Release Notes
 
+## v2.5.5 — 2026-03-25
+
+### New Features
+
+#### Fixed Output Sample Rate
+A new **Fixed Output Sample Rate** setting is available under the Playback → Advanced section of the settings page. When set, RSPlayer will always resample audio to the specified rate regardless of the source file's sample rate or what the device reports as supported. Useful for hardware that requires a fixed clock rate (e.g. external DACs locked to 192kHz or 48kHz) or for forcing a known-good rate on devices with unreliable capability reporting.
+
+#### Volume Persistence Across Restarts
+The volume level is now saved whenever it changes and automatically restored when the service restarts. Previously, the player always started at the hardware default (maximum) on restart, which could cause a loud shock on powered systems. The volume is now restored to the last-used level, defaulting to 0 on first use.
+
+#### Expanded Audio Format Support
+The following file formats are now recognized and scanned into the library:
+
+| Format | Extensions |
+|--------|------------|
+| AIFF | `.aiff`, `.aif` |
+| MPEG Audio (Layer I/II) | `.mp1`, `.mp2` |
+| Ogg Audio | `.oga` |
+| WebM Audio | `.weba` |
+
+Previously supported formats (FLAC, WAV, MP3, M4A, OGG, DSF, DFF, CAF, MKA) are unchanged.
+
+### Improvements
+
+#### ALSA Driver Compatibility: Automatic Rate Fallback
+Some ALSA drivers (e.g. Merus MA12070P) advertise a continuous sample rate range (e.g. 44100–192000 Hz) but only accept specific discrete rates at stream-open time. RSPlayer now detects this condition and automatically probes candidate rates in priority order — integer multiples of the source rate first, then range boundaries, then standard rates — retrying the stream open until one succeeds. This prevents playback failures on hardware with non-compliant ALSA drivers.
+
+#### SMB Network Mount: Domain Support and Improved Credentials Handling
+- **Domain field**: SMB shares can now be configured with a Windows domain for environments that require domain-qualified authentication.
+- **Inline credentials**: Credentials are now passed directly to the kernel mount call instead of being written to a credentials file (`/opt/rsplayer/creds_*`). This removes the dependency on the credentials file path and simplifies the mount lifecycle.
+- **Auto-name from share**: If no mount name is provided in the UI, the name is automatically derived from the share path.
+- **Password masking in logs**: Mount log lines no longer expose the password in plaintext.
+
+#### Settings Page: Collapsible Sections and Reorganized Playback Controls
+The settings page is now organized into collapsible sections — **Appearance**, **Playback**, **Audio Processing**, and **Music Library** — making it easier to navigate on both desktop and mobile.
+
+The **Playback** section has been further reorganized:
+- **Alsa mixer** and **Volume step** are now shown on the same row, directly below the audio interface selector.
+- **Input buffer size**, **Ring buffer size**, and **Player thread priority** have been moved into the **Advanced** subsection (collapsed by default), alongside Fixed output sample rate and ALSA buffer frame size.
+
+#### Theme Consistency
+Settings page backgrounds now use CSS variables instead of hardcoded colors, ensuring all themes apply correctly across the full UI.
+
+### Upcoming
+
+- **Symphonia 0.6 alpha:** RSPlayer currently uses a custom Symphonia fork (`break_infinite_loop` branch) as a workaround for issues with radio stream handling and API shape differences. An upgrade to the official Symphonia 0.6 alpha is planned once it stabilizes on crates.io.
+
+### Bug Fixes
+
+- **Frontend cache busting**: `package.js` and `package_bg.wasm` (the WASM bundle) were not receiving version query strings on cache-busting. Fixed — both files are now requested with `?v=<version>` so browser caches are correctly invalidated on upgrade.
+- **SMB credentials file left behind**: The credentials file (`/opt/rsplayer/creds_<name>`) was not removed on unmount in some cases. This code path has been removed; credentials are no longer written to disk.
+
+---
+
 ## v2.5.1 — 2026-03-22
 
 ### Improvements

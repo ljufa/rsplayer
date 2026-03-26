@@ -1,3 +1,4 @@
+pub mod dsd_bundle;
 pub mod album_repository;
 pub mod loudness_repository;
 pub mod loudness_service;

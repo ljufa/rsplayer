@@ -9,18 +9,18 @@ use std::{
     time::Duration,
 };
 
+use crate::dsd_bundle::{CODEC_TYPE_DSD_LSBF, CODEC_TYPE_DSD_MSBF};
 use log::{debug, info, warn};
 use rayon::prelude::*;
 use std::sync::atomic::AtomicU32;
 use std::thread::available_parallelism;
 use symphonia::core::{
-    audio::SampleBuffer,
-    codecs::{DecoderOptions, CODEC_TYPE_DSD_LSBF, CODEC_TYPE_DSD_MSBF, CODEC_TYPE_NULL},
+    codecs::{audio::{AudioDecoderOptions, CODEC_ID_NULL_AUDIO}, CodecParameters},
     errors::Error as SymphoniaError,
-    formats::FormatOptions,
+    formats::{FormatOptions, FormatReader, TrackType},
+    formats::probe::Hint,
     io::{MediaSourceStream, MediaSourceStreamOptions},
     meta::MetadataOptions,
-    probe::{Hint, ProbeResult},
 };
 
 use crate::loudness_repository::LoudnessRepository;
@@ -165,35 +165,43 @@ fn measure_integrated_loudness(file_path: &Path) -> Option<f64> {
         hint.with_extension(ext.to_str().unwrap_or(""));
     }
 
-    let mut probed = symphonia::default::get_probe()
-        .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
+    let probe = crate::dsd_bundle::build_probe();
+    let mut format = probe
+        .probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())
         .ok()?;
 
-    measure_from_probed(&mut probed)
+    measure_from_format(&mut *format)
 }
 
-fn measure_from_probed(probed: &mut ProbeResult) -> Option<f64> {
-    let track = probed.format.default_track()?;
+fn measure_from_format(format: &mut dyn FormatReader) -> Option<f64> {
+    let track = format.default_track(TrackType::Audio)?;
     let track_id = track.id;
-    let codec = track.codec_params.codec;
 
-    if codec == CODEC_TYPE_NULL || codec == CODEC_TYPE_DSD_LSBF || codec == CODEC_TYPE_DSD_MSBF {
+    let audio_params = match track.codec_params.as_ref()? {
+        CodecParameters::Audio(p) => p,
+        _ => return None,
+    };
+
+    let codec = audio_params.codec;
+    if codec == CODEC_ID_NULL_AUDIO || codec == CODEC_TYPE_DSD_LSBF || codec == CODEC_TYPE_DSD_MSBF {
         return None;
     }
 
-    let channels = u32::try_from(track.codec_params.channels?.count()).ok()?;
-    let sample_rate = track.codec_params.sample_rate?;
+    let channels = u32::try_from(audio_params.channels.as_ref()?.count()).ok()?;
+    let sample_rate = audio_params.sample_rate?;
 
-    let mut decoder = symphonia::default::get_codecs()
-        .make(&track.codec_params, &DecoderOptions::default())
+    let codec_registry = crate::dsd_bundle::build_codec_registry();
+    let mut decoder = codec_registry
+        .make_audio_decoder(audio_params, &AudioDecoderOptions::default())
         .ok()?;
 
     let mut meter = ebur128::EbuR128::new(channels, sample_rate, ebur128::Mode::I).ok()?;
-    let mut sample_buf: Option<SampleBuffer<f32>> = None;
+    let mut sample_vec: Vec<f32> = Vec::new();
 
     loop {
-        let packet = match probed.format.next_packet() {
-            Ok(p) => p,
+        let packet = match format.next_packet() {
+            Ok(Some(p)) => p,
+            Ok(None) => break,
             Err(SymphoniaError::ResetRequired) => {
                 decoder.reset();
                 continue;
@@ -206,16 +214,8 @@ fn measure_from_probed(probed: &mut ProbeResult) -> Option<f64> {
         }
 
         let Ok(audio_buf) = decoder.decode(&packet) else { continue };
-
-        let spec = *audio_buf.spec();
-        let frames = audio_buf.frames();
-        let cap = audio_buf.capacity() as u64;
-        if sample_buf.as_ref().is_none_or(|sb| sb.capacity() < frames) {
-            sample_buf = Some(SampleBuffer::<f32>::new(cap, spec));
-        }
-        let sbuf = sample_buf.as_mut().unwrap();
-        sbuf.copy_interleaved_ref(audio_buf);
-        let _ = meter.add_frames_f32(sbuf.samples());
+        audio_buf.copy_to_vec_interleaved(&mut sample_vec);
+        let _ = meter.add_frames_f32(&sample_vec);
     }
 
     meter.loudness_global().ok()

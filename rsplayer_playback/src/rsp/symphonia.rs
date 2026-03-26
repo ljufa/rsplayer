@@ -10,16 +10,19 @@ use api_models::player::Song;
 use api_models::settings::RsPlayerSettings;
 use api_models::state::{PlayerInfo, SongProgress, StateChangeEvent};
 use log::{debug, info, warn};
+use rsplayer_metadata::dsd_bundle::{build_codec_registry, build_probe, CODEC_TYPE_DSD_LSBF, CODEC_TYPE_DSD_MSBF};
 use rsplayer_metadata::radio_meta::{self, RadioMeta};
 use symphonia::core::audio::Channels;
-use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_DSD_LSBF, CODEC_TYPE_DSD_MSBF, CODEC_TYPE_NULL};
+use symphonia::core::codecs::{
+    audio::{AudioDecoderOptions, CODEC_ID_NULL_AUDIO},
+    CodecParameters,
+};
 use symphonia::core::errors::Error;
-use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
+use symphonia::core::formats::probe::Hint;
+use symphonia::core::formats::{FormatOptions, SeekMode, SeekTo, Track};
 use symphonia::core::io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions, ReadOnlySource};
 use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
-use symphonia::core::units::{Time, TimeBase};
-use symphonia::default::{get_codecs, get_probe};
+use symphonia::core::units::{Time, TimeBase, Timestamp};
 use tokio::sync::broadcast::Sender;
 
 use crate::rsp::alsa_output::AlsaOutput;
@@ -78,57 +81,60 @@ pub fn play_file(
     let buffer_len = if is_seekable {
         (rsp_settings.input_stream_buffer_size_mb * 1024 * 1024).next_power_of_two()
     } else {
-        (256 * 1024).min(
-            (rsp_settings.input_stream_buffer_size_mb * 1024 * 1024).next_power_of_two(),
-        )
+        (256 * 1024).min((rsp_settings.input_stream_buffer_size_mb * 1024 * 1024).next_power_of_two())
     };
     // Probe the media source stream for metadata and get the format reader.
-    let Ok(probed) = get_probe().format(
+    let Ok(mut reader) = build_probe().probe(
         &hint,
         MediaSourceStream::new(source, MediaSourceStreamOptions { buffer_len }),
-        &FormatOptions::default(),
-        &MetadataOptions::default(),
+        FormatOptions::default(),
+        MetadataOptions::default(),
     ) else {
         return Err(format_err!("Media source probe failed"));
     };
-
-    let mut reader: Box<dyn FormatReader> = probed.format;
 
     let tracks = reader.tracks();
     let Some(track) = first_supported_track(tracks) else {
         return Err(format_err!("Invalid track"));
     };
     let track_id = track.id;
-    let codec_parameters = &track.codec_params;
-    let tb = codec_parameters.time_base.unwrap_or_else(|| TimeBase::new(1, 1));
-    let dur = codec_parameters
-        .n_frames
-        .map_or(1, |frames| codec_parameters.start_ts + frames);
-    let dur = tb.calc_time(dur);
-    let mut rate = codec_parameters.sample_rate;
-    let mut bps = codec_parameters.bits_per_sample;
-    let mut chan_num = codec_parameters.channels.map(Channels::count);
+    let tb = track
+        .time_base
+        .unwrap_or_else(|| TimeBase::new(std::num::NonZero::new(1).unwrap(), std::num::NonZero::new(1).unwrap()));
+    let dur_ts = track
+        .num_frames
+        .map_or(1, |frames| track.start_ts.get().unsigned_abs().saturating_add(frames));
+    let dur = tb.calc_time(Timestamp::new(dur_ts as i64)).unwrap_or(Time::ZERO);
+
+    let audio_params = match track.codec_params.as_ref() {
+        Some(CodecParameters::Audio(p)) => p,
+        _ => return Err(format_err!("Invalid track codec params")),
+    };
+
+    let mut rate = audio_params.sample_rate;
+    let mut bps = audio_params.bits_per_sample;
+    let mut chan_num = audio_params.channels.as_ref().map(Channels::count);
     if let Some(radio_meta) = &radio_meta {
         rate = radio_meta.samplerate;
         chan_num = radio_meta.channels;
         bps = radio_meta.bitrate;
     }
-    let cd = get_codecs().get_codec(codec_parameters.codec);
+    let codec_registry = build_codec_registry();
+    let cd = codec_registry.get_audio_decoder(audio_params.codec);
     changes_tx
         .send(StateChangeEvent::PlayerInfoEvent(PlayerInfo {
             audio_format_bit: bps,
             audio_format_channels: chan_num,
             audio_format_rate: rate,
-            codec: cd.map(|c| c.short_name.to_uppercase()),
+            codec: cd.map(|c| c.codec.info.short_name.to_uppercase()),
             track_loudness_lufs,
             normalization_gain_db,
         }))
         .expect("msg send failed");
 
-    let is_dsd = codec_parameters.codec == CODEC_TYPE_DSD_LSBF || codec_parameters.codec == CODEC_TYPE_DSD_MSBF;
+    let is_dsd = audio_params.codec == CODEC_TYPE_DSD_LSBF || audio_params.codec == CODEC_TYPE_DSD_MSBF;
 
-    let decode_opts = &DecoderOptions::default();
-    let mut decoder = get_codecs().make(codec_parameters, decode_opts)?;
+    let mut decoder = codec_registry.make_audio_decoder(audio_params, &AudioDecoderOptions::default())?;
     let mut audio_output: Option<AlsaOutput> = None;
     let mut vu_meter = vu_meter;
     let mut last_current_time = 0;
@@ -144,7 +150,7 @@ pub fn play_file(
             let seek_result = reader.seek(
                 SeekMode::Accurate,
                 SeekTo::Time {
-                    time: Time::new(u64::from(skip_to), 0.0),
+                    time: Time::try_new(i64::from(skip_to), 0).unwrap_or(Time::ZERO),
                     track_id: Some(track_id),
                 },
             );
@@ -155,19 +161,20 @@ pub fn play_file(
 
         //  Get the next packet from the format reader.
         let packet = match reader.next_packet() {
-            Ok(packet) => packet,
+            Ok(Some(packet)) => packet,
+            Ok(None) => break Ok(PlaybackResult::SongFinished),
             Err(Error::IoError(error)) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
                 break Ok(PlaybackResult::SongFinished);
             }
             Err(err) => break Err(err.into()),
         };
 
-        let current_time = tb.calc_time(packet.ts()).seconds;
+        let current_time = tb.calc_time(packet.pts()).map_or(0, |t| t.as_secs().unsigned_abs());
         if current_time != last_current_time {
             last_current_time = current_time;
             changes_tx
                 .send(StateChangeEvent::SongTimeEvent(SongProgress {
-                    total_time: Duration::from_secs(dur.seconds),
+                    total_time: Duration::from_secs(dur.as_secs().unsigned_abs()),
                     current_time: Duration::from_secs(current_time),
                 }))
                 .expect("msg send failed");
@@ -179,7 +186,7 @@ pub fn play_file(
                 if audio_output.is_none() {
                     // Get the audio buffer specification. This is a description of the decoded
                     // audio buffer's sample format and sample rate.
-                    let spec = *decoded_buff.spec();
+                    let spec = decoded_buff.spec().clone();
 
                     // Get the capacity of the decoded buffer. Note that this is capacity, not
                     // length! The capacity of the decoded buffer is constant for the life of the
@@ -208,7 +215,7 @@ pub fn play_file(
                 // for the packet is >= the seeked position (0 if not seeking).
 
                 let mut write_failed = false;
-                if packet.ts() > 0 {
+                if packet.pts() > Timestamp::new(0) {
                     if let Some(output) = audio_output.as_mut() {
                         if let Err(e) = output.write(decoded_buff) {
                             warn!("Audio output write error: {e}");
@@ -321,5 +328,10 @@ fn get_source(
 }
 
 fn first_supported_track(tracks: &[Track]) -> Option<&Track> {
-    tracks.iter().find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
+    tracks.iter().find(|t| {
+        matches!(
+            &t.codec_params,
+            Some(CodecParameters::Audio(p)) if p.codec != CODEC_ID_NULL_AUDIO
+        )
+    })
 }

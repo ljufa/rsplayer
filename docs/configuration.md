@@ -1,23 +1,40 @@
 # Configuration
 
-To configure `rsplayer`, navigate to the settings page in the web UI. Here is an overview of the available settings.
+To configure `rsplayer`, navigate to the settings page in the web UI. Settings are organized into collapsible sections. Here is an overview of the available settings.
 
-## General
+## Appearance
+
+-   **Theme:** Select a visual theme for the web UI. Available themes: Dark, Light, Solarized, Dracula, Nord, Rose Pine, Ocean, Gruvbox, Catppuccin, and Hi-Contrast.
+
+## Playback
 
 -   **Audio interface:** Selects the primary audio device for playback. Options include your available ALSA hardware cards, a `Pipewire` virtual card (if `wpctl` is installed on the host), or `Local Browser Playback` for streaming audio directly to your device's web browser.
 -   **PCM Device:** Choose the specific PCM device for the selected audio interface (hidden if Local Browser Playback is selected).
--   **Input buffer size (MB):** The size of the buffer for audio data, in megabytes (1-200). (Hidden if Local Browser Playback is selected).
--   **Ring buffer size (ms):** The size of the ring buffer in milliseconds (100-10000). (Hidden if Local Browser Playback is selected).
--   **Player thread priority:** The priority of the player thread, from 1 to 99. (Hidden if Local Browser Playback is selected).
--   **Set alsa buffer frame size (Experimental!):** An experimental feature to set the ALSA buffer frame size. (Hidden if Local Browser Playback is selected).
+-   **Alsa mixer:** When using an ALSA audio interface, selects the specific mixer control used for volume adjustment. Shown on the same row as Volume step.
+-   **Volume step:** The amount to increase or decrease the volume with each step.
 -   **Auto resume playback on start:** If enabled, `rsplayer` will automatically resume playback of the last track when it starts.
+
+### Advanced
+
+These settings are hidden under the **Advanced** collapsible inside the Playback section. Defaults work well for most setups.
+
+-   **Input buffer size (MB):** The size of the buffer for audio data read from disk or network, in megabytes (1-200). (Hidden if Local Browser Playback is selected).
+-   **Ring buffer size (ms):** The size of the ring buffer between the decoder and the ALSA output stream, in milliseconds (1-10000). (Hidden if Local Browser Playback is selected).
+-   **Player thread priority:** The real-time priority of the player thread, from 1 to 99. Higher values reduce the risk of audio dropouts on loaded systems. (Hidden if Local Browser Playback is selected).
+-   **Fixed output sample rate:** When set, RSPlayer resamples all audio to this rate regardless of the source or device capabilities. Leave at "Auto (recommended)" unless your DAC requires a fixed clock rate.
+-   **Set alsa buffer frame size (Experimental!):** Manually override the ALSA hardware buffer frame size. (Hidden if Local Browser Playback is selected).
+
+## Audio Processing
+
 -   **Enable VU meter:** Displays a real-time VU meter on the player page during playback.
 -   **Enable loudness normalization (EBU R128):** When enabled, playback volume is automatically adjusted to match a target loudness level using the EBU R128 standard. Loudness analysis runs in the background while playback is stopped — each song is measured once and the result is stored permanently. Progress can be tracked on the Library Statistics page.
 -   **Target loudness (LUFS):** Sets the target loudness level for normalization, from -30 to -5 LUFS (default: -18). Only visible when loudness normalization is enabled.
 
-## Music Sources
+## Music Library
 
 The Music Sources section manages where rsplayer looks for your music files. You can combine multiple local directories and network shares.
+
+Supported file extensions: `.flac`, `.wav`, `.aiff`, `.aif`, `.mp3`, `.mp2`, `.mp1`, `.m4a`, `.ogg`, `.oga`, `.caf`, `.mka`, `.weba`, `.dsf`, `.dff`
 
 ### Local Directories
 
@@ -29,14 +46,10 @@ The Music Sources section manages where rsplayer looks for your music files. You
 
 The Network Mounts section (collapsible) lets you mount remote SMB/CIFS or NFS shares directly from rsplayer.
 
--   **Add Network Mount:** Provide a name, type (SMB or NFS), server address, and share path. For SMB shares, you can optionally provide a username and password. Clicking "Mount" creates the mount at `/mnt/rsplayer/<name>` and automatically registers it as a music directory.
+-   **Add Network Mount:** Provide a name (optional — auto-derived from share path if blank), type (SMB or NFS), server address, and share path. For SMB shares, you can optionally provide a username, password, and Windows domain. Clicking "Mount" creates the mount at `/mnt/rsplayer/<name>` and automatically registers it as a music directory.
 -   **Mount/Unmount:** Toggle mounting of saved network shares. Status indicators show whether each share is accessible (Read/Write, Read only, Not mounted, Not accessible).
 -   **Remove:** Unmounts (if rsplayer-managed) and removes the share from the saved list.
 -   **Detected Network Mounts:** Network filesystems already mounted on the system (e.g., via `/etc/fstab` or manually) are automatically detected and listed. Click "Save" to add them as music sources without re-mounting.
-
-## Appearance
-
--   **Theme:** Select a visual theme for the web UI. Available themes: Dark, Light, Solarized, Dracula, Nord, Rose Pine, Ocean, Gruvbox, Catppuccin, and Hi-Contrast.
 
 ## DSP Settings
 
@@ -54,14 +67,7 @@ Available filter types:
 
 DSP also supports loading built-in presets and importing CamillaDSP configuration files (.yml/.yaml).
 
-## Volume control
-
-?>Note: The volume control section is hidden when the USB firmware link is enabled, as volume is managed by the firmware in that case.
-
-The volume control method is set automatically based on your audio interface selection — Alsa for ALSA hardware cards, Pipewire for the Pipewire virtual card.
-
--   **Alsa mixer:** When using an ALSA audio interface, this selects the specific mixer control for volume adjustment.
--   **Volume step:** The amount to increase or decrease the volume with each step.
+?>**Note:** The Alsa mixer and Volume step fields are hidden when the USB firmware link is enabled — volume is managed by the firmware in that case. The control method (ALSA or Pipewire) is set automatically based on the selected audio interface.
 
 ## RSPlayer firmware(control board) USB link
 

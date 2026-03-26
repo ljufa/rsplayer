@@ -206,6 +206,7 @@ async fn main() {
         _ = spawn(command_handler::handle_system_commands(
                 ai_service,
                 usb_service.clone(),
+                config.clone(),
                 system_commands_rx,
                 state_changes_tx.clone()))
             => {

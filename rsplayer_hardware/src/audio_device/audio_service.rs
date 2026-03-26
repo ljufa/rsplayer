@@ -48,7 +48,7 @@ impl AudioInterfaceService {
             (settings, card_index)
         };
 
-        let volume_ctrl_device: Box<dyn VolumeControlDevice + Send + Sync> = if settings.usb_settings.enabled {
+        let mut volume_ctrl_device: Box<dyn VolumeControlDevice + Send + Sync> = if settings.usb_settings.enabled {
             if usb_service.is_none() {
                 return Err(anyhow::anyhow!(
                     "USB service is required for RSPlayerFirmware volume control."
@@ -68,6 +68,9 @@ impl AudioInterfaceService {
                 VolumeCrtlType::Off => Box::new(NoOpVolumeControlDevice),
             }
         };
+
+        // Restore saved volume; default to 0 on first use to prevent hardware-max shock
+        volume_ctrl_device.set_vol(settings.volume_ctrl_settings.saved_volume.unwrap_or(0));
 
         Ok(Self {
             volume_ctrl_device: Mutex::new(volume_ctrl_device),

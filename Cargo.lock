@@ -198,12 +198,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arrayvec"
-version = "0.7.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
-
-[[package]]
 name = "async-compression"
 version = "0.4.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2721,6 +2715,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex-lite"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
+
+[[package]]
 name = "regex-syntax"
 version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2765,6 +2765,7 @@ dependencies = [
  "rsplayer_playback",
  "rust-embed",
  "serde",
+ "tempfile",
  "tokio",
  "tokio-stream",
  "warp",
@@ -2829,6 +2830,7 @@ dependencies = [
  "rayon",
  "serde_json",
  "symphonia",
+ "symphonia-metadata",
  "tokio",
  "unicode-normalization",
  "ureq",
@@ -3328,11 +3330,10 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "symphonia"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
  "lazy_static",
- "symphonia-bundle-dsd",
  "symphonia-bundle-flac",
  "symphonia-bundle-mp3",
  "symphonia-codec-aac",
@@ -3350,41 +3351,30 @@ dependencies = [
 ]
 
 [[package]]
-name = "symphonia-bundle-dsd"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
-dependencies = [
- "log",
- "symphonia-core",
- "symphonia-metadata",
-]
-
-[[package]]
 name = "symphonia-bundle-flac"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
  "log",
+ "symphonia-common",
  "symphonia-core",
  "symphonia-metadata",
- "symphonia-utils-xiph",
 ]
 
 [[package]]
 name = "symphonia-bundle-mp3"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
  "lazy_static",
  "log",
  "symphonia-core",
- "symphonia-metadata",
 ]
 
 [[package]]
 name = "symphonia-codec-aac"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
  "lazy_static",
  "log",
@@ -3393,8 +3383,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-adpcm"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
  "log",
  "symphonia-core",
@@ -3402,8 +3392,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-alac"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
  "log",
  "symphonia-core",
@@ -3411,8 +3401,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-pcm"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
  "log",
  "symphonia-core",
@@ -3420,75 +3410,85 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-vorbis"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+dependencies = [
+ "log",
+ "symphonia-common",
+ "symphonia-core",
+]
+
+[[package]]
+name = "symphonia-common"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
  "log",
  "symphonia-core",
- "symphonia-utils-xiph",
+ "symphonia-metadata",
 ]
 
 [[package]]
 name = "symphonia-core"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
- "arrayvec",
- "bitflags 1.3.2",
+ "bitflags 2.10.0",
  "bytemuck",
  "lazy_static",
  "log",
+ "num-complex",
+ "rustfft",
+ "smallvec",
 ]
 
 [[package]]
 name = "symphonia-format-caf"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
  "log",
+ "symphonia-common",
  "symphonia-core",
- "symphonia-metadata",
 ]
 
 [[package]]
 name = "symphonia-format-isomp4"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
- "encoding_rs",
  "log",
+ "symphonia-common",
  "symphonia-core",
  "symphonia-metadata",
- "symphonia-utils-xiph",
 ]
 
 [[package]]
 name = "symphonia-format-mkv"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
  "lazy_static",
  "log",
+ "symphonia-common",
  "symphonia-core",
- "symphonia-metadata",
- "symphonia-utils-xiph",
 ]
 
 [[package]]
 name = "symphonia-format-ogg"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
  "log",
+ "symphonia-common",
  "symphonia-core",
  "symphonia-metadata",
- "symphonia-utils-xiph",
 ]
 
 [[package]]
 name = "symphonia-format-riff"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
  "extended",
  "log",
@@ -3498,22 +3498,14 @@ dependencies = [
 
 [[package]]
 name = "symphonia-metadata"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
+version = "0.6.0-alpha.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
 dependencies = [
- "encoding_rs",
  "lazy_static",
  "log",
+ "regex-lite",
+ "smallvec",
  "symphonia-core",
-]
-
-[[package]]
-name = "symphonia-utils-xiph"
-version = "0.5.5"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=master#3e2ee93dbca696f7ad567db731a6039deaa44845"
-dependencies = [
- "symphonia-core",
- "symphonia-metadata",
 ]
 
 [[package]]

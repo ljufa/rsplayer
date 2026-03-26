@@ -18,7 +18,8 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 ## Features
 - **Low Latency Output**: Direct output to ALSA or PipeWire minimizes latency.
 - **Local Browser Playback**: Stream audio directly to your web browser for local playback.
-- **Automatic Resampling**: High-quality FFT-based resampling (via rubato) when the output device doesn't support the source sample rate — no configuration needed.
+- **Automatic Resampling**: High-quality FFT-based resampling (via rubato) when the output device doesn't support the source sample rate — no configuration needed. Automatically probes fallback rates for ALSA drivers that misreport their supported range.
+- **Fixed Output Sample Rate**: Optionally lock the output to a specific sample rate, overriding automatic detection.
 - **Multiple Music Sources**: Configure multiple local directories and network mounts as music sources, all scanned together.
 - **Network Storage Management**: Discover, mount, and manage SMB/CIFS and NFS shares directly from the settings page.
 - **Adjustable Playback Thread Priority**: Customize the priority of the playback thread up to a real-time rating of 99 via the settings page.
@@ -39,6 +40,7 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - **Priority Queue**: Add songs, albums, artists, or directories to play next without disrupting the queue order.
 - **Drag-and-Drop Queue Reordering**: Reorder queue items by dragging them directly in the queue view.
 - **Automatic Cache Busting**: Browser caches are automatically invalidated on every release — no stale UI after upgrading.
+- **Volume Persistence**: Volume level is saved on change and restored on restart, defaulting to 0 on first use to prevent hardware-max shock.
 
 ### Planned features
 - **Expanded Audio Codec Support**: Compatibility with a wider range of audio codecs.

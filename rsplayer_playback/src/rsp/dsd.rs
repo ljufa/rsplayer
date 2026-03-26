@@ -1,6 +1,5 @@
-use symphonia::core::audio::RawSample;
-use symphonia::core::conv::FromSample;
-use symphonia::core::sample::SampleFormat as SymphoniaSampleFormat;
+use symphonia::core::audio::conv::FromSample;
+
 
 // DSD Wrapper types
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Default)]
@@ -31,20 +30,12 @@ impl std::ops::Sub for DsdU32 {
     }
 }
 
-impl symphonia::core::sample::Sample for DsdU32 {
-    const FORMAT: SymphoniaSampleFormat = SymphoniaSampleFormat::U32; // Proxy
+impl symphonia::core::audio::sample::Sample for DsdU32 {
     const EFF_BITS: u32 = 32;
     const MID: Self = DsdU32(0x6969_6969);
 
     fn clamped(self) -> Self {
         self
-    }
-}
-
-impl RawSample for DsdU32 {
-    type RawType = u32;
-    fn into_raw_sample(self) -> Self::RawType {
-        self.0
     }
 }
 
@@ -78,8 +69,8 @@ impl FromSample<i32> for DsdU32 {
     }
 }
 
-use symphonia::core::conv::IntoSample;
-use symphonia::core::sample::{i24, u24};
+use symphonia::core::audio::conv::IntoSample;
+use symphonia::core::audio::sample::{i24, u24};
 
 // ConvertibleSample is automatically implemented because DsdU32 implements Sample and all FromSample variants.
 
