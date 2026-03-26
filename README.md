@@ -42,6 +42,13 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - **Automatic Cache Busting**: Browser caches are automatically invalidated on every release — no stale UI after upgrading.
 - **Volume Persistence**: Volume level is saved on change and restored on restart, defaulting to 0 on first use to prevent hardware-max shock.
 
+## Known Limitations
+
+- **DSD passthrough bypass**: DSP (parametric EQ, filters), loudness normalization, and resampling are all bypassed for DSD files (`.dsf`, `.dff`). DSD bitstreams are passed directly to the DAC without any signal processing.
+- **Radio streams**: Loudness normalization is not applied to internet radio streams — it requires pre-scanned file metadata. Seeking is not supported for streams.
+- **Supported formats**: RSPlayer uses the [Symphonia](https://github.com/pdeljanov/Symphonia) library for decoding. Supported formats include FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, and DSD (DSF/DFF). Formats not supported by Symphonia (e.g. Opus, WMA, WavPack, Monkey's Audio / APE, True Audio / TTA) will fail to play.
+- **Local Browser Playback**: In this mode the browser's native audio engine plays files directly. DSP, loudness normalization, resampling, VU metering, and DSD playback are all unavailable — format support is limited to what the browser itself can decode.
+
 ### Planned features
 - **Expanded Audio Codec Support**: Compatibility with a wider range of audio codecs.
 - **Intelligent Dynamic Playlists**: Advanced dynamic playlists that adapt based on user likes or playback counts for a personalized listening experience.
