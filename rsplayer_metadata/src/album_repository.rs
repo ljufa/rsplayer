@@ -1,87 +1,9 @@
 use chrono::DateTime;
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
-use unicode_normalization::UnicodeNormalization;
 
 use api_models::{player::Song, playlist::Album};
 
-pub(crate) fn normalize_name(s: &str) -> String {
-    let without_diacritics: String = s
-        .nfd()
-        .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
-        .nfc()
-        .collect();
-    let lower = without_diacritics.to_lowercase();
-    let collapsed = lower.split_whitespace().collect::<Vec<_>>().join(" ");
-    collapsed
-        .chars()
-        .map(|c| match c {
-            '\u{2013}' | '\u{2014}' | '\u{2012}' | '\u{2015}' | '\u{FE58}' | '\u{FE63}' | '\u{FF0D}' => '-',
-            '\u{2018}' | '\u{2019}' | '\u{02BC}' => '\'',
-            '\u{201C}' | '\u{201D}' => '"',
-            '\u{FF0F}' => '/',
-            other => other,
-        })
-        .collect()
-}
-
-const ID3V1_GENRES: &[&str] = &[
-    "Blues", "Classic Rock", "Country", "Dance", "Disco", "Funk", "Grunge", "Hip-Hop",
-    "Jazz", "Metal", "New Age", "Oldies", "Other", "Pop", "R&B", "Rap", "Reggae", "Rock",
-    "Techno", "Industrial", "Alternative", "Ska", "Death Metal", "Pranks", "Soundtrack",
-    "Euro-Techno", "Ambient", "Trip-Hop", "Vocal", "Jazz+Funk", "Fusion", "Trance",
-    "Classical", "Instrumental", "Acid", "House", "Game", "Sound Clip", "Gospel", "Noise",
-    "Alternative Rock", "Bass", "Soul", "Punk", "Space", "Meditative", "Instrumental Pop",
-    "Instrumental Rock", "Ethnic", "Gothic", "Darkwave", "Techno-Industrial", "Electronic",
-    "Pop-Folk", "Eurodance", "Dream", "Southern Rock", "Comedy", "Cult", "Gangsta", "Top 40",
-    "Christian Rap", "Pop/Funk", "Jungle", "Native US", "Cabaret", "New Wave", "Psychedelic",
-    "Rave", "Showtunes", "Trailer", "Lo-Fi", "Tribal", "Acid Punk", "Acid Jazz", "Polka",
-    "Retro", "Musical", "Rock & Roll", "Hard Rock",
-    // Extended (80+)
-    "Folk", "Folk-Rock", "National Folk", "Swing", "Fast Fusion", "Bebop", "Latin", "Revival",
-    "Celtic", "Bluegrass", "Avantgarde", "Gothic Rock", "Progressive Rock", "Psychedelic Rock",
-    "Symphonic Rock", "Slow Rock", "Big Band", "Chorus", "Easy Listening", "Acoustic", "Humour",
-    "Speech", "Chanson", "Opera", "Chamber Music", "Sonata", "Symphony", "Booty Bass", "Primus",
-    "Porn Groove", "Satire", "Slow Jam", "Club", "Tango", "Samba", "Folklore", "Ballad",
-    "Power Ballad", "Rhythmic Soul", "Freestyle", "Duet", "Punk Rock", "Drum Solo", "A Capella",
-    "Euro-House", "Dance Hall", "Goa", "Drum & Bass", "Club-House", "Hardcore Techno", "Terror",
-    "Indie", "BritPop", "Negerpunk", "Polsk Punk", "Beat", "Christian Gangsta Rap", "Heavy Metal",
-    "Black Metal", "Crossover", "Contemporary Christian", "Christian Rock", "Merengue", "Salsa",
-    "Thrash Metal", "Anime", "JPop", "Synthpop", "Abstract", "Art Rock", "Baroque", "Bhangra",
-    "Big Beat", "Breakbeat", "Chillout", "Downtempo", "Dub", "EBM", "Eclectic", "Electro",
-    "Electroclash", "Emo", "Experimental", "Garage", "Global", "IDM", "Illbient", "Industro-Goth",
-    "Jam Band", "Krautrock", "Leftfield", "Lounge", "Math Rock", "New Romantic", "Nu-Breakz",
-    "Post-Punk", "Post-Rock", "Psytrance", "Shoegaze", "Space Rock", "Trop Rock", "World Music",
-    "Neoclassical", "Audiobook", "Audio Theatre", "Neue Deutsche Welle", "Podcast", "Indie-Rock",
-    "G-Funk", "Dubstep", "Garage Rock", "Psybient",
-];
-
-fn resolve_id3v1_genre(raw: &str) -> Option<&'static str> {
-    let trimmed = raw.trim();
-    let num_str = trimmed.strip_prefix('(').and_then(|s| s.strip_suffix(')')).unwrap_or(trimmed);
-    let idx: usize = num_str.parse().ok()?;
-    ID3V1_GENRES.get(idx).copied()
-}
-
-fn is_junk_genre(normalized: &str) -> bool {
-    matches!(normalized, "other" | "unknown genre" | "unknown" | "misc" | "none" | "unclassified" | "")
-}
-
-fn normalize_genre_key(genre: &str) -> String {
-    normalize_name(genre)
-}
-
-fn title_case_genre(s: &str) -> String {
-    s.split_whitespace()
-        .map(|word| {
-            let mut chars = word.chars();
-            chars.next().map_or_else(String::new, |first| {
-                let upper: String = first.to_uppercase().collect();
-                upper + chars.as_str()
-            })
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
+use crate::genre_utils::{is_junk_genre, normalize_genre_key, normalize_name, resolve_id3v1_genre, title_case_genre};
 
 pub struct AlbumRepository {
     albums_db: Keyspace,
@@ -96,7 +18,9 @@ impl AlbumRepository {
     }
 
     pub fn delete_all(&self) {
-        let keys: Vec<Vec<u8>> = self.albums_db.iter()
+        let keys: Vec<Vec<u8>> = self
+            .albums_db
+            .iter()
             .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
             .collect();
         for key in keys {
@@ -161,10 +85,16 @@ impl AlbumRepository {
         for album in albums {
             if let Some(ref raw_genre) = album.genre {
                 let genre_str = resolve_id3v1_genre(raw_genre).map_or_else(|| raw_genre.clone(), String::from);
-                if genre_str.is_empty() { continue; }
+                if genre_str.is_empty() {
+                    continue;
+                }
                 let key = normalize_genre_key(&genre_str);
-                if is_junk_genre(&key) { continue; }
-                let entry = genre_map.entry(key).or_insert_with(|| (title_case_genre(&genre_str), Vec::new()));
+                if is_junk_genre(&key) {
+                    continue;
+                }
+                let entry = genre_map
+                    .entry(key)
+                    .or_insert_with(|| (title_case_genre(&genre_str), Vec::new()));
                 entry.1.push(album);
             }
         }
@@ -232,7 +162,9 @@ impl AlbumRepository {
         if !album.song_keys.contains(&song.file) {
             album.song_keys.push(song.file);
         }
-        if song.image_id.is_some() { album.image_id = song.image_id; }
+        if song.image_id.is_some() {
+            album.image_id = song.image_id;
+        }
         if let Some(artist) = song.album_artist {
             album.artist = Some(artist);
         } else if let Some(artist) = song.artist {
@@ -252,9 +184,15 @@ impl AlbumRepository {
                 album.released = Some(dt.naive_utc().and_utc());
             }
         }
-        if let Some(genre) = song.genre { album.genre = Some(genre); }
-        if let Some(label) = song.label { album.label = Some(label); }
-        if album.title.is_empty() { album.title = raw_album; }
+        if let Some(genre) = song.genre {
+            album.genre = Some(genre);
+        }
+        if let Some(label) = song.label {
+            album.label = Some(label);
+        }
+        if album.title.is_empty() {
+            album.title = raw_album;
+        }
         album.added = song.file_date;
         _ = self.albums_db.insert(key.as_bytes(), album.to_json_string_bytes());
         drop(album);
@@ -274,10 +212,10 @@ impl AlbumRepository {
 
 #[cfg(test)]
 mod test {
-    use chrono::{Months, Utc};
-    use api_models::playlist::Album;
     use crate::album_repository::AlbumRepository;
     use crate::test::test_shared;
+    use api_models::playlist::Album;
+    use chrono::{Months, Utc};
 
     macro_rules! insert_albums_with_date {
         ($repo:expr, $($key:expr, $title:expr, $artist:expr, $added_offset:expr, $published_offset:expr),* $(,)?) => {
@@ -292,9 +230,20 @@ mod test {
         };
     }
 
-    #[test] fn should_get_albums() {
+    #[test]
+    fn should_get_albums() {
         let album_repository = create_album_repo();
-        insert_albums!(&album_repository, "a1", "Album One", "RP and E Goldstein", Some("Classical"), "a2", "Album Two", "Artist 1", Some("Club"));
+        insert_albums!(
+            &album_repository,
+            "a1",
+            "Album One",
+            "RP and E Goldstein",
+            Some("Classical"),
+            "a2",
+            "Album Two",
+            "Artist 1",
+            Some("Club")
+        );
         let albums = album_repository.find_all();
         assert_eq!(albums.len(), 2);
         assert_eq!(albums[0].title, "Album One");
@@ -302,7 +251,8 @@ mod test {
         assert_eq!(albums[1].title, "Album Two");
     }
 
-    #[test] fn should_get_latest_added_albums() {
+    #[test]
+    fn should_get_latest_added_albums() {
         let album_repository = create_album_repo();
         #[rustfmt::skip]
         insert_albums_with_date!(&album_repository,
@@ -321,7 +271,8 @@ mod test {
         assert!(result[2].title.contains("Album 3"));
     }
 
-    #[test] fn should_get_latest_released_albums() {
+    #[test]
+    fn should_get_latest_released_albums() {
         let album_repository = create_album_repo();
         #[rustfmt::skip]
         insert_albums_with_date!(&album_repository,
@@ -340,7 +291,8 @@ mod test {
         assert_eq!(result[2].title, "Album 6");
     }
 
-    #[test] fn test_find_all_album_artists() {
+    #[test]
+    fn test_find_all_album_artists() {
         let album_repository = create_album_repo();
         #[rustfmt::skip]
         insert_albums!(&album_repository,
@@ -355,7 +307,8 @@ mod test {
         assert_eq!(result.len(), 4);
     }
 
-    #[test] fn test_find_by_artist() {
+    #[test]
+    fn test_find_by_artist() {
         let album_repository = create_album_repo();
         #[rustfmt::skip]
         insert_albums!(&album_repository,
@@ -372,16 +325,47 @@ mod test {
         assert_eq!(result.len(), 1);
     }
 
-    #[test] fn normalize_name_case() { use super::normalize_name; assert_eq!(normalize_name("Pink Floyd"), normalize_name("pink floyd")); }
-    #[test] fn normalize_name_whitespace() { use super::normalize_name; assert_eq!(normalize_name("  Pink  Floyd  "), normalize_name("Pink Floyd")); }
-    #[test] fn normalize_name_diacritics() { use super::normalize_name; assert_eq!(normalize_name("Beyoncé"), normalize_name("Beyonce")); }
-    #[test] fn normalize_name_punctuation() { use super::normalize_name; assert_eq!(normalize_name("AC\u{2013}DC"), normalize_name("AC-DC")); }
+    #[test]
+    fn normalize_name_case() {
+        use super::normalize_name;
+        assert_eq!(normalize_name("Pink Floyd"), normalize_name("pink floyd"));
+    }
+    #[test]
+    fn normalize_name_whitespace() {
+        use super::normalize_name;
+        assert_eq!(normalize_name("  Pink  Floyd  "), normalize_name("Pink Floyd"));
+    }
+    #[test]
+    fn normalize_name_diacritics() {
+        use super::normalize_name;
+        assert_eq!(normalize_name("Beyoncé"), normalize_name("Beyonce"));
+    }
+    #[test]
+    fn normalize_name_punctuation() {
+        use super::normalize_name;
+        assert_eq!(normalize_name("AC\u{2013}DC"), normalize_name("AC-DC"));
+    }
 
-    #[test] fn update_from_song_merges_case_variants() {
-        use api_models::player::Song; use chrono::Utc;
+    #[test]
+    fn update_from_song_merges_case_variants() {
+        use api_models::player::Song;
+        use chrono::Utc;
         let repo = create_album_repo();
-        for (i, album_name) in ["Dark Side of the Moon", "dark side of the moon", "Dark Side Of The Moon"].iter().enumerate() {
-            repo.update_from_song(Song { file: format!("artist/album/track{i}.flac"), album: Some(album_name.to_string()), artist: Some("Pink Floyd".to_string()), file_date: Utc::now(), ..Default::default() });
+        for (i, album_name) in [
+            "Dark Side of the Moon",
+            "dark side of the moon",
+            "Dark Side Of The Moon",
+        ]
+        .iter()
+        .enumerate()
+        {
+            repo.update_from_song(Song {
+                file: format!("artist/album/track{i}.flac"),
+                album: Some(album_name.to_string()),
+                artist: Some("Pink Floyd".to_string()),
+                file_date: Utc::now(),
+                ..Default::default()
+            });
         }
         let all = repo.find_all();
         assert_eq!(all.len(), 1);
@@ -390,21 +374,43 @@ mod test {
         assert_eq!(full.song_keys.len(), 3);
     }
 
-    #[test] fn find_all_album_artists_deduplicates_case_variants() {
-        use api_models::player::Song; use chrono::Utc;
+    #[test]
+    fn find_all_album_artists_deduplicates_case_variants() {
+        use api_models::player::Song;
+        use chrono::Utc;
         let repo = create_album_repo();
         for (i, artist) in ["Pink Floyd", "pink floyd", "PINK FLOYD"].iter().enumerate() {
-            repo.update_from_song(Song { file: format!("track{i}.flac"), album: Some(format!("Album {i}")), artist: Some(artist.to_string()), file_date: Utc::now(), ..Default::default() });
+            repo.update_from_song(Song {
+                file: format!("track{i}.flac"),
+                album: Some(format!("Album {i}")),
+                artist: Some(artist.to_string()),
+                file_date: Utc::now(),
+                ..Default::default()
+            });
         }
         let artists = repo.find_all_album_artists();
         assert_eq!(artists.len(), 1);
     }
 
-    #[test] fn query_songs_by_album_roundtrip() {
-        use api_models::player::Song; use chrono::Utc;
+    #[test]
+    fn query_songs_by_album_roundtrip() {
+        use api_models::player::Song;
+        use chrono::Utc;
         let repo = create_album_repo();
-        repo.update_from_song(Song { file: "pink_floyd/dsotm/money.flac".to_string(), album: Some("Dark Side of the Moon".to_string()), artist: Some("Pink Floyd".to_string()), file_date: Utc::now(), ..Default::default() });
-        repo.update_from_song(Song { file: "pink_floyd/dsotm/time.flac".to_string(), album: Some("Dark Side of the Moon".to_string()), artist: Some("Pink Floyd".to_string()), file_date: Utc::now(), ..Default::default() });
+        repo.update_from_song(Song {
+            file: "pink_floyd/dsotm/money.flac".to_string(),
+            album: Some("Dark Side of the Moon".to_string()),
+            artist: Some("Pink Floyd".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        });
+        repo.update_from_song(Song {
+            file: "pink_floyd/dsotm/time.flac".to_string(),
+            album: Some("Dark Side of the Moon".to_string()),
+            artist: Some("Pink Floyd".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        });
         let albums = repo.find_by_artist("Pink Floyd");
         assert_eq!(albums.len(), 1);
         let found = repo.find_by_id(&albums[0].title);
@@ -412,28 +418,85 @@ mod test {
         assert_eq!(found.unwrap().song_keys.len(), 2);
     }
 
-    #[test] fn find_by_artist_is_case_insensitive() {
-        use api_models::player::Song; use chrono::Utc;
+    #[test]
+    fn find_by_artist_is_case_insensitive() {
+        use api_models::player::Song;
+        use chrono::Utc;
         let repo = create_album_repo();
-        repo.update_from_song(Song { file: "track1.flac".to_string(), album: Some("Wish You Were Here".to_string()), artist: Some("Pink Floyd".to_string()), file_date: Utc::now(), ..Default::default() });
+        repo.update_from_song(Song {
+            file: "track1.flac".to_string(),
+            album: Some("Wish You Were Here".to_string()),
+            artist: Some("Pink Floyd".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        });
         assert_eq!(repo.find_by_artist("pink floyd").len(), 1);
         assert_eq!(repo.find_by_artist("PINK FLOYD").len(), 1);
     }
 
-    #[test] fn test_delete_all() {
+    #[test]
+    fn test_delete_all() {
         let album_repository = create_album_repo();
-        insert_albums!(&album_repository, "a1", "Album One", "Artist", Some("Classical"), "a2", "Album Two", "Artist", Some("Club"));
+        insert_albums!(
+            &album_repository,
+            "a1",
+            "Album One",
+            "Artist",
+            Some("Classical"),
+            "a2",
+            "Album Two",
+            "Artist",
+            Some("Club")
+        );
         album_repository.delete_all();
         assert_eq!(album_repository.find_all().len(), 0);
     }
 
-    #[test] fn resolve_id3v1_numeric_genres() { use super::resolve_id3v1_genre; assert_eq!(resolve_id3v1_genre("(17)"), Some("Rock")); assert_eq!(resolve_id3v1_genre("17"), Some("Rock")); assert_eq!(resolve_id3v1_genre("(999)"), None); }
-    #[test] fn junk_genres_are_filtered() { use super::is_junk_genre; assert!(is_junk_genre("other")); assert!(!is_junk_genre("rock")); }
-    #[test] fn genre_title_case() { use super::title_case_genre; assert_eq!(title_case_genre("progressive rock"), "Progressive Rock"); }
+    #[test]
+    fn resolve_id3v1_numeric_genres() {
+        use super::resolve_id3v1_genre;
+        assert_eq!(resolve_id3v1_genre("(17)"), Some("Rock"));
+        assert_eq!(resolve_id3v1_genre("17"), Some("Rock"));
+        assert_eq!(resolve_id3v1_genre("(999)"), None);
+    }
+    #[test]
+    fn junk_genres_are_filtered() {
+        use super::is_junk_genre;
+        assert!(is_junk_genre("other"));
+        assert!(!is_junk_genre("rock"));
+    }
+    #[test]
+    fn genre_title_case() {
+        use super::title_case_genre;
+        assert_eq!(title_case_genre("progressive rock"), "Progressive Rock");
+    }
 
-    #[test] fn find_all_by_genre_merges_case_variants() {
+    #[test]
+    fn find_all_by_genre_merges_case_variants() {
         let repo = create_album_repo();
-        insert_albums!(&repo, "a1", "Album One", "Artist 1", Some("Electronic"), "a2", "Album Two", "Artist 2", Some("electronic"), "a3", "Album Three", "Artist 3", Some("ELECTRONIC"), "a4", "Album Four", "Artist 4", Some("Rock"), "a5", "Album Five", "Artist 5", Some("rock"));
+        insert_albums!(
+            &repo,
+            "a1",
+            "Album One",
+            "Artist 1",
+            Some("Electronic"),
+            "a2",
+            "Album Two",
+            "Artist 2",
+            Some("electronic"),
+            "a3",
+            "Album Three",
+            "Artist 3",
+            Some("ELECTRONIC"),
+            "a4",
+            "Album Four",
+            "Artist 4",
+            Some("Rock"),
+            "a5",
+            "Album Five",
+            "Artist 5",
+            Some("rock")
+        );
         let result = repo.find_all_by_genre(20);
         let electronic = result.iter().find(|(name, _)| name.to_lowercase() == "electronic");
         assert!(electronic.is_some());
@@ -441,32 +504,98 @@ mod test {
         assert_eq!(result.len(), 2);
     }
 
-    #[test] fn find_all_by_genre_resolves_id3v1_codes() {
+    #[test]
+    fn find_all_by_genre_resolves_id3v1_codes() {
         let repo = create_album_repo();
-        insert_albums!(&repo, "a1", "Album One", "Artist 1", Some("(17)"), "a2", "Album Two", "Artist 2", Some("Rock"));
+        insert_albums!(
+            &repo,
+            "a1",
+            "Album One",
+            "Artist 1",
+            Some("(17)"),
+            "a2",
+            "Album Two",
+            "Artist 2",
+            Some("Rock")
+        );
         let result = repo.find_all_by_genre(20);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].1.len(), 2);
     }
 
-    #[test] fn find_all_by_genre_filters_junk() {
+    #[test]
+    fn find_all_by_genre_filters_junk() {
         let repo = create_album_repo();
-        insert_albums!(&repo, "a1", "A1", "Ar1", Some("Other"), "a2", "A2", "Ar2", Some("Other"), "a3", "A3", "Ar3", Some("Unknown genre"), "a4", "A4", "Ar4", Some("Unknown genre"), "a5", "A5", "Ar5", Some("Jazz"), "a6", "A6", "Ar6", Some("Jazz"));
+        insert_albums!(
+            &repo,
+            "a1",
+            "A1",
+            "Ar1",
+            Some("Other"),
+            "a2",
+            "A2",
+            "Ar2",
+            Some("Other"),
+            "a3",
+            "A3",
+            "Ar3",
+            Some("Unknown genre"),
+            "a4",
+            "A4",
+            "Ar4",
+            Some("Unknown genre"),
+            "a5",
+            "A5",
+            "Ar5",
+            Some("Jazz"),
+            "a6",
+            "A6",
+            "Ar6",
+            Some("Jazz")
+        );
         let result = repo.find_all_by_genre(20);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].0, "Jazz");
     }
 
-    fn create_album(title: &str, artist: &str, genre: Option<&str>, added: Option<i32>, published: Option<i32>) -> Vec<u8> {
+    fn create_album(
+        title: &str,
+        artist: &str,
+        genre: Option<&str>,
+        added: Option<i32>,
+        published: Option<i32>,
+    ) -> Vec<u8> {
         let added_date = added.map_or_else(Utc::now, |add| {
-            if add < 0 { chrono::Utc::now().checked_sub_months(Months::new(add.unsigned_abs())).unwrap() }
-            else { chrono::Utc::now().checked_add_months(Months::new(add.unsigned_abs())).unwrap() }
+            if add < 0 {
+                chrono::Utc::now()
+                    .checked_sub_months(Months::new(add.unsigned_abs()))
+                    .unwrap()
+            } else {
+                chrono::Utc::now()
+                    .checked_add_months(Months::new(add.unsigned_abs()))
+                    .unwrap()
+            }
         });
         let published_date = published.map(|add| {
-            if add < 0 { chrono::Utc::now().checked_sub_months(Months::new(add.unsigned_abs())).unwrap() }
-            else { chrono::Utc::now().checked_add_months(Months::new(add.unsigned_abs())).unwrap() }
+            if add < 0 {
+                chrono::Utc::now()
+                    .checked_sub_months(Months::new(add.unsigned_abs()))
+                    .unwrap()
+            } else {
+                chrono::Utc::now()
+                    .checked_add_months(Months::new(add.unsigned_abs()))
+                    .unwrap()
+            }
         });
-        Album { title: title.to_owned(), artist: Some(artist.to_owned()), added: added_date, released: published_date, genre: genre.map(std::borrow::ToOwned::to_owned), ..Default::default() }.to_json_string_bytes()
+        Album {
+            title: title.to_owned(),
+            artist: Some(artist.to_owned()),
+            added: added_date,
+            released: published_date,
+            genre: genre.map(std::borrow::ToOwned::to_owned),
+            ..Default::default()
+        }
+        .to_json_string_bytes()
     }
     fn create_album_repo() -> AlbumRepository {
         let ctx = test_shared::Context::default();

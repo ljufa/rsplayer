@@ -34,7 +34,7 @@ These settings are hidden under the **Advanced** collapsible inside the Playback
 
 The Music Sources section manages where rsplayer looks for your music files. You can combine multiple local directories and network shares.
 
-Supported file extensions: `.flac`, `.wav`, `.aiff`, `.aif`, `.mp3`, `.mp2`, `.mp1`, `.m4a`, `.ogg`, `.oga`, `.caf`, `.mka`, `.weba`, `.dsf`, `.dff`
+Supported file extensions: `.flac`, `.wav`, `.aiff`, `.aif`, `.ape`, `.mp3`, `.mp2`, `.mp1`, `.m4a`, `.ogg`, `.oga`, `.caf`, `.mka`, `.weba`, `.dsf`, `.dff`
 
 ### Local Directories
 

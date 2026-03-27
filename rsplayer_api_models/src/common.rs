@@ -1,6 +1,10 @@
 use std::time::Duration;
 
-use crate::{player::Song, settings::{DspSettings, NetworkMountConfig}, state::CurrentQueueQuery};
+use crate::{
+    player::Song,
+    settings::{DspSettings, NetworkMountConfig},
+    state::CurrentQueueQuery,
+};
 use chrono::{DateTime, Utc};
 use num_derive::ToPrimitive;
 use serde::{Deserialize, Serialize};

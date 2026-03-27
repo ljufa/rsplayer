@@ -34,12 +34,16 @@ impl LoudnessRepository {
         let mut bytes = [0u8; 5];
         bytes[0] = 0x01;
         bytes[1..5].copy_from_slice(&loudness.to_le_bytes());
-        self.db.insert(file_key, bytes.as_ref()).expect("Failed to save loudness");
+        self.db
+            .insert(file_key, bytes.as_ref())
+            .expect("Failed to save loudness");
     }
 
     /// Mark the file as analysed but without a usable loudness value.
     pub fn save_unavailable(&self, file_key: &str) {
-        self.db.insert(file_key, &[0x00u8][..]).expect("Failed to save loudness sentinel");
+        self.db
+            .insert(file_key, &[0x00u8][..])
+            .expect("Failed to save loudness sentinel");
     }
 
     /// Total number of songs that have been processed (includes unavailable sentinels).
@@ -52,7 +56,9 @@ impl LoudnessRepository {
     }
 
     pub fn delete_all(&self) {
-        let keys: Vec<Vec<u8>> = self.db.iter()
+        let keys: Vec<Vec<u8>> = self
+            .db
+            .iter()
             .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
             .collect();
         for key in keys {

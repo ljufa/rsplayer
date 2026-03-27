@@ -18,8 +18,8 @@ fn main() {
 
     let out_dir = env::var("OUT_DIR").unwrap();
 
-    let template = fs::read_to_string("../rsplayer_web_ui/public/index.html")
-        .expect("Failed to read index.html template");
+    let template =
+        fs::read_to_string("../rsplayer_web_ui/public/index.html").expect("Failed to read index.html template");
 
     let processed = template.replace("__VERSION__", &version);
 

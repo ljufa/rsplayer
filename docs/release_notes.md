@@ -1,5 +1,69 @@
 # Release Notes
 
+## v2.6.0 — 2026-03-27
+
+### New Features
+
+#### Monkey's Audio (APE) Support
+RSPlayer now supports playback of Monkey's Audio (APE) files, a popular lossless audio compression format. The implementation includes a custom Symphonia decoder and demuxer with:
+- Full support for 8, 16, 24, and 32-bit sample depths
+- Background frame prefetching for smooth playback
+- APEv2 and ID3v2 tag reading with proper metadata mapping
+
+#### Global Keyboard Shortcuts
+A comprehensive keyboard shortcut system has been added for power users:
+- **Space**: Play / Pause
+- **← / →**: Previous / Next track (Shift+Arrow for ±10s seek)
+- **↑ / ↓**: Volume up / down
+- **M**: Mute / Unmute
+- **L**: Like / Unlike current track
+- **Y**: Toggle lyrics modal
+- **S**: Cycle shuffle/repeat mode
+- **/**: Focus search input
+- **?**: Show keyboard shortcuts help
+- **1-4**: Navigate to Player, Queue, Library, Settings
+- **F / A / P / R / T**: Navigate to Files, Artists, Playlists, Radio, Stats
+
+#### Breadcrumb Navigation
+All library pages now feature breadcrumb navigation at the top, showing the current location within the library hierarchy. This provides clear context and quick navigation back to parent sections.
+
+#### Skeleton Loading Screens
+Loading states are now visualized with skeleton screens instead of blank spaces. This provides immediate feedback that content is loading and improves perceived performance.
+
+#### Empty State UI
+All pages now display helpful empty state screens when there's no content:
+- Queue: "Queue is empty" with call-to-action to browse library
+- Playlists: "No playlists yet" with guidance
+- Artists/Files: "No results" for empty searches
+- Radio: Contextual empty states for filters
+
+### Improvements
+
+#### Radio Stream Metadata
+Radio stream metadata extraction has been significantly improved:
+- **Radiosphere provider**: Extracts track info, cover art, and channel descriptions
+- **Quantumcast provider**: Parses StreamABC metadata for track and cover art
+- **ICY metadata reader**: New dedicated ICY metadata parser for Shoutcast/Icecast streams
+
+#### Genre Normalization
+A new comprehensive genre utilities module provides:
+- Full ID3v1 genre code translation (148 standard genres)
+- Case normalization and whitespace handling
+- Junk genre filtering
+
+#### Code Architecture
+Major refactoring for improved maintainability:
+- Backend commands split into dedicated modules (player, queue, playlist, metadata, storage, system)
+- New `AudioMetadataExtractor` for centralized metadata extraction
+- ALSA output error threshold increased to 30 for better resilience on resource-constrained hardware
+
+### Bug Fixes
+
+- Fixed ALSA output error handling to be more resilient on hardware like Raspberry Pi Zero
+- Fixed various UI layout issues with modal backgrounds and button styling
+
+---
+
 ## v2.5.5 — 2026-03-25
 
 ### New Features

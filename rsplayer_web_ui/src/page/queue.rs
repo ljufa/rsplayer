@@ -8,8 +8,8 @@ use gloo_console::log;
 use gloo_net::Error;
 use seed::prelude::web_sys::KeyboardEvent;
 use seed::{
-    a, attrs, button, div, empty, footer, header, i, id, input, p, prelude::*, progress, section, span, style,
-    textarea, C, IF,
+    a, attrs, button, div, empty, footer, h3, header, i, id, input, p, prelude::*, progress, section, style, textarea,
+    C, IF,
 };
 
 use crate::{attachQueueDragScroll, scrollToId};
@@ -303,10 +303,7 @@ pub fn view(model: &Model) -> Node<Msg> {
 fn view_clear_queue_confirm_modal(model: &Model) -> Node<Msg> {
     div![
         C!["modal", IF!(model.show_clear_queue_confirm => "is-active")],
-        div![
-            C!["modal-background"],
-            ev(Ev::Click, |_| Msg::CancelClearQueueConfirm)
-        ],
+        div![C!["modal-background"], ev(Ev::Click, |_| Msg::CancelClearQueueConfirm)],
         div![
             C!["modal-card"],
             header![
@@ -329,11 +326,7 @@ fn view_clear_queue_confirm_modal(model: &Model) -> Node<Msg> {
                     "Confirm",
                     ev(Ev::Click, |_| Msg::ClearQueue)
                 ],
-                button![
-                    C!["button"],
-                    "Cancel",
-                    ev(Ev::Click, |_| Msg::CancelClearQueueConfirm)
-                ]
+                button![C!["button"], "Cancel", ev(Ev::Click, |_| Msg::CancelClearQueueConfirm)]
             ]
         ]
     ]
@@ -443,6 +436,23 @@ fn view_add_url_modal(model: &Model) -> Node<Msg> {
 
 #[allow(clippy::too_many_lines)]
 fn view_queue_items(model: &Model) -> Node<Msg> {
+    // Show skeleton screens when initially loading
+    if model.waiting_response && model.current_queue.is_none() {
+        return view_skeleton_queue();
+    }
+
+    // Check if queue is empty
+    let is_empty = !model.waiting_response
+        && model
+            .current_queue
+            .as_ref()
+            .map(|page| page.items.is_empty())
+            .unwrap_or(true);
+
+    if is_empty {
+        return view_empty_queue(model);
+    }
+
     if model.current_queue.is_none() {
         return empty!();
     }
@@ -530,6 +540,79 @@ fn view_queue_items(model: &Model) -> Node<Msg> {
                 ]
             })
         ]
+    ]
+}
+
+fn view_empty_queue(model: &Model) -> Node<Msg> {
+    let is_search = !model.search_input.is_empty();
+
+    if is_search {
+        // No search results in queue
+        div![
+            C!["empty-state", "empty-state--search"],
+            i![C!["material-icons", "empty-state__icon"], "search_off"],
+            h3![C!["empty-state__title"], "No matching songs"],
+            p![
+                C!["empty-state__description"],
+                format!(
+                    "No songs in the queue match \"{}\". Try a different search term.",
+                    model.search_input
+                )
+            ],
+            div![
+                C!["empty-state__actions"],
+                button![
+                    C!["empty-state__cta"],
+                    i![C!["material-icons"], "backspace"],
+                    "Clear Search",
+                    ev(Ev::Click, |_| Msg::ClearSearch)
+                ],
+            ],
+        ]
+    } else {
+        // Empty queue
+        div![
+            C!["empty-state"],
+            i![C!["material-icons", "empty-state__icon"], "queue_music"],
+            h3![C!["empty-state__title"], "Queue is empty"],
+            p![
+                C!["empty-state__description"],
+                "Your playback queue is empty. Add songs from your library to start listening."
+            ],
+            div![
+                C!["empty-state__actions"],
+                a![
+                    C!["empty-state__cta"],
+                    attrs! { At::Href => "#/library/files" },
+                    i![C!["material-icons"], "library_music"],
+                    "Browse Library",
+                ],
+                button![
+                    C!["empty-state__secondary"],
+                    i![C!["material-icons"], "add"],
+                    "Add URL",
+                    ev(Ev::Click, |_| Msg::AddUrlButtonClick)
+                ],
+            ],
+        ]
+    }
+}
+
+fn view_skeleton_queue() -> Node<Msg> {
+    div![
+        C!["skeleton-list"],
+        // Generate 6 skeleton queue items
+        (0..6).map(|_| {
+            div![
+                C!["skeleton-queue-item"],
+                div![C!["skeleton skeleton-queue-number"]],
+                div![
+                    C!["skeleton-queue-info"],
+                    div![C!["skeleton skeleton-queue-title"]],
+                    div![C!["skeleton skeleton-queue-artist"]],
+                ],
+            ]
+        })
     ]
 }
 

@@ -11,7 +11,7 @@ use gloo_console::{error, log};
 use gloo_file::futures::read_as_text;
 use gloo_file::File;
 use gloo_net::{http::Request, Error};
-use seed::{a, attrs, button, details, div, empty, footer, h1, header, i, input, label, option, p, prelude::*, section, select, span, style, summary, C, IF};
+use seed::{a, attrs, button, code, details, div, empty, footer, h1, header, i, input, label, option, p, prelude::*, section, select, span, style, summary, C, IF};
 use wasm_bindgen::JsCast;
 use web_sys::FileList;
 
@@ -528,7 +528,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             }
             // Auto-derive name from share if not provided
             let name = if model.mount_form_name.is_empty() {
-                model.mount_form_share.replace('/', "_").replace(' ', "_")
+                model.mount_form_share.replace(['/', ' '], "_")
             } else {
                 model.mount_form_name.clone()
             };
@@ -1057,6 +1057,11 @@ fn view_rsp(rsp_settings: &RsPlayerSettings, local_browser_playback: bool) -> No
                     view_validation_icon(rsp_settings, "input_stream_buffer_size_mb")
                 ],
                 label!["Ring buffer size (1-10000ms)", C!["label", "has-text-white", "mt-5"]],
+                p![
+                    C!["help", "has-text-grey-light", "mb-2"],
+                    "Software ring buffer between the decoder and ALSA. Default: 1000 ms. \
+                     Increase if you hear dropouts with CPU-intensive formats (e.g. APE at high compression)."
+                ],
                 div![
                     C!["control", "has-icons-right"],
                     style! {St::Width => "max-content"},
@@ -1086,7 +1091,7 @@ fn view_rsp(rsp_settings: &RsPlayerSettings, local_browser_playback: bool) -> No
                 div![
                     C!["select"],
                     select![
-                        input_ev(Ev::Input, |value| Msg::InputRspFixedSampleRateChange(value)),
+                        input_ev(Ev::Input, Msg::InputRspFixedSampleRateChange),
                         option![
                             attrs! { At::Value => "" },
                             IF!(rsp_settings.fixed_output_sample_rate.is_none() => attrs! { At::Selected => true }),
@@ -1114,9 +1119,18 @@ fn view_rsp(rsp_settings: &RsPlayerSettings, local_browser_playback: bool) -> No
                     ],
                     label![
                         C!["label", "has-text-white"],
-                        "Set ALSA buffer frame size (Experimental!)",
+                        "Override ALSA period size (frames)",
                         attrs! { At::For => "alsabufsize_cb" }
                     ]
+                ],
+                p![
+                    C!["help", "has-text-grey-light", "mb-2"],
+                    "When not overridden, rsplayer uses 4096 frames by default. \
+                     This is the ALSA hardware period — how many frames ALSA processes per interrupt. \
+                     Larger values reduce USB scheduling pressure and fix ",
+                    code!["alsa::poll() POLLERR"],
+                    " on async USB audio devices (e.g. Amanero Combo768 on RPi). \
+                     At 44.1 kHz: 4096 frames ≈ 93 ms. Leave unset unless you have a specific reason."
                 ],
                 IF!(rsp_settings.alsa_buffer_size.is_some() =>
                     div![
@@ -1126,7 +1140,7 @@ fn view_rsp(rsp_settings: &RsPlayerSettings, local_browser_playback: bool) -> No
                             input![
                                 C!["input"],
                                 attrs! {
-                                    At::Value => rsp_settings.alsa_buffer_size.unwrap_or(10000),
+                                    At::Value => rsp_settings.alsa_buffer_size.unwrap_or(4096),
                                     At::Type => "number"
                                 },
                                 input_ev(Ev::Input, move |value| { Msg::InputRspAlsaBufferSizeChange(value) }),
@@ -1439,7 +1453,7 @@ fn view_music_directories(model: &Model) -> Node<Msg> {
             .map(|(idx, dir)| {
                 let dir_status = model.music_dir_statuses.iter().find(|s| s.path == *dir);
                 let status_label = match dir_status {
-                    Some(s) if s.readable && s.writable => "Read/Write",
+                    Some(s) if s.readable && s.writable => "Read / Write",
                     Some(s) if s.readable => "Read only",
                     Some(_) => "Not accessible",
                     None => "Unknown",
@@ -1483,7 +1497,7 @@ fn view_network_storage(model: &Model) -> Node<Msg> {
         model.settings.network_storage_settings.mounts.iter().map(|mount| {
             let mount_name2 = mount.name.clone();
             let status = model.mount_statuses.iter().find(|s| s.name == mount.name);
-            let is_mounted = status.map_or(false, |s| s.is_mounted);
+            let is_mounted = status.is_some_and(|s| s.is_mounted);
             let mount_point = mount
                 .mount_point
                 .clone()
@@ -1494,7 +1508,7 @@ fn view_network_storage(model: &Model) -> Node<Msg> {
                 NetworkMountType::Nfs => format!("{}:{}", mount.server, mount.share),
             };
             let (status_label, status_class) = match status {
-                Some(s) if s.readable && s.writable => ("Read/Write", "is-success"),
+                Some(s) if s.readable && s.writable => ("Read / Write", "is-success"),
                 Some(s) if s.readable => ("Read only", "is-warning"),
                 Some(s) if s.is_mounted => ("Not accessible", "is-danger"),
                 Some(_) => ("Not mounted", "is-danger"),
@@ -1719,7 +1733,7 @@ fn view_external_mounts(model: &Model) -> Node<Msg> {
         model.external_mounts.iter().map(|ext| {
             let mp = ext.mount_point.clone();
             let (status_label, status_class) = match (ext.readable, ext.writable) {
-                (true, true) => ("Read/Write", "is-success"),
+                (true, true) => ("Read / Write", "is-success"),
                 (true, false) => ("Read only", "is-warning"),
                 _ => ("Not accessible", "is-danger"),
             };

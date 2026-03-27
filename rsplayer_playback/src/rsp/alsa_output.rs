@@ -6,13 +6,15 @@ use std::sync::Arc;
 use symphonia::core::audio::{AudioSpec, GenericAudioBufferRef};
 
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::thread;
 use std::time::Duration;
 
 /// Number of consecutive error callbacks before the stream is considered
 /// fatally broken.  Transient ALSA errors (xruns, timestamp glitches) on
 /// resource-constrained hardware like `RPi` Zero are common and recoverable.
-const ERROR_THRESHOLD: u32 = 5;
+/// Without any sleep in the error callback the counter can increment very
+/// rapidly, so keep this high enough to absorb bursts while still detecting
+/// genuine hardware failures.
+const ERROR_THRESHOLD: u32 = 30;
 
 use crate::rsp::dsd::DsdU32;
 use crate::rsp::vumeter::VUMeter;
@@ -22,7 +24,7 @@ use rsplayer_dsp::Equalizer;
 use symphonia::core::audio::conv::{ConvertibleSample, FromSample, IntoSample};
 use symphonia::core::audio::sample::Sample;
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::traits::{DeviceTrait, StreamTrait};
 use rb::{RbConsumer, RbProducer, SpscRb, RB};
 
 use log::{debug, error, warn};
@@ -244,26 +246,16 @@ pub struct AlsaOutput {
 
 #[allow(clippy::too_many_arguments)]
 impl AlsaOutput {
-    #[allow(clippy::too_many_arguments, deprecated)]
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines, deprecated)]
     pub fn new(
         spec: AudioSpec,
         duration: u64,
-        audio_device: &str,
+        device: &cpal::Device,
         rsp_settings: &RsPlayerSettings,
         is_dsd: bool,
         dsp_handle: Option<&DspHandle>,
         vu_meter: Option<VUMeter>,
     ) -> Result<AlsaOutput> {
-        let host = cpal::default_host();
-        let device = if audio_device == "default" {
-            host.default_output_device()
-                .ok_or_else(|| Error::msg("Default audio device not found!"))?
-        } else {
-            host.devices()?
-                .find(|d| d.name().unwrap_or_default() == audio_device)
-                .ok_or_else(|| Error::msg(format!("Device {audio_device} not found!")))?
-        };
-
         debug!("Spec: {spec:?}");
 
         if let Ok(default_cfg) = device.default_output_config() {
@@ -317,7 +309,7 @@ impl AlsaOutput {
             );
             Some(fixed)
         } else {
-            find_device_rate(&device, spec.rate())
+            find_device_rate(device, spec.rate())
         };
         if let Some(rate) = device_rate {
             info!(
@@ -330,7 +322,10 @@ impl AlsaOutput {
         let device_channels = if is_dsd {
             None
         } else {
-            find_device_channels(&device, spec.channels().count() as u16)
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                find_device_channels(device, spec.channels().count() as u16)
+            }
         };
         if let Some(ch) = device_channels {
             info!(
@@ -345,8 +340,8 @@ impl AlsaOutput {
         let effective_dsp = if is_dsd {
             None
         } else if let Some(handle) = dsp_handle {
-            let dsp_rate = device_rate.unwrap_or(spec.rate()) as usize;
-            let dsp_channels = device_channels.map_or(spec.channels().count(), |ch| ch as usize);
+            let dsp_rate = device_rate.unwrap_or_else(|| spec.rate()) as usize;
+            let dsp_channels = device_channels.map_or_else(|| spec.channels().count(), |ch| ch as usize);
             handle.rebuild(dsp_channels, dsp_rate);
             Some(handle.clone())
         } else {
@@ -355,49 +350,119 @@ impl AlsaOutput {
 
         // For DSD streams, VU metering is also skipped.
         let effective_vu = if is_dsd { None } else { vu_meter };
-        let spec_clone = spec.clone();
+        let spec_clone = spec;
 
-        let result = AlsaOutput::open_with_format(
-            spec,
-            duration,
-            &device,
-            rsp_settings,
-            effective_dsp.clone(),
-            effective_vu.clone(),
-            sample_format,
-            device_rate,
-            device_channels,
-        );
+        // Determine which ALSA buffer size(s) to try.
+        //
+        // When the user has not configured a specific size, prefer Fixed(4096)
+        // over the driver default.  Many async USB audio devices (e.g. Amanero
+        // Combo 768) produce `alsa::poll() POLLERR` with the driver's default
+        // period (often 256 frames = 5.8 ms at 44.1 kHz) because the RPi USB
+        // controller cannot sustain that interrupt rate.  Fixed(4096) ≈ 90 ms
+        // is well within the USB controller's capability.
+        //
+        // If Fixed(4096) fails to open the stream (rare), fall back to Default.
+        let buf_sizes: &[cpal::BufferSize] = if is_dsd || rsp_settings.alsa_buffer_size.is_some() {
+            &[] // handled below via explicit_buf
+        } else {
+            &[cpal::BufferSize::Fixed(4096), cpal::BufferSize::Default]
+        };
+        let explicit_buf = rsp_settings
+            .alsa_buffer_size
+            .map_or(cpal::BufferSize::Default, cpal::BufferSize::Fixed);
+
+        let mut result = if buf_sizes.is_empty() {
+            AlsaOutput::open_with_format(
+                &spec_clone,
+                duration,
+                device,
+                rsp_settings,
+                effective_dsp.clone(),
+                effective_vu.clone(),
+                sample_format,
+                device_rate,
+                device_channels,
+                explicit_buf,
+            )
+        } else {
+            let mut r = Err(Error::msg("no buffer size tried"));
+            for buf in buf_sizes {
+                r = AlsaOutput::open_with_format(
+                    &spec_clone,
+                    duration,
+                    device,
+                    rsp_settings,
+                    effective_dsp.clone(),
+                    effective_vu.clone(),
+                    sample_format,
+                    device_rate,
+                    device_channels,
+                    *buf,
+                );
+                if r.is_ok() {
+                    break;
+                }
+                warn!("ALSA buffer size {buf:?} rejected, trying next");
+            }
+            r
+        };
 
         // Some ALSA drivers (e.g. Merus MA12070P) report a continuous rate
         // range like [44100, 192000] but only accept specific discrete rates.
         // When the stream open fails and we assumed native rate support
         // (device_rate == None), probe candidate rates until one succeeds.
         if result.is_err() && device_rate.is_none() && !is_dsd {
-            for fallback_rate in fallback_rate_candidates(&device, spec_clone.rate()) {
-                let spec_for_call = spec_clone.clone();
+            'rate_fallback: for fallback_rate in fallback_rate_candidates(device, spec_clone.rate()) {
                 warn!(
                     "{}Hz rejected by device, trying resampling to {}Hz",
                     spec_clone.rate(),
                     fallback_rate
                 );
                 if let Some(handle) = dsp_handle {
-                    let dsp_channels = device_channels.map_or(spec_clone.channels().count(), |ch| ch as usize);
+                    let dsp_channels = device_channels.map_or_else(|| spec_clone.channels().count(), |ch| ch as usize);
                     handle.rebuild(dsp_channels, fallback_rate as usize);
                 }
-                let retry = AlsaOutput::open_with_format(
-                    spec_for_call,
-                    duration,
-                    &device,
-                    rsp_settings,
-                    effective_dsp.clone(),
-                    effective_vu.clone(),
-                    sample_format,
-                    Some(fallback_rate),
-                    device_channels,
-                );
-                if retry.is_ok() {
-                    return retry;
+                let buf_sizes_for_rate: &[cpal::BufferSize] = if rsp_settings.alsa_buffer_size.is_none() && !is_dsd {
+                    &[cpal::BufferSize::Fixed(4096), cpal::BufferSize::Default]
+                } else {
+                    &[]
+                };
+                if buf_sizes_for_rate.is_empty() {
+                    let retry = AlsaOutput::open_with_format(
+                        &spec_clone,
+                        duration,
+                        device,
+                        rsp_settings,
+                        effective_dsp.clone(),
+                        effective_vu.clone(),
+                        sample_format,
+                        Some(fallback_rate),
+                        device_channels,
+                        explicit_buf,
+                    );
+                    if retry.is_ok() {
+                        result = retry;
+                        break 'rate_fallback;
+                    }
+                } else {
+                    for buf in buf_sizes_for_rate {
+                        let retry = AlsaOutput::open_with_format(
+                            &spec_clone,
+                            duration,
+                            device,
+                            rsp_settings,
+                            effective_dsp.clone(),
+                            effective_vu.clone(),
+                            sample_format,
+                            Some(fallback_rate),
+                            device_channels,
+                            *buf,
+                        );
+                        if retry.is_ok() {
+                            result = retry;
+                            break 'rate_fallback;
+                        }
+                    }
                 }
             }
         }
@@ -407,7 +472,7 @@ impl AlsaOutput {
 
     #[allow(clippy::too_many_lines)]
     fn open_with_format(
-        spec: AudioSpec,
+        spec: &AudioSpec,
         duration: u64,
         device: &cpal::Device,
         rsp_settings: &RsPlayerSettings,
@@ -416,18 +481,17 @@ impl AlsaOutput {
         sample_format: cpal::SampleFormat,
         device_rate: Option<u32>,
         device_channels: Option<u16>,
+        buffer_size: cpal::BufferSize,
     ) -> Result<AlsaOutput> {
         let source_channels = spec.channels().count();
         let output_channels = device_channels.map_or(source_channels, |ch| ch as usize);
-        let output_rate = device_rate.unwrap_or(spec.rate());
+        let output_rate = device_rate.unwrap_or_else(|| spec.rate());
 
         #[allow(clippy::cast_possible_truncation)]
         let config = cpal::StreamConfig {
             channels: output_channels as cpal::ChannelCount,
             sample_rate: output_rate,
-            buffer_size: rsp_settings
-                .alsa_buffer_size
-                .map_or(cpal::BufferSize::Default, cpal::BufferSize::Fixed),
+            buffer_size,
         };
 
         let ring_len = ((rsp_settings.ring_buffer_size_ms * output_rate as usize) / 1000) * output_channels;
@@ -459,7 +523,6 @@ impl AlsaOutput {
                                 if count <= ERROR_THRESHOLD {
                                     error!("audio output error ({count}/{ERROR_THRESHOLD}): {err}");
                                 }
-                                thread::sleep(Duration::from_millis(200));
                             }
                         },
                         None,
@@ -495,7 +558,7 @@ impl AlsaOutput {
                     let max_out_samples = resampler.output_frames_max() * output_channels;
                     Box::new(ResamplingPcmWriter {
                         producer,
-                        samples: Vec::with_capacity(duration as usize * source_channels),
+                        samples: Vec::with_capacity(usize::try_from(duration).unwrap_or(0) * source_channels),
                         resampler,
                         channels: source_channels,
                         output_channels,
@@ -506,7 +569,7 @@ impl AlsaOutput {
                 } else {
                     Box::new(PcmWriter {
                         producer,
-                        samples: Vec::with_capacity(duration as usize * source_channels),
+                        samples: Vec::with_capacity(usize::try_from(duration).unwrap_or(0) * source_channels),
                         source_channels,
                         output_channels,
                         channel_buf: Vec::new(),
@@ -541,7 +604,6 @@ impl AlsaOutput {
                                 if count <= ERROR_THRESHOLD {
                                     error!("audio output error ({count}/{ERROR_THRESHOLD}): {err}");
                                 }
-                                thread::sleep(Duration::from_millis(200));
                             }
                         },
                         None,
@@ -552,7 +614,7 @@ impl AlsaOutput {
                     })?;
                 let writer = Box::new(DsdWriter {
                     producer,
-                    samples: Vec::with_capacity(duration as usize * spec.channels().count()),
+                    samples: Vec::with_capacity(usize::try_from(duration).unwrap_or(0) * spec.channels().count()),
                 });
                 (stream, writer as Box<dyn AudioWriter>)
             }
@@ -721,6 +783,7 @@ fn fallback_rate_candidates(device: &cpal::Device, source_rate: u32) -> Vec<u32>
     }
 
     // 2. Range boundary rates sorted by distance from source_rate.
+    #[allow(clippy::tuple_array_conversions)]
     let mut boundaries: Vec<u32> = ranges
         .iter()
         .flat_map(|&(lo, hi)| [lo, hi])

@@ -195,7 +195,7 @@ const fn thread_priority_default_value() -> u8 {
     1
 }
 const fn ring_buffer_size_default_value() -> usize {
-    200
+    1000
 }
 const fn input_stream_buffer_size_default_value() -> usize {
     10
@@ -215,7 +215,7 @@ impl Default for RsPlayerSettings {
         Self {
             enabled: true,
             input_stream_buffer_size_mb: 10,
-            ring_buffer_size_ms: 200,
+            ring_buffer_size_ms: 1000,
             player_threads_priority: 1,
             alsa_buffer_size: None,
             fixed_output_sample_rate: None,
@@ -247,7 +247,7 @@ pub struct MetadataStoreSettings {
     #[serde(default)]
     pub music_directories: Vec<String>,
     pub follow_links: bool,
-    #[serde(skip)]
+    #[serde(default, skip_serializing)]
     pub supported_extensions: Vec<String>,
     pub db_path: String,
 }
@@ -321,14 +321,10 @@ impl Default for MetadataStoreSettings {
             follow_links: true,
             supported_extensions: vec![
                 // Lossless
-                "flac", "wav", "aiff", "aif",
-                // Lossy
-                "mp3", "mp2", "mp1", "m4a", "ogg", "oga",
-                // Lossless containers
-                "caf",
-                // Matroska / WebM (audio-only containers)
-                "mka", "weba",
-                // DSD
+                "flac", "wav", "aiff", "aif", "ape", // Lossy
+                "mp3", "mp2", "mp1", "m4a", "ogg", "oga", // Lossless containers
+                "caf", // Matroska / WebM (audio-only containers)
+                "mka", "weba", // DSD
                 "dsf", "dff",
             ]
             .into_iter()

@@ -6,6 +6,35 @@ function scrollToId(id) {
     }
 }
 
+// ============================================================
+//   SAFE NAVIGATION (avoids RefCell borrow issues)
+// ============================================================
+
+/**
+ * Navigate to a hash URL safely by deferring until next event loop tick.
+ * This prevents RefCell borrow panics in Seed's update cycle.
+ */
+function navigateToHash(hash) {
+    setTimeout(function() {
+        window.location.hash = hash;
+    }, 0);
+}
+
+/**
+ * Focus on the search input field if present on the page.
+ * Returns true if focused, false if no search field found.
+ */
+function focusSearchInput() {
+    // Find search input by common selectors
+    const searchInput = document.querySelector('input[type="text"][placeholder*="search" i], input[type="text"][placeholder*="find" i], input.input-size');
+    if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+        return true;
+    }
+    return false;
+}
+
 function attachCarousel(id) {
     try {
         if (!document.querySelector(id)) return;
@@ -165,6 +194,42 @@ function setupMediaSessionHandlers() {
             audio.currentTime = details.seekTime;
         }
     });
+}
+
+// ============================================================
+//   FIRST VISIT / WELCOME MODAL
+// ============================================================
+
+const FIRST_VISIT_KEY = "rsplayer-first-visit";
+
+/**
+ * Check if this is the first time user visits the app.
+ */
+function isFirstVisit() {
+    try {
+        const visited = localStorage.getItem(FIRST_VISIT_KEY);
+        return !visited;
+    } catch(e) {
+        return true;
+    }
+}
+
+/**
+ * Mark that user has visited the app (dismissed welcome modal).
+ */
+function markVisited() {
+    try {
+        localStorage.setItem(FIRST_VISIT_KEY, "true");
+    } catch(e) {}
+}
+
+/**
+ * Reset first visit status (for testing).
+ */
+function resetFirstVisit() {
+    try {
+        localStorage.removeItem(FIRST_VISIT_KEY);
+    } catch(e) {}
 }
 
 // Apply saved (or system-preferred) theme as early as possible to avoid flash.

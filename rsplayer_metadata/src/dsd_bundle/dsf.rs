@@ -25,7 +25,10 @@ impl DSDChunk {
         let file_size = source.read_u64()?;
         let metadata_offset = source.read_u64()?;
 
-        Ok(DSDChunk { file_size, metadata_offset })
+        Ok(DSDChunk {
+            file_size,
+            metadata_offset,
+        })
     }
 }
 
@@ -111,6 +114,10 @@ impl DSFMetadata {
         let dsd_chunk = DSDChunk::read(source)?;
         let fmt_chunk = FmtChunk::read(source)?;
         let data_chunk = DataChunk::read(source)?;
-        Ok(DSFMetadata { dsd_chunk, fmt_chunk, data_chunk })
+        Ok(DSFMetadata {
+            dsd_chunk,
+            fmt_chunk,
+            data_chunk,
+        })
     }
 }

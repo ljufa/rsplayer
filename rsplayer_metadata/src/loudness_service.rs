@@ -1,5 +1,4 @@
 use std::{
-    fs::File,
     path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -9,20 +8,12 @@ use std::{
     time::Duration,
 };
 
-use crate::dsd_bundle::{CODEC_TYPE_DSD_LSBF, CODEC_TYPE_DSD_MSBF};
 use log::{debug, info, warn};
 use rayon::prelude::*;
 use std::sync::atomic::AtomicU32;
 use std::thread::available_parallelism;
-use symphonia::core::{
-    codecs::{audio::{AudioDecoderOptions, CODEC_ID_NULL_AUDIO}, CodecParameters},
-    errors::Error as SymphoniaError,
-    formats::{FormatOptions, FormatReader, TrackType},
-    formats::probe::Hint,
-    io::{MediaSourceStream, MediaSourceStreamOptions},
-    meta::MetadataOptions,
-};
 
+use crate::loudness_analyzer::LoudnessAnalyzer;
 use crate::loudness_repository::LoudnessRepository;
 use crate::song_repository::SongRepository;
 
@@ -30,14 +21,16 @@ pub struct LoudnessService {
     repository: Arc<LoudnessRepository>,
     song_repository: Arc<SongRepository>,
     music_dirs: Vec<String>,
-    /// Set to `true` by `PlayerService` while the playback thread is running.
-    /// The scan loop suspends itself whenever this is `true`.
     pub is_playing: Arc<AtomicBool>,
     stop: Arc<AtomicBool>,
 }
 
 impl LoudnessService {
-    pub fn new(repository: Arc<LoudnessRepository>, song_repository: Arc<SongRepository>, music_dirs: Vec<String>) -> Arc<Self> {
+    pub fn new(
+        repository: Arc<LoudnessRepository>,
+        song_repository: Arc<SongRepository>,
+        music_dirs: Vec<String>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             repository,
             song_repository,
@@ -47,8 +40,6 @@ impl LoudnessService {
         })
     }
 
-    /// Spawn the background scan thread and its rayon worker pool.
-    /// Safe to call once after construction. No threads are created until this is called.
     pub fn start(self: &Arc<Self>) {
         let svc = self.clone();
         thread::Builder::new()
@@ -72,7 +63,6 @@ impl LoudnessService {
         self.is_playing.store(active, Ordering::Relaxed);
     }
 
-    /// Look up the stored loudness in hundredths of a LUFS.
     pub fn get_loudness(&self, file_key: &str) -> Option<i32> {
         self.repository.get(file_key)
     }
@@ -98,7 +88,6 @@ impl LoudnessService {
                 continue;
             }
 
-            // Wait for any active playback to finish before starting the batch.
             if self.is_playing.load(Ordering::Relaxed) {
                 info!("Loudness scan: waiting for playback to stop before next batch");
                 while self.is_playing.load(Ordering::Relaxed) {
@@ -113,110 +102,47 @@ impl LoudnessService {
             info!("Loudness scan: {} songs pending, analysing in parallel", pending.len());
             let scanned = AtomicU32::new(0);
 
-            thread_pool.install(|| pending.par_iter().for_each(|file_key| {
-                if self.stop.load(Ordering::Relaxed) {
-                    return;
-                }
-                // If playback starts mid-batch, skip this file — it will be
-                // picked up in the next outer-loop iteration.
-                if self.is_playing.load(Ordering::Relaxed) {
-                    debug!("Loudness scan: skipping {file_key} (playback started)");
-                    return;
-                }
+            thread_pool.install(|| {
+                pending.par_iter().for_each(|file_key| {
+                    if self.stop.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    if self.is_playing.load(Ordering::Relaxed) {
+                        debug!("Loudness scan: skipping {file_key} (playback started)");
+                        return;
+                    }
 
-                let full_path = self.music_dirs.iter()
-                    .map(|dir| format!("{dir}/{file_key}"))
-                    .find(|p| Path::new(p).exists());
-                let Some(full_path) = full_path else {
-                    warn!("Loudness scan: file not found in any music directory: {file_key}");
-                    return;
-                };
-                debug!("Loudness scan: analysing {file_key}");
-                if let Some(lufs) = measure_integrated_loudness(Path::new(&full_path)) {
-                    #[allow(clippy::cast_possible_truncation)]
-                    let stored = (lufs * 100.0).round() as i32;
-                    debug!("Loudness scan: {file_key} => {lufs:.2} LUFS");
-                    self.repository.save_loudness(file_key, stored);
-                } else {
-                    warn!("Loudness scan: no loudness for {file_key} (DSD or unsupported)");
-                    self.repository.save_unavailable(file_key);
-                }
+                    let full_path = self
+                        .music_dirs
+                        .iter()
+                        .map(|dir| format!("{dir}/{file_key}"))
+                        .find(|p| Path::new(p).exists());
+                    let Some(full_path) = full_path else {
+                        warn!("Loudness scan: file not found in any music directory: {file_key}");
+                        return;
+                    };
+                    debug!("Loudness scan: analysing {file_key}");
+                    if let Some(lufs) = LoudnessAnalyzer::measure_file(Path::new(&full_path)) {
+                        #[allow(clippy::cast_possible_truncation)]
+                        let stored = (lufs * 100.0).round() as i32;
+                        debug!("Loudness scan: {file_key} => {lufs:.2} LUFS");
+                        self.repository.save_loudness(file_key, stored);
+                    } else {
+                        warn!("Loudness scan: no loudness for {file_key} (DSD or unsupported)");
+                        self.repository.save_unavailable(file_key);
+                    }
 
-                let c = scanned.fetch_add(1, Ordering::Relaxed) + 1;
-                if c.is_multiple_of(50) {
-                    info!("Loudness scan: {c} songs done so far");
-                    self.repository.flush();
-                }
-            }));
+                    let c = scanned.fetch_add(1, Ordering::Relaxed) + 1;
+                    if c.is_multiple_of(50) {
+                        info!("Loudness scan: {c} songs done so far");
+                        self.repository.flush();
+                    }
+                });
+            });
 
             self.repository.flush();
             let total = scanned.load(Ordering::Relaxed);
             info!("Loudness scan: pass complete, {total} songs analysed");
         }
     }
-}
-
-fn measure_integrated_loudness(file_path: &Path) -> Option<f64> {
-    let file = Box::new(File::open(file_path).ok()?);
-    let mss = MediaSourceStream::new(file, MediaSourceStreamOptions::default());
-
-    let mut hint = Hint::new();
-    if let Some(ext) = file_path.extension() {
-        hint.with_extension(ext.to_str().unwrap_or(""));
-    }
-
-    let probe = crate::dsd_bundle::build_probe();
-    let mut format = probe
-        .probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())
-        .ok()?;
-
-    measure_from_format(&mut *format)
-}
-
-fn measure_from_format(format: &mut dyn FormatReader) -> Option<f64> {
-    let track = format.default_track(TrackType::Audio)?;
-    let track_id = track.id;
-
-    let audio_params = match track.codec_params.as_ref()? {
-        CodecParameters::Audio(p) => p,
-        _ => return None,
-    };
-
-    let codec = audio_params.codec;
-    if codec == CODEC_ID_NULL_AUDIO || codec == CODEC_TYPE_DSD_LSBF || codec == CODEC_TYPE_DSD_MSBF {
-        return None;
-    }
-
-    let channels = u32::try_from(audio_params.channels.as_ref()?.count()).ok()?;
-    let sample_rate = audio_params.sample_rate?;
-
-    let codec_registry = crate::dsd_bundle::build_codec_registry();
-    let mut decoder = codec_registry
-        .make_audio_decoder(audio_params, &AudioDecoderOptions::default())
-        .ok()?;
-
-    let mut meter = ebur128::EbuR128::new(channels, sample_rate, ebur128::Mode::I).ok()?;
-    let mut sample_vec: Vec<f32> = Vec::new();
-
-    loop {
-        let packet = match format.next_packet() {
-            Ok(Some(p)) => p,
-            Ok(None) => break,
-            Err(SymphoniaError::ResetRequired) => {
-                decoder.reset();
-                continue;
-            }
-            Err(_) => break,
-        };
-
-        if packet.track_id() != track_id {
-            continue;
-        }
-
-        let Ok(audio_buf) = decoder.decode(&packet) else { continue };
-        audio_buf.copy_to_vec_interleaved(&mut sample_vec);
-        let _ = meter.add_frames_f32(&sample_vec);
-    }
-
-    meter.loudness_global().ok()
 }

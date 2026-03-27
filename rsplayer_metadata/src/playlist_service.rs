@@ -64,7 +64,12 @@ impl PlaylistService {
             .take(limit)
             .map(|value| Song::bytes_to_song(&value).expect("Failed to deserialize song"))
             .collect();
-        PlaylistPage { total, offset, limit, items: songs }
+        PlaylistPage {
+            total,
+            offset,
+            limit,
+            items: songs,
+        }
     }
 
     pub fn get_playlists(&self) -> Playlists {

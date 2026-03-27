@@ -8,7 +8,7 @@ use api_models::{
 };
 use indextree::{Arena, NodeId};
 use seed::{
-    a, attrs, div, empty, i, input, li, p,
+    a, attrs, button, div, empty, h3, i, input, li, nav, p,
     prelude::{web_sys::KeyboardEvent, *},
     section, span, style, ul, C, IF,
 };
@@ -225,7 +225,80 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 }
 
 pub fn view(model: &Model) -> Node<Msg> {
-    div![view_search_input(model), view_files(model)]
+    div![view_breadcrumbs(model), view_search_input(model), view_files(model)]
+}
+
+fn view_breadcrumbs(model: &Model) -> Node<Msg> {
+    let mut breadcrumbs: Vec<Node<Msg>> = vec![a![
+        C!["breadcrumb-nav__item"],
+        attrs! { At::Href => "#/library/files" },
+        i![C!["material-icons", "breadcrumb-nav__icon"], "home"],
+        span!["Library"],
+    ]];
+
+    // Add separator
+    breadcrumbs.push(span![C!["breadcrumb-nav__separator"], "/"]);
+
+    // Add Files link
+    breadcrumbs.push(a![
+        C![
+            "breadcrumb-nav__item",
+            IF!(model.tree.current == model.tree.root && model.search_input.is_empty() => "is-current")
+        ],
+        attrs! { At::Href => "#/library/files" },
+        i![C!["material-icons", "breadcrumb-nav__icon"], "folder"],
+        span!["Files"],
+    ]);
+
+    // If searching, show search term
+    if !model.search_input.is_empty() {
+        breadcrumbs.push(span![C!["breadcrumb-nav__separator"], "/"]);
+        breadcrumbs.push(span![
+            C!["breadcrumb-nav__item", "is-current"],
+            i![C!["material-icons", "breadcrumb-nav__icon"], "search"],
+            span![format!("Search: {}", model.search_input)],
+        ]);
+    } else if model.tree.current != model.tree.root {
+        // Build path from current node to root
+        let mut path_items: Vec<(String, NodeId)> = vec![];
+        let mut current = model.tree.current;
+
+        while current != model.tree.root {
+            if let Some(node) = model.tree.arena.get(current) {
+                let item = node.get();
+                let name = match item {
+                    MetadataLibraryItem::Directory { name } => name.clone(),
+                    MetadataLibraryItem::SongItem(song) => song.get_file_name_without_path(),
+                    _ => String::new(),
+                };
+                if !name.is_empty() {
+                    path_items.push((name, current));
+                }
+            }
+            // Move to parent
+            if let Some(parent) = current.ancestors(&model.tree.arena).nth(1) {
+                current = parent;
+            } else {
+                break;
+            }
+        }
+
+        // Reverse to show from root to current
+        path_items.reverse();
+
+        for (idx, (name, _node_id)) in path_items.iter().enumerate() {
+            breadcrumbs.push(span![C!["breadcrumb-nav__separator"], "/"]);
+            let is_last = idx == path_items.len() - 1;
+            let icon_name = if is_last { "folder_open" } else { "folder" };
+            breadcrumbs.push(span![
+                C!["breadcrumb-nav__item", IF!(is_last => "is-current")],
+                i![C!["material-icons", "breadcrumb-nav__icon"], icon_name],
+                span![name.clone()],
+            ]);
+        }
+    }
+
+    nav![C!["breadcrumb-nav"], breadcrumbs]
 }
 
 fn view_search_input(model: &Model) -> Node<Msg> {
@@ -268,6 +341,23 @@ fn view_search_input(model: &Model) -> Node<Msg> {
     ]
 }
 fn view_files(model: &Model) -> Node<Msg> {
+    // Show skeleton screens while loading initially
+    if model.wait_response && model.tree.root.children(&model.tree.arena).next().is_none() {
+        return view_skeleton_files();
+    }
+
+    let is_empty = !model.wait_response
+        && model
+            .tree
+            .arena
+            .get(model.tree.root)
+            .map(|node| node.first_child().is_none())
+            .unwrap_or(true);
+
+    if is_empty {
+        return view_empty_state(model);
+    }
+
     section![
         view_spinner_modal(model.wait_response),
         C!["pr-2", "pl-1"],
@@ -276,6 +366,77 @@ fn view_files(model: &Model) -> Node<Msg> {
             get_tree_start_node(model.tree.root, &model.tree.arena, !model.search_input.is_empty())
         ],
     ]
+}
+
+fn view_skeleton_files() -> Node<Msg> {
+    div![
+        C!["skeleton-tree"],
+        // Generate 8 skeleton items
+        (0..8).map(|_| {
+            div![
+                C!["skeleton-tree-item"],
+                div![C!["skeleton skeleton-tree-icon"]],
+                div![C!["skeleton skeleton-tree-text"]],
+            ]
+        })
+    ]
+}
+
+fn view_empty_state(model: &Model) -> Node<Msg> {
+    let is_search = !model.search_input.is_empty();
+
+    if is_search {
+        // No search results
+        div![
+            C!["empty-state", "empty-state--search"],
+            i![C!["material-icons", "empty-state__icon"], "search_off"],
+            h3![C!["empty-state__title"], "No results found"],
+            p![
+                C!["empty-state__description"],
+                format!(
+                    "We couldn't find any music matching \"{}\". Try different keywords or check your spelling.",
+                    model.search_input
+                )
+            ],
+            div![
+                C!["empty-state__actions"],
+                button![
+                    C!["empty-state__cta"],
+                    i![C!["material-icons"], "backspace"],
+                    "Clear Search",
+                    ev(Ev::Click, |_| Msg::ClearSearch)
+                ],
+            ],
+        ]
+    } else {
+        // Empty library
+        div![
+            C!["empty-state"],
+            i![C!["material-icons", "empty-state__icon"], "library_music"],
+            h3![C!["empty-state__title"], "No music found"],
+            p![
+                C!["empty-state__description"],
+                "Your music library is empty. Add some music files to get started with RSPlayer."
+            ],
+            div![
+                C!["empty-state__actions"],
+                a![
+                    C!["empty-state__cta"],
+                    attrs! { At::Href => "#/settings" },
+                    i![C!["material-icons"], "settings"],
+                    "Go to Settings",
+                ],
+                button![
+                    C!["empty-state__secondary"],
+                    i![C!["material-icons"], "refresh"],
+                    "Refresh",
+                    ev(Ev::Click, |_| Msg::SendUserCommand(UserCommand::Metadata(
+                        api_models::common::MetadataCommand::QueryLocalFiles(String::new(), 0)
+                    )))
+                ],
+            ],
+        ]
+    }
 }
 
 #[allow(clippy::collection_is_never_read)]

@@ -9,8 +9,8 @@ use api_models::{
 };
 use gloo_console::log;
 use seed::{
-    a, attrs, button, div, figure, footer, header, i, id, img, li, nodes, p, prelude::*, progress, section, span,
-    style, ul, C, IF,
+    a, attrs, button, div, figure, footer, h3, header, i, id, img, li, nav, nodes, p, prelude::*, progress, section,
+    span, style, ul, C, IF,
 };
 
 use crate::{attachCarousel, scrollToId};
@@ -297,7 +297,29 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 }
 
 pub fn view(model: &Model) -> Node<Msg> {
-    div![view_selected_playlist_items_modal(model), view_static_playlists(model),]
+    div![
+        view_breadcrumbs(model),
+        view_selected_playlist_items_modal(model),
+        view_static_playlists(model),
+    ]
+}
+
+fn view_breadcrumbs(_model: &Model) -> Node<Msg> {
+    nav![
+        C!["breadcrumb-nav"],
+        a![
+            C!["breadcrumb-nav__item"],
+            attrs! { At::Href => "#/library/playlists" },
+            i![C!["material-icons", "breadcrumb-nav__icon"], "home"],
+            span!["Library"],
+        ],
+        span![C!["breadcrumb-nav__separator"], "/"],
+        span![
+            C!["breadcrumb-nav__item", "is-current"],
+            i![C!["material-icons", "breadcrumb-nav__icon"], "playlist_play"],
+            span!["Playlists"],
+        ],
+    ]
 }
 
 fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
@@ -425,6 +447,24 @@ fn view_selected_playlist_items_modal(model: &Model) -> Node<Msg> {
 }
 
 fn view_static_playlists(model: &Model) -> Node<Msg> {
+    // Check if playlists are completely empty
+    let has_any_playlists = model.static_playlists.items.iter().any(|it| {
+        it.is_recently_added() || it.is_new_release() || it.is_saved() || it.is_most_played() || it.is_liked()
+    });
+
+    let has_genre_decade = model.static_playlists.has_genre_headers() || model.static_playlists.has_decade_headers();
+
+    let is_empty = !model.static_playlist_loading && !has_any_playlists && !has_genre_decade;
+
+    if is_empty {
+        return view_empty_playlists();
+    }
+
+    // Show skeleton while loading initially
+    if model.static_playlist_loading && model.static_playlists.items.is_empty() {
+        return view_skeleton_playlists();
+    }
+
     section![
         div![
             IF!(model.static_playlist_loading => progress![C!["progress", "is-small"], attrs!{ At::Max => "100"}, style!{ St::MarginBottom => "50px"}]),
@@ -486,6 +526,71 @@ fn view_static_playlists(model: &Model) -> Node<Msg> {
     ]
 }
 
+fn view_empty_playlists() -> Node<Msg> {
+    div![
+        C!["empty-state"],
+        i![C!["material-icons", "empty-state__icon"], "queue_music"],
+        h3![C!["empty-state__title"], "No playlists yet"],
+        p![C!["empty-state__description"], 
+            "You don't have any playlists yet. Start listening to music and your playlists will appear here automatically."],
+        div![
+            C!["empty-state__actions"],
+            a![
+                C!["empty-state__cta"],
+                attrs! { At::Href => "#/library/files" },
+                i![C!["material-icons"], "library_music"],
+                "Browse Library",
+            ],
+            button![
+                C!["empty-state__secondary"],
+                i![C!["material-icons"], "refresh"],
+                "Refresh",
+                ev(Ev::Click, |_| Msg::SendUserCommand(UserCommand::Playlist(
+                    api_models::common::PlaylistCommand::QueryPlaylist
+                )))
+            ],
+        ],
+    ]
+}
+
+fn view_skeleton_playlists() -> Node<Msg> {
+    div![
+        C!["skeleton-container"],
+        style! { St::Padding => "20px" },
+        // Section title skeleton
+        div![
+            C!["skeleton skeleton--title"],
+            style! { St::Width => "200px", St::MarginBottom => "20px" },
+        ],
+        // Carousel skeleton with 4 items
+        div![
+            C!["skeleton-carousel"],
+            (0..4).map(|_| {
+                div![
+                    C!["skeleton-carousel-item"],
+                    div![C!["skeleton skeleton-carousel-image"]],
+                    div![C!["skeleton skeleton-carousel-title"]],
+                ]
+            })
+        ],
+        // Another section
+        div![
+            C!["skeleton skeleton--title"],
+            style! { St::Width => "150px", St::MarginTop => "30px", St::MarginBottom => "20px" },
+        ],
+        div![
+            C!["skeleton-carousel"],
+            (0..4).map(|_| {
+                div![
+                    C!["skeleton-carousel-item"],
+                    div![C!["skeleton skeleton-carousel-image"]],
+                    div![C!["skeleton skeleton-carousel-title"]],
+                ]
+            })
+        ],
+    ]
+}
+
 fn view_collapsible_section(model: &Model, carousel_id: &str, title: &str, items: &[&PlaylistType]) -> Node<Msg> {
     let is_expanded = model.expanded_sections.contains(carousel_id);
     let toggle_id = carousel_id.to_string();
@@ -537,7 +642,13 @@ enum CategoryKind {
     Decade,
 }
 
-fn view_lazy_section(model: &Model, carousel_id: &str, title: &str, header_count: usize, kind: CategoryKind) -> Node<Msg> {
+fn view_lazy_section(
+    model: &Model,
+    carousel_id: &str,
+    title: &str,
+    header_count: usize,
+    kind: CategoryKind,
+) -> Node<Msg> {
     let is_expanded = model.expanded_sections.contains(carousel_id);
     let toggle_id = carousel_id.to_string();
     let icon = if is_expanded { "expand_less" } else { "expand_more" };

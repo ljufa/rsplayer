@@ -1,4 +1,3 @@
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 
@@ -110,7 +109,7 @@ impl VUMeter {
         let _ = grad.add_color_stop(0.7, &color_mid);
         let _ = grad.add_color_stop(1.0, &color_high);
 
-        self.ctx.set_fill_style(&grad);
+        self.ctx.set_fill_style_canvas_gradient(&grad);
         self.ctx.fill_rect(x, y, fill_width, h);
 
         // Empty portion: use ui-elements colour at low opacity
@@ -121,7 +120,7 @@ impl VUMeter {
             // append alpha via rgba isn't possible with a hex var; use low opacity white overlay
             "rgba(255, 255, 255, 0.08)".to_string()
         };
-        self.ctx.set_fill_style(&JsValue::from_str(&empty_color));
+        self.ctx.set_fill_style_str(&empty_color);
         self.ctx.fill_rect(x + fill_width, y, w - fill_width, h);
     }
 }

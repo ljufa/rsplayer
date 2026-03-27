@@ -183,7 +183,8 @@ pub fn start_listening(
                                         if let Some((_, state_str)) = msg.split_once('=') {
                                             let is_on = state_str == "1";
                                             info!("Firmware power state changed: {is_on}");
-                                            _ = state_changes_tx.send(StateChangeEvent::RSPlayerFirmwarePowerEvent(is_on));
+                                            _ = state_changes_tx
+                                                .send(StateChangeEvent::RSPlayerFirmwarePowerEvent(is_on));
                                         }
                                     }
                                     if msg == "CyclePlaybackMode" {
@@ -230,10 +231,7 @@ pub fn start_listening(
     });
 }
 
-pub fn start_state_sync(
-    service: Arc<UsbService>,
-    state_changes_tx: &tokio::sync::broadcast::Sender<StateChangeEvent>,
-) {
+pub fn start_state_sync(service: Arc<UsbService>, state_changes_tx: &tokio::sync::broadcast::Sender<StateChangeEvent>) {
     let mut rx = state_changes_tx.subscribe();
 
     tokio::spawn(async move {

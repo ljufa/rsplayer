@@ -71,6 +71,26 @@ struct Model {
     /// Whether the library sub-nav dropdown is expanded.
     library_nav_open: bool,
     local_browser_playback: bool,
+    /// Whether to show the welcome modal for first-time users.
+    show_welcome_modal: bool,
+    /// Whether to show the keyboard shortcuts help modal.
+    show_keyboard_shortcuts: bool,
+    /// Whether this is the first visit (persists after modal dismiss).
+    is_first_visit: bool,
+}
+
+/// Tabs for keyboard navigation
+#[derive(Debug, Clone, Copy)]
+pub enum Tab {
+    Player,
+    Queue,
+    Library,
+    LibraryFiles,
+    LibraryArtists,
+    LibraryPlaylists,
+    LibraryRadio,
+    LibraryStats,
+    Settings,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -127,6 +147,34 @@ pub enum Msg {
     BrowserAudioPlaying,
     MediaNextTrack,
     MediaPrevTrack,
+    
+    /// Global keyboard shortcuts
+    TogglePlayPause,
+    ToggleMute,
+    
+    /// Navigate to specific tab
+    NavigateToTab(Tab),
+    
+    /// Show/hide welcome modal for first-time users.
+    ToggleWelcomeModal,
+    /// Dismiss welcome modal permanently.
+    DismissWelcomeModal,
+    /// Show/hide keyboard shortcuts help modal.
+    ToggleKeyboardShortcutsHelp,
+    /// Close all open modals.
+    CloseModals,
+    /// Focus on search input field.
+    FocusSearch,
+    /// Toggle like on current track.
+    ToggleLike,
+    /// Toggle lyrics modal.
+    ToggleLyrics,
+    /// Cycle shuffle/repeat mode.
+    CycleShuffleMode,
+    /// Seek backward 10 seconds.
+    SeekBackward,
+    /// Seek forward 10 seconds.
+    SeekForward,
 }
 
 #[derive(Debug, Deserialize)]
@@ -211,6 +259,138 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
     let page = Page::new(url.clone(), orders);
     orders.subscribe(Msg::UrlChanged).notify(subs::UrlChanged(url.clone()));
     orders.stream(streams::window_event(Ev::Resize, |_| Msg::WindowResized));
+    
+    // Global keyboard shortcuts - works on all pages
+    orders.stream(streams::window_event(Ev::KeyDown, |event| {
+        use api_models::common::UserCommand::Player;
+        use api_models::common::{PlayerCommand, SystemCommand};
+        
+        // Clone what we need before converting event
+        let target = event.target();
+        let is_input = target.as_ref().is_some_and(|t| {
+            let el = t.dyn_ref::<web_sys::Element>();
+            el.is_some_and(|e| {
+                let tag = e.tag_name();
+                tag == "INPUT" || tag == "TEXTAREA"
+            })
+        });
+        
+        if is_input {
+            return Msg::Ignore;
+        }
+        
+        // Now convert and use the keyboard event
+        let keyboard_event: web_sys::KeyboardEvent = event.unchecked_into();
+        let key = keyboard_event.key();
+        let repeat = keyboard_event.repeat();
+        let shift_key = keyboard_event.shift_key();
+        
+        match key.as_str() {
+            "?" => {
+                keyboard_event.prevent_default();
+                Msg::ToggleKeyboardShortcutsHelp
+            }
+            "/" => {
+                // Focus search input
+                keyboard_event.prevent_default();
+                Msg::FocusSearch
+            }
+            "Escape" => {
+                Msg::CloseModals
+            }
+            " " => {
+                if !repeat {
+                    keyboard_event.prevent_default();
+                    Msg::TogglePlayPause
+                } else {
+                    Msg::Ignore
+                }
+            }
+            "ArrowLeft" => {
+                keyboard_event.prevent_default();
+                if shift_key {
+                    Msg::SeekBackward
+                } else {
+                    Msg::SendUserCommand(Player(PlayerCommand::Prev))
+                }
+            }
+            "ArrowRight" => {
+                keyboard_event.prevent_default();
+                if shift_key {
+                    Msg::SeekForward
+                } else {
+                    Msg::SendUserCommand(Player(PlayerCommand::Next))
+                }
+            }
+            "ArrowUp" => {
+                keyboard_event.prevent_default();
+                Msg::SendSystemCommand(SystemCommand::VolUp)
+            }
+            "ArrowDown" => {
+                keyboard_event.prevent_default();
+                Msg::SendSystemCommand(SystemCommand::VolDown)
+            }
+            "m" | "M" => {
+                keyboard_event.prevent_default();
+                Msg::ToggleMute
+            }
+            // Player controls
+            "l" | "L" => {
+                // Like/Unlike current track
+                keyboard_event.prevent_default();
+                Msg::ToggleLike
+            }
+            "y" | "Y" => {
+                // Toggle lyrics modal
+                keyboard_event.prevent_default();
+                Msg::ToggleLyrics
+            }
+            "s" | "S" => {
+                // Cycle shuffle/repeat mode
+                keyboard_event.prevent_default();
+                Msg::CycleShuffleMode
+            }
+            // Tab navigation
+            "1" => {
+                keyboard_event.prevent_default();
+                Msg::NavigateToTab(Tab::Player)
+            }
+            "2" => {
+                keyboard_event.prevent_default();
+                Msg::NavigateToTab(Tab::Queue)
+            }
+            "3" => {
+                keyboard_event.prevent_default();
+                Msg::NavigateToTab(Tab::Library)
+            }
+            "4" => {
+                keyboard_event.prevent_default();
+                Msg::NavigateToTab(Tab::Settings)
+            }
+            // Library sub-tabs
+            "f" | "F" => {
+                keyboard_event.prevent_default();
+                Msg::NavigateToTab(Tab::LibraryFiles)
+            }
+            "a" | "A" => {
+                keyboard_event.prevent_default();
+                Msg::NavigateToTab(Tab::LibraryArtists)
+            }
+            "p" | "P" => {
+                keyboard_event.prevent_default();
+                Msg::NavigateToTab(Tab::LibraryPlaylists)
+            }
+            "r" | "R" => {
+                keyboard_event.prevent_default();
+                Msg::NavigateToTab(Tab::LibraryRadio)
+            }
+            "t" | "T" => {
+                keyboard_event.prevent_default();
+                Msg::NavigateToTab(Tab::LibraryStats)
+            }
+            _ => Msg::Ignore,
+        }
+    }));
 
     if matches!(page, Page::Player) {
         orders.after_next_render(|_| Some(Msg::InitVUMeter));
@@ -241,6 +421,8 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
     });
     // Read whichever theme JS already applied (from localStorage / system pref).
     let current_theme = getTheme();
+    // Check if this is the first visit.
+    let show_welcome_modal = isFirstVisit();
 
     Model {
         base_url: url.to_base_url(),
@@ -270,6 +452,9 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
         current_theme,
         library_nav_open: false,
         local_browser_playback: false,
+        show_welcome_modal,
+        show_keyboard_shortcuts: false,
+        is_first_visit: show_welcome_modal, // Same as initial welcome modal state
     }
 }
 // ------ ------
@@ -293,6 +478,31 @@ impl<'a> Urls<'a> {
     }
     fn library_abs() -> Url {
         Url::new().add_hash_path_part(MUSIC_LIBRARY)
+    }
+    fn library_files_abs() -> Url {
+        Url::new()
+            .add_hash_path_part(MUSIC_LIBRARY)
+            .add_hash_path_part(MUSIC_LIBRARY_FILES)
+    }
+    fn library_artists_abs() -> Url {
+        Url::new()
+            .add_hash_path_part(MUSIC_LIBRARY)
+            .add_hash_path_part(MUSIC_LIBRARY_ARTISTS)
+    }
+    fn library_playlists_abs() -> Url {
+        Url::new()
+            .add_hash_path_part(MUSIC_LIBRARY)
+            .add_hash_path_part(MUSIC_LIBRARY_PL_STATIC)
+    }
+    fn library_radio_abs() -> Url {
+        Url::new()
+            .add_hash_path_part(MUSIC_LIBRARY)
+            .add_hash_path_part(MUSIC_LIBRARY_RADIO)
+    }
+    fn library_stats_abs() -> Url {
+        Url::new()
+            .add_hash_path_part(MUSIC_LIBRARY)
+            .add_hash_path_part(MUSIC_LIBRARY_STATS)
     }
     fn get_search_term(url: &Url) -> Option<String> {
         url.hash_path().iter().find_map(|p| {
@@ -908,6 +1118,105 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 orders.send_msg(Msg::SendUserCommand(Player(PlayerCommand::Prev)));
             }
         }
+        
+        Msg::TogglePlayPause => {
+            let cmd = if model.player_model.player_state == PlayerState::PLAYING {
+                Player(PlayerCommand::Pause)
+            } else {
+                Player(PlayerCommand::Play)
+            };
+            orders.send_msg(Msg::SendUserCommand(cmd));
+        }
+        
+        Msg::ToggleMute => {
+            let is_muted = model.player_model.volume_state.current == 0;
+            let new_vol = if is_muted { 
+                model.player_model.volume_state.max / 2 
+            } else { 
+                0 
+            };
+            orders.send_msg(Msg::SendSystemCommand(SystemCommand::SetVol(new_vol)));
+        }
+        
+        Msg::ToggleLike => {
+            // Toggle like on current track
+            if let Some(song) = &model.player_model.current_song {
+                let id = song.file.clone();
+                let is_liked = song.statistics.as_ref().is_some_and(|stat| stat.liked_count > 0);
+                let cmd = if is_liked {
+                    MetadataCommand::DislikeMediaItem(id)
+                } else {
+                    MetadataCommand::LikeMediaItem(id)
+                };
+                orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(cmd)));
+            }
+        }
+        
+        Msg::ToggleLyrics => {
+            model.player_model.lyrics_modal_open = !model.player_model.lyrics_modal_open;
+            if model.player_model.lyrics_modal_open && model.player_model.lyrics.is_none() {
+                orders.send_msg(Msg::FetchLyrics);
+            }
+        }
+        
+        Msg::CycleShuffleMode => {
+            orders.send_msg(Msg::SendUserCommand(Player(PlayerCommand::CyclePlaybackMode)));
+        }
+        
+        Msg::SeekBackward => {
+            // Seek back 10 seconds
+            let current = model.player_model.progress.current_time.as_secs();
+            let new_pos = current.saturating_sub(10) as u16;
+            orders.send_msg(Msg::SeekTrackPosition(new_pos));
+        }
+        
+        Msg::SeekForward => {
+            // Seek forward 10 seconds
+            let current = model.player_model.progress.current_time.as_secs();
+            let total = model.player_model.progress.total_time.as_secs();
+            let new_pos = (current + 10).min(total) as u16;
+            orders.send_msg(Msg::SeekTrackPosition(new_pos));
+        }
+        
+        Msg::NavigateToTab(tab) => {
+            let url = match tab {
+                Tab::Player => Urls::player_abs(),
+                Tab::Queue => Urls::queue_abs(),
+                Tab::Library => Urls::library_files_abs(),
+                Tab::LibraryFiles => Urls::library_files_abs(),
+                Tab::LibraryArtists => Urls::library_artists_abs(),
+                Tab::LibraryPlaylists => Urls::library_playlists_abs(),
+                Tab::LibraryRadio => Urls::library_radio_abs(),
+                Tab::LibraryStats => Urls::library_stats_abs(),
+                Tab::Settings => Urls::settings_abs(),
+            };
+            let hash = url.hash_path().join("/");
+            // Use JS function that defers navigation with setTimeout
+            navigateToHash(&hash);
+        }
+        
+        Msg::ToggleWelcomeModal => {
+            model.show_welcome_modal = !model.show_welcome_modal;
+        }
+        
+        Msg::DismissWelcomeModal => {
+            model.show_welcome_modal = false;
+            markVisited();
+        }
+        
+        Msg::ToggleKeyboardShortcutsHelp => {
+            model.show_keyboard_shortcuts = !model.show_keyboard_shortcuts;
+        }
+        
+        Msg::CloseModals => {
+            model.show_keyboard_shortcuts = false;
+            model.show_welcome_modal = false;
+            model.player_model.lyrics_modal_open = false;
+        }
+        
+        Msg::FocusSearch => {
+            focusSearchInput();
+        }
 
         Msg::Ignore => {}
         _ => {}
@@ -925,45 +1234,65 @@ fn view(model: &Model) -> impl IntoNodes<Msg> {
         (String::new(), "var(--background)".to_string())
     };
 
-    div![
-        C!["container"],
-        style! {
-            St::MinHeight => "100vh",
-            St::Position => "relative",
-            St::BackgroundColor => bg_color,
-        },
-        // Sticky background layer constrained to container width
+    nodes![
         div![
+            C!["container"],
             style! {
-                St::Position => "sticky",
-                St::Top => "0",
-                St::Height => "100vh",
-                St::Width => "100%",
-                St::ZIndex => 0,
-                St::BackgroundImage => bg_image,
-                St::BackgroundRepeat => "no-repeat",
-                St::BackgroundSize => "cover",
-                St::BackgroundPosition => "center",
-                St::PointerEvents => "none",
-            },
-        ],
-        // Content layer - pulled up to overlap sticky background
-        div![
-            style! {
-                St::Position => "relative",
-                St::MarginTop => "-100vh",
                 St::MinHeight => "100vh",
-                St::ZIndex => 1,
+                St::Position => "relative",
+                St::BackgroundColor => bg_color,
             },
-            view_navigation_tabs(&model.page, model.library_nav_open),
-            view_startup_error(model.startup_error.as_ref()),
-            view_reconnect_notification(model),
-            view_metadata_scan_notification(model),
-            view_local_browser_playback(model),
-            view_content(model, &model.base_url),
-            view_player_footer(&model.page, &model.player_model),
-            view_notification(model)
-        ]
+            // Sticky background layer constrained to container width
+            div![
+                style! {
+                    St::Position => "sticky",
+                    St::Top => "0",
+                    St::Height => "100vh",
+                    St::Width => "100%",
+                    St::ZIndex => 0,
+                    St::BackgroundImage => bg_image,
+                    St::BackgroundRepeat => "no-repeat",
+                    St::BackgroundSize => "cover",
+                    St::BackgroundPosition => "center",
+                    St::PointerEvents => "none",
+                },
+            ],
+            // Content layer - pulled up to overlap sticky background
+            div![
+                style! {
+                    St::Position => "relative",
+                    St::MarginTop => "-100vh",
+                    St::MinHeight => "100vh",
+                    St::ZIndex => 1,
+                },
+                view_navigation_tabs(&model.page, model.library_nav_open),
+                view_startup_error(model.startup_error.as_ref()),
+                view_reconnect_notification(model),
+                view_metadata_scan_notification(model),
+                view_local_browser_playback(model),
+                view_content(model, &model.base_url),
+                view_player_footer(&model.page, &model.player_model),
+                view_notification(model),
+            ]
+        ],
+        // Welcome modal (outside container to overlay everything)
+        IF!(model.show_welcome_modal => view_welcome_modal()),
+        // Keyboard shortcuts help modal
+        IF!(model.show_keyboard_shortcuts => view_keyboard_shortcuts_help()),
+        // Help button - only show on first visit
+        IF!(model.is_first_visit => button![
+            C!["help-tooltip-trigger"],
+            attrs! { At::Title => "Show help / Getting started" },
+            i![C!["material-icons"], "help_outline"],
+            ev(Ev::Click, |_| Msg::ToggleWelcomeModal)
+        ]),
+        // Keyboard shortcut hint - hidden on mobile via CSS
+        div![
+            C!["keyboard-hint"],
+            attrs! { At::Title => "Press ? for keyboard shortcuts" },
+            "?",
+            ev(Ev::Click, |_| Msg::ToggleKeyboardShortcutsHelp),
+        ],
     ]
 }
 
@@ -1001,6 +1330,248 @@ fn view_notification(model: &Model) -> Node<Msg> {
             }
             _ => empty!(),
         })
+    ]
+}
+
+fn view_welcome_modal() -> Node<Msg> {
+    div![
+        C!["modal", "is-active", "welcome-modal"],
+        div![
+            C!["modal-background"],
+            ev(Ev::Click, |_| Msg::ToggleWelcomeModal)
+        ],
+        div![
+            C!["modal-content"],
+            style! {
+                St::BackgroundColor => "var(--ui-elements)",
+                St::Padding => "2rem",
+                St::BorderRadius => "12px",
+                St::MaxWidth => "500px",
+                St::BoxShadow => "0 20px 60px rgba(0, 0, 0, 0.5)",
+            },
+            // Header
+            div![
+                C!["welcome-modal__header"],
+                i![C!["material-icons", "welcome-modal__icon"], "music_note"],
+                h2![C!["welcome-modal__title"], "Welcome to RSPlayer"],
+                p![C!["welcome-modal__subtitle"], "Your personal music streaming server"],
+            ],
+            // Steps
+            div![
+                C!["welcome-modal__steps"],
+                div![
+                    C!["welcome-modal__step"],
+                    div![C!["welcome-modal__step-number"], "1"],
+                    div![
+                        C!["welcome-modal__step-content"],
+                        div![C!["welcome-modal__step-title"], "Add your music"],
+                        p![C!["welcome-modal__step-description"], 
+                            "Go to Settings and configure your music library directories. RSPlayer will scan and organize your music collection."],
+                    ],
+                ],
+                div![
+                    C!["welcome-modal__step"],
+                    div![C!["welcome-modal__step-number"], "2"],
+                    div![
+                        C!["welcome-modal__step-content"],
+                        div![C!["welcome-modal__step-title"], "Browse your library"],
+                        p![C!["welcome-modal__step-description"], 
+                            "Use the Library tab to browse by files, artists, or explore automatically generated playlists."],
+                    ],
+                ],
+                div![
+                    C!["welcome-modal__step"],
+                    div![C!["welcome-modal__step-number"], "3"],
+                    div![
+                        C!["welcome-modal__step-content"],
+                        div![C!["welcome-modal__step-title"], "Start listening"],
+                        p![C!["welcome-modal__step-description"], 
+                            "Add songs to your queue and enjoy your music. Use keyboard shortcuts (Space to play/pause, arrows to skip)."],
+                    ],
+                ],
+            ],
+            // Actions
+            div![
+                C!["welcome-modal__actions"],
+                button![
+                    C!["welcome-modal__btn", "welcome-modal__btn--primary"],
+                    "Get Started",
+                    ev(Ev::Click, |_| Msg::DismissWelcomeModal)
+                ],
+                a![
+                    C!["welcome-modal__btn", "welcome-modal__btn--secondary"],
+                    attrs! { At::Href => "#/settings" },
+                    "Go to Settings",
+                    ev(Ev::Click, |_| Msg::DismissWelcomeModal)
+                ],
+            ],
+        ],
+    ]
+}
+
+fn view_keyboard_shortcuts_help() -> Node<Msg> {
+    let shortcuts = vec![
+        ("?", "Show / Hide this help"),
+        ("/", "Focus search field"),
+        ("Space", "Play / Pause"),
+        ("← / →", "Previous / Next track"),
+        ("Shift+← / →", "Seek back / forward 10s"),
+        ("↑ / ↓", "Volume up / down"),
+        ("M", "Mute / Unmute"),
+        ("L", "Like / Unlike track"),
+        ("Y", "Toggle lyrics"),
+        ("S", "Shuffle / Repeat mode"),
+        ("Esc", "Close modal"),
+    ];
+    
+    let nav_shortcuts = vec![
+        ("1", "Now Playing"),
+        ("2", "Queue"),
+        ("3", "Library"),
+        ("4", "Settings"),
+        ("F", "Library Files"),
+        ("A", "Library Artists"),
+        ("P", "Library Playlists"),
+        ("R", "Library Radio"),
+        ("T", "Library Statistics"),
+    ];
+    
+    div![
+        C!["modal", "is-active"],
+        div![
+            C!["modal-background"],
+            ev(Ev::Click, |_| Msg::ToggleKeyboardShortcutsHelp)
+        ],
+        div![
+            C!["modal-content"],
+            style! {
+                St::BackgroundColor => "var(--ui-elements)",
+                St::Padding => "2rem",
+                St::BorderRadius => "12px",
+                St::MaxWidth => "450px",
+                St::BoxShadow => "0 20px 60px rgba(0, 0, 0, 0.5)",
+            },
+            // Header
+            div![
+                C!["keyboard-help__header"],
+                style! { St::TextAlign => "center", St::MarginBottom => "1.5rem" },
+                i![
+                    C!["material-icons"],
+                    style! { St::FontSize => "48px", St::Color => "var(--accent)", St::MarginBottom => "12px" },
+                    "keyboard"
+                ],
+                h2![
+                    style! { St::FontSize => "1.5rem", St::FontWeight => "700", St::Color => "var(--primary-text)" },
+                    "Keyboard Shortcuts"
+                ],
+            ],
+            // Shortcuts list
+            div![
+                style! {
+                    St::Display => "flex",
+                    St::FlexDirection => "column",
+                    St::Gap => "12px",
+                    St::MarginBottom => "1.5rem",
+                },
+                shortcuts.into_iter().map(|(key, description)| {
+                    div![
+                        style! {
+                            St::Display => "flex",
+                            St::AlignItems => "center",
+                            St::JustifyContent => "space-between",
+                            St::Padding => "10px 0",
+                            St::BorderBottom => "1px solid var(--border-color)",
+                        },
+                        span![
+                            style! { St::Color => "var(--secondary-text)", St::FontSize => "0.95rem" },
+                            description
+                        ],
+                        kbd![
+                            style! {
+                                St::BackgroundColor => "var(--accent)",
+                                St::Color => "var(--primary-text)",
+                                St::Padding => "4px 12px",
+                                St::BorderRadius => "4px",
+                                St::FontFamily => "monospace",
+                                St::FontSize => "0.85rem",
+                                St::FontWeight => "600",
+                                St::MinWidth => "40px",
+                                St::TextAlign => "center",
+                            },
+                            key
+                        ],
+                    ]
+                })
+            ],
+            // Navigation shortcuts section
+            h3![
+                style! { 
+                    St::FontSize => "1.1rem", 
+                    St::FontWeight => "600", 
+                    St::Color => "var(--primary-text)",
+                    St::MarginTop => "20px",
+                    St::MarginBottom => "10px",
+                    St::TextAlign => "center",
+                },
+                "Navigation"
+            ],
+            div![
+                style! {
+                    St::Display => "flex",
+                    St::FlexDirection => "column",
+                    St::Gap => "12px",
+                    St::MarginBottom => "1.5rem",
+                },
+                nav_shortcuts.into_iter().map(|(key, description)| {
+                    div![
+                        style! {
+                            St::Display => "flex",
+                            St::AlignItems => "center",
+                            St::JustifyContent => "space-between",
+                            St::Padding => "10px 0",
+                            St::BorderBottom => "1px solid var(--border-color)",
+                        },
+                        span![
+                            style! { St::Color => "var(--secondary-text)", St::FontSize => "0.95rem" },
+                            description
+                        ],
+                        kbd![
+                            style! {
+                                St::BackgroundColor => "var(--ui-elements)",
+                                St::Color => "var(--primary-text)",
+                                St::Border => "1px solid var(--border-color)",
+                                St::Padding => "4px 12px",
+                                St::BorderRadius => "4px",
+                                St::FontFamily => "monospace",
+                                St::FontSize => "0.85rem",
+                                St::FontWeight => "600",
+                                St::MinWidth => "40px",
+                                St::TextAlign => "center",
+                            },
+                            key
+                        ],
+                    ]
+                })
+            ],
+            // Close button
+            div![
+                style! { St::TextAlign => "center" },
+                button![
+                    C!["button", "is-primary"],
+                    "Got it!",
+                    ev(Ev::Click, |_| Msg::ToggleKeyboardShortcutsHelp)
+                ],
+            ],
+        ],
+        // Close on Escape
+        ev(Ev::KeyDown, |event| {
+            let keyboard_event: web_sys::KeyboardEvent = event.unchecked_into();
+            if keyboard_event.key() == "Escape" {
+                Msg::ToggleKeyboardShortcutsHelp
+            } else {
+                Msg::Ignore
+            }
+        }),
     ]
 }
 
@@ -1388,6 +1959,18 @@ extern "C" {
 
     /// Register Media Session action handlers for media keys (play/pause/next/prev/seek).
     pub fn setupMediaSessionHandlers();
+    
+    /// Check if this is the first time the user visits the app.
+    pub fn isFirstVisit() -> bool;
+    
+    /// Mark that user has visited the app (dismissed welcome modal).
+    pub fn markVisited();
+    
+    /// Navigate to a hash URL safely (defers with setTimeout to avoid borrow issues).
+    pub fn navigateToHash(hash: &str);
+    
+    /// Focus on the search input field if present. Returns true if focused.
+    pub fn focusSearchInput() -> bool;
 }
 
 fn create_websocket(orders: &impl Orders<Msg>) -> Result<EventClient, WebSocketError> {
@@ -1456,12 +2039,13 @@ async fn update_album_cover(track: Song) -> Msg {
             text: format!("/artwork/{}", image_id),
         });
     };
-    if track.album.is_some() && track.artist.is_some() {
-        let ai = get_album_image_from_lastfm_api(track.album.unwrap(), track.artist.unwrap()).await;
-        ai.map_or_else(|| Msg::Ignore, Msg::AlbumImageUpdated)
-    } else {
-        Msg::Ignore
+    if let Some(album) = track.album {
+        if let Some(artist) = track.artist {
+            let ai = get_album_image_from_lastfm_api(album, artist).await;
+            return ai.map_or_else(|| Msg::Ignore, Msg::AlbumImageUpdated);
+        }
     }
+    Msg::Ignore
 }
 
 #[allow(clippy::future_not_send)]

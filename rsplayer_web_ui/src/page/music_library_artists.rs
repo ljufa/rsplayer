@@ -4,7 +4,7 @@ use api_models::{
 };
 use indextree::{Arena, NodeId};
 use seed::{
-    a, attrs, div, empty, i, input, li, p,
+    a, attrs, button, div, empty, h3, i, input, li, nav, p,
     prelude::{web_sys::KeyboardEvent, *},
     section, span, style, ul, C, IF,
 };
@@ -236,7 +236,42 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 }
 
 pub fn view(model: &Model) -> Node<Msg> {
-    div![view_search_input(model), view_files(model)]
+    div![view_breadcrumbs(model), view_search_input(model), view_files(model)]
+}
+
+fn view_breadcrumbs(model: &Model) -> Node<Msg> {
+    let mut items: Vec<Node<Msg>> = vec![
+        a![
+            C!["breadcrumb-nav__item"],
+            attrs! { At::Href => "#/library/artists" },
+            i![C!["material-icons", "breadcrumb-nav__icon"], "home"],
+            span!["Library"],
+        ],
+        span![C!["breadcrumb-nav__separator"], "/"],
+    ];
+
+    if model.search_input.is_empty() {
+        items.push(span![
+            C!["breadcrumb-nav__item", "is-current"],
+            i![C!["material-icons", "breadcrumb-nav__icon"], "people"],
+            span!["Artists"],
+        ]);
+    } else {
+        items.push(a![
+            C!["breadcrumb-nav__item"],
+            attrs! { At::Href => "#/library/artists" },
+            i![C!["material-icons", "breadcrumb-nav__icon"], "people"],
+            span!["Artists"],
+        ]);
+        items.push(span![C!["breadcrumb-nav__separator"], "/"]);
+        items.push(span![
+            C!["breadcrumb-nav__item", "is-current"],
+            i![C!["material-icons", "breadcrumb-nav__icon"], "search"],
+            span![format!("Search: {}", model.search_input)],
+        ]);
+    }
+
+    nav![C!["breadcrumb-nav"], items]
 }
 
 fn view_search_input(model: &Model) -> Node<Msg> {
@@ -279,11 +314,99 @@ fn view_search_input(model: &Model) -> Node<Msg> {
     ]
 }
 fn view_files(model: &Model) -> Node<Msg> {
+    // Show skeleton screens while loading initially
+    if model.wait_response && model.tree.root.children(&model.tree.arena).next().is_none() {
+        return view_skeleton_artists();
+    }
+
+    let is_empty = !model.wait_response
+        && model
+            .tree
+            .arena
+            .get(model.tree.root)
+            .map(|node| node.first_child().is_none())
+            .unwrap_or(true);
+
+    if is_empty {
+        return view_empty_state(model);
+    }
+
     section![
         view_spinner_modal(model.wait_response),
         C!["pr-2", "pl-1"],
         ul![C!["wtree"], get_tree_start_node(model.tree.root, &model.tree.arena)],
     ]
+}
+
+fn view_skeleton_artists() -> Node<Msg> {
+    div![
+        C!["skeleton-tree"],
+        // Generate 8 skeleton artist items
+        (0..8).map(|_| {
+            div![
+                C!["skeleton-tree-item"],
+                div![C!["skeleton skeleton-tree-icon"]],
+                div![C!["skeleton skeleton-tree-text"]],
+            ]
+        })
+    ]
+}
+
+fn view_empty_state(model: &Model) -> Node<Msg> {
+    let is_search = !model.search_input.is_empty();
+
+    if is_search {
+        // No search results
+        div![
+            C!["empty-state", "empty-state--search"],
+            i![C!["material-icons", "empty-state__icon"], "search_off"],
+            h3![C!["empty-state__title"], "No artists found"],
+            p![
+                C!["empty-state__description"],
+                format!(
+                    "We couldn't find any artists matching \"{}\". Try different keywords.",
+                    model.search_input
+                )
+            ],
+            div![
+                C!["empty-state__actions"],
+                button![
+                    C!["empty-state__cta"],
+                    i![C!["material-icons"], "backspace"],
+                    "Clear Search",
+                    ev(Ev::Click, |_| Msg::ClearSearch)
+                ],
+            ],
+        ]
+    } else {
+        // Empty library
+        div![
+            C!["empty-state"],
+            i![C!["material-icons", "empty-state__icon"], "people_outline"],
+            h3![C!["empty-state__title"], "No artists found"],
+            p![
+                C!["empty-state__description"],
+                "No artists were found in your music library. Make sure your music files have proper metadata tags."
+            ],
+            div![
+                C!["empty-state__actions"],
+                a![
+                    C!["empty-state__cta"],
+                    attrs! { At::Href => "#/settings" },
+                    i![C!["material-icons"], "settings"],
+                    "Configure Library",
+                ],
+                button![
+                    C!["empty-state__secondary"],
+                    i![C!["material-icons"], "refresh"],
+                    "Refresh",
+                    ev(Ev::Click, |_| Msg::SendUserCommand(UserCommand::Metadata(
+                        api_models::common::MetadataCommand::QueryArtists
+                    )))
+                ],
+            ],
+        ]
+    }
 }
 
 #[allow(clippy::collection_is_never_read)]

@@ -6,12 +6,8 @@ use symphonia::core::codecs::audio::AudioCodecParameters;
 use symphonia::core::codecs::CodecParameters;
 use symphonia::core::common::FourCc;
 use symphonia::core::errors::Result;
-use symphonia::core::formats::{
-    FormatId, FormatInfo, FormatOptions, FormatReader, SeekMode, SeekTo, SeekedTo, Track,
-};
-use symphonia::core::formats::probe::{
-    ProbeDataMatchSpec, ProbeFormatData, ProbeableFormat, Score, Scoreable,
-};
+use symphonia::core::formats::probe::{ProbeDataMatchSpec, ProbeFormatData, ProbeableFormat, Score, Scoreable};
+use symphonia::core::formats::{FormatId, FormatInfo, FormatOptions, FormatReader, SeekMode, SeekTo, SeekedTo, Track};
 use symphonia::core::io::{MediaSourceStream, ReadBytes, ScopedStream};
 use symphonia::core::meta::{Metadata, MetadataBuilder, MetadataLog, MetadataSideData};
 use symphonia::core::packet::Packet;
@@ -22,8 +18,11 @@ use symphonia_metadata::id3v2::{read_id3v2, ID3V2_METADATA_INFO};
 use super::{dsf::DSFMetadata, CODEC_TYPE_DSD_LSBF};
 
 const DSF_FORMAT_ID: FormatId = FormatId::new(FourCc::new(*b"DSF "));
-const DSF_FORMAT_INFO: FormatInfo =
-    FormatInfo { format: DSF_FORMAT_ID, short_name: "dsf", long_name: "DSD Stream File" };
+const DSF_FORMAT_INFO: FormatInfo = FormatInfo {
+    format: DSF_FORMAT_ID,
+    short_name: "dsf",
+    long_name: "DSD Stream File",
+};
 
 pub struct DsfReader<'s> {
     reader: MediaSourceStream<'s>,
@@ -57,7 +56,6 @@ impl<'s> DsfReader<'s> {
 
         let channel_set = match dsf_metadata.fmt_chunk.channel_type {
             1 => Channels::Positioned(Position::FRONT_CENTER),
-            2 => Channels::Positioned(Position::FRONT_LEFT | Position::FRONT_RIGHT),
             7 => Channels::Positioned(
                 Position::FRONT_LEFT
                     | Position::FRONT_RIGHT
@@ -134,10 +132,7 @@ impl Scoreable for DsfReader<'_> {
 }
 
 impl ProbeableFormat<'_> for DsfReader<'_> {
-    fn try_probe_new(
-        mss: MediaSourceStream<'_>,
-        opts: FormatOptions,
-    ) -> Result<Box<dyn FormatReader + '_>> {
+    fn try_probe_new(mss: MediaSourceStream<'_>, opts: FormatOptions) -> Result<Box<dyn FormatReader + '_>> {
         Ok(Box::new(DsfReader::try_new(mss, opts)?))
     }
 
@@ -172,7 +167,7 @@ impl FormatReader for DsfReader<'_> {
             return Ok(None);
         }
 
-        let pts = Timestamp::new((self.current_block * self.samples_per_block) as i64);
+        let pts = Timestamp::new((self.current_block * self.samples_per_block).cast_signed());
         let dur = Duration::new(self.samples_per_block);
         let packet_size = self.bytes_per_sample_frame as usize;
         let buf = self.reader.read_boxed_slice(packet_size)?;
@@ -188,22 +183,15 @@ impl FormatReader for DsfReader<'_> {
             _ => 2_822_400,
         };
 
-        let tb = TimeBase::try_from_recip(sample_rate).unwrap_or(TimeBase::new(
-            NonZero::new(1).unwrap(),
-            NonZero::new(sample_rate).unwrap(),
-        ));
+        let tb = TimeBase::try_from_recip(sample_rate)
+            .unwrap_or_else(|| TimeBase::new(NonZero::new(1).unwrap(), NonZero::new(sample_rate).unwrap()));
 
         let required_ts = match to {
             SeekTo::TimeStamp { ts, .. } => ts,
-            SeekTo::Time { time, .. } => {
-                tb.calc_timestamp(time).unwrap_or(Timestamp::ZERO)
-            }
+            SeekTo::Time { time, .. } => tb.calc_timestamp(time).unwrap_or(Timestamp::ZERO),
         };
 
-        let max_ts = Timestamp::new(
-            self.total_blocks
-                .saturating_mul(self.samples_per_block) as i64,
-        );
+        let max_ts = Timestamp::new(self.total_blocks.saturating_mul(self.samples_per_block).cast_signed());
         let clamped_ts = required_ts.min(max_ts);
         let block_index = clamped_ts.get().unsigned_abs() / self.samples_per_block;
         let byte_offset = block_index * u64::from(self.bytes_per_sample_frame);
@@ -212,9 +200,13 @@ impl FormatReader for DsfReader<'_> {
         self.reader.seek(SeekFrom::Start(abs_pos))?;
         self.current_block = block_index;
 
-        let actual_ts = Timestamp::new((block_index * self.samples_per_block) as i64);
+        let actual_ts = Timestamp::new((block_index * self.samples_per_block).cast_signed());
 
-        Ok(SeekedTo { track_id: 0, actual_ts, required_ts })
+        Ok(SeekedTo {
+            track_id: 0,
+            actual_ts,
+            required_ts,
+        })
     }
 
     fn into_inner<'r>(self: Box<Self>) -> MediaSourceStream<'r>

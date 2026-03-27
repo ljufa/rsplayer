@@ -1,6 +1,6 @@
 use api_models::common::Volume;
-use std::process::Command;
 use log::error;
+use std::process::Command;
 
 use super::VolumeControlDevice;
 
@@ -81,24 +81,24 @@ impl VolumeControlDevice for PipewireVolumeControlDevice {
 
     fn set_vol(&mut self, level: u8) -> Volume {
         let level = level.clamp(self.current_vol.min, self.current_vol.max);
-        
+
         #[allow(clippy::cast_precision_loss)]
         let level_float = f32::from(level) / 100.0;
-        
+
         let output = Command::new("wpctl")
             .arg("set-volume")
             .arg("@DEFAULT_AUDIO_SINK@")
             .arg(format!("{level_float:.2}"))
             .output();
-            
+
         if let Err(e) = output {
             error!("Failed to set volume via wpctl: {e}");
         } else if let Ok(o) = output {
             if !o.status.success() {
-                 error!("wpctl returned error: {}", String::from_utf8_lossy(&o.stderr));
+                error!("wpctl returned error: {}", String::from_utf8_lossy(&o.stderr));
             }
         }
-            
+
         self.get_vol()
     }
 }

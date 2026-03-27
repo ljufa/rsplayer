@@ -1,9 +1,7 @@
 use symphonia::core::audio::{
     AsGenericAudioBufferRef, AudioBuffer, AudioMut, AudioSpec, Channels, GenericAudioBufferRef, Position,
 };
-use symphonia::core::codecs::audio::{
-    AudioCodecParameters, AudioDecoder, AudioDecoderOptions, FinalizeResult,
-};
+use symphonia::core::codecs::audio::{AudioCodecParameters, AudioDecoder, AudioDecoderOptions, FinalizeResult};
 use symphonia::core::codecs::registry::{RegisterableAudioDecoder, SupportedAudioCodec};
 use symphonia::core::codecs::{CodecInfo, CodecProfileInfo};
 use symphonia::core::errors::Result;
@@ -26,12 +24,16 @@ impl DsdDecoder {
             .clone()
             .unwrap_or_else(|| Channels::Positioned(Position::FRONT_LEFT | Position::FRONT_RIGHT));
         let frames_in = params.frames_per_block.unwrap_or(32_768);
+        #[allow(clippy::cast_possible_truncation)]
         let capacity = frames_in as usize / 32;
 
         let spec = AudioSpec::new(out_rate, channels);
         let buf = AudioBuffer::new(spec, capacity);
 
-        Ok(DsdDecoder { params: params.clone(), buf })
+        Ok(DsdDecoder {
+            params: params.clone(),
+            buf,
+        })
     }
 
     fn decode_inner(&mut self, packet: &Packet) {
@@ -92,10 +94,7 @@ impl AudioDecoder for DsdDecoder {
 }
 
 impl RegisterableAudioDecoder for DsdDecoder {
-    fn try_registry_new(
-        params: &AudioCodecParameters,
-        opts: &AudioDecoderOptions,
-    ) -> Result<Box<dyn AudioDecoder>>
+    fn try_registry_new(params: &AudioCodecParameters, opts: &AudioDecoderOptions) -> Result<Box<dyn AudioDecoder>>
     where
         Self: Sized,
     {

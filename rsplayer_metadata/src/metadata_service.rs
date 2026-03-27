@@ -5,19 +5,14 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc, RwLock,
     },
-    time::{self, Duration},
+    time,
 };
 
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
-use log::{info, warn};
-use symphonia::core::{
-    formats::{FormatOptions, FormatReader, TrackType},
-    formats::probe::Hint,
-    io::{MediaSourceStream, MediaSourceStreamOptions},
-    meta::{MetadataOptions, StandardTag, Tag, Visual},
-};
+use log::{debug, info, warn};
+use symphonia::core::{formats::probe::Hint, formats::FormatOptions, io::MediaSourceStream, meta::MetadataOptions};
 use tokio::sync::broadcast::Sender;
 use walkdir::WalkDir;
 
@@ -29,6 +24,7 @@ use api_models::{
     state::StateChangeEvent,
 };
 
+use crate::audio_metadata_extractor::AudioMetadataExtractor;
 use crate::song_repository::SongRepository;
 use crate::{album_repository::AlbumRepository, play_statistic_repository::PlayStatisticsRepository};
 
@@ -50,11 +46,19 @@ impl MetadataService {
         song_repository: Arc<SongRepository>,
         album_repository: Arc<AlbumRepository>,
         statistic_repository: Arc<PlayStatisticsRepository>,
+        version: &str,
     ) -> Result<Self> {
         let settings = settings.clone();
         let ignored_files_db = db
             .keyspace("ignored_files", KeyspaceCreateOptions::default)
             .expect("Failed to open ignored_files keyspace");
+
+        // db  migration for version 2.6.0
+        if version == "2.6.0" {
+            info!("Version 2.6.0 detected - clearing ignored files database to rescan APE files");
+            ignored_files_db.clear()?;
+        }
+
         Ok(Self {
             ignored_files_db,
             settings: RwLock::new(settings),
@@ -254,22 +258,14 @@ impl MetadataService {
         if full_scan {
             self.song_repository.delete_all();
             self.album_repository.delete_all();
-            {
-                let keys: Vec<Vec<u8>> = self
-                    .ignored_files_db
-                    .iter()
-                    .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
-                    .collect();
-                for key in keys {
-                    _ = self.ignored_files_db.remove(key);
-                }
-            }
+            self.ignored_files_db.clear().ok();
         }
 
         if !Path::new(ARTWORK_DIR).exists() {
             _ = std::fs::create_dir(ARTWORK_DIR);
         }
         let (new_files, deleted_db_keys) = self.get_diff(&settings);
+        info!("Scanning directories: {:?}", settings.effective_directories());
         info!(
             "New files found: {} / Deleted files found: {}",
             new_files.len(),
@@ -329,6 +325,9 @@ impl MetadataService {
         let mut deleted_keys: Vec<String> = Vec::new();
         let mut unchanged_keys: Vec<String> = Vec::new();
 
+        let supported_exts = MetadataStoreSettings::default().supported_extensions;
+        debug!("Supported extensions: {supported_exts:?}");
+
         for music_dir in &settings.effective_directories() {
             if !Path::new(music_dir).exists() {
                 warn!("Music directory does not exist, skipping: {music_dir}");
@@ -339,13 +338,20 @@ impl MetadataService {
                 .sort_by_file_name()
                 .into_iter()
                 .filter_map(std::result::Result::ok)
-                .filter(|de| de.file_type().is_file())
+                .filter(|de| {
+                    debug!("Checking file: {}", de.path().display());
+                    de.file_type().is_file()
+                })
                 .filter(|de| {
                     let ext = de
                         .path()
                         .extension()
                         .map_or_else(|| "no_ext".to_string(), |ex| ex.to_str().unwrap().to_lowercase());
-                    MetadataStoreSettings::default().supported_extensions.contains(&ext)
+                    let is_supported = MetadataStoreSettings::default().supported_extensions.contains(&ext);
+                    if !is_supported {
+                        debug!("File {} has unsupported extension: {}", de.path().display(), ext);
+                    }
+                    is_supported
                 })
                 .map(|de| {
                     (
@@ -353,11 +359,20 @@ impl MetadataService {
                         Self::full_path_to_database_key_for_dir(music_dir, de.path().to_str().unwrap()),
                     )
                 })
-                .filter(|de| !self.ignored_files_db.contains_key(&de.1).unwrap_or(false))
+                .filter(|de| {
+                    let in_ignored = self.ignored_files_db.contains_key(&de.1).unwrap_or(false);
+                    if in_ignored {
+                        debug!("File {} is in ignored database", de.0);
+                    }
+                    !in_ignored
+                })
             {
+                debug!("Processing file: {} -> key: {}", entry.0, entry.1);
                 if self.song_repository.find_by_id(&entry.1).is_some() {
+                    debug!("File {} already in database (unchanged)", entry.0);
                     unchanged_keys.push(entry.1.clone());
                 } else {
+                    debug!("File {} is NEW", entry.0);
                     added_files.push(entry.0.clone());
                 }
             }
@@ -370,7 +385,12 @@ impl MetadataService {
         (added_files, deleted_keys)
     }
 
-    fn add_songs_to_db(&self, files: &[String], state_changes_sender: &Sender<StateChangeEvent>, settings: &MetadataStoreSettings) -> u32 {
+    fn add_songs_to_db(
+        &self,
+        files: &[String],
+        state_changes_sender: &Sender<StateChangeEvent>,
+        settings: &MetadataStoreSettings,
+    ) -> u32 {
         use rayon::prelude::*;
         use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -383,7 +403,10 @@ impl MetadataService {
             if let Err(e) = self.scan_single_file(Path::new(file), settings) {
                 log::error!("Unable to scan file {file}. Error: {e}");
                 self.ignored_files_db
-                    .insert(Self::full_path_to_database_key(settings, file), e.to_string().as_bytes())
+                    .insert(
+                        Self::full_path_to_database_key(settings, file),
+                        e.to_string().as_bytes(),
+                    )
                     .expect("DB error");
             }
             if c.is_multiple_of(100) {
@@ -400,7 +423,7 @@ impl MetadataService {
         let file = Box::new(File::open(file_path).unwrap());
         let file_modification_date: DateTime<Utc> = file.as_ref().metadata()?.modified()?.into();
 
-        let mss = MediaSourceStream::new(file, MediaSourceStreamOptions::default());
+        let mss = MediaSourceStream::new(file, symphonia::core::io::MediaSourceStreamOptions::default());
 
         let mut hint = Hint::new();
         if let Some(ext) = file_path.extension() {
@@ -414,7 +437,7 @@ impl MetadataService {
         info!("Scanning file:\t{file_p}");
         match crate::dsd_bundle::build_probe().probe(&hint, mss, format_opts, metadata_opts) {
             Ok(mut probed) => {
-                let (mut song, image_data) = build_song(&mut *probed);
+                let (mut song, image_data) = AudioMetadataExtractor::extract(&mut *probed);
 
                 if let Some(image_data) = &image_data {
                     let image_id = uuid::Uuid::new_v4();
@@ -440,105 +463,4 @@ impl MetadataService {
             }
         }
     }
-}
-
-fn build_song(format: &mut dyn FormatReader) -> (Song, Option<Visual>) {
-    let mut song = Song::default();
-    let mut image_data: Option<Visual> = None;
-    if let Some(track) = format.default_track(TrackType::Audio) {
-        if let Some(num_frames) = track.num_frames {
-            if let Some(tb) = track.time_base {
-                if let Some(time) = tb.calc_time(symphonia::core::units::Timestamp::new(num_frames as i64)) {
-                    song.time = Some(Duration::from_secs(time.as_secs().unsigned_abs()));
-                }
-            }
-        }
-    }
-
-    let mut fill_song_from_metadata = |metadata_rev: &symphonia::core::meta::MetadataRevision| {
-        let tags = &metadata_rev.media.tags;
-        for tag in tags.iter().filter(|t| t.has_std_tag()) {
-            if let Some(std_tag) = &tag.std {
-                match std_tag {
-                    StandardTag::Album(_) => {
-                        if song.album.is_none() {
-                            song.album = from_tag_value_to_option(tag);
-                        }
-                    }
-                    StandardTag::AlbumArtist(_) => {
-                        if song.album_artist.is_none() {
-                            song.album_artist = from_tag_value_to_option(tag);
-                        }
-                    }
-                    StandardTag::Artist(_) => {
-                        if song.artist.is_none() {
-                            song.artist = from_tag_value_to_option(tag);
-                        }
-                    }
-                    StandardTag::Composer(_) => {
-                        if song.composer.is_none() {
-                            song.composer = from_tag_value_to_option(tag);
-                        }
-                    }
-                    StandardTag::RecordingDate(_) | StandardTag::ReleaseDate(_) | StandardTag::RecordingYear(_) | StandardTag::ReleaseYear(_) => {
-                        if song.date.is_none() {
-                            song.date = from_tag_value_to_option(tag);
-                        }
-                    }
-                    StandardTag::DiscNumber(_) => {
-                        if song.disc.is_none() {
-                            song.disc = from_tag_value_to_option(tag);
-                        }
-                    }
-                    StandardTag::Genre(_) => {
-                        if song.genre.is_none() {
-                            song.genre = from_tag_value_to_option(tag);
-                        }
-                    }
-                    StandardTag::Label(_) => {
-                        if song.label.is_none() {
-                            song.label = from_tag_value_to_option(tag);
-                        }
-                    }
-                    StandardTag::Performer(_) => {
-                        if song.performer.is_none() {
-                            song.performer = from_tag_value_to_option(tag);
-                        }
-                    }
-                    StandardTag::TrackNumber(_) => {
-                        if song.track.is_none() {
-                            song.track = from_tag_value_to_option(tag);
-                        }
-                    }
-                    StandardTag::TrackTitle(_) => {
-                        if song.title.is_none() {
-                            song.title = from_tag_value_to_option(tag);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        for tag in tags.iter().filter(|t| !t.has_std_tag()) {
-            song.tags
-                .entry(tag.raw.key.clone())
-                .or_insert_with(|| from_tag_value_to_option(tag).unwrap_or_default());
-        }
-        if image_data.is_none() {
-            if let Some(v) = metadata_rev.media.visuals.first() {
-                image_data = Some(v.clone());
-            }
-        }
-    };
-
-    if let Some(metadata_rev) = format.metadata().skip_to_latest() {
-        fill_song_from_metadata(metadata_rev);
-    }
-
-    (song, image_data)
-}
-
-#[allow(clippy::unnecessary_wraps)]
-fn from_tag_value_to_option(tag: &Tag) -> Option<String> {
-    Some(tag.raw.value.to_string())
 }

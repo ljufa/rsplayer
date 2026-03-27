@@ -27,9 +27,16 @@ use rsplayer_metadata::queue_service::QueueService;
 use rsplayer_metadata::song_repository::SongRepository;
 use rsplayer_playback::rsp::player_service::PlayerService;
 
+mod command_context;
 mod command_handler;
+mod metadata_commands;
 mod mount_service;
+mod player_commands;
+mod playlist_commands;
+mod queue_commands;
 mod server_warp;
+mod storage_commands;
+mod system_commands;
 
 #[allow(clippy::redundant_pub_crate, clippy::too_many_lines)]
 #[tokio::main(flavor = "multi_thread")]
@@ -68,7 +75,7 @@ async fn main() {
     info!("Configuration successfully loaded.");
 
     // Auto-mount configured network storage shares
-    mount_service::mount_all(&config.get_settings().network_storage_settings);
+    mount_service::MountService::mount_all(&config.get_settings().network_storage_settings);
 
     let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate()).expect("failed to create signal future");
 
@@ -82,6 +89,7 @@ async fn main() {
             song_repository.clone(),
             album_repository.clone(),
             statistics_repository.clone(),
+            version,
         )
         .expect("Failed to start metadata service"),
     );

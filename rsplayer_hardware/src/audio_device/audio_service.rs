@@ -17,9 +17,9 @@ pub struct AudioInterfaceService {
     volume_ctrl_device: Mutex<Box<dyn VolumeControlDevice + Sync + Send>>,
 }
 
+use super::pipewire::PipewireVolumeControlDevice;
 use super::rsp_firmware::RSPlayerFirmwareVolumeControlDevice;
 use super::NoOpVolumeControlDevice;
-use super::pipewire::PipewireVolumeControlDevice;
 use api_models::common::VolumeCrtlType;
 
 use crate::usb::ArcUsbService;

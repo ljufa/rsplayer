@@ -24,7 +24,9 @@ impl SongRepository {
         self.songs_db.remove(id).expect("Failed to delete song");
     }
     pub fn delete_all(&self) {
-        let keys: Vec<Vec<u8>> = self.songs_db.iter()
+        let keys: Vec<Vec<u8>> = self
+            .songs_db
+            .iter()
             .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
             .collect();
         for key in keys {

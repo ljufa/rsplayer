@@ -300,6 +300,8 @@ body {
 .app-nav__item.is-active .app-nav__link {
   color: var(--accent);
   opacity: 1;
+  background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-radius: 8px 8px 0 0;
 }
 
 .app-nav__item.is-active .app-nav__link::after {
@@ -336,6 +338,14 @@ body {
   background-color: var(--overlay-bg);
   border-top: 1px solid var(--border-color);
   animation: subnav-slide-in 0.15s ease;
+}
+
+/* Desktop: Always show library subnav when on library pages */
+@media screen and (min-width: 769px) {
+  .app-nav:has(.app-nav__item.is-active) .app-nav__subnav,
+  .app-nav__subnav.is-library-active {
+    display: flex !important;
+  }
 }
 
 @keyframes subnav-slide-in {
@@ -1076,10 +1086,48 @@ a:hover {
 }
 
 /* ============================================================
-   BULMA COLOR CLASS OVERRIDES — ALL THEMES
-   Applied to every named theme so Bulma's hardcoded color
-   helpers always defer to the active theme palette.
+   BREADCRUMB NAVIGATION
    ============================================================ */
+
+.breadcrumb-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: var(--overlay-bg);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.breadcrumb-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--secondary-text);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.breadcrumb-nav__item:hover {
+  color: var(--accent);
+}
+
+.breadcrumb-nav__item.is-current {
+  color: var(--primary-text);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.breadcrumb-nav__separator {
+  color: var(--secondary-text);
+  font-size: 0.8rem;
+}
+
+.breadcrumb-nav__icon {
+  font-size: 1rem;
+  color: var(--accent);
+}
 
 /* Selector covering every theme except the default dark
    (dark inherits from :root and is already correct) */
@@ -1374,11 +1422,194 @@ details.settings-details[open] > .settings-details__summary::after {
 }
 
 /* ============================================================
-   BULMA SEMANTIC COLOUR OVERRIDES
-   Replace every hardcoded Bulma colour (primary teal, info blue,
-   success green, etc.) with theme-aware CSS variables so buttons,
-   switches, notifications and file inputs match the active theme.
+   PLAYER PAGE IMPROVEMENTS
    ============================================================ */
+
+/* Progress bar container with tooltip */
+.progress-bar-container {
+  width: 100%;
+}
+
+/* Progress slider wrapper for tooltip positioning */
+.progress-slider-wrapper {
+  position: relative;
+  width: 100%;
+  padding: 10px 0;
+}
+
+/* Progress tooltip - shows time on hover */
+.progress-tooltip {
+  position: absolute;
+  top: -30px;
+  transform: translateX(-50%);
+  background-color: var(--accent);
+  color: var(--primary-text);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  display: none;
+  z-index: 10;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.progress-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid var(--accent);
+}
+
+/* Larger touch target for progress slider */
+.player-progress-slider {
+  height: 44px !important;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.player-progress-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
+}
+
+.player-progress-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  margin-top: -6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: transform 0.1s ease;
+}
+
+.player-progress-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.player-progress-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+}
+
+.player-progress-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Time display styling */
+.progress-time-current,
+.progress-time-total {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* Volume control improvements */
+.volume-control-row {
+  align-items: center;
+}
+
+.volume-slider-wrapper {
+  position: relative;
+  padding: 10px 0;
+}
+
+.volume-tooltip {
+  position: absolute;
+  top: -25px;
+  transform: translateX(-50%);
+  background-color: var(--accent);
+  color: var(--primary-text);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  display: none;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.volume-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid var(--accent);
+}
+
+.player-volume-slider {
+  height: 44px !important;
+  cursor: pointer;
+}
+
+.player-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  margin-top: -5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: transform 0.1s ease;
+}
+
+.player-volume-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.volume-percentage-display {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Keyboard shortcuts hint */
+.keyboard-shortcuts-hint {
+  position: absolute;
+  bottom: 100px;
+  right: 20px;
+  background-color: var(--overlay-bg);
+  padding: 10px 15px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: var(--secondary-text);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.player-page:hover .keyboard-shortcuts-hint {
+  opacity: 0.7;
+}
+
+.keyboard-shortcuts-hint kbd,
+.keyboard-shortcuts-hint__key {
+  background-color: var(--ui-elements);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: monospace;
+  margin: 0 2px;
+  font-size: 0.8em;
+}
 
 /* ---- is-primary → accent colour ---- */
 [data-theme] .button.is-primary,
@@ -1610,4 +1841,683 @@ details.settings-details[open] > .settings-details__summary::after {
 [data-theme] .message.is-danger .message-body {
   border-color: #c0392b;
   color: var(--primary-text);
+}
+
+/* ============================================================
+   EMPTY STATES & ONBOARDING
+   ============================================================ */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  min-height: 400px;
+}
+
+.empty-state__icon {
+  font-size: 64px;
+  color: var(--secondary-text);
+  margin-bottom: 20px;
+  opacity: 0.6;
+}
+
+.empty-state__title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary-text);
+  margin-bottom: 12px;
+}
+
+.empty-state__description {
+  font-size: 1rem;
+  color: var(--secondary-text);
+  max-width: 400px;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.empty-state__actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.empty-state__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background-color: var(--accent);
+  color: var(--primary-text);
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+  font-size: 0.95rem;
+}
+
+.empty-state__cta:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.empty-state__cta .material-icons {
+  font-size: 20px;
+}
+
+.empty-state__secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background-color: var(--ui-elements);
+  color: var(--primary-text);
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  font-size: 0.95rem;
+}
+
+.empty-state__secondary:hover {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* No search results variant */
+.empty-state--search .empty-state__icon {
+  font-size: 48px;
+}
+
+.empty-state--search .empty-state__title {
+  font-size: 1.25rem;
+}
+
+/* Welcome Modal */
+.welcome-modal .modal-content {
+  max-width: 500px;
+}
+
+.welcome-modal__header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.welcome-modal__icon {
+  font-size: 48px;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.welcome-modal__title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--primary-text);
+  margin-bottom: 8px;
+}
+
+.welcome-modal__subtitle {
+  font-size: 1rem;
+  color: var(--secondary-text);
+}
+
+.welcome-modal__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.welcome-modal__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  background-color: var(--ui-elements);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.welcome-modal__step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background-color: var(--accent);
+  color: var(--primary-text);
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.welcome-modal__step-content {
+  flex: 1;
+}
+
+.welcome-modal__step-title {
+  font-weight: 600;
+  color: var(--primary-text);
+  margin-bottom: 4px;
+}
+
+.welcome-modal__step-description {
+  font-size: 0.9rem;
+  color: var(--secondary-text);
+  line-height: 1.4;
+}
+
+.welcome-modal__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.welcome-modal__btn {
+  padding: 12px 32px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  font-size: 1rem;
+}
+
+.welcome-modal__btn--primary {
+  background-color: var(--accent);
+  color: var(--primary-text);
+}
+
+.welcome-modal__btn--primary:hover {
+  filter: brightness(1.1);
+}
+
+.welcome-modal__btn--secondary {
+  background-color: var(--ui-elements);
+  color: var(--primary-text);
+  border: 1px solid var(--border-color);
+}
+
+.welcome-modal__btn--secondary:hover {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Help tooltip */
+.help-tooltip-trigger {
+  position: fixed;
+  bottom: 100px;
+  right: 20px;
+  z-index: 99;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: var(--ui-elements);
+  color: var(--secondary-text);
+  border: 2px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 24px;
+}
+
+.help-tooltip-trigger:hover {
+  background-color: var(--accent);
+  color: var(--primary-text);
+  border-color: var(--accent);
+  transform: scale(1.1);
+}
+
+/* Loading state */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  min-height: 300px;
+}
+
+.loading-state__spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--ui-elements);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-state__text {
+  color: var(--secondary-text);
+  font-size: 1rem;
+}
+
+/* ============================================================
+   KEYBOARD SHORTCUTS HELP & ACCESSIBILITY
+   ============================================================ */
+
+/* Keyboard hint in corner - desktop only */
+.keyboard-hint {
+  position: fixed;
+  bottom: 100px;
+  right: 20px;
+  z-index: 98;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--ui-elements);
+  color: var(--secondary-text);
+  border: 2px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: monospace;
+}
+
+.keyboard-hint:hover {
+  background-color: var(--accent);
+  color: var(--primary-text);
+  border-color: var(--accent);
+  transform: scale(1.1);
+}
+
+/* Hide keyboard hint on mobile */
+@media screen and (max-width: 768px) {
+  .keyboard-hint {
+    display: none;
+  }
+}
+
+/* Focus indicators for accessibility */
+*:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Remove default focus outline but keep visible one */
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Button press feedback */
+.button,
+.empty-state__cta,
+.empty-state__secondary,
+.player-controls button,
+.app-nav__link {
+  transition: transform 0.1s ease, filter 0.2s ease;
+}
+
+.button:active,
+.empty-state__cta:active,
+.empty-state__secondary:active,
+.player-controls button:active,
+.app-nav__link:active {
+  transform: scale(0.95);
+}
+
+/* Touch target minimum 44px */
+button,
+a,
+input[type="range"],
+.song-actions__trigger,
+.list-item,
+.breadcrumb-nav__item {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Specifically for small buttons */
+.button.is-small {
+  min-height: 36px;
+  min-width: 36px;
+}
+
+/* Toast notification improvements */
+.notification {
+  animation: slideIn 0.3s ease;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.notification.is-primary {
+  background-color: color-mix(in srgb, var(--accent) 20%, var(--ui-elements));
+  border-left: 4px solid var(--accent);
+}
+
+.notification.is-error {
+  background-color: color-mix(in srgb, #c0392b 20%, var(--ui-elements));
+  border-left: 4px solid #c0392b;
+}
+
+.notification.is-info {
+  background-color: color-mix(in srgb, var(--accent) 15%, var(--ui-elements));
+  border-left: 4px solid var(--accent);
+}
+
+/* Improve modal styling */
+.modal-content {
+  animation: modalFadeIn 0.2s ease;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Keyboard help modal specific */
+.keyboard-help__header {
+  text-align: center;
+}
+
+/* Improved app navigation hover states */
+.app-nav__item:hover .app-nav__link {
+  color: var(--accent);
+}
+
+.app-nav__sublink:hover {
+  background-color: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+/* Smooth transitions for all interactive elements */
+a, button, input, .list-item, .card {
+  transition: all 0.2s ease;
+}
+
+/* Queue item hover enhancement */
+.list-item:hover {
+  background-color: color-mix(in srgb, var(--accent) 5%, var(--ui-elements));
+}
+
+/* Current playing item highlight */
+.list-item.current {
+  background-color: color-mix(in srgb, var(--accent) 10%, var(--ui-elements));
+  border-left: 3px solid var(--accent);
+}
+
+/* Improved scrollbar styling */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ui-elements);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--secondary-text);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--secondary-text) var(--ui-elements);
+}
+
+/* ============================================================
+   SKELETON SCREENS - Performance UX
+   ============================================================ */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--ui-elements) 25%,
+    color-mix(in srgb, var(--ui-elements) 80%, var(--accent)) 50%,
+    var(--ui-elements) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Skeleton variants */
+.skeleton--text {
+  height: 1em;
+  margin-bottom: 0.5em;
+}
+
+.skeleton--text-sm {
+  height: 0.875em;
+  width: 60%;
+  margin-bottom: 0.5em;
+}
+
+.skeleton--title {
+  height: 1.5em;
+  width: 80%;
+  margin-bottom: 0.75em;
+}
+
+.skeleton--avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+}
+
+.skeleton--image {
+  width: 100%;
+  padding-bottom: 100%; /* Square aspect ratio */
+  border-radius: 8px;
+}
+
+.skeleton--card {
+  height: 120px;
+  border-radius: 8px;
+}
+
+.skeleton--list-item {
+  height: 60px;
+  margin-bottom: 8px;
+}
+
+/* Skeleton container layouts */
+.skeleton-container {
+  padding: 20px;
+}
+
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+/* Library file tree skeleton */
+.skeleton-tree {
+  padding: 10px;
+}
+
+.skeleton-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.skeleton-tree-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.skeleton-tree-text {
+  flex: 1;
+  height: 16px;
+  border-radius: 4px;
+}
+
+/* Queue item skeleton */
+.skeleton-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.skeleton-queue-number {
+  width: 32px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.skeleton-queue-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skeleton-queue-title {
+  height: 16px;
+  width: 60%;
+  border-radius: 4px;
+}
+
+.skeleton-queue-artist {
+  height: 12px;
+  width: 40%;
+  border-radius: 4px;
+}
+
+/* Player track info skeleton */
+.skeleton-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px 20px;
+}
+
+.skeleton-player-image {
+  width: 200px;
+  height: 200px;
+  border-radius: 8px;
+}
+
+.skeleton-player-title {
+  width: 60%;
+  height: 24px;
+  border-radius: 4px;
+}
+
+.skeleton-player-artist {
+  width: 40%;
+  height: 16px;
+  border-radius: 4px;
+}
+
+/* Playlist carousel skeleton */
+.skeleton-carousel {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 20px;
+}
+
+.skeleton-carousel-item {
+  flex-shrink: 0;
+  width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-carousel-image {
+  width: 150px;
+  height: 150px;
+  border-radius: 8px;
+}
+
+.skeleton-carousel-title {
+  height: 14px;
+  width: 80%;
+  border-radius: 4px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--ui-elements);
+  }
+}
+
+/* Image loading placeholder */
+.image-loading {
+  background-color: var(--ui-elements);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+}
+
+.image-loading .material-icons {
+  font-size: 48px;
+  color: var(--secondary-text);
+  opacity: 0.5;
+}
+
+.image-loading--album {
+  aspect-ratio: 1;
+  border-radius: 8px;
 }

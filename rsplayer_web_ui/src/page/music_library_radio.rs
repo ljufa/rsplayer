@@ -5,7 +5,7 @@ use api_models::state::StateChangeEvent;
 use gloo_net::http::Request;
 use indextree::{Arena, NodeId};
 use seed::prelude::web_sys::KeyboardEvent;
-use seed::{a, attrs, div, empty, i, img, input, label, li, p, prelude::*, section, span, style, ul, C, IF};
+use seed::{a, attrs, div, empty, i, img, input, label, li, nav, p, prelude::*, section, span, style, ul, C, IF};
 use serde::{Deserialize, Serialize};
 
 use crate::page::music_library_radio::Msg::{
@@ -292,6 +292,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
 
 pub fn view(model: &Model) -> Node<Msg> {
     section![
+        view_breadcrumbs(model),
         view_spinner_modal(model.wait_response),
         view_search_input(model),
         ul![
@@ -299,6 +300,45 @@ pub fn view(model: &Model) -> Node<Msg> {
             view_tree(model.tree.root, &model.tree.arena, &model.filter_type)
         ]
     ]
+}
+
+fn view_breadcrumbs(model: &Model) -> Node<Msg> {
+    let mut items: Vec<Node<Msg>> = vec![
+        a![
+            C!["breadcrumb-nav__item"],
+            attrs! { At::Href => "#/library/radio" },
+            i![C!["material-icons", "breadcrumb-nav__icon"], "home"],
+            span!["Library"],
+        ],
+        span![C!["breadcrumb-nav__separator"], "/"],
+        span![
+            C!["breadcrumb-nav__item", "is-current"],
+            i![C!["material-icons", "breadcrumb-nav__icon"], "radio"],
+            span!["Radio"],
+        ],
+    ];
+    
+    // Add filter category if selected
+    if model.filter_type != FilterType::Favorites {
+        items.push(span![C!["breadcrumb-nav__separator"], "/"]);
+        let filter_name = match model.filter_type {
+            FilterType::Country => "By Country",
+            FilterType::Language => "By Language",
+            FilterType::Tag => "By Tag",
+            FilterType::Search => "Search",
+            _ => "",
+        };
+        if !filter_name.is_empty() {
+            items.push(
+                span![
+                    C!["breadcrumb-nav__item", "is-current"],
+                    span![filter_name],
+                ]
+            );
+        }
+    }
+    
+    nav![C!["breadcrumb-nav"], items]
 }
 fn view_search_input(model: &Model) -> Node<Msg> {
     div![

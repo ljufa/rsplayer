@@ -1,5 +1,5 @@
-use log::{debug, error, info, trace, warn};
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
+use log::{debug, error, info, trace, warn};
 use std::sync::{
     atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, Ordering},
     Arc, Mutex,
@@ -18,8 +18,9 @@ use rsplayer_metadata::queue_service::QueueService;
 
 use rsplayer_dsp::DspProcessor;
 
-use crate::rsp::vumeter::VUMeter;
 use super::symphonia::PlaybackResult;
+use crate::rsp::playback_config::PlaybackConfig;
+use crate::rsp::playback_context::PlaybackContext;
 
 pub struct PlayerService {
     state_db: Keyspace,
@@ -76,7 +77,10 @@ impl PlayerService {
                 let effective_dsp = if rsp.dsp_settings.enabled {
                     rsp.dsp_settings.clone()
                 } else {
-                    DspSettings { enabled: false, filters: vec![] }
+                    DspSettings {
+                        enabled: false,
+                        filters: vec![],
+                    }
                 };
                 Some(DspProcessor::new(effective_dsp))
             } else {
@@ -253,7 +257,11 @@ impl PlayerService {
         let changes_tx = self.changes_tx.clone();
         let rsp_settings = self.rsp_settings.clone();
         let metadata_service = self.metadata_service.clone();
-        let dsp_handle = self.dsp_processor.lock().ok().and_then(|g| g.as_ref().map(DspProcessor::handle));
+        let dsp_handle = self
+            .dsp_processor
+            .lock()
+            .ok()
+            .and_then(|g| g.as_ref().map(DspProcessor::handle));
         let current_volume = self.current_volume.clone();
         let vu_meter_enabled = self.rsp_settings.vu_meter_enabled;
         let loudness_service = self.loudness_service.clone();
@@ -286,7 +294,6 @@ impl PlayerService {
                 }
                 let mut retry_count = 0;
                 let result = loop {
-
                     let Some(song) = queue.get_current_song() else {
                         changes_tx
                             .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
@@ -320,14 +327,27 @@ impl PlayerService {
                     }
                     #[allow(clippy::cast_possible_truncation)]
                     let normalization_gain_hundredths = normalization_gain_db.map(|g| (g * 100.0) as i32);
-                    let vu_meter = if vu_meter_enabled {
-                        Some(VUMeter::new(current_volume.clone(), changes_tx.clone()))
-                    } else {
-                        None
-                    };
+
+                    let config = PlaybackConfig::new(
+                        audio_device.clone(),
+                        rsp_settings.clone(),
+                        music_dirs.clone(),
+                        vu_meter_enabled,
+                        local_browser_playback,
+                    );
+
+                    let mut context = PlaybackContext::new(
+                        stop_signal.clone(),
+                        skip_to_time.clone(),
+                        current_volume.clone(),
+                        changes_tx.clone(),
+                        dsp_handle.clone(),
+                        vu_meter_enabled,
+                    );
+
                     let play_result = if local_browser_playback {
                         loop {
-                            if stop_signal.load(Ordering::Relaxed) {
+                            if context.is_stopped() {
                                 break Ok(PlaybackResult::PlaybackStopped);
                             }
                             std::thread::sleep(std::time::Duration::from_millis(250));
@@ -335,14 +355,8 @@ impl PlayerService {
                     } else {
                         super::symphonia::play_file(
                             &song.file,
-                            &stop_signal,
-                            &skip_to_time,
-                            &audio_device,
-                            &rsp_settings,
-                            &music_dirs,
-                            &changes_tx,
-                            dsp_handle.as_ref(),
-                            vu_meter,
+                            &config,
+                            &mut context,
                             track_loudness,
                             normalization_gain_hundredths,
                         )

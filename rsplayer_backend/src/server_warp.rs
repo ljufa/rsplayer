@@ -39,13 +39,11 @@ pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Out
         .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
         .allow_any_origin();
 
-    let index_html = warp::get()
-        .and(warp::path::end())
-        .map(|| {
-                let reply = warp::reply::html(INDEX_HTML);
-                let reply = warp::reply::with_header(reply, "Cache-Control", "no-cache, must-revalidate");
-                warp::reply::with_header(reply, "ETag", concat!("\"", env!("APP_VERSION"), "\""))
-            });
+    let index_html = warp::get().and(warp::path::end()).map(|| {
+        let reply = warp::reply::html(INDEX_HTML);
+        let reply = warp::reply::with_header(reply, "Cache-Control", "no-cache, must-revalidate");
+        warp::reply::with_header(reply, "ETag", concat!("\"", env!("APP_VERSION"), "\""))
+    });
     let ui_static_content = warp::get().and(warp_embed::embed(&StaticContentDir));
 
     let routes = filters::settings_save(config.clone())
@@ -92,13 +90,11 @@ pub fn start(
         HeaderValue::from_static("max-age=259200"), // 3 days
     );
 
-    let index_html = warp::get()
-        .and(warp::path::end())
-        .map(|| {
-                let reply = warp::reply::html(INDEX_HTML);
-                let reply = warp::reply::with_header(reply, "Cache-Control", "no-cache, must-revalidate");
-                warp::reply::with_header(reply, "ETag", concat!("\"", env!("APP_VERSION"), "\""))
-            });
+    let index_html = warp::get().and(warp::path::end()).map(|| {
+        let reply = warp::reply::html(INDEX_HTML);
+        let reply = warp::reply::with_header(reply, "Cache-Control", "no-cache, must-revalidate");
+        warp::reply::with_header(reply, "ETag", concat!("\"", env!("APP_VERSION"), "\""))
+    });
     let ui_static_content = warp::get()
         .and(warp_embed::embed(&StaticContentDir))
         .with(warp::compression::gzip())
@@ -116,9 +112,7 @@ pub fn start(
         let first = dirs_iter.next().unwrap_or_else(|| "/music".to_string());
         let base = warp::path("music").and(warp::fs::dir(first)).boxed();
         dirs_iter.fold(base, |acc, dir| {
-            acc.or(warp::path("music").and(warp::fs::dir(dir)))
-                .unify()
-                .boxed()
+            acc.or(warp::path("music").and(warp::fs::dir(dir))).unify().boxed()
         })
     };
 
@@ -153,8 +147,7 @@ pub fn start(
     };
     let ports = get_ports();
     let http_handle = warp::serve(routes.clone()).run(([0, 0, 0, 0], ports.0));
-    let https_handle = if let (Ok(cert_path), Ok(key_path)) =
-        (env::var("TLS_CERT_PATH"), env::var("TLS_CERT_KEY_PATH"))
+    let https_handle = if let (Ok(cert_path), Ok(key_path)) = (env::var("TLS_CERT_PATH"), env::var("TLS_CERT_KEY_PATH"))
     {
         info!("TLS enabled, starting HTTPS on port {}", ports.1);
         Some(
