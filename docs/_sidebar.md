@@ -2,6 +2,7 @@
 - **Getting Started**
   - [Installation](installation.md)
   - [Configuration](configuration.md)
+  - [Usage Guide](usage.md)
   - [Troubleshooting](troubleshooting.md)
 - **Development**
   - [Building from Source](build.md)
