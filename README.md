@@ -66,9 +66,9 @@ For DIY enthusiasts seeking a customizable, high-performance music player for th
 - **MPRIS D-Bus integration**: Native Linux desktop media key and player integration.
 - **Community plugin framework**: Extensible architecture for third-party plugins.
 - **Improve playlists management create/modify/delete items and playlists**: Items can be added/removed to/from playlist from everywhere.
-- **New version detection and upgrade from the app**
-- **Problem(bug) report with diagnostic**
-
+- **New version detection and upgrade from the app**: Detect a new version and provide upgrade button
+- **Problem(bug) report with diagnostic**: Report problem by user
+- **Scheduled music library scans**: Enable user to define automatic library scan interval (or cron)
 
 ### Planned code improvements
 - Replace Bulma CSS with a modern, maintained alternative.

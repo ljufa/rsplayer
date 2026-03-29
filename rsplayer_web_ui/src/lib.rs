@@ -182,8 +182,6 @@ pub enum Msg {
     SeekBackward,
     /// Seek forward 10 seconds.
     SeekForward,
-    /// Navigate to settings and focus on audio interface (for first-time setup)
-    NavigateToSettingsFocusAudio,
 }
 
 #[derive(Debug, Deserialize)]
@@ -569,11 +567,8 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             ));
             // Store settings for later use
             model.global_settings = Some(sett);
-            // If first visit and playback not configured, navigate to settings
-            if model.is_first_visit && !playback_configured {
-                log!("First visit and playback not configured, navigating to settings");
-                orders.send_msg(Msg::NavigateToSettingsFocusAudio);
-            }
+            // Note: Welcome modal already shows "Required Setup" notice with "Go to Settings" button
+            // User will navigate manually via the modal button (avoids RefCell borrow conflict)
         }
         Msg::WebSocketOpened => {
             model.web_socket_reconnector = None;
@@ -1291,15 +1286,6 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         
         Msg::FocusSearch => {
             focusSearchInput();
-        }
-        
-        Msg::NavigateToSettingsFocusAudio => {
-            log!("NavigateToSettingsFocusAudio: navigating to settings");
-            // Navigate to settings and focus on audio interface
-            Urls::settings_abs().go_and_load();
-            // Send message to settings page to focus on audio interface
-            // This will be handled after the page is loaded
-            orders.perform_cmd(cmds::timeout(100, || Msg::Settings(page::settings::Msg::FocusAudioInterface)));
         }
 
         Msg::Ignore => {}
