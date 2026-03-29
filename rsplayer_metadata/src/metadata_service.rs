@@ -424,8 +424,113 @@ impl MetadataService {
         count.load(Ordering::Relaxed)
     }
 
+    /// Fast metadata extraction for APE files using the `ape_decoder` crate directly.
+    /// Reads only header + seek table + tags from disk, avoiding loading the entire file.
+    fn scan_ape_file_fast(
+        &self,
+        file_path: &Path,
+        settings: &MetadataStoreSettings,
+        file_modification_date: DateTime<Utc>,
+    ) -> Result<()> {
+        let file_p = Self::full_path_to_database_key(settings, file_path.to_str().unwrap());
+        info!("Scanning APE file (fast path):\t{file_p}");
+
+        let file = File::open(file_path)?;
+        let mut decoder = ape_decoder::ApeDecoder::new(file).map_err(|e| {
+            Error::msg(format!("APE decode error: {e}"))
+        })?;
+
+        let info = decoder.info();
+        let duration_ms = info.duration_ms;
+        let mut song = Song::default();
+        song.time = Some(std::time::Duration::from_millis(duration_ms));
+
+        // Read APEv2 tags
+        if let Ok(Some(ape_tag)) = decoder.read_tag() {
+            for field in &ape_tag.fields {
+                if let Some(value) = field.value_as_str() {
+                    let name = field.name.to_ascii_lowercase();
+                    match name.as_str() {
+                        "title" => song.title = Some(value.to_string()),
+                        "artist" => song.artist = Some(value.to_string()),
+                        "album" => song.album = Some(value.to_string()),
+                        "album artist" | "albumartist" => song.album_artist = Some(value.to_string()),
+                        "year" | "date" => song.date = Some(value.to_string()),
+                        "track" | "tracknumber" => song.track = Some(value.to_string()),
+                        "disc" | "discnumber" => song.disc = Some(value.to_string()),
+                        "genre" => song.genre = Some(value.to_string()),
+                        "composer" => song.composer = Some(value.to_string()),
+                        "performer" => song.performer = Some(value.to_string()),
+                        "label" => song.label = Some(value.to_string()),
+                        _ => {
+                            song.tags.entry(field.name.clone()).or_insert_with(|| value.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Read ID3v2 tags as fallback
+        if let Ok(Some(id3_tag)) = decoder.read_id3v2_tag() {
+            for frame in &id3_tag.frames {
+                if let Some(value) = Self::decode_id3_text_frame(&frame.data) {
+                    match frame.id.as_str() {
+                        "TIT2" if song.title.is_none() => song.title = Some(value),
+                        "TPE1" if song.artist.is_none() => song.artist = Some(value),
+                        "TALB" if song.album.is_none() => song.album = Some(value),
+                        "TPE2" if song.album_artist.is_none() => song.album_artist = Some(value),
+                        "TDRC" | "TYER" | "TDAT" if song.date.is_none() => song.date = Some(value),
+                        "TRCK" if song.track.is_none() => {
+                            song.track = Some(value.split('/').next().unwrap_or(&value).to_string());
+                        }
+                        "TPOS" if song.disc.is_none() => {
+                            song.disc = Some(value.split('/').next().unwrap_or(&value).to_string());
+                        }
+                        "TCON" if song.genre.is_none() => song.genre = Some(value),
+                        "TCOM" if song.composer.is_none() => song.composer = Some(value),
+                        "TPE3" if song.performer.is_none() => song.performer = Some(value),
+                        "TPUB" if song.label.is_none() => song.label = Some(value),
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        song.file.clone_from(&file_p);
+        song.file_date = file_modification_date;
+        debug!("Add/update song in database: {song:?}");
+        self.song_repository.save(&song);
+        self.album_repository.update_from_song(song);
+        Ok(())
+    }
+
+    /// Decode an `ID3v2` text frame payload to a string.
+    fn decode_id3_text_frame(data: &[u8]) -> Option<String> {
+        if data.is_empty() {
+            return None;
+        }
+        let encoding = data[0];
+        let payload = &data[1..];
+        if payload.is_empty() {
+            return None;
+        }
+        let text = match encoding {
+            0 => payload.iter().map(|&b| b as char).collect::<String>(),
+            1..=3 => String::from_utf8_lossy(payload).into_owned(),
+            _ => return None,
+        };
+        let text = text.trim_end_matches('\0').to_string();
+        if text.is_empty() { None } else { Some(text) }
+    }
+
     fn scan_single_file(&self, file_path: &Path, settings: &MetadataStoreSettings) -> Result<()> {
         info!("Scanning file:\t{}", file_path.display());
+
+        // Fast path for APE files: read tags directly without loading entire file
+        if file_path.extension().is_some_and(|e| e.eq_ignore_ascii_case("ape")) {
+            let file_modification_date: DateTime<Utc> = file_path.metadata()?.modified()?.into();
+            return self.scan_ape_file_fast(file_path, settings, file_modification_date);
+        }
 
         let file = Box::new(File::open(file_path).unwrap());
         let file_modification_date: DateTime<Utc> = file.as_ref().metadata()?.modified()?.into();

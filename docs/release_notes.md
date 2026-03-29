@@ -38,6 +38,19 @@ New power management options in Settings:
 
 ### Improvements
 
+#### APE Playback Performance
+APE (Monkey's Audio) files are now played directly from disk instead of loading the entire file into memory:
+- Only headers and seek table (~1KB) are read upfront; frame data is read on demand during playback
+- 1 MB read buffer amortizes NFS/network round trips, preventing audio buffer starvation on slow links
+- Removed background prefetch thread for simpler, more reliable decoding
+- Added version check (APE format version ≥ 3990 required)
+
+#### APE Metadata Scanning Performance
+APE file metadata scanning is now significantly faster:
+- Tags are read directly from disk without loading the entire audio file
+- APEv2 and ID3v2 tags are extracted using the native `ape_decoder` crate
+- Large APE libraries now scan in seconds instead of minutes
+
 #### Settings Page
 - **Unsaved changes warning**: When navigating away from Settings with unapplied DSP changes, a confirmation dialog now asks before discarding changes
 - **Separate save and restart**: Settings are now saved in two modes:

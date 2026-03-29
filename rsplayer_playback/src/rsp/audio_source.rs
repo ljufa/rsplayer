@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{format_err, Result};
 use symphonia::core::formats::probe::Hint;
@@ -82,13 +82,27 @@ pub fn probe_local_file(
     for dir in music_dirs {
         let path = Path::new(dir).join(path_str);
         if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
-            hint.with_extension(extension);
+            hint.with_extension(&extension.to_lowercase());
         }
         if let Ok(file) = std::fs::File::open(&path) {
             return Ok((Box::new(file) as Box<dyn MediaSource>, None));
         }
     }
     Err(format_err!("Unable to open file: {path_str}"))
+}
+
+/// Resolve an APE file path across music directories.
+/// Returns the full path if found, None otherwise.
+pub fn resolve_ape_path(path_str: &str, music_dirs: &[String]) -> Option<PathBuf> {
+    for dir in music_dirs {
+        let path = Path::new(dir).join(path_str);
+        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            if ext.eq_ignore_ascii_case("ape") && path.exists() {
+                return Some(path);
+            }
+        }
+    }
+    None
 }
 
 pub fn is_http_stream(path: &str) -> bool {

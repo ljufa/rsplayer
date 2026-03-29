@@ -21,4 +21,4 @@
 
 ### Deploy to local test env (RPI)
 - there are two test devices rpi zero and rpi4 (rpi_host and rpi_target env variables in Makefile.toml) it requires switch remove/add comment...
-- `cargo make build_ui_release` && `cargo make copy_remote`
+- If FE files had changed `cargo make build_ui_release` && `cargo make copy_remote`, otherwise only `cargo make copy_remote`

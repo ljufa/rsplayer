@@ -5,7 +5,9 @@ use anyhow::{format_err, Result};
 use api_models::player::Song;
 use api_models::state::{PlayerInfo, SongProgress, StateChangeEvent};
 use log::{debug, warn};
+use rsplayer_metadata::ape_bundle::ApeReader;
 use rsplayer_metadata::dsd_bundle::{build_codec_registry, build_probe, CODEC_TYPE_DSD_LSBF, CODEC_TYPE_DSD_MSBF};
+use rsplayer_metadata::radio_meta::RadioMeta;
 use symphonia::core::audio::Channels;
 use symphonia::core::codecs::{
     audio::{AudioDecoderOptions, CODEC_ID_NULL_AUDIO},
@@ -13,13 +15,13 @@ use symphonia::core::codecs::{
 };
 use symphonia::core::errors::Error;
 use symphonia::core::formats::probe::Hint;
-use symphonia::core::formats::{FormatOptions, SeekMode, SeekTo, Track};
+use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::{Time, TimeBase, Timestamp};
 
 use crate::rsp::alsa_output::AlsaOutput;
-use crate::rsp::audio_source::{is_http_stream, probe_http_source, probe_local_file};
+use crate::rsp::audio_source::{is_http_stream, probe_http_source, probe_local_file, resolve_ape_path};
 use crate::rsp::device_capabilities::DeviceCapabilities;
 use crate::rsp::playback_config::PlaybackConfig;
 use crate::rsp::playback_context::PlaybackContext;
@@ -49,34 +51,54 @@ pub fn play_file(
 
     let is_seekable = !is_http_stream(path_str);
 
-    let (source, radio_meta) = if is_http_stream(path_str) {
-        probe_http_source(path_str, &mut hint, &context.changes_tx)?
+    // For APE files: open the file directly and construct ApeReader without
+    // reading the entire file into memory. Only headers + seek table are read
+    // upfront (~1KB); frame data is read on demand during playback.
+    let ape_path = if is_http_stream(path_str) {
+        None
     } else {
-        probe_local_file(path_str, &config.music_dirs, &mut hint)?
+        resolve_ape_path(path_str, &config.music_dirs)
     };
 
-    if let Some(radio_meta) = &radio_meta {
-        context
-            .changes_tx
-            .send(StateChangeEvent::CurrentSongEvent(Song {
-                title: radio_meta.name.clone(),
-                album: radio_meta.description.clone(),
-                genre: radio_meta.genre.clone(),
-                file: radio_meta.url.clone(),
-                image_url: radio_meta.image_url.clone(),
-                ..Default::default()
-            }))
-            .ok();
-    }
+    let mut radio_meta: Option<RadioMeta> = None;
 
-    let mut reader = build_probe()
-        .probe(
-            &hint,
-            MediaSourceStream::new(source, symphonia::core::io::MediaSourceStreamOptions::default()),
-            FormatOptions::default(),
-            MetadataOptions::default(),
-        )
-        .map_err(|_| format_err!("Media source probe failed"))?;
+    let mut reader: Box<dyn FormatReader + '_> = if let Some(ape_path) = ape_path {
+        debug!("APE direct file path: {}", ape_path.display());
+        // 1 MB buffer to amortize NFS round trips — default 8 KB causes
+        // dozens of small reads per frame, starving the audio ring buffer on slow links.
+        let file = std::io::BufReader::with_capacity(1024 * 1024, std::fs::File::open(&ape_path)?);
+        Box::new(ApeReader::try_new_from_reader(file)?)
+    } else {
+        let (source, rm) = if is_http_stream(path_str) {
+            probe_http_source(path_str, &mut hint, &context.changes_tx)?
+        } else {
+            probe_local_file(path_str, &config.music_dirs, &mut hint)?
+        };
+        radio_meta = rm;
+
+        if let Some(rm) = &radio_meta {
+            context
+                .changes_tx
+                .send(StateChangeEvent::CurrentSongEvent(Song {
+                    title: rm.name.clone(),
+                    album: rm.description.clone(),
+                    genre: rm.genre.clone(),
+                    file: rm.url.clone(),
+                    image_url: rm.image_url.clone(),
+                    ..Default::default()
+                }))
+                .ok();
+        }
+
+        build_probe()
+            .probe(
+                &hint,
+                MediaSourceStream::new(source, symphonia::core::io::MediaSourceStreamOptions::default()),
+                FormatOptions::default(),
+                MetadataOptions::default(),
+            )
+            .map_err(|_| format_err!("Media source probe failed"))?
+    };
 
     let tracks = reader.tracks();
     let Some(track) = first_supported_track(tracks) else {
