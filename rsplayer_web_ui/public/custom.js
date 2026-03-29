@@ -35,6 +35,20 @@ function focusSearchInput() {
     return false;
 }
 
+/**
+ * Focus on the audio interface select dropdown in settings.
+ * Returns true if focused, false if not found.
+ */
+function focusAudioInterfaceSelect() {
+    const audioSelect = document.getElementById('audio-interface-select');
+    if (audioSelect) {
+        audioSelect.focus();
+        audioSelect.scrollIntoView({ behavior: "smooth", block: "center" });
+        return true;
+    }
+    return false;
+}
+
 function attachCarousel(id) {
     try {
         if (!document.querySelector(id)) return;
@@ -230,6 +244,29 @@ function resetFirstVisit() {
     try {
         localStorage.removeItem(FIRST_VISIT_KEY);
     } catch(e) {}
+}
+
+// ============================================================
+//   UNSAVED CHANGES / BEFOREUNLOAD WARNING
+// ============================================================
+
+let _beforeUnloadHandler = null;
+
+/**
+ * Register or unregister the beforeunload warning.
+ * Call with true when there are unsaved changes, false when cleared.
+ */
+function setBeforeUnloadWarning(hasChanges) {
+    if (hasChanges && !_beforeUnloadHandler) {
+        _beforeUnloadHandler = function(e) {
+            e.preventDefault();
+            return (e.returnValue = '');
+        };
+        window.addEventListener('beforeunload', _beforeUnloadHandler);
+    } else if (!hasChanges && _beforeUnloadHandler) {
+        window.removeEventListener('beforeunload', _beforeUnloadHandler);
+        _beforeUnloadHandler = null;
+    }
 }
 
 // Apply saved (or system-preferred) theme as early as possible to avoid flash.

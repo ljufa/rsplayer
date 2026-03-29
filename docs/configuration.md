@@ -34,7 +34,7 @@ These settings are hidden under the **Advanced** collapsible inside the Playback
 
 ![Audio Processing Settings](/_assets/settings_audio_processing.png)
 
-- **Enable VU meter:** Displays a real-time VU meter on the player page during playback.
+- **Enable visualization:** Displays a real-time visualization on the player page during playback. When enabled, a visualizer button appears on the player controls. Press **V** or click the button to cycle through 12 different styles (NeonBar, Spectrum, Wave, Circular, Lissajous, Particles, Mirror, Starfield, DNA, Plasma, Tunnel, Bounce). Your preferred visualizer is saved automatically.
 - **Enable loudness normalization (EBU R128):** When enabled, playback volume is automatically adjusted to match a target loudness level using the EBU R128 standard. Loudness analysis runs in the background while playback is stopped — each song is measured once and the result is stored permanently. Progress can be tracked on the Library Statistics page.
 - **Target loudness (LUFS):** Sets the target loudness level for normalization, from -30 to -5 LUFS (default: -18). Only visible when loudness normalization is enabled.
 
@@ -109,7 +109,10 @@ Please refer to the documentation within these repositories for detailed guides 
 
 | Button | Action |
 |--------|--------|
+| Save (without restart) | Apply settings that don't require restart |
 | Save & restart player | Apply settings and restart |
 | Restart player | Restart without saving |
 | Restart system | Reboot the device |
 | Shutdown system | Power off the device |
+
+> **Note:** When DSP or other settings that require restart are changed, RSPlayer will prompt you to restart. If you navigate away from Settings with unapplied changes, a confirmation dialog will warn you.

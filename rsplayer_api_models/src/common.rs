@@ -224,6 +224,8 @@ pub enum SystemCommand {
     VolUp,
     VolDown,
     SetVol(u8),
+    /// Firmware-reported volume: persist and broadcast without sending to hardware.
+    ReportVolume(u8),
     PowerOff,
     RestartSystem,
     RestartRSPlayer,

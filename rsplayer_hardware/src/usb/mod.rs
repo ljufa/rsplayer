@@ -1,6 +1,6 @@
 use anyhow::Result;
 use api_models::{
-    common::{PlayerCommand, SystemCommand, UserCommand, Volume},
+    common::{PlayerCommand, SystemCommand, UserCommand},
     state::StateChangeEvent,
 };
 use log::{debug, error, info, trace};
@@ -171,11 +171,7 @@ pub fn start_listening(
                                     if msg.starts_with("CurVolume=") {
                                         if let Some((_, vol_str)) = msg.split_once('=') {
                                             if let Ok(vol) = vol_str.parse::<u8>() {
-                                                let volume = Volume {
-                                                    current: vol,
-                                                    ..Volume::default()
-                                                };
-                                                _ = state_changes_tx.send(StateChangeEvent::VolumeChangeEvent(volume));
+                                                _ = system_commands_tx.blocking_send(SystemCommand::ReportVolume(vol));
                                             }
                                         }
                                     }

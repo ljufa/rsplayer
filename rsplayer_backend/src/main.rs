@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use env_logger::Env;
+use fjall::PersistMode;
 
 use rsplayer_hardware::usb::{self, UsbService};
 use tokio::signal::unix::{Signal, SignalKind};
@@ -66,9 +67,11 @@ async fn main() {
     "
     );
 
-    let shared_db = fjall::Database::builder("rsplayer.db")
-        .open()
-        .expect("Failed to open fjall database");
+    let shared_db = std::sync::Arc::new(
+        fjall::Database::builder("rsplayer.db")
+            .open()
+            .expect("Failed to open fjall database")
+    );
     info!("Shared database opened.");
 
     let config = Arc::new(Configuration::new(&shared_db));
@@ -84,7 +87,7 @@ async fn main() {
     let statistics_repository = Arc::new(PlayStatisticsRepository::new(&shared_db));
     let metadata_service = Arc::new(
         MetadataService::new(
-            &shared_db,
+            shared_db.clone(),
             &config.get_settings().metadata_settings,
             song_repository.clone(),
             album_repository.clone(),
@@ -107,7 +110,6 @@ async fn main() {
     let usb_settings = config.get_settings().usb_settings;
     let usb_service = if usb_settings.enabled {
         let service = Arc::new(UsbService::new(usb_settings.baud_rate));
-        // Try initial connection, but don't fail if it doesn't find the device yet
         let _ = service.try_reconnect();
         Some(service)
     } else {
@@ -157,6 +159,7 @@ async fn main() {
         system_commands_tx.clone(),
         &config,
     );
+    info!("HTTP servers started.");
 
     if config.get_settings().auto_resume_playback {
         player_service.play_from_current_queue_song();
@@ -229,14 +232,21 @@ async fn main() {
 
         _ = term_signal.recv() => {
             info!("Terminate signal received.");
+            persist_db_on_shutdown(&shared_db);
         }
 
         _ = tokio::signal::ctrl_c() => {
             info!("CTRL-c signal received.");
+            persist_db_on_shutdown(&shared_db);
         }
     };
 
     info!("RSPlayer shutdown completed.");
+}
+
+fn persist_db_on_shutdown(db: &fjall::Database) {
+    info!("Persisting database to WAL...");
+    let _ = db.persist(PersistMode::SyncData);
 }
 
 #[allow(clippy::redundant_pub_crate)]

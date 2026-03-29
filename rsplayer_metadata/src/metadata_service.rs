@@ -10,7 +10,7 @@ use std::{
 
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
-use fjall::{Database, Keyspace, KeyspaceCreateOptions};
+use fjall::{Database, Keyspace, KeyspaceCreateOptions, PersistMode};
 use log::{debug, info, warn};
 use symphonia::core::{formats::probe::Hint, formats::FormatOptions, io::MediaSourceStream, meta::MetadataOptions};
 use tokio::sync::broadcast::Sender;
@@ -37,11 +37,12 @@ pub struct MetadataService {
     song_repository: Arc<SongRepository>,
     album_repository: Arc<AlbumRepository>,
     statistic_repository: Arc<PlayStatisticsRepository>,
+    db: Arc<Database>,
 }
 
 impl MetadataService {
     pub fn new(
-        db: &Database,
+        db: Arc<Database>,
         settings: &MetadataStoreSettings,
         song_repository: Arc<SongRepository>,
         album_repository: Arc<AlbumRepository>,
@@ -66,6 +67,7 @@ impl MetadataService {
             song_repository,
             album_repository,
             statistic_repository,
+            db,
         })
     }
 
@@ -296,6 +298,11 @@ impl MetadataService {
             start_time.elapsed().as_secs()
         );
         self.scan_running.store(false, Ordering::Relaxed);
+        if let Err(e) = self.db.persist(PersistMode::SyncData) {
+            warn!("Failed to persist database after scan: {e}");
+        } else {
+            info!("Database persisted after scan");
+        }
     }
 
     fn full_path_to_database_key_for_dir(music_dir: &str, input: &str) -> String {

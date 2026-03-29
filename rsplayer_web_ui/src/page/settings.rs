@@ -7,7 +7,7 @@ use api_models::{
 };
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
-use gloo_console::{error, log};
+use gloo_console::log;
 use gloo_file::futures::read_as_text;
 use gloo_file::File;
 use gloo_net::{http::Request, Error};
@@ -16,6 +16,8 @@ use wasm_bindgen::JsCast;
 use web_sys::FileList;
 
 use crate::dsp::get_dsp_presets;
+use crate::focusAudioInterfaceSelect;
+use crate::setBeforeUnloadWarning;
 use crate::view_spinner_modal;
 
 const API_SETTINGS_PATH: &str = "/api/settings";
@@ -27,7 +29,8 @@ const API_SETTINGS_PATH: &str = "/api/settings";
 pub enum ConfirmAction {
     FullRescan,
     RestartPlayer,
-    SaveAndRestartPlayer,
+    RestartSystem,
+    ShutdownSystem,
     RemoveMusicDirectory(usize),
     RemoveNetworkMount(String),
 }
@@ -51,6 +54,34 @@ pub struct Model {
     new_music_dir: String,
     external_mounts: Vec<ExternalMount>,
     network_mounts_open: bool,
+    /// Whether to auto-focus on audio interface field (set on first visit if not configured)
+    focus_audio_interface: bool,
+    /// Whether the Playback section should be open (set once when settings load)
+    playback_section_should_open: Option<bool>,
+    /// Whether any restart-requiring settings were changed (shows restart banner)
+    pending_restart: bool,
+    /// Whether DSP settings have been edited since the last Apply (or page load)
+    dsp_dirty: bool,
+}
+
+impl Model {
+    pub fn has_unsaved_changes(&self) -> bool {
+        self.dsp_dirty || self.pending_restart
+    }
+}
+
+impl Model {
+    pub fn is_playback_device_configured(&self) -> bool {
+        self.settings.local_browser_playback 
+            || (!self.settings.alsa_settings.output_device.card_id.is_empty() 
+                && !self.settings.alsa_settings.output_device.card_id.starts_with("--")
+                && !self.settings.alsa_settings.output_device.name.is_empty()
+                && !self.settings.alsa_settings.output_device.name.starts_with("--"))
+    }
+    
+    pub fn is_music_library_configured(&self) -> bool {
+        !self.settings.metadata_settings.effective_directories().is_empty()
+    }
 }
 
 #[derive(Debug)]
@@ -100,7 +131,8 @@ pub enum Msg {
     ConfirmCancelled,
 
     // --- Buttons ----
-    SaveSettingsAndRestart,
+    /// Auto-save settings without restart. bool = restart required for change to take effect.
+    SaveCurrentSettings(bool),
     SettingsSaved(Result<String, Error>),
 
     SettingsFetched(Settings),
@@ -129,6 +161,10 @@ pub enum Msg {
     /// Emitted when the user picks a theme in the settings page.
     /// The parent (lib.rs) intercepts this and calls applyTheme().
     SelectTheme(String),
+    
+    // --- First-time setup ---
+    /// Focus on the audio interface dropdown (for first-time setup)
+    FocusAudioInterface,
 }
 
 #[derive(Debug, Clone, EnumIter, PartialEq, Eq)]
@@ -212,6 +248,10 @@ pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
         new_music_dir: String::new(),
         external_mounts: Vec::new(),
         network_mounts_open: false,
+        focus_audio_interface: false,
+        playback_section_should_open: None,
+        pending_restart: false,
+        dsp_dirty: false,
     }
 }
 
@@ -234,10 +274,16 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                         orders.send_msg(Msg::ClickRescanMetadataButton(true));
                     }
                     ConfirmAction::RestartPlayer => {
+                        model.pending_restart = false;
+                        model.dsp_dirty = false;
+                        setBeforeUnloadWarning(false);
                         orders.send_msg(Msg::SendSystemCommand(SystemCommand::RestartRSPlayer));
                     }
-                    ConfirmAction::SaveAndRestartPlayer => {
-                        orders.send_msg(Msg::SaveSettingsAndRestart);
+                    ConfirmAction::RestartSystem => {
+                        orders.send_msg(Msg::SendSystemCommand(SystemCommand::RestartSystem));
+                    }
+                    ConfirmAction::ShutdownSystem => {
+                        orders.send_msg(Msg::SendSystemCommand(SystemCommand::PowerOff));
                     }
                     ConfirmAction::RemoveMusicDirectory(idx) => {
                         orders.send_msg(Msg::RemoveMusicDirectory(idx));
@@ -248,26 +294,24 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 }
             }
         }
-        Msg::SaveSettingsAndRestart => {
-            match model.settings.validate() {
-                Ok(_) => {
-                    let settings = model.settings.clone();
-                    orders.perform_cmd(async {
-                        Msg::SettingsSaved(save_settings(settings, "reload=true".to_string()).await)
-                    });
-                    model.waiting_response = true;
-                }
-                Err(e) => {
-                    error!(format!("Settings validation failed: {:?}", e));
-                }
+        Msg::SaveCurrentSettings(needs_restart) => {
+            if needs_restart {
+                model.pending_restart = true;
+                setBeforeUnloadWarning(true);
             }
+            let settings = model.settings.clone();
+            orders.perform_cmd(async move {
+                _ = save_settings(settings, "reload=false".to_string()).await;
+            });
         }
         Msg::ToggleUsbEnabled => {
             model.settings.usb_settings.enabled = !model.settings.usb_settings.enabled;
+            orders.send_msg(Msg::SaveCurrentSettings(true));
         }
 
         Msg::ToggleResumePlayback => {
             model.settings.auto_resume_playback = !model.settings.auto_resume_playback;
+            orders.send_msg(Msg::SaveCurrentSettings(false));
         }
         Msg::ToggleRspAlsaBufferSize => {
             if model.settings.rs_player_settings.alsa_buffer_size.is_some() {
@@ -275,6 +319,7 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             } else {
                 model.settings.rs_player_settings.alsa_buffer_size = Some(10000);
             }
+            orders.send_msg(Msg::SaveCurrentSettings(true));
         }
 
         Msg::InputNewMusicDir(value) => {
@@ -315,19 +360,23 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     model.settings.volume_ctrl_settings.ctrl_device = VolumeCrtlType::Alsa;
                 }
             }
+            orders.send_msg(Msg::SaveCurrentSettings(true));
         }
         Msg::InputAlsaPcmChange(value) => {
             model
                 .settings
                 .alsa_settings
                 .set_output_device(&model.selected_audio_card_id, &value);
+            orders.send_msg(Msg::SaveCurrentSettings(true));
         }
 
         Msg::InputVolumeStepChanged(step) => {
             model.settings.volume_ctrl_settings.volume_step = step.parse::<u8>().unwrap_or_default();
+            orders.send_msg(Msg::SaveCurrentSettings(false));
         }
         Msg::InputVolumeAlsaMixerChanged(mixer_name) => {
             model.settings.volume_ctrl_settings.alsa_mixer_name = Some(mixer_name);
+            orders.send_msg(Msg::SaveCurrentSettings(false));
         }
 
         Msg::InputRspInputBufferSizeChange(value) => {
@@ -354,13 +403,33 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::InputRspFixedSampleRateChange(value) => {
             model.settings.rs_player_settings.fixed_output_sample_rate = value.parse::<u32>().ok().filter(|&r| r > 0);
+            orders.send_msg(Msg::SaveCurrentSettings(true));
         }
         Msg::SettingsFetched(sett) => {
             model.waiting_response = false;
+            model.pending_restart = false;
+            model.dsp_dirty = false;
+            setBeforeUnloadWarning(false);
             model.selected_audio_card_id = sett.alsa_settings.output_device.card_id.clone();
             model.settings = sett;
+            // Set whether Playback section should be open (only once, on first load)
+            if model.playback_section_should_open.is_none() {
+                model.playback_section_should_open = Some(!model.is_playback_device_configured());
+            }
             // Query mount status on load
             orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(StorageCommand::QueryMountStatus)));
+            // Focus on audio interface if needed (flag was set by parent)
+            log!(format!("SettingsFetched: focus_audio_interface={}, is_playback_device_configured={}, local_browser_playback={}, card_id={}, pcm_name={}", 
+                model.focus_audio_interface,
+                model.is_playback_device_configured(),
+                model.settings.local_browser_playback,
+                model.settings.alsa_settings.output_device.card_id,
+                model.settings.alsa_settings.output_device.name
+            ));
+            if model.focus_audio_interface && !model.is_playback_device_configured() {
+                log!("Focusing audio interface select");
+                focusAudioInterfaceSelect();
+            }
         }
         Msg::SettingsSaved(_saved) => {
             model.waiting_response = false;
@@ -377,13 +446,17 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::ToggleDspEnabled => {
             model.settings.rs_player_settings.dsp_settings.enabled = !model.settings.rs_player_settings.dsp_settings.enabled;
+            model.dsp_dirty = true;
+            setBeforeUnloadWarning(true);
         }
         Msg::ToggleVuMeterEnabled => {
             model.settings.rs_player_settings.vu_meter_enabled = !model.settings.rs_player_settings.vu_meter_enabled;
+            orders.send_msg(Msg::SaveCurrentSettings(true));
         }
         Msg::ToggleLoudnessNormalization => {
             model.settings.rs_player_settings.loudness_normalization_enabled =
                 !model.settings.rs_player_settings.loudness_normalization_enabled;
+            orders.send_msg(Msg::SaveCurrentSettings(true));
         }
         Msg::InputNormalizationTargetLufs(val) => {
             if let Ok(v) = val.parse::<f64>() {
@@ -391,6 +464,8 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             }
         }
         Msg::DspAddFilter => {
+            model.dsp_dirty = true;
+            setBeforeUnloadWarning(true);
             model.settings.rs_player_settings.dsp_settings.filters.push(FilterConfig {
                 filter: DspFilter::Peaking {
                     freq: 1000.0,
@@ -402,13 +477,19 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::DspRemoveAllFilters => {
             model.settings.rs_player_settings.dsp_settings.filters.clear();
+            model.dsp_dirty = true;
+            setBeforeUnloadWarning(true);
         }
         Msg::DspRemoveFilter(index) => {
             if index < model.settings.rs_player_settings.dsp_settings.filters.len() {
                 model.settings.rs_player_settings.dsp_settings.filters.remove(index);
+                model.dsp_dirty = true;
+                setBeforeUnloadWarning(true);
             }
         }
         Msg::DspUpdateFilterType(index, filter_type) => {
+            model.dsp_dirty = true;
+            setBeforeUnloadWarning(true);
             if let Some(filter_config) = model.settings.rs_player_settings.dsp_settings.filters.get_mut(index) {
                 filter_config.filter = match filter_type {
                     FilterType::Peaking => DspFilter::Peaking { freq: 1000.0, gain: 0.0, q: 0.707 },
@@ -428,6 +509,8 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             }
         }
         Msg::DspUpdateFilterValue(index, field, value) => {
+            model.dsp_dirty = true;
+            setBeforeUnloadWarning(true);
              if let Some(filter_config) = model.settings.rs_player_settings.dsp_settings.filters.get_mut(index) {
                 if let Ok(val) = value.parse::<f64>() {
                     match (&mut filter_config.filter, field) {
@@ -476,6 +559,8 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
              }
         }
         Msg::DspUpdateFilterChannels(index, val) => {
+            model.dsp_dirty = true;
+            setBeforeUnloadWarning(true);
             if let Some(filter_config) = model.settings.rs_player_settings.dsp_settings.filters.get_mut(index) {
                 match val.as_str() {
                     "Left" => filter_config.channels = vec![0],
@@ -485,11 +570,15 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             }
         }
         Msg::DspApplySettings => {
+            model.dsp_dirty = false;
+            setBeforeUnloadWarning(model.pending_restart);
             orders.send_msg(Msg::SendUserCommand(UserCommand::UpdateDsp(model.settings.rs_player_settings.dsp_settings.clone())));
         }
         Msg::DspLoadPreset(index) => {
             if let Some(preset) = get_dsp_presets().get(index) {
                 model.settings.rs_player_settings.dsp_settings.filters = preset.filters.clone();
+                model.dsp_dirty = true;
+                setBeforeUnloadWarning(true);
             }
         }
         Msg::DspImportConfig(file_list) => {
@@ -509,6 +598,8 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 let filters = crate::dsp::parse_dsp_config(&content);
                 if !filters.is_empty() {
                     model.settings.rs_player_settings.dsp_settings.filters = filters;
+                    model.dsp_dirty = true;
+                    setBeforeUnloadWarning(true);
                 }
             }
         }
@@ -611,6 +702,11 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::SelectTheme(_) => {
             // Handled by the parent (lib.rs) — nothing to do here.
         }
+        Msg::FocusAudioInterface => {
+            log!("FocusAudioInterface message received");
+            // Set flag to focus after settings are loaded
+            model.focus_audio_interface = true;
+        }
         _ => {}
     }
 }
@@ -642,16 +738,49 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
             style!{St::Padding => "0.5rem 0"},
             details![
                 C!["settings-details"],
-                summary![C!["settings-details__summary"], "Playback"],
+                IF!(model.playback_section_should_open.unwrap_or(false) => attrs! { At::Open => true }),
+                summary![
+                    C!["settings-details__summary"], 
+                    "Playback",
+                    IF!(!model.waiting_response && !model.is_playback_device_configured() => span![
+                        style! {
+                            St::BackgroundColor => "#ffb400",
+                            St::Color => "#000",
+                            St::FontSize => "0.7rem",
+                            St::Padding => "2px 8px",
+                            St::BorderRadius => "4px",
+                            St::FontWeight => "600",
+                            St::MarginLeft => "0.5rem",
+                        },
+                        "Required"
+                    ]),
+                ],
                 div![
                     C!["settings-details__body"],
+                    IF!(!model.waiting_response && !model.is_playback_device_configured() => div![
+                        C!["notification", "is-warning", "is-light", "mb-4"],
+                        style! { St::Padding => "0.75rem" },
+                        i![C!["material-icons", "mr-2", "is-size-6"], "warning"],
+                        span!["Please select an audio interface and PCM device to enable playback."],
+                    ]),
                     // Audio interface
                     div![
                         C!["field", "is-grouped", "is-grouped-multiline"],
                         div![C!["control"],
-                            label!["Audio interface", C!["label","has-text-white"]],
+                            label![
+                                C!["label","has-text-white"],
+                                "Audio interface",
+                                IF!(!model.waiting_response && !model.is_playback_device_configured() => span![
+                                    style! {
+                                        St::Color => "#ffb400",
+                                        St::MarginLeft => "0.25rem",
+                                    },
+                                    "*"
+                                ]),
+                            ],
                             div![
                                 C!["select"],
+                                IF!(model.focus_audio_interface && !model.waiting_response && !model.is_playback_device_configured() => attrs! { At::Id => "audio-interface-select" }),
                                 select![
                                     option!["-- Select audio interface --"],
                                     option![
@@ -675,7 +804,17 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
                             ],
                         ],
                         IF!(!model.settings.local_browser_playback => div![C!["control"],
-                            label!["PCM Device", C!["label","has-text-white"]],
+                            label![
+                                C!["label","has-text-white"],
+                                "PCM Device",
+                                IF!(!model.waiting_response && !model.is_playback_device_configured() => span![
+                                    style! {
+                                        St::Color => "#ffb400",
+                                        St::MarginLeft => "0.25rem",
+                                    },
+                                    "*"
+                                ]),
+                            ],
                             div![
                                 C!["select"],
                                 select![
@@ -779,7 +918,7 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
                         ],
                         label![
                             C!["label","has-text-white"],
-                            "Enable VU meter",
+                            "Enable Music Visualization",
                             attrs! {
                                 At::For => "vu_meter_enabled_cb"
                             }
@@ -821,6 +960,7 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
                                             At::Max => "-5"
                                         },
                                         input_ev(Ev::Change, Msg::InputNormalizationTargetLufs),
+                                        ev(Ev::Blur, |_| Msg::SaveCurrentSettings(true)),
                                     ]
                                 ]
                             ],
@@ -837,7 +977,7 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
                             ]
                         ]
                     ),
-                    view_dsp_settings(&settings.rs_player_settings),
+                    view_dsp_settings(&settings.rs_player_settings, model.dsp_dirty),
                 ],
             ],
         ],
@@ -847,10 +987,30 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
             style!{St::Padding => "0.5rem 0"},
             details![
                 C!["settings-details"],
-                attrs! { At::Open => true },
-                summary![C!["settings-details__summary"], "Music Library"],
+                summary![
+                    C!["settings-details__summary"],
+                    "Music Library",
+                    IF!(!model.waiting_response && !model.is_music_library_configured() => span![
+                        style! {
+                            St::BackgroundColor => "#3273dc",
+                            St::Color => "#fff",
+                            St::FontSize => "0.7rem",
+                            St::Padding => "2px 8px",
+                            St::BorderRadius => "4px",
+                            St::FontWeight => "600",
+                            St::MarginLeft => "0.5rem",
+                        },
+                        "Recommended"
+                    ]),
+                ],
                 div![
                     C!["settings-details__body"],
+                    IF!(!model.waiting_response && !model.is_music_library_configured() => div![
+                        C!["notification", "is-info", "is-light", "mb-4"],
+                        style! { St::Padding => "0.75rem" },
+                        i![C!["material-icons", "mr-2", "is-size-6"], "info"],
+                        span!["Add music directories to browse your local library. Optional if you only use radio streaming."],
+                    ]),
                     view_music_directories(model),
                     view_network_storage(model),
                     div![
@@ -924,32 +1084,41 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
             ],
         ],
 
+        // restart pending banner
+        IF!(model.pending_restart => div![
+            C!["notification", "is-warning", "is-light", "mb-3"],
+            style! { St::Padding => "0.75rem" },
+            i![C!["material-icons", "mr-2", "is-size-6"], "restart_alt"],
+            "Some changes require a player restart to take effect.",
+        ]),
+
         // buttons
         div![
             C!["buttons"],
-                button![
-                    IF!(model.settings.validate().is_err() => attrs!{ At::Disabled => ""}),
-                    C!["button"],
-                    "Save & restart player",
-                    ev(Ev::Click, |_| Msg::ShowConfirm(ConfirmAction::SaveAndRestartPlayer))
-                ],
-                button![
-                    C!["button", "is-warning"],
-                    "Restart player",
-                    ev(Ev::Click, |_| Msg::ShowConfirm(ConfirmAction::RestartPlayer))
-                ],
+            button![
+                C!["button", "is-warning"],
+                "Restart player",
+                ev(Ev::Click, |_| Msg::ShowConfirm(ConfirmAction::RestartPlayer))
+            ],
+        ],
+
+        // Danger zone
+        section![
+            style!{ St::Padding => "0.5rem 0" },
+            p![C!["settings-details__summary"], "Danger Zone"],
+            div![
+                C!["buttons", "mt-2"],
                 button![
                     C!["button", "is-danger"],
                     "Restart system",
-                    ev(Ev::Click, |_| Msg::SendSystemCommand(
-                        SystemCommand::RestartSystem
-                    ))
+                    ev(Ev::Click, |_| Msg::ShowConfirm(ConfirmAction::RestartSystem))
                 ],
                 button![
                     C!["button", "is-danger"],
                     "Shutdown system",
-                    ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::PowerOff))
-                ]
+                    ev(Ev::Click, |_| Msg::ShowConfirm(ConfirmAction::ShutdownSystem))
+                ],
+            ],
         ],
 
         // version
@@ -972,9 +1141,18 @@ fn view_confirm_modal(confirm_action: &Option<ConfirmAction>) -> Node<Msg> {
     let message = match action {
         ConfirmAction::FullRescan => "Full rescan will destroy the current music database and rebuild it from scratch. All metadata and playback state will be lost. Are you sure?",
         ConfirmAction::RestartPlayer => "If the player was not started via systemd, it will exit and must be started again manually. Are you sure you want to restart?",
-        ConfirmAction::SaveAndRestartPlayer => "Settings will be saved and the player will restart. If the player was not started via systemd, it will exit and must be started again manually. Are you sure?",
+        ConfirmAction::RestartSystem => "This will reboot the entire system. All active connections will be lost and playback will stop. You will need to wait for the system to come back online. Are you sure?",
+        ConfirmAction::ShutdownSystem => "This will power off the entire system. Playback will stop and you will lose all connections. The system will need to be physically powered on again. Are you sure?",
         ConfirmAction::RemoveMusicDirectory(_) => "This will remove the directory from music sources. Songs from this directory will no longer be scanned. No data or directory will be deleted. Are you sure?",
         ConfirmAction::RemoveNetworkMount(_) => "This will unmount and remove the network share. Songs from this mount will no longer be accessible. No data or directory will be deleted. Are you sure?",
+    };
+    let title = match action {
+        ConfirmAction::RestartSystem | ConfirmAction::ShutdownSystem => "System Action",
+        _ => "Warning",
+    };
+    let confirm_class = match action {
+        ConfirmAction::ShutdownSystem | ConfirmAction::RestartSystem => "is-danger",
+        _ => "is-warning",
     };
     div![
         C!["modal", "is-active"],
@@ -986,7 +1164,7 @@ fn view_confirm_modal(confirm_action: &Option<ConfirmAction>) -> Node<Msg> {
             C!["modal-card"],
             header![
                 C!["modal-card-head"],
-                p![C!["modal-card-title"], "Warning"],
+                p![C!["modal-card-title"], title],
                 button![
                     C!["delete"],
                     attrs! { At::AriaLabel => "close" },
@@ -1000,7 +1178,7 @@ fn view_confirm_modal(confirm_action: &Option<ConfirmAction>) -> Node<Msg> {
             footer![
                 C!["modal-card-foot"],
                 button![
-                    C!["button", "is-warning"],
+                    C!["button", confirm_class],
                     "Confirm",
                     ev(Ev::Click, |_| Msg::ConfirmAccepted)
                 ],
@@ -1053,6 +1231,7 @@ fn view_rsp(rsp_settings: &RsPlayerSettings, local_browser_playback: bool) -> No
                         C!["input"],
                         attrs! {At::Value => rsp_settings.input_stream_buffer_size_mb, At::Type => "number"},
                         input_ev(Ev::Input, move |value| { Msg::InputRspInputBufferSizeChange(value) }),
+                        ev(Ev::Blur, |_| Msg::SaveCurrentSettings(true)),
                     ],
                     view_validation_icon(rsp_settings, "input_stream_buffer_size_mb")
                 ],
@@ -1069,6 +1248,7 @@ fn view_rsp(rsp_settings: &RsPlayerSettings, local_browser_playback: bool) -> No
                         C!["input"],
                         attrs! {At::Value => rsp_settings.ring_buffer_size_ms, At::Type => "number"},
                         input_ev(Ev::Input, move |value| { Msg::InputRspAudioBufferSizeChange(value) }),
+                        ev(Ev::Blur, |_| Msg::SaveCurrentSettings(true)),
                     ],
                     view_validation_icon(rsp_settings, "ring_buffer_size_ms")
                 ],
@@ -1080,6 +1260,7 @@ fn view_rsp(rsp_settings: &RsPlayerSettings, local_browser_playback: bool) -> No
                         C!["input"],
                         attrs! {At::Value => rsp_settings.player_threads_priority, At::Type => "number"},
                         input_ev(Ev::Input, move |value| { Msg::InputRspThreadPriorityChange(value) }),
+                        ev(Ev::Blur, |_| Msg::SaveCurrentSettings(true)),
                     ],
                     view_validation_icon(rsp_settings, "player_threads_priority")
                 ],
@@ -1091,7 +1272,7 @@ fn view_rsp(rsp_settings: &RsPlayerSettings, local_browser_playback: bool) -> No
                 div![
                     C!["select"],
                     select![
-                        input_ev(Ev::Input, Msg::InputRspFixedSampleRateChange),
+                        input_ev(Ev::Change, Msg::InputRspFixedSampleRateChange),
                         option![
                             attrs! { At::Value => "" },
                             IF!(rsp_settings.fixed_output_sample_rate.is_none() => attrs! { At::Selected => true }),
@@ -1144,6 +1325,7 @@ fn view_rsp(rsp_settings: &RsPlayerSettings, local_browser_playback: bool) -> No
                                     At::Type => "number"
                                 },
                                 input_ev(Ev::Input, move |value| { Msg::InputRspAlsaBufferSizeChange(value) }),
+                                ev(Ev::Blur, |_| Msg::SaveCurrentSettings(true)),
                             ],
                         ],
                     ]
@@ -1153,7 +1335,7 @@ fn view_rsp(rsp_settings: &RsPlayerSettings, local_browser_playback: bool) -> No
     ]
 }
 
-fn view_dsp_settings(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
+fn view_dsp_settings(rsp_settings: &RsPlayerSettings, dsp_dirty: bool) -> Node<Msg> {
     div![
         div![
             C!["field", "mt-5"],
@@ -1220,9 +1402,14 @@ fn view_dsp_settings(rsp_settings: &RsPlayerSettings) -> Node<Msg> {
                     ],
                     button![
                         C!["button", "is-warning", "is-small"],
+                        IF!(dsp_dirty => C!["is-outlined"]),
                         "Apply (Live)",
                         ev(Ev::Click, |_| Msg::DspApplySettings)
                     ],
+                    IF!(dsp_dirty => span![
+                        C!["tag", "is-warning", "is-light", "ml-2"],
+                        "Unapplied changes"
+                    ]),
                     div![
                         C!["file", "is-primary", "is-small", "ml-2"],
                         label![

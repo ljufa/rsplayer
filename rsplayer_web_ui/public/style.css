@@ -983,6 +983,8 @@ a:hover {
   align-items: center;
   height: 90vh;
   padding: 1rem;
+  position: relative;
+  overflow: hidden;
 }
 
 .track-info {
@@ -1010,6 +1012,8 @@ a:hover {
   background-color: var(--player-controls-bg);
   padding: 20px;
   border-radius: 10px;
+  position: relative;
+  z-index: 1;
 }
 
 .button.is-ghost {
@@ -1047,6 +1051,8 @@ a:hover {
   width: 100%;
   max-width: 600px;
   padding: 20px;
+  position: relative;
+  z-index: 1;
   border-radius: 10px;
   margin-bottom: 1rem;
   height: 340px;
@@ -1366,6 +1372,9 @@ details.settings-details[open] > .settings-details__summary::after {
 .settings-details__body {
   padding: 16px;
   border-top: 1px solid var(--border-color);
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .theme-picker {
@@ -2200,7 +2209,6 @@ input[type="range"],
 
 /* Toast notification improvements */
 .notification {
-  animation: slideIn 0.3s ease;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }

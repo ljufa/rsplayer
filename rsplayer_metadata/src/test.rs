@@ -615,7 +615,7 @@ pub mod test_shared {
 
             Self {
                 metadata_service: MetadataService::new(
-                    &db,
+                    Arc::new(db),
                     &settings,
                     song_repository.clone(),
                     album_repository.clone(),

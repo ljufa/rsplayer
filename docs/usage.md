@@ -56,6 +56,7 @@ The top section displays information about the currently playing track:
 | Shuffle/Repeat | Cycle through: Sequential → Random → Loop Single → Loop Queue |
 | Heart | Like/unlike the current track |
 | Lyrics | Open synchronized lyrics modal |
+| Visualizer | Toggle music visualizer (shown when visualization is enabled in Settings) |
 
 ### Progress Bar
 
@@ -82,6 +83,9 @@ The top section displays information about the currently playing track:
 | L | Like / Unlike track |
 | Y | Toggle lyrics |
 | S | Shuffle / Repeat mode |
+| V | Cycle visualizer mode |
+| / | Focus search field |
+| ? | Show keyboard shortcuts help |
 | Esc | Close modal |
 
 ### Synchronized Lyrics
@@ -209,7 +213,7 @@ Configure RSPlayer settings. For detailed configuration options, see the [Config
 |---------|-------------|
 | Appearance | Theme selection |
 | Playback | Audio interface, volume control, auto-resume |
-| Audio Processing | VU meter, loudness normalization, DSP |
+| Audio Processing | Visualization, loudness normalization, DSP |
 | Music Library | Music directories, network storage |
 | Hardware | USB firmware link, power control |
 

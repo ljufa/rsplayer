@@ -25,14 +25,29 @@ pub async fn handle_system_command(cmd: SystemCommand, ctx: &SystemCommandContex
         VolUp => {
             let nv = ctx.audio_service.volume_up();
             if nv.current > 0 {
+                let mut settings = ctx.config.get_settings();
+                settings.volume_ctrl_settings.saved_volume = Some(nv.current);
+                ctx.config.save_settings(&settings);
                 ctx.send_event(StateChangeEvent::VolumeChangeEvent(nv));
             }
         }
         VolDown => {
             let nv = ctx.audio_service.volume_down();
             if nv.current > 0 {
+                let mut settings = ctx.config.get_settings();
+                settings.volume_ctrl_settings.saved_volume = Some(nv.current);
+                ctx.config.save_settings(&settings);
                 ctx.send_event(StateChangeEvent::VolumeChangeEvent(nv));
             }
+        }
+        SystemCommand::ReportVolume(val) => {
+            let mut settings = ctx.config.get_settings();
+            settings.volume_ctrl_settings.saved_volume = Some(val);
+            ctx.config.save_settings(&settings);
+            ctx.send_event(StateChangeEvent::VolumeChangeEvent(api_models::common::Volume {
+                current: val,
+                ..Default::default()
+            }));
         }
         PowerOff => {
             info!("Shutting down system");

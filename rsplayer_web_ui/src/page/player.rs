@@ -15,21 +15,32 @@ use crate::{Msg, PlayerModel};
 pub fn view(model: &PlayerModel) -> Node<Msg> {
     div![
         C!["player-page"],
+        // Visualizer — absolute background layer, covers full player-page
+        IF!(model.vu_meter_enabled => div![
+            style! {
+                St::Position => "absolute",
+                St::Top => "0",
+                St::Left => "0",
+                St::Width => "100%",
+                St::Height => "100%",
+                St::ZIndex => "0",
+                St::PointerEvents => "none",
+            },
+            canvas![
+                id!("vumeter"),
+                style! {
+                    St::Display => "block",
+                    St::Width => "100%",
+                    St::Height => "100%",
+                }
+            ],
+        ]),
         div![
             C!["track-info-container", "has-background-dark-transparent"],
             view_track_info(model.current_song.as_ref(), model.player_info.as_ref()),
         ],
         view_controls(model),
         IF!(model.lyrics_modal_open => view_lyrics_modal(model)),
-        // Keyboard shortcuts hint
-        div![
-            C!["keyboard-shortcuts-hint"],
-            p!["Keyboard shortcuts:"],
-            p![span![C!["keyboard-shortcuts-hint__key"], "Space"], " Play / Pause"],
-            p![span![C!["keyboard-shortcuts-hint__key"], "← / →"], " Previous / Next"],
-            p![span![C!["keyboard-shortcuts-hint__key"], "↑ / ↓"], " Volume up / down"],
-            p![span![C!["keyboard-shortcuts-hint__key"], "M"], " Mute / Unmute"],
-        ],
     ]
 }
 
@@ -206,9 +217,16 @@ fn view_controls(model: &PlayerModel) -> Node<Msg> {
             // Left side controls
             div![
                 C!["level-item"],
+                // Visualizer toggle (only shown when Music Visualization is enabled)
+                IF!(model.vu_meter_enabled => button![
+                    C!["button", "is-ghost", "is-medium"],
+                    attrs! {At::Title => "Toggle visualizer (V)"},
+                    span![C!["icon"], i![C!["fas", "fa-chart-bar"]]],
+                    ev(Ev::Click, |_| Msg::ToggleVisualizer)
+                ]),
                 button![
                     C!["button", "is-ghost", "is-medium"],
-                    attrs! {At::Title => shuffle_title},
+                    attrs! {At::Title => format!("{} (S)", shuffle_title)},
                     span![C!["icon"], i![C!["fas", shuffle_class]]],
                     ev(Ev::Click, |_| Msg::SendUserCommand(Player(
                         PlayerCommand::CyclePlaybackMode
@@ -220,11 +238,13 @@ fn view_controls(model: &PlayerModel) -> Node<Msg> {
                 C!["level-item"],
                 button![
                     C!["button", "is-ghost", "is-medium"],
+                    attrs! {At::Title => "Previous (←)"},
                     span![C!["icon"], i![C!["fas", "fa-backward"]]],
                     ev(Ev::Click, |_| Msg::SendUserCommand(Player(PlayerCommand::Prev))),
                 ],
                 button![
                     C!["button", "is-rounded", "is-large", "mx-4"],
+                    attrs! {At::Title => if playing { "Pause (Space)" } else { "Play (Space)" }},
                     span![
                         C!["icon", "is-large"],
                         i![C!["fas", if playing { "fa-pause" } else { "fa-play" }]]
@@ -237,6 +257,7 @@ fn view_controls(model: &PlayerModel) -> Node<Msg> {
                 ],
                 button![
                     C!["button", "is-ghost", "is-medium"],
+                    attrs! {At::Title => "Next (→)"},
                     span![C!["icon"], i![C!["fas", "fa-forward"]]],
                     ev(Ev::Click, |_| Msg::SendUserCommand(Player(PlayerCommand::Next))),
                 ],
@@ -259,6 +280,7 @@ fn view_controls(model: &PlayerModel) -> Node<Msg> {
                     );
                     button![
                         C!["button", "is-ghost", "is-medium"],
+                        attrs! {At::Title => "Like / Unlike (L)"},
                         span![C!["icon"], i![C![like_class, "fa-heart"]]],
                         ev(Ev::Click, |_| Msg::LikeMediaItemClick(cmd))
                     ]
@@ -266,25 +288,13 @@ fn view_controls(model: &PlayerModel) -> Node<Msg> {
                 // Lyrics button
                 button![
                     C!["button", "is-ghost", "is-medium"],
-                    attrs! {At::Title => "Lyrics"},
+                    attrs! {At::Title => "Lyrics (Y)"},
                     span![C!["icon"], i![C!["fas", "fa-align-left"]]],
                     ev(Ev::Click, |_| Msg::ToggleLyricsModal)
                 ],
             ],
         ],
         view_track_progress_bar(&model.progress),
-        IF!(model.vu_meter_enabled => div![
-            C!["container", "px-5", "pb-4"],
-            canvas![
-                id!("vumeter"),
-                style! {
-                    St::Width => "100%",
-                    St::Height => "20px",
-                    St::BorderRadius => "4px",
-                    // St::Background => "#222",
-                }
-            ]
-        ]),
         view_volume_slider(&model.volume_state, model.volume_state.current),
     ]
 }
@@ -379,7 +389,7 @@ fn view_volume_slider(volume_state: &Volume, current_volume: u8) -> Node<Msg> {
                 C!["level-item"],
                 button![
                     C!["button", "is-ghost", "is-medium"],
-                    attrs! {At::Title => if is_muted { "Unmute" } else { "Mute" }},
+                    attrs! {At::Title => if is_muted { "Unmute (M)" } else { "Mute (M)" }},
                     span![
                         C!["icon"],
                         i![C!["fas", if is_muted { "fa-volume-mute" } else { "fa-volume-up" }]]
@@ -394,6 +404,7 @@ fn view_volume_slider(volume_state: &Volume, current_volume: u8) -> Node<Msg> {
                 C!["level-item"],
                 button![
                     C!["button", "is-ghost", "is-medium"],
+                    attrs! {At::Title => "Volume down (↓)"},
                     span![C!["icon"], i![C!["fas", "fa-volume-down"]]],
                     ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::VolDown))
                 ],
@@ -424,6 +435,7 @@ fn view_volume_slider(volume_state: &Volume, current_volume: u8) -> Node<Msg> {
                 C!["level-item"],
                 button![
                     C!["button", "is-ghost", "is-medium"],
+                    attrs! {At::Title => "Volume up (↑)"},
                     span![C!["icon"], i![C!["fas", "fa-volume-up"]]],
                     ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::VolUp))
                 ],

@@ -1,5 +1,65 @@
 # Release Notes
 
+## v2.6.5 — 2026-03-29
+
+### New Features
+
+#### Enhanced Music Visualizer
+The music visualizer has been completely redesigned with 12 new visualizer modes:
+- **NeonBar**: Classic vertical bars with neon glow effect
+- **Spectrum**: Frequency spectrum analyzer
+- **Wave**: Oscilloscope-style waveform display
+- **Circular**: Radial spectrum display
+- **Lissajous**: Parametric curve visualization
+- **Particles**: Dynamic particle system
+- **Mirror**: Mirrored spectrum display
+- **Starfield**: 3D starfield effect
+- **DNA**: Double helix visualization
+- **Plasma**: Fluid plasma effect
+- **Tunnel**: Perspective tunnel effect
+- **Bounce**: Bouncing ball visualization
+
+- Toggle visualizer on/off from the player controls (shown when visualization is enabled)
+- Press **V** to cycle through visualizer types
+- Visualizer style is persisted across sessions
+- Visualizer now renders as an immersive background layer behind the player
+
+#### First-Time Setup Wizard
+New guided setup for first-time users:
+- Welcome modal now includes a "Required Setup" notice
+- On first visit, if no playback device is configured, automatically navigates to Settings
+- Audio interface dropdown is automatically focused for easy configuration
+- Detects both ALSA hardware devices and Local Browser Playback mode
+
+#### System Power Controls
+New power management options in Settings:
+- **Restart System**: Reboots the entire device
+- **Shutdown System**: Powers off the device
+
+### Improvements
+
+#### Settings Page
+- **Unsaved changes warning**: When navigating away from Settings with unapplied DSP changes, a confirmation dialog now asks before discarding changes
+- **Separate save and restart**: Settings are now saved in two modes:
+  - Save without restart (for settings that take effect immediately like theme)
+  - Save with restart (for settings that require player restart like audio device)
+- DSP dirty state tracking to prevent accidental loss of EQ changes
+
+#### Volume Persistence
+- Volume changes via hardware buttons (USB volume up/down) are now persisted immediately
+- Firmware-reported volume from USB devices is properly saved and broadcast
+
+#### Database Reliability
+- Database is now persisted (WAL sync) after metadata scan completes
+- Database is also persisted on graceful shutdown (SIGTERM, SIGINT, Ctrl+C)
+
+#### UI/UX
+- All player control buttons now have keyboard shortcut tooltips (e.g., "Play (Space)", "Next (→)")
+- Removed redundant keyboard shortcuts hint box from player page
+- Track info and controls now render above the visualizer background with proper z-indexing
+
+---
+
 ## v2.6.0 — 2026-03-27
 
 ### New Features

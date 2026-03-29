@@ -66,6 +66,7 @@ struct Model {
     metadata_scan_info: Option<String>,
     notification: Option<StateChangeEvent>,
     vumeter: Option<vumeter::VUMeter>,
+    visualizer_type: vumeter::VisualizerType,
     /// Name of the currently active theme (e.g. "dark", "light", "solarized", "high-contrast").
     current_theme: String,
     /// Whether the library sub-nav dropdown is expanded.
@@ -77,6 +78,11 @@ struct Model {
     show_keyboard_shortcuts: bool,
     /// Whether this is the first visit (persists after modal dismiss).
     is_first_visit: bool,
+    /// Global settings (fetched on init, used to check if playback device is configured)
+    global_settings: Option<api_models::settings::Settings>,
+    /// Set to true when we push back in history to cancel a navigation from dirty settings.
+    /// The resulting synthetic UrlChanged is skipped to avoid re-initializing the settings page.
+    skip_next_url_change: bool,
 }
 
 /// Tabs for keyboard navigation
@@ -127,6 +133,7 @@ pub enum Msg {
     SetVolume(String),
     SetVolumeInput(String),
     InitVUMeter,
+    ToggleVisualizer,
     WindowResized,
 
     LikeMediaItemClick(MetadataCommand),
@@ -175,6 +182,8 @@ pub enum Msg {
     SeekBackward,
     /// Seek forward 10 seconds.
     SeekForward,
+    /// Navigate to settings and focus on audio interface (for first-time setup)
+    NavigateToSettingsFocusAudio,
 }
 
 #[derive(Debug, Deserialize)]
@@ -340,6 +349,10 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
                 keyboard_event.prevent_default();
                 Msg::ToggleLike
             }
+            "v" | "V" => {
+                keyboard_event.prevent_default();
+                Msg::ToggleVisualizer
+            }
             "y" | "Y" => {
                 // Toggle lyrics modal
                 keyboard_event.prevent_default();
@@ -449,12 +462,15 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
         metadata_scan_info: None,
         notification: None,
         vumeter: None,
+        visualizer_type: load_visualizer_type(),
         current_theme,
         library_nav_open: false,
         local_browser_playback: false,
         show_welcome_modal,
         show_keyboard_shortcuts: false,
         is_first_visit: show_welcome_modal, // Same as initial welcome modal state
+        global_settings: None,
+        skip_next_url_change: false,
     }
 }
 // ------ ------
@@ -540,6 +556,24 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 orders.stream(streams::window_event(Ev::from("media-nexttrack"), |_| Msg::MediaNextTrack));
                 orders.stream(streams::window_event(Ev::from("media-previoustrack"), |_| Msg::MediaPrevTrack));
             }
+            // Check if playback device is configured
+            let playback_configured = sett.local_browser_playback 
+                || (!sett.alsa_settings.output_device.card_id.is_empty() 
+                    && !sett.alsa_settings.output_device.name.is_empty());
+            log!(format!("SettingsFetchedGlobal: is_first_visit={}, playback_configured={}, local_browser_playback={}, card_id={}, pcm_name={}", 
+                model.is_first_visit,
+                playback_configured,
+                sett.local_browser_playback,
+                sett.alsa_settings.output_device.card_id,
+                sett.alsa_settings.output_device.name
+            ));
+            // Store settings for later use
+            model.global_settings = Some(sett);
+            // If first visit and playback not configured, navigate to settings
+            if model.is_first_visit && !playback_configured {
+                log!("First visit and playback not configured, navigating to settings");
+                orders.send_msg(Msg::NavigateToSettingsFocusAudio);
+            }
         }
         Msg::WebSocketOpened => {
             model.web_socket_reconnector = None;
@@ -615,6 +649,26 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
 
         Msg::UrlChanged(subs::UrlChanged(url)) => {
+            // Skip the synthetic URL change triggered by history.go(-1) when we cancel navigation.
+            if model.skip_next_url_change {
+                model.skip_next_url_change = false;
+                return;
+            }
+            // Warn before navigating away from settings with unapplied DSP changes.
+            if let Page::Settings(ref sett_model) = model.page {
+                if sett_model.has_unsaved_changes() {
+                    let confirmed = web_sys::window()
+                        .and_then(|w| w.confirm_with_message("You have changes that require a player restart to take effect. Leave without restarting?").ok())
+                        .unwrap_or(true);
+                    if !confirmed {
+                        model.skip_next_url_change = true;
+                        if let Some(w) = web_sys::window() {
+                            let _ = w.history().map(|h| h.go_with_delta(-1));
+                        }
+                        return;
+                    }
+                }
+            }
             model.page = Page::new(url, orders);
             // Close library dropdown when navigating away from library section.
             if !matches!(
@@ -665,11 +719,32 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::InitVUMeter => {
             if model.player_model.vu_meter_enabled {
-                if let Some(meter) = vumeter::VUMeter::new("vumeter") {
+                if let Some(meter) = vumeter::VUMeter::with_type("vumeter", model.visualizer_type) {
                     model.vumeter = Some(meter);
                 }
             } else {
                 model.vumeter = None;
+            }
+        }
+        Msg::ToggleVisualizer => {
+            model.visualizer_type = match model.visualizer_type {
+                vumeter::VisualizerType::None => vumeter::VisualizerType::NeonBar,
+                vumeter::VisualizerType::NeonBar => vumeter::VisualizerType::Spectrum,
+                vumeter::VisualizerType::Spectrum => vumeter::VisualizerType::Wave,
+                vumeter::VisualizerType::Wave => vumeter::VisualizerType::Circular,
+                vumeter::VisualizerType::Circular => vumeter::VisualizerType::Lissajous,
+                vumeter::VisualizerType::Lissajous => vumeter::VisualizerType::Particles,
+                vumeter::VisualizerType::Particles => vumeter::VisualizerType::Mirror,
+                vumeter::VisualizerType::Mirror => vumeter::VisualizerType::Starfield,
+                vumeter::VisualizerType::Starfield => vumeter::VisualizerType::Dna,
+                vumeter::VisualizerType::Dna => vumeter::VisualizerType::Plasma,
+                vumeter::VisualizerType::Plasma => vumeter::VisualizerType::Tunnel,
+                vumeter::VisualizerType::Tunnel => vumeter::VisualizerType::Bounce,
+                vumeter::VisualizerType::Bounce => vumeter::VisualizerType::None,
+            };
+            save_visualizer_type(model.visualizer_type);
+            if let Some(meter) = vumeter::VUMeter::with_type("vumeter", model.visualizer_type) {
+                model.vumeter = Some(meter);
             }
         }
         Msg::WindowResized => {
@@ -1217,6 +1292,15 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::FocusSearch => {
             focusSearchInput();
         }
+        
+        Msg::NavigateToSettingsFocusAudio => {
+            log!("NavigateToSettingsFocusAudio: navigating to settings");
+            // Navigate to settings and focus on audio interface
+            Urls::settings_abs().go_and_load();
+            // Send message to settings page to focus on audio interface
+            // This will be handled after the page is loaded
+            orders.perform_cmd(cmds::timeout(100, || Msg::Settings(page::settings::Msg::FocusAudioInterface)));
+        }
 
         Msg::Ignore => {}
         _ => {}
@@ -1346,7 +1430,7 @@ fn view_welcome_modal() -> Node<Msg> {
                 St::BackgroundColor => "var(--ui-elements)",
                 St::Padding => "2rem",
                 St::BorderRadius => "12px",
-                St::MaxWidth => "500px",
+                St::MaxWidth => "550px",
                 St::BoxShadow => "0 20px 60px rgba(0, 0, 0, 0.5)",
             },
             // Header
@@ -1356,6 +1440,25 @@ fn view_welcome_modal() -> Node<Msg> {
                 h2![C!["welcome-modal__title"], "Welcome to RSPlayer"],
                 p![C!["welcome-modal__subtitle"], "Your personal music streaming server"],
             ],
+            // Required setup notice
+            div![
+                style! {
+                    St::BackgroundColor => "rgba(255, 180, 0, 0.15)",
+                    St::Border => "1px solid rgba(255, 180, 0, 0.4)",
+                    St::BorderRadius => "8px",
+                    St::Padding => "1rem",
+                    St::MarginBottom => "1.5rem",
+                },
+                div![
+                    style! { St::Display => "flex", St::AlignItems => "center", St::Gap => "0.5rem", St::MarginBottom => "0.5rem" },
+                    i![C!["material-icons"], style! { St::Color => "#ffb400", St::FontSize => "20px" }, "warning"],
+                    span![style! { St::FontWeight => "600", St::Color => "#ffb400" }, "Required Setup"],
+                ],
+                p![
+                    style! { St::FontSize => "0.9rem", St::Color => "var(--secondary-text)", St::Margin => "0" },
+                    "Before you can play music, you need to configure the audio interface in Settings."
+                ],
+            ],
             // Steps
             div![
                 C!["welcome-modal__steps"],
@@ -1364,9 +1467,23 @@ fn view_welcome_modal() -> Node<Msg> {
                     div![C!["welcome-modal__step-number"], "1"],
                     div![
                         C!["welcome-modal__step-content"],
-                        div![C!["welcome-modal__step-title"], "Add your music"],
+                        div![
+                            style! { St::Display => "flex", St::AlignItems => "center", St::Gap => "0.5rem" },
+                            div![C!["welcome-modal__step-title"], "Audio Interface"],
+                            span![
+                                style! {
+                                    St::BackgroundColor => "#ffb400",
+                                    St::Color => "#000",
+                                    St::FontSize => "0.7rem",
+                                    St::Padding => "2px 6px",
+                                    St::BorderRadius => "4px",
+                                    St::FontWeight => "600",
+                                },
+                                "Required"
+                            ],
+                        ],
                         p![C!["welcome-modal__step-description"], 
-                            "Go to Settings and configure your music library directories. RSPlayer will scan and organize your music collection."],
+                            "In Settings → Playback, select your audio interface and PCM device. This determines where your music will be played."],
                     ],
                 ],
                 div![
@@ -1374,9 +1491,23 @@ fn view_welcome_modal() -> Node<Msg> {
                     div![C!["welcome-modal__step-number"], "2"],
                     div![
                         C!["welcome-modal__step-content"],
-                        div![C!["welcome-modal__step-title"], "Browse your library"],
+                        div![
+                            style! { St::Display => "flex", St::AlignItems => "center", St::Gap => "0.5rem" },
+                            div![C!["welcome-modal__step-title"], "Music Library"],
+                            span![
+                                style! {
+                                    St::BackgroundColor => "#3273dc",
+                                    St::Color => "#fff",
+                                    St::FontSize => "0.7rem",
+                                    St::Padding => "2px 6px",
+                                    St::BorderRadius => "4px",
+                                    St::FontWeight => "600",
+                                },
+                                "Recommended"
+                            ],
+                        ],
                         p![C!["welcome-modal__step-description"], 
-                            "Use the Library tab to browse by files, artists, or explore automatically generated playlists."],
+                            "In Settings → Music Library, add directories containing your music files. Optional if you only use radio streaming."],
                     ],
                 ],
                 div![
@@ -1384,24 +1515,24 @@ fn view_welcome_modal() -> Node<Msg> {
                     div![C!["welcome-modal__step-number"], "3"],
                     div![
                         C!["welcome-modal__step-content"],
-                        div![C!["welcome-modal__step-title"], "Start listening"],
+                        div![C!["welcome-modal__step-title"], "Start Listening"],
                         p![C!["welcome-modal__step-description"], 
-                            "Add songs to your queue and enjoy your music. Use keyboard shortcuts (Space to play/pause, arrows to skip)."],
+                            "Browse your library, add songs to queue, and enjoy! Use keyboard shortcuts (? for help, Space to play/pause)."],
                     ],
                 ],
             ],
             // Actions
             div![
                 C!["welcome-modal__actions"],
-                button![
-                    C!["welcome-modal__btn", "welcome-modal__btn--primary"],
-                    "Get Started",
-                    ev(Ev::Click, |_| Msg::DismissWelcomeModal)
-                ],
                 a![
-                    C!["welcome-modal__btn", "welcome-modal__btn--secondary"],
+                    C!["welcome-modal__btn", "welcome-modal__btn--primary"],
                     attrs! { At::Href => "#/settings" },
                     "Go to Settings",
+                    ev(Ev::Click, |_| Msg::DismissWelcomeModal)
+                ],
+                button![
+                    C!["welcome-modal__btn", "welcome-modal__btn--secondary"],
+                    "Dismiss",
                     ev(Ev::Click, |_| Msg::DismissWelcomeModal)
                 ],
             ],
@@ -1812,6 +1943,7 @@ fn view_navigation_tabs(page: &Page, library_nav_open: bool) -> Node<Msg> {
                 C!["app-nav__item", IF!(page_name == "Player" => "is-active")],
                 a![
                     C!["app-nav__link"],
+                    attrs!("title" => "Now Playing (1)"),
                     i![C!["material-icons"], attrs!("aria-hidden" => "true"), "music_note"],
                     span![C!["app-nav__label"], "Now Playing"],
                     ev(Ev::Click, |_| Urls::player_abs().go_and_load()),
@@ -1822,6 +1954,7 @@ fn view_navigation_tabs(page: &Page, library_nav_open: bool) -> Node<Msg> {
                 C!["app-nav__item", IF!(page_name == "Queue" => "is-active")],
                 a![
                     C!["app-nav__link"],
+                    attrs!("title" => "Queue (2)"),
                     i![C!["material-icons"], attrs!("aria-hidden" => "true"), "queue_music"],
                     span![C!["app-nav__label"], "Queue"],
                     ev(Ev::Click, |_| Urls::queue_abs().go_and_load()),
@@ -1832,6 +1965,7 @@ fn view_navigation_tabs(page: &Page, library_nav_open: bool) -> Node<Msg> {
                 C!["app-nav__item", IF!(is_library => "is-active")],
                 a![
                     C!["app-nav__link"],
+                    attrs!("title" => "Library (3)"),
                     i![C!["material-icons"], attrs!("aria-hidden" => "true"), "library_music"],
                     span![C!["app-nav__label"], "Library"],
                     // Chevron rotates when open
@@ -1848,6 +1982,7 @@ fn view_navigation_tabs(page: &Page, library_nav_open: bool) -> Node<Msg> {
                 C!["app-nav__item", IF!(page_name == "Settings" => "is-active")],
                 a![
                     C!["app-nav__link"],
+                    attrs!("title" => "Settings (4)"),
                     i![C!["material-icons"], attrs!("aria-hidden" => "true"), "tune"],
                     span![C!["app-nav__label"], "Settings"],
                     ev(Ev::Click, |_| Urls::settings_abs().go_and_load()),
@@ -1860,33 +1995,33 @@ fn view_navigation_tabs(page: &Page, library_nav_open: bool) -> Node<Msg> {
                 C!["app-nav__subnav"],
                 a![
                     C!["app-nav__sublink", IF!(page_name == "MusicLibraryStaticPlaylist" => "is-active")],
+                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_PL_STATIC), "title" => "Playlists (P)"},
                     i![C!["material-icons"], "playlist_play"],
                     span!["Playlists"],
-                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_PL_STATIC)},
                 ],
                 a![
                     C!["app-nav__sublink", IF!(page_name == "MusicLibraryFiles" => "is-active")],
+                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_FILES), "title" => "Files (F)"},
                     i![C!["material-icons"], "folder_open"],
                     span!["Files"],
-                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_FILES)},
                 ],
                 a![
                     C!["app-nav__sublink", IF!(page_name == "MusicLibraryArtists" => "is-active")],
+                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_ARTISTS), "title" => "Artists (A)"},
                     i![C!["material-icons"], "people"],
                     span!["Artists"],
-                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_ARTISTS)},
                 ],
                 a![
                     C!["app-nav__sublink", IF!(page_name == "MusicLibraryRadio" => "is-active")],
+                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_RADIO), "title" => "Radio (R)"},
                     i![C!["material-icons"], "radio"],
                     span!["Radio"],
-                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_RADIO)},
                 ],
                 a![
                     C!["app-nav__sublink", IF!(page_name == "LibraryStats" => "is-active")],
+                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_STATS), "title" => "Statistics (T)"},
                     i![C!["material-icons"], "insert_chart"],
                     span!["Statistics"],
-                    attrs! {At::Href => Urls::library_abs().add_hash_path_part(MUSIC_LIBRARY_STATS)},
                 ],
             ]
         ),
@@ -1971,6 +2106,12 @@ extern "C" {
     
     /// Focus on the search input field if present. Returns true if focused.
     pub fn focusSearchInput() -> bool;
+    
+    /// Focus on the audio interface select dropdown in settings. Returns true if focused.
+    pub fn focusAudioInterfaceSelect() -> bool;
+
+    /// Register or unregister the browser beforeunload warning for unsaved changes.
+    pub fn setBeforeUnloadWarning(has_changes: bool);
 }
 
 fn create_websocket(orders: &impl Orders<Msg>) -> Result<EventClient, WebSocketError> {
@@ -2098,6 +2239,23 @@ async fn get_album_image_from_lastfm_api(album: String, artist: String) -> Optio
         None
     } else {
         None
+    }
+}
+
+const VISUALIZER_STORAGE_KEY: &str = "rsplayer_visualizer";
+
+fn load_visualizer_type() -> vumeter::VisualizerType {
+    (|| {
+        let storage = web_sys::window()?.local_storage().ok()??;
+        let value = storage.get_item(VISUALIZER_STORAGE_KEY).ok()??;
+        vumeter::VisualizerType::from_str(&value)
+    })()
+    .unwrap_or(vumeter::VisualizerType::Lissajous)
+}
+
+fn save_visualizer_type(vt: vumeter::VisualizerType) {
+    if let Some(Ok(Some(storage))) = web_sys::window().map(|w| w.local_storage()) {
+        let _ = storage.set_item(VISUALIZER_STORAGE_KEY, vt.as_str());
     }
 }
 
