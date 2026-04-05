@@ -36,7 +36,12 @@ These settings are hidden under the **Advanced** collapsible inside the Playback
 
 - **Enable visualization:** Displays a real-time visualization on the player page during playback. When enabled, a visualizer button appears on the player controls. Press **V** or click the button to cycle through 12 different styles (NeonBar, Spectrum, Wave, Circular, Lissajous, Particles, Mirror, Starfield, DNA, Plasma, Tunnel, Bounce). Your preferred visualizer is saved automatically.
 - **Enable loudness normalization (EBU R128):** When enabled, playback volume is automatically adjusted to match a target loudness level using the EBU R128 standard. Loudness analysis runs in the background while playback is stopped — each song is measured once and the result is stored permanently. Progress can be tracked on the Library Statistics page.
-- **Target loudness (LUFS):** Sets the target loudness level for normalization, from -30 to -5 LUFS (default: -18). Only visible when loudness normalization is enabled.
+- **Normalization source:** Selects where the gain value comes from. Only visible when loudness normalization is enabled.
+  - **Auto** *(default)*: Uses track-level gain from file tags if present; falls back to RSPlayer's own EBU R128 calculated loudness. Best choice for mixed libraries.
+  - **File tags — track gain**: Reads `REPLAYGAIN_TRACK_GAIN` or `R128_TRACK_GAIN` directly from the file. Works for files already tagged by an external tool (foobar2000, beets, MusicBrainz Picard, etc.).
+  - **File tags — album gain**: Reads `REPLAYGAIN_ALBUM_GAIN` or `R128_ALBUM_GAIN` from the file. Useful for preserving intended loudness relationships across an album.
+  - **Calculated**: RSPlayer's original behavior — EBU R128 integrated loudness measured in the background and normalized to the configured target LUFS.
+- **Target loudness (LUFS):** Sets the target loudness level for normalization, from -30 to -5 LUFS (default: -18). Only visible when the normalization source is set to **Auto** or **Calculated**.
 
 ## DSP Settings
 
