@@ -9,7 +9,8 @@ use symphonia::core::{
     meta::MetadataOptions,
 };
 
-use crate::dsd_bundle::{build_codec_registry, build_probe, CODEC_TYPE_DSD_LSBF, CODEC_TYPE_DSD_MSBF};
+use crate::dsd_bundle::{CODEC_TYPE_DSD_LSBF, CODEC_TYPE_DSD_MSBF};
+use crate::{build_codec_registry, build_probe};
 
 pub struct LoudnessAnalyzer;
 

@@ -53,6 +53,7 @@ pub struct PlayerModel {
     parsed_lyrics: Option<Vec<lyrics::LyricLine>>,
     ring_buffer_size_ms: usize,
     last_active_lyrics_idx: Option<usize>,
+    pre_mute_volume: Option<u8>,
 }
 
 // #[derive(Debug)]
@@ -83,6 +84,7 @@ struct Model {
     /// Set to true when we push back in history to cancel a navigation from dirty settings.
     /// The resulting synthetic UrlChanged is skipped to avoid re-initializing the settings page.
     skip_next_url_change: bool,
+    demo_mode: bool,
 }
 
 /// Tabs for keyboard navigation
@@ -456,6 +458,7 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
             parsed_lyrics: None,
             ring_buffer_size_ms: 200, // Default value
             last_active_lyrics_idx: None,
+            pre_mute_volume: None,
         },
         metadata_scan_info: None,
         notification: None,
@@ -469,6 +472,7 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
         is_first_visit: show_welcome_modal, // Same as initial welcome modal state
         global_settings: None,
         skip_next_url_change: false,
+        demo_mode: false,
     }
 }
 // ------ ------
@@ -543,6 +547,7 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
         Msg::SettingsFetchedGlobal(sett) => {
             model.local_browser_playback = sett.local_browser_playback;
+            model.demo_mode = sett.demo_mode;
             // In browser mode there's no ring buffer — no latency offset needed
             model.player_model.ring_buffer_size_ms = if sett.local_browser_playback {
                 0
@@ -1200,10 +1205,11 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         
         Msg::ToggleMute => {
             let is_muted = model.player_model.volume_state.current == 0;
-            let new_vol = if is_muted { 
-                model.player_model.volume_state.max / 2 
-            } else { 
-                0 
+            let new_vol = if is_muted {
+                model.player_model.pre_mute_volume.take().unwrap_or(model.player_model.volume_state.max / 2)
+            } else {
+                model.player_model.pre_mute_volume = Some(model.player_model.volume_state.current);
+                0
             };
             orders.send_msg(Msg::SendSystemCommand(SystemCommand::SetVol(new_vol)));
         }
@@ -1335,6 +1341,7 @@ fn view(model: &Model) -> impl IntoNodes<Msg> {
                     St::MinHeight => "100vh",
                     St::ZIndex => 1,
                 },
+                view_demo_mode_banner(model),
                 view_navigation_tabs(&model.page, model.library_nav_open),
                 view_startup_error(model.startup_error.as_ref()),
                 view_reconnect_notification(model),
@@ -1380,6 +1387,22 @@ fn view_reconnect_notification(model: &Model) -> Node<Msg> {
     } else {
         empty!()
     }
+}
+
+fn view_demo_mode_banner(model: &Model) -> Node<Msg> {
+    if !model.demo_mode {
+        return empty!();
+    }
+    div![
+        C!["notification", "is-warning", "is-light"],
+        style! {
+            St::Margin => "0",
+            St::BorderRadius => "0",
+            St::TextAlign => "center",
+            St::Padding => "0.5rem 1rem",
+        },
+        "Demo mode \u{2014} some features might not be available."
+    ]
 }
 
 fn view_notification(model: &Model) -> Node<Msg> {
@@ -2098,6 +2121,12 @@ extern "C" {
 
     /// Register or unregister the browser beforeunload warning for unsaved changes.
     pub fn setBeforeUnloadWarning(has_changes: bool);
+
+    /// Persist a flag so the Playback settings section stays open after a forced reload.
+    pub fn setPlaybackSectionOpen(value: bool);
+
+    /// Read and clear the one-shot flag for keeping the Playback section open.
+    pub fn getAndClearPlaybackSectionOpen() -> bool;
 }
 
 fn create_websocket(orders: &impl Orders<Msg>) -> Result<EventClient, WebSocketError> {

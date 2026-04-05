@@ -70,7 +70,7 @@ async fn main() {
     let shared_db = std::sync::Arc::new(
         fjall::Database::builder("rsplayer.db")
             .open()
-            .expect("Failed to open fjall database")
+            .expect("Failed to open fjall database"),
     );
     info!("Shared database opened.");
 

@@ -313,10 +313,58 @@ impl PlayerService {
                         .expect("msg send failed");
                     let track_loudness = loudness_service.get_loudness(&song.file);
                     let normalization_gain_db: Option<f64> = if rsp_settings.loudness_normalization_enabled {
-                        track_loudness.map(|lufs_hundredths| {
-                            let lufs = f64::from(lufs_hundredths) / 100.0;
-                            rsp_settings.loudness_normalization_target_lufs - lufs
-                        })
+                        use api_models::settings::NormalizationSource;
+                        let tag_track = song.file_tag_track_gain();
+                        let tag_album = song.file_tag_album_gain();
+                        let calculated = || {
+                            track_loudness.map(|lufs_hundredths| {
+                                let lufs = f64::from(lufs_hundredths) / 100.0;
+                                rsp_settings.loudness_normalization_target_lufs - lufs
+                            })
+                        };
+                        debug!(
+                            "Normalization inputs for '{}': source={:?}, track_loudness={:?} (LUFS*100), \
+                             tag_track_gain={:?} dB, tag_album_gain={:?} dB, target={} LUFS",
+                            song.file,
+                            rsp_settings.loudness_normalization_source,
+                            track_loudness,
+                            tag_track,
+                            tag_album,
+                            rsp_settings.loudness_normalization_target_lufs,
+                        );
+                        let gain = match rsp_settings.loudness_normalization_source {
+                            NormalizationSource::Calculated => {
+                                let g = calculated();
+                                debug!("Normalization [Calculated]: gain={g:?} dB");
+                                g
+                            }
+                            NormalizationSource::FileTagsTrack => {
+                                debug!("Normalization [FileTagsTrack]: gain={tag_track:?} dB");
+                                tag_track
+                            }
+                            NormalizationSource::FileTagsAlbum => {
+                                debug!("Normalization [FileTagsAlbum]: gain={tag_album:?} dB");
+                                tag_album
+                            }
+                            NormalizationSource::Auto => {
+                                let g = tag_track.or_else(calculated);
+                                if tag_track.is_some() {
+                                    debug!("Normalization [Auto]: using file tag track gain={g:?} dB");
+                                } else {
+                                    debug!(
+                                        "Normalization [Auto]: no track tag, falling back to calculated gain={g:?} dB"
+                                    );
+                                }
+                                g
+                            }
+                        };
+                        if gain.is_none() {
+                            debug!(
+                                "Normalization: no gain available for '{}', skipping normalization",
+                                song.file
+                            );
+                        }
+                        gain
                     } else {
                         None
                     };

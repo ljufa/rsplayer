@@ -210,7 +210,7 @@ mod filters {
 
 #[allow(warnings, clippy::unused_async)]
 mod handlers {
-    use std::{collections::HashMap, convert::Infallible, process::exit};
+    use std::{collections::HashMap, convert::Infallible, env, process::exit};
 
     use log::{debug, error};
     use warp::hyper::StatusCode;
@@ -239,6 +239,7 @@ mod handlers {
     pub async fn get_settings(config: Config) -> Result<impl warp::Reply, Infallible> {
         let mut settings = config.get_settings_mut();
         settings.version = env!("APP_VERSION").to_string();
+        settings.demo_mode = env::var("DEMO_MODE").is_ok();
 
         #[cfg(feature = "alsa")]
         {

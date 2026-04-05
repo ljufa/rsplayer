@@ -436,14 +436,15 @@ impl MetadataService {
         info!("Scanning APE file (fast path):\t{file_p}");
 
         let file = File::open(file_path)?;
-        let mut decoder = ape_decoder::ApeDecoder::new(file).map_err(|e| {
-            Error::msg(format!("APE decode error: {e}"))
-        })?;
+        let mut decoder =
+            ape_decoder::ApeDecoder::new(file).map_err(|e| Error::msg(format!("APE decode error: {e}")))?;
 
         let info = decoder.info();
         let duration_ms = info.duration_ms;
-        let mut song = Song::default();
-        song.time = Some(std::time::Duration::from_millis(duration_ms));
+        let mut song = Song {
+            time: Some(std::time::Duration::from_millis(duration_ms)),
+            ..Default::default()
+        };
 
         // Read APEv2 tags
         if let Ok(Some(ape_tag)) = decoder.read_tag() {
@@ -520,7 +521,11 @@ impl MetadataService {
             _ => return None,
         };
         let text = text.trim_end_matches('\0').to_string();
-        if text.is_empty() { None } else { Some(text) }
+        if text.is_empty() {
+            None
+        } else {
+            Some(text)
+        }
     }
 
     fn scan_single_file(&self, file_path: &Path, settings: &MetadataStoreSettings) -> Result<()> {
@@ -547,7 +552,7 @@ impl MetadataService {
         let file_p = &Self::full_path_to_database_key(settings, file_path.to_str().unwrap());
 
         info!("Scanning file:\t{file_p}");
-        match crate::dsd_bundle::build_probe().probe(&hint, mss, format_opts, metadata_opts) {
+        match crate::build_probe().probe(&hint, mss, format_opts, metadata_opts) {
             Ok(mut probed) => {
                 let (mut song, image_data) = AudioMetadataExtractor::extract(&mut *probed);
 

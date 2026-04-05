@@ -1,7 +1,7 @@
 
 use api_models::{
     common::{MetadataCommand::RescanMetadata, StorageCommand, SystemCommand, UserCommand, VolumeCrtlType},
-    settings::{DspFilter, FilterConfig, MetadataStoreSettings, NetworkMountConfig, NetworkMountType, RsPlayerSettings, Settings},
+    settings::{DspFilter, FilterConfig, MetadataStoreSettings, NetworkMountConfig, NetworkMountType, NormalizationSource, RsPlayerSettings, Settings},
     state::{ExternalMount, MountStatus, MusicDirStatus},
     validator::Validate,
 };
@@ -17,7 +17,9 @@ use web_sys::FileList;
 
 use crate::dsp::get_dsp_presets;
 use crate::focusAudioInterfaceSelect;
+use crate::getAndClearPlaybackSectionOpen;
 use crate::setBeforeUnloadWarning;
+use crate::setPlaybackSectionOpen;
 use crate::view_spinner_modal;
 
 const API_SETTINGS_PATH: &str = "/api/settings";
@@ -114,6 +116,7 @@ pub enum Msg {
         ToggleVuMeterEnabled,
         ToggleLoudnessNormalization,
         InputNormalizationTargetLufs(String),
+        SelectNormalizationSource(NormalizationSource),
         DspAddFilter,
         DspRemoveAllFilters,
         DspRemoveFilter(usize),
@@ -348,6 +351,8 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
 
         Msg::InputAlsaCardChange(value) => {
+            let browser_playback_involved =
+                value == "browser" || model.settings.local_browser_playback;
             if value == "browser" {
                 model.settings.local_browser_playback = true;
             } else {
@@ -360,7 +365,18 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                     model.settings.volume_ctrl_settings.ctrl_device = VolumeCrtlType::Alsa;
                 }
             }
-            orders.send_msg(Msg::SaveCurrentSettings(true));
+            if browser_playback_involved {
+                let settings = model.settings.clone();
+                orders.perform_cmd(async move {
+                    _ = save_settings(settings, "reload=false".to_string()).await;
+                    setPlaybackSectionOpen(true);
+                    if let Some(w) = web_sys::window() {
+                        _ = w.location().reload();
+                    }
+                });
+            } else {
+                orders.send_msg(Msg::SaveCurrentSettings(true));
+            }
         }
         Msg::InputAlsaPcmChange(value) => {
             model
@@ -414,7 +430,8 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.settings = sett;
             // Set whether Playback section should be open (only once, on first load)
             if model.playback_section_should_open.is_none() {
-                model.playback_section_should_open = Some(!model.is_playback_device_configured());
+                let force_open = getAndClearPlaybackSectionOpen();
+                model.playback_section_should_open = Some(force_open || !model.is_playback_device_configured());
             }
             // Query mount status on load
             orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(StorageCommand::QueryMountStatus)));
@@ -456,6 +473,10 @@ pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::ToggleLoudnessNormalization => {
             model.settings.rs_player_settings.loudness_normalization_enabled =
                 !model.settings.rs_player_settings.loudness_normalization_enabled;
+            orders.send_msg(Msg::SaveCurrentSettings(true));
+        }
+        Msg::SelectNormalizationSource(source) => {
+            model.settings.rs_player_settings.loudness_normalization_source = source;
             orders.send_msg(Msg::SaveCurrentSettings(true));
         }
         Msg::InputNormalizationTargetLufs(val) => {
@@ -947,23 +968,67 @@ pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
                         div![
                             div![
                                 C!["field", "mt-2"],
-                                label![C!["label", "has-text-white"], "Target loudness (LUFS)"],
+                                label![C!["label", "has-text-white"], "Normalization source"],
                                 div![
                                     C!["control"],
-                                    input![
-                                        C!["input", "is-small"],
-                                        attrs! {
-                                            At::Type => "number"
-                                            At::Value => settings.rs_player_settings.loudness_normalization_target_lufs
-                                            At::Step => "0.5"
-                                            At::Min => "-30"
-                                            At::Max => "-5"
-                                        },
-                                        input_ev(Ev::Change, Msg::InputNormalizationTargetLufs),
-                                        ev(Ev::Blur, |_| Msg::SaveCurrentSettings(true)),
+                                    div![
+                                        C!["select", "is-small"],
+                                        select![
+                                            input_ev(Ev::Change, |val| {
+                                                let source = match val.as_str() {
+                                                    "FileTagsTrack" => NormalizationSource::FileTagsTrack,
+                                                    "FileTagsAlbum" => NormalizationSource::FileTagsAlbum,
+                                                    "Calculated" => NormalizationSource::Calculated,
+                                                    _ => NormalizationSource::Auto,
+                                                };
+                                                Msg::SelectNormalizationSource(source)
+                                            }),
+                                            option![
+                                                attrs! { At::Value => "Auto",
+                                                    At::Selected => (settings.rs_player_settings.loudness_normalization_source == NormalizationSource::Auto).as_at_value() },
+                                                "Auto (file tags if present, else calculated)"
+                                            ],
+                                            option![
+                                                attrs! { At::Value => "FileTagsTrack",
+                                                    At::Selected => (settings.rs_player_settings.loudness_normalization_source == NormalizationSource::FileTagsTrack).as_at_value() },
+                                                "File tags \u{2013} track gain"
+                                            ],
+                                            option![
+                                                attrs! { At::Value => "FileTagsAlbum",
+                                                    At::Selected => (settings.rs_player_settings.loudness_normalization_source == NormalizationSource::FileTagsAlbum).as_at_value() },
+                                                "File tags \u{2013} album gain"
+                                            ],
+                                            option![
+                                                attrs! { At::Value => "Calculated",
+                                                    At::Selected => (settings.rs_player_settings.loudness_normalization_source == NormalizationSource::Calculated).as_at_value() },
+                                                "Calculated (RSPlayer EBU R128)"
+                                            ],
+                                        ]
                                     ]
                                 ]
                             ],
+                            IF!(matches!(settings.rs_player_settings.loudness_normalization_source,
+                                    NormalizationSource::Calculated | NormalizationSource::Auto) =>
+                                div![
+                                    C!["field", "mt-2"],
+                                    label![C!["label", "has-text-white"], "Target loudness (LUFS)"],
+                                    div![
+                                        C!["control"],
+                                        input![
+                                            C!["input", "is-small"],
+                                            attrs! {
+                                                At::Type => "number"
+                                                At::Value => settings.rs_player_settings.loudness_normalization_target_lufs
+                                                At::Step => "0.5"
+                                                At::Min => "-30"
+                                                At::Max => "-5"
+                                            },
+                                            input_ev(Ev::Change, Msg::InputNormalizationTargetLufs),
+                                            ev(Ev::Blur, |_| Msg::SaveCurrentSettings(true)),
+                                        ]
+                                    ]
+                                ]
+                            ),
                             div![
                                 C!["notification", "mt-4"],
                                 i![C!["material-icons", "mr-2", "is-size-6"], "info"],

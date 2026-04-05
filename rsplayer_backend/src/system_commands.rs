@@ -49,19 +49,26 @@ pub async fn handle_system_command(cmd: SystemCommand, ctx: &SystemCommandContex
                 ..Default::default()
             }));
         }
+
         PowerOff => {
+            if std::env::var("DEMO_MODE").is_ok() {
+                ctx.send_event(StateChangeEvent::NotificationError(
+                    "Not available in demo mode".to_string(),
+                ));
+                return;
+            }
             info!("Shutting down system");
-            _ = std::process::Command::new("/usr/sbin/poweroff")
-                .spawn()
-                .expect("halt command failed")
-                .wait();
+            _ = std::process::Command::new("/usr/sbin/poweroff").spawn();
         }
         RestartSystem => {
+            if std::env::var("DEMO_MODE").is_ok() {
+                ctx.send_event(StateChangeEvent::NotificationError(
+                    "Not available in demo mode".to_string(),
+                ));
+                return;
+            }
             info!("Restarting system");
-            _ = std::process::Command::new("/usr/sbin/reboot")
-                .spawn()
-                .expect("halt command failed")
-                .wait();
+            _ = std::process::Command::new("/usr/sbin/reboot").spawn();
         }
         RestartRSPlayer => {
             info!("Restarting RSPlayer");

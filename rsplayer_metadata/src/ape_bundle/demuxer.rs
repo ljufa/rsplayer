@@ -85,9 +85,8 @@ impl ApeReader {
         log::debug!("APE fallback: read {} bytes into memory", data.len());
 
         let cursor = std::io::Cursor::new(data);
-        let mut decoder = ApeDecoder::new(cursor).map_err(|e| {
-            Error::IoError(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
-        })?;
+        let mut decoder = ApeDecoder::new(cursor)
+            .map_err(|e| Error::IoError(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())))?;
 
         let info = decoder.info().clone();
         let metadata_log = Self::read_metadata(&mut decoder);
@@ -105,7 +104,10 @@ impl ApeReader {
 
         log::info!(
             "APE: version={version}, {} frames, {} samples, {}Hz, {channels}ch, {bits_per_sample}bps, compression={}",
-            info.total_frames, info.total_samples, info.sample_rate, info.compression_level,
+            info.total_frames,
+            info.total_samples,
+            info.sample_rate,
+            info.compression_level,
         );
 
         // ape-decoder only supports version >= 3990 (different entropy coding for 3950-3989).
@@ -196,7 +198,11 @@ impl ApeReader {
             _ => return None,
         };
         let text = text.trim_end_matches('\0');
-        if text.is_empty() { None } else { Some(text.to_string()) }
+        if text.is_empty() {
+            None
+        } else {
+            Some(text.to_string())
+        }
     }
 
     fn map_ape_tag(name: &str, value: &str) -> Option<StandardTag> {
@@ -226,8 +232,16 @@ impl ApeReader {
             "TALB" => Some(StandardTag::Album(v())),
             "TPE2" => Some(StandardTag::AlbumArtist(v())),
             "TDRC" | "TYER" | "TDAT" => Some(StandardTag::RecordingDate(v())),
-            "TRCK" => value.split('/').next().and_then(|n| n.parse().ok()).map(StandardTag::TrackNumber),
-            "TPOS" => value.split('/').next().and_then(|n| n.parse().ok()).map(StandardTag::DiscNumber),
+            "TRCK" => value
+                .split('/')
+                .next()
+                .and_then(|n| n.parse().ok())
+                .map(StandardTag::TrackNumber),
+            "TPOS" => value
+                .split('/')
+                .next()
+                .and_then(|n| n.parse().ok())
+                .map(StandardTag::DiscNumber),
             "TCON" => Some(StandardTag::Genre(v())),
             "COMM" => Some(StandardTag::Comment(v())),
             "TCOM" => Some(StandardTag::Composer(v())),

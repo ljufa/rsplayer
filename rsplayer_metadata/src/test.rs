@@ -462,6 +462,88 @@ mod metadata {
         assert_eq!(favs.first().unwrap(), "http://radioaparat.com");
     }
 
+    /// aa/music.flac has REPLAYGAIN_TRACK_GAIN=+3.14 dB, REPLAYGAIN_ALBUM_GAIN=-1.50 dB
+    #[test]
+    fn test_flac_replaygain_tags_stored_in_song() {
+        let ctx = TestContext::new();
+        ctx.metadata_service.scan_music_dir(true, &ctx.sender);
+        let song = ctx.song_repository.find_by_id("aa/music.flac").expect("song not found");
+        assert_eq!(
+            song.tags.get("REPLAYGAIN_TRACK_GAIN").map(String::as_str),
+            Some("+3.14 dB")
+        );
+        assert_eq!(
+            song.tags.get("REPLAYGAIN_ALBUM_GAIN").map(String::as_str),
+            Some("-1.50 dB")
+        );
+    }
+
+    /// aa/aaa/music.flac has R128_TRACK_GAIN=512 (+2.0 dB), R128_ALBUM_GAIN=-256 (-1.0 dB)
+    #[test]
+    fn test_flac_r128_tags_stored_in_song() {
+        let ctx = TestContext::new();
+        ctx.metadata_service.scan_music_dir(true, &ctx.sender);
+        let song = ctx
+            .song_repository
+            .find_by_id("aa/aaa/music.flac")
+            .expect("song not found");
+        assert_eq!(song.tags.get("R128_TRACK_GAIN").map(String::as_str), Some("512"));
+        assert_eq!(song.tags.get("R128_ALBUM_GAIN").map(String::as_str), Some("-256"));
+    }
+
+    #[test]
+    fn test_file_tag_track_gain_replaygain() {
+        let ctx = TestContext::new();
+        ctx.metadata_service.scan_music_dir(true, &ctx.sender);
+        let song = ctx.song_repository.find_by_id("aa/music.flac").expect("song not found");
+        let gain = song.file_tag_track_gain().expect("track gain should be present");
+        assert!((gain - 3.14).abs() < 0.001, "expected +3.14 dB, got {gain}");
+    }
+
+    #[test]
+    fn test_file_tag_album_gain_replaygain() {
+        let ctx = TestContext::new();
+        ctx.metadata_service.scan_music_dir(true, &ctx.sender);
+        let song = ctx.song_repository.find_by_id("aa/music.flac").expect("song not found");
+        let gain = song.file_tag_album_gain().expect("album gain should be present");
+        assert!((gain - (-1.50)).abs() < 0.001, "expected -1.50 dB, got {gain}");
+    }
+
+    #[test]
+    fn test_file_tag_track_gain_r128() {
+        let ctx = TestContext::new();
+        ctx.metadata_service.scan_music_dir(true, &ctx.sender);
+        let song = ctx
+            .song_repository
+            .find_by_id("aa/aaa/music.flac")
+            .expect("song not found");
+        // R128_TRACK_GAIN=512 → 512/256 = +2.0 dB
+        let gain = song.file_tag_track_gain().expect("track gain should be present");
+        assert!((gain - 2.0).abs() < 0.001, "expected +2.0 dB, got {gain}");
+    }
+
+    #[test]
+    fn test_file_tag_album_gain_r128() {
+        let ctx = TestContext::new();
+        ctx.metadata_service.scan_music_dir(true, &ctx.sender);
+        let song = ctx
+            .song_repository
+            .find_by_id("aa/aaa/music.flac")
+            .expect("song not found");
+        // R128_ALBUM_GAIN=-256 → -256/256 = -1.0 dB
+        let gain = song.file_tag_album_gain().expect("album gain should be present");
+        assert!((gain - (-1.0)).abs() < 0.001, "expected -1.0 dB, got {gain}");
+    }
+
+    #[test]
+    fn test_no_gain_tags_for_mp3() {
+        let ctx = TestContext::new();
+        ctx.metadata_service.scan_music_dir(true, &ctx.sender);
+        let song = ctx.song_repository.find_by_id("ab/music.mp3").expect("song not found");
+        assert!(song.file_tag_track_gain().is_none(), "mp3 has no gain tags");
+        assert!(song.file_tag_album_gain().is_none(), "mp3 has no gain tags");
+    }
+
     #[test]
     fn test_increase_play_count() {
         let ctx = TestContext::new();

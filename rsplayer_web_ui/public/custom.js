@@ -247,6 +247,40 @@ function resetFirstVisit() {
 }
 
 // ============================================================
+//   SETTINGS SECTION STATE (survive reload)
+// ============================================================
+
+const PLAYBACK_SECTION_OPEN_KEY = "rsplayer-playback-section-open";
+
+/**
+ * Persist a flag so the Playback section stays open after a forced reload.
+ */
+function setPlaybackSectionOpen(value) {
+    try {
+        if (value) {
+            localStorage.setItem(PLAYBACK_SECTION_OPEN_KEY, "true");
+        } else {
+            localStorage.removeItem(PLAYBACK_SECTION_OPEN_KEY);
+        }
+    } catch(e) {}
+}
+
+/**
+ * Read and immediately clear the flag (one-shot, consumed on reload).
+ * Returns true if the section should be opened.
+ */
+function getAndClearPlaybackSectionOpen() {
+    try {
+        const val = localStorage.getItem(PLAYBACK_SECTION_OPEN_KEY);
+        if (val) {
+            localStorage.removeItem(PLAYBACK_SECTION_OPEN_KEY);
+            return true;
+        }
+    } catch(e) {}
+    return false;
+}
+
+// ============================================================
 //   UNSAVED CHANGES / BEFOREUNLOAD WARNING
 // ============================================================
 

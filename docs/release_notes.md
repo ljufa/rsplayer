@@ -1,5 +1,52 @@
 # Release Notes
 
+## v2.7.0 — 2026-04-05
+
+### New Features
+
+#### Loudness Normalization Source Selection
+The loudness normalization system now supports multiple gain sources, selectable from Settings → Audio Processing:
+
+- **Auto** *(default)*: Uses track-level gain from file tags if present; falls back to RSPlayer's own EBU R128 calculated loudness. Best choice for mixed libraries.
+- **File tags — track gain**: Reads `REPLAYGAIN_TRACK_GAIN` or `R128_TRACK_GAIN` directly from the file and applies it as-is. Works for files already tagged by an external tool (foobar2000, beets, MusicBrainz Picard, etc.).
+- **File tags — album gain**: Reads `REPLAYGAIN_ALBUM_GAIN` or `R128_ALBUM_GAIN` from the file. Useful for preserving intended loudness relationships across an album.
+- **Calculated**: RSPlayer's original behavior — EBU R128 integrated loudness measured in the background and normalized to the configured target LUFS.
+
+Both ReplayGain (text, e.g. `+2.35 dB`) and EBU R128 (Q7.8 fixed-point integer, e.g. `256`) tag formats are supported with case-insensitive key lookup. When both are present in a file, R128 takes priority over ReplayGain.
+
+The **Target loudness (LUFS)** field is now only shown when the selected source actually uses it (Auto or Calculated modes).
+
+The player info line on the player page now shows the applied gain even when no RSPlayer-measured LUFS is available (e.g. `+1.0 dB (file tag)`), and displays the full chain when both are known: `−14.2 LUFS  →  +1.8 dB  →  −12.4 LUFS`.
+
+#### Demo Mode
+A new `demo_mode` setting disables destructive system commands (power off, system restart) and shows a banner across the top of the UI informing the user that some features are not available. Intended for public or shared deployments. Enable by setting `"demo_mode": true` in the settings file or via the `DEMO_MODE` environment variable.
+
+### Bug Fixes
+
+#### Mute — Volume Not Restored After Unmute
+Pressing mute and then unmute (via the button or the **M** keyboard shortcut) now restores the volume to exactly the level it was at before muting. Previously, unmuting always set the volume to 50% regardless of the prior level.
+
+The mute button click and the keyboard shortcut now share the same code path, eliminating the subtle divergence that existed between the two.
+
+### Improvements
+
+#### Volume Control Icons
+The volume control row now uses visually distinct icons for each button:
+- **Mute** button: speaker icon (sound on) / speaker-with-X (muted) — no longer the same as the volume-up button
+- **Volume down**: ⊖ (`fa-circle-minus`)
+- **Volume up**: ⊕ (`fa-circle-plus`)
+
+#### Settings Page: Playback Section State Across Reloads
+When switching between **Local Browser Playback** and a hardware ALSA device, the settings page now saves a flag to `localStorage` before reloading, so the Playback section automatically reopens in the correct state after the forced page reload.
+
+#### Metadata Extractor: ReplayGain and R128 Tag Preservation
+The `AudioMetadataExtractor` now stores `REPLAYGAIN_TRACK_GAIN`, `REPLAYGAIN_ALBUM_GAIN`, `REPLAYGAIN_TRACK_PEAK`, and `REPLAYGAIN_ALBUM_PEAK` tags in the song's raw tag map during metadata scanning. This makes them available at playback time without re-reading the file.
+
+#### Internal: Codec Registry and Probe Moved to Crate Root
+`build_probe()` and `build_codec_registry()` have been moved from `rsplayer_metadata::dsd_bundle` to the `rsplayer_metadata` crate root. Both functions register all default Symphonia formats and codecs, plus the custom DSD (DSF) and APE readers/decoders. Callers no longer need to import from the internal `dsd_bundle` sub-module.
+
+---
+
 ## v2.6.5 — 2026-03-29
 
 ### New Features

@@ -5,15 +5,34 @@
 ![](https://img.shields.io/github/license/ljufa/rsplayer?style=flat-square)
 ![](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=flat-square)
 # RSPlayer
-RSPlayer is open-source music player designed specifically for headless computing environments. It shines on devices like the Raspberry Pi and other Linux-powered Single Board Computers (SBCs).
+RSPlayer is an open-source, headless music server for Linux — run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser.
 
-Operating as a system service, RSPlayer offers a web-based user interface, making it a perfect fit for devices without dedicated monitors or input peripherals. The UI is meticulously designed to be responsive and intuitive, delivering a seamless user experience across mobile devices, tablets, and PCs.
+It runs as a systemd service and exposes a responsive web UI, making it a great fit for machines without a monitor or keyboard — but equally at home on a dedicated desktop audio PC. Hardware and DIY integrations (GPIO DAC control, custom firmware) are fully optional.
 
-Under the hood, RSPlayer harnesses the power of the [Symphonia](https://github.com/pdeljanov/Symphonia) and [Cpal](https://github.com/rustaudio/cpal) crates. These allow RSPlayer to handle audio decoding and playback efficiently, leveraging Rust's native capabilities for high-performance audio playback.
-
-For DIY enthusiasts seeking a customizable, high-performance music player for their projects, RSPlayer is the go-to choice. Its lightweight design and efficient resource usage make it ideal for transforming your Raspberry Pi or other SBCs into a dedicated music station.
+Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia) for audio decoding and [Cpal](https://github.com/rustaudio/cpal) for output, with a Rust-native audio pipeline for low-latency, high-performance playback.
 
 ### Online demo -> https://rsplayer.dlj.freemyip.com/
+
+## How does RSPlayer compare?
+
+> Approximate comparison as of early 2026. Features change frequently.
+
+| Feature | RSPlayer | Volumio | Moode Audio | MPD |
+|---|---|---|---|---|
+| Language | Rust | Node.js | PHP/Bash | C |
+| Runs on x86_64 / NAS / server | ✓ | ✓ | Pi-only | ✓ |
+| Parametric EQ / DSP | ✓ built-in | paid tier | ✓ (CamillaDSP) | via plugins |
+| Multi-room | planned | paid tier | ✓ | via plugins |
+| DSD playback | ✓ | ✓ | ✓ | ✓ |
+| Web UI | ✓ | ✓ | ✓ | 3rd party |
+| Local browser playback | ✓ | — | — | — |
+| Loudness normalization (EBU R128) | ✓ | — | — | — |
+| Synchronized lyrics | ✓ | — | — | — |
+| Docker | ✓ | ✓ | — | ✓ |
+| RISC-V 64 | ✓ | — | — | — |
+| Home Assistant integration | ✓ | ✓ | — | ✓ |
+| DIY hardware integration | optional | — | — | — |
+| License | MIT | GPL | GPL | GPL |
 
 ## Features
 - **Low Latency Output**: Direct output to ALSA or PipeWire minimizes latency.

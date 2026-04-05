@@ -98,6 +98,15 @@ impl AudioMetadataExtractor {
                             song.title = Some(Self::tag_value_to_option(tag));
                         }
                     }
+                    // Loudness tags: store under their raw key so playback can read them.
+                    StandardTag::ReplayGainTrackGain(_)
+                    | StandardTag::ReplayGainAlbumGain(_)
+                    | StandardTag::ReplayGainTrackPeak(_)
+                    | StandardTag::ReplayGainAlbumPeak(_) => {
+                        song.tags
+                            .entry(tag.raw.key.clone())
+                            .or_insert_with(|| Self::tag_value_to_option(tag));
+                    }
                     _ => {}
                 }
             }

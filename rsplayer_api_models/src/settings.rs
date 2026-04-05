@@ -28,6 +28,21 @@ pub struct Settings {
     pub local_browser_playback: bool,
     #[serde(default)]
     pub version: String,
+    #[serde(default)]
+    pub demo_mode: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum NormalizationSource {
+    /// Prefer file tags (track gain); fall back to `RSPlayer` EBU R128 calculated loudness.
+    #[default]
+    Auto,
+    /// Use `REPLAYGAIN_TRACK_GAIN` or `R128_TRACK_GAIN` from the file, applied as-is.
+    FileTagsTrack,
+    /// Use `REPLAYGAIN_ALBUM_GAIN` or `R128_ALBUM_GAIN` from the file, applied as-is.
+    FileTagsAlbum,
+    /// Use `RSPlayer`'s own EBU R128 integrated loudness measurement (original behavior).
+    Calculated,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
@@ -57,6 +72,8 @@ pub struct RsPlayerSettings {
     pub loudness_normalization_enabled: bool,
     #[serde(default = "default_normalization_target_lufs")]
     pub loudness_normalization_target_lufs: f64,
+    #[serde(default)]
+    pub loudness_normalization_source: NormalizationSource,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
@@ -223,6 +240,7 @@ impl Default for RsPlayerSettings {
             vu_meter_enabled: default_vu_meter_enabled(),
             loudness_normalization_enabled: false,
             loudness_normalization_target_lufs: default_normalization_target_lufs(),
+            loudness_normalization_source: NormalizationSource::default(),
         }
     }
 }
@@ -378,6 +396,7 @@ impl Default for Settings {
             network_storage_settings: NetworkStorageSettings::default(),
             local_browser_playback: false,
             version: String::new(),
+            demo_mode: false,
         }
     }
 }

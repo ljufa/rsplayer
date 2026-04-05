@@ -166,19 +166,27 @@ fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Nod
                     pi.audio_format_rate.map_or(0, |r| r)
                 ))
             ],
-            IF!(player_info.and_then(|pi| pi.track_loudness_lufs).is_some() =>
+            IF!(player_info.and_then(|pi| pi.track_loudness_lufs.or(pi.normalization_gain_db)).is_some() =>
                 h3![
                     C!["subtitle", "is-6", "has-text-grey-light"],
                     {
                         let pi = player_info.unwrap();
-                        let lufs = pi.track_loudness_lufs.unwrap() as f64 / 100.0;
-                        match pi.normalization_gain_db {
-                            Some(gain_hundredths) => {
+                        match (pi.track_loudness_lufs, pi.normalization_gain_db) {
+                            (Some(lufs_hundredths), Some(gain_hundredths)) => {
+                                let lufs = lufs_hundredths as f64 / 100.0;
                                 let gain = gain_hundredths as f64 / 100.0;
                                 let effective = lufs + gain;
                                 format!("{lufs:.1} LUFS  →  {gain:+.1} dB  →  {effective:.1} LUFS")
                             }
-                            None => format!("{lufs:.1} LUFS"),
+                            (Some(lufs_hundredths), None) => {
+                                let lufs = lufs_hundredths as f64 / 100.0;
+                                format!("{lufs:.1} LUFS")
+                            }
+                            (None, Some(gain_hundredths)) => {
+                                let gain = gain_hundredths as f64 / 100.0;
+                                format!("{gain:+.1} dB (file tag)")
+                            }
+                            (None, None) => String::new(),
                         }
                     }
                 ]
@@ -392,12 +400,9 @@ fn view_volume_slider(volume_state: &Volume, current_volume: u8) -> Node<Msg> {
                     attrs! {At::Title => if is_muted { "Unmute (M)" } else { "Mute (M)" }},
                     span![
                         C!["icon"],
-                        i![C!["fas", if is_muted { "fa-volume-mute" } else { "fa-volume-up" }]]
+                        i![C!["fas", if is_muted { "fa-volume-xmark" } else { "fa-volume-off" }]]
                     ],
-                    ev(Ev::Click, move |_| {
-                        let new_vol = if is_muted { max_vol / 2 } else { 0 };
-                        Msg::SendSystemCommand(SystemCommand::SetVol(new_vol))
-                    })
+                    ev(Ev::Click, |_| Msg::ToggleMute)
                 ],
             ],
             div![
@@ -405,7 +410,7 @@ fn view_volume_slider(volume_state: &Volume, current_volume: u8) -> Node<Msg> {
                 button![
                     C!["button", "is-ghost", "is-medium"],
                     attrs! {At::Title => "Volume down (↓)"},
-                    span![C!["icon"], i![C!["fas", "fa-volume-down"]]],
+                    span![C!["icon"], i![C!["fas", "fa-circle-minus"]]],
                     ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::VolDown))
                 ],
             ],
@@ -436,7 +441,7 @@ fn view_volume_slider(volume_state: &Volume, current_volume: u8) -> Node<Msg> {
                 button![
                     C!["button", "is-ghost", "is-medium"],
                     attrs! {At::Title => "Volume up (↑)"},
-                    span![C!["icon"], i![C!["fas", "fa-volume-up"]]],
+                    span![C!["icon"], i![C!["fas", "fa-circle-plus"]]],
                     ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::VolUp))
                 ],
             ],
