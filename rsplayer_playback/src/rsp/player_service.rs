@@ -179,12 +179,12 @@ impl PlayerService {
             self.seek_current_song(last_song_time);
         }
 
-        *self.playback_thread_handle.lock().unwrap() = Some(self.play_all_in_queue());
+        *self.playback_thread_handle.lock().expect("lock poisoned") = Some(self.play_all_in_queue());
     }
 
     pub fn play_from_beginning(&self) {
         _ = self.state_db.remove(LAST_SONG_PAUSED_KEY);
-        *self.playback_thread_handle.lock().unwrap() = Some(self.play_all_in_queue());
+        *self.playback_thread_handle.lock().expect("lock poisoned") = Some(self.play_all_in_queue());
     }
 
     pub fn play_next_song(&self) {
@@ -203,7 +203,7 @@ impl PlayerService {
 
     pub fn stop_current_song(&self) -> Option<PlaybackResult> {
         self.stop_signal.store(true, Ordering::Relaxed);
-        let handle = self.playback_thread_handle.lock().unwrap().take();
+        let handle = self.playback_thread_handle.lock().expect("lock poisoned").take();
         handle.and_then(|h| h.join().ok())
     }
 
@@ -268,7 +268,7 @@ impl PlayerService {
         let is_multi_core_platform = core_affinity::get_core_ids().is_some_and(|ids| ids.len() > 1);
         let local_browser_playback = self.local_browser_playback;
         let prio = if is_multi_core_platform {
-            ThreadPriority::Crossplatform(playback_thread_prio.try_into().unwrap())
+            ThreadPriority::Crossplatform(playback_thread_prio.try_into().expect("invalid thread priority value"))
         } else {
             ThreadPriority::Min
         };
@@ -305,12 +305,12 @@ impl PlayerService {
                         metadata_service.increase_play_count(&song.file);
                     }
 
-                    changes_tx
-                        .send(StateChangeEvent::CurrentSongEvent(song.clone()))
-                        .expect("msg send failed");
-                    changes_tx
-                        .send(StateChangeEvent::PlaybackStateEvent(PlayerState::PLAYING))
-                        .expect("msg send failed");
+                    if let Err(e) = changes_tx.send(StateChangeEvent::CurrentSongEvent(song.clone())) {
+                        warn!("Failed to send current song event: {e}");
+                    }
+                    if let Err(e) = changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::PLAYING)) {
+                        warn!("Failed to send playback state event: {e}");
+                    }
                     let track_loudness = loudness_service.get_loudness(&song.file);
                     let normalization_gain_db: Option<f64> = if rsp_settings.loudness_normalization_enabled {
                         use api_models::settings::NormalizationSource;
@@ -461,15 +461,12 @@ impl PlayerService {
                 loudness_service.set_playback_active(false);
                 result
             })
-            .unwrap()
+            .expect("failed to spawn playback thread")
     }
 
     fn get_last_played_song_time(&self) -> u16 {
         let last_time = match self.state_db.get(LAST_SONG_PROGRESS_KEY) {
-            Ok(Some(lt)) => {
-                let v = lt.to_vec();
-                String::from_utf8(v).unwrap()
-            }
+            Ok(Some(lt)) => String::from_utf8(lt.to_vec()).unwrap_or_else(|_| "0".to_string()),
             _ => "0".to_string(),
         };
         last_time.parse::<u16>().unwrap_or_default()

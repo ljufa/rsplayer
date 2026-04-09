@@ -16,9 +16,9 @@ pub fn handle_storage_command(cmd: StorageCommand, ctx: &CommandContext) {
                     .iter()
                     .position(|m| m.name == mount_config.name);
                 if let Some(idx) = existing {
-                    settings.network_storage_settings.mounts[idx] = mount_config.clone();
+                    settings.network_storage_settings.mounts[idx] = mount_config;
                 } else {
-                    settings.network_storage_settings.mounts.push(mount_config.clone());
+                    settings.network_storage_settings.mounts.push(mount_config);
                 }
                 if !settings.metadata_settings.music_directories.contains(&mount_point) {
                     settings.metadata_settings.music_directories.push(mount_point.clone());
@@ -63,8 +63,7 @@ pub fn handle_storage_command(cmd: StorageCommand, ctx: &CommandContext) {
                 .cloned();
             let is_rsplayer_managed = config.as_ref().is_some_and(|c| c.mount_point.is_none());
             let mount_point = config
-                .as_ref()
-                .and_then(|c| c.mount_point.clone())
+                .and_then(|c| c.mount_point)
                 .unwrap_or_else(|| format!("/mnt/rsplayer/{name}"));
 
             if is_rsplayer_managed {

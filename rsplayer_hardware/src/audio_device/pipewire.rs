@@ -76,7 +76,7 @@ impl VolumeControlDevice for PipewireVolumeControlDevice {
                 error!("Failed to get volume from wpctl");
             }
         }
-        self.current_vol.clone()
+        self.current_vol
     }
 
     fn set_vol(&mut self, level: u8) -> Volume {

@@ -615,7 +615,7 @@ fn view_collapsible_section(model: &Model, carousel_id: &str, title: &str, items
                 icon,
             ],
             span![
-                C!["title is-3 has-text-light"],
+                C!["title is-5 has-text-light"],
                 style! { St::MarginBottom => "0" },
                 title,
             ],
@@ -675,7 +675,7 @@ fn view_lazy_section(
                 icon,
             ],
             span![
-                C!["title is-3 has-text-light"],
+                C!["title is-5 has-text-light"],
                 style! { St::MarginBottom => "0" },
                 title,
             ],
@@ -685,7 +685,7 @@ fn view_lazy_section(
                 format!("({item_count})"),
             ],
             a![
-                style! { St::MarginLeft => "auto", St::MarginRight => "12px" },
+                style! { St::MarginLeft => "auto", St::MarginRight => "12px", St::Display => "flex", St::AlignItems => "center" },
                 attrs!(At::Title => "Replace queue & play all"),
                 i![
                     C!["material-icons", "has-text-light"],
@@ -701,7 +701,7 @@ fn view_lazy_section(
                 }),
             ],
             a![
-                style! { St::MarginRight => "8px" },
+                style! { St::MarginRight => "8px", St::Display => "flex", St::AlignItems => "center" },
                 attrs!(At::Title => "Add all to queue"),
                 i![
                     C!["material-icons", "has-text-light"],

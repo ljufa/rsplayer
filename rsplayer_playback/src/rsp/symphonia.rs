@@ -109,7 +109,7 @@ pub fn play_file(
     let track_id = track.id;
     let tb = track
         .time_base
-        .unwrap_or_else(|| TimeBase::new(std::num::NonZero::new(1).unwrap(), std::num::NonZero::new(1).unwrap()));
+        .unwrap_or_else(|| TimeBase::new(std::num::NonZero::<u32>::new(1).expect("1 is non-zero"), std::num::NonZero::<u32>::new(1).expect("1 is non-zero")));
     let dur_ts = track
         .num_frames
         .map_or(1, |frames| track.start_ts.get().unsigned_abs().saturating_add(frames));
@@ -129,17 +129,16 @@ pub fn play_file(
     }
     let codec_registry = build_codec_registry();
     let cd = codec_registry.get_audio_decoder(audio_params.codec);
-    context
-        .changes_tx
-        .send(StateChangeEvent::PlayerInfoEvent(PlayerInfo {
-            audio_format_bit: bps,
-            audio_format_channels: chan_num,
-            audio_format_rate: rate,
-            codec: cd.map(|c| c.codec.info.short_name.to_uppercase()),
-            track_loudness_lufs,
-            normalization_gain_db,
-        }))
-        .expect("msg send failed");
+    if let Err(e) = context.changes_tx.send(StateChangeEvent::PlayerInfoEvent(PlayerInfo {
+        audio_format_bit: bps,
+        audio_format_channels: chan_num,
+        audio_format_rate: rate,
+        codec: cd.map(|c| c.codec.info.short_name.to_uppercase()),
+        track_loudness_lufs,
+        normalization_gain_db,
+    })) {
+        warn!("Failed to send player info event: {e}");
+    }
 
     let is_dsd = audio_params.codec == CODEC_TYPE_DSD_LSBF || audio_params.codec == CODEC_TYPE_DSD_MSBF;
 
@@ -182,13 +181,10 @@ pub fn play_file(
         let current_time = tb.calc_time(packet.pts()).map_or(0, |t| t.as_secs().unsigned_abs());
         if current_time != last_current_time {
             last_current_time = current_time;
-            context
-                .changes_tx
-                .send(StateChangeEvent::SongTimeEvent(SongProgress {
-                    total_time: Duration::from_secs(dur.as_secs().unsigned_abs()),
-                    current_time: Duration::from_secs(current_time),
-                }))
-                .expect("msg send failed");
+            let _ = context.changes_tx.send(StateChangeEvent::SongTimeEvent(SongProgress {
+                total_time: Duration::from_secs(dur.as_secs().unsigned_abs()),
+                current_time: Duration::from_secs(current_time),
+            }));
         }
         // Decode the packet into audio samples.
         match decoder.decode(&packet) {

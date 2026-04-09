@@ -37,7 +37,7 @@ impl UsbService {
     pub fn send_command(&self, command: &str) -> Result<()> {
         let message = format!("{command}\n");
 
-        let mut port_guard = self.port.lock().unwrap();
+        let mut port_guard = self.port.lock().expect("lock poisoned");
         if let Some(port) = port_guard.as_mut() {
             port.write_all(message.as_bytes()).and_then(|()| port.flush())?;
             trace!("Written command: {command}");
@@ -60,15 +60,15 @@ impl UsbService {
                 Ok(new_port) => {
                     info!("Reconnected to USB device at {new_path}");
                     {
-                        let mut port_guard = self.port.lock().unwrap();
+                        let mut port_guard = self.port.lock().expect("lock poisoned");
                         *port_guard = Some(new_port);
                     }
-                    let cached_song = self.last_song_cache.lock().unwrap().clone();
+                    let cached_song = self.last_song_cache.lock().expect("lock poisoned").clone();
                     if let Some((t, a, al)) = cached_song {
                         debug!("Resending cached track info: {t} - {a}");
                         let _ = self.send_command(&format!("SetTrack({t}|{a}|{al})"));
                     }
-                    let cached_mode = self.last_playback_mode_cache.lock().unwrap().clone();
+                    let cached_mode = self.last_playback_mode_cache.lock().expect("lock poisoned").clone();
                     if let Some(mode) = cached_mode {
                         debug!("Resending cached playback mode: {mode}");
                         let _ = self.send_command(&format!("SetPlaybackMode({mode})"));
@@ -84,7 +84,7 @@ impl UsbService {
     }
 
     pub fn send_track_info(&self, title: &str, artist: &str, album: &str) -> Result<()> {
-        *self.last_song_cache.lock().unwrap() = Some((title.to_string(), artist.to_string(), album.to_string()));
+        *self.last_song_cache.lock().expect("lock poisoned") = Some((title.to_string(), artist.to_string(), album.to_string()));
         self.send_command(&format!("SetTrack({title}|{artist}|{album})"))
     }
 
@@ -131,7 +131,7 @@ pub fn start_listening(
         loop {
             // Try to acquire a working port reader
             let port_result = {
-                let mut port_guard = service.port.lock().unwrap();
+                let mut port_guard = service.port.lock().expect("lock poisoned");
                 port_guard.as_mut().map_or_else(
                     || {
                         Err(serialport::Error::new(
@@ -208,7 +208,7 @@ pub fn start_listening(
                     // If we broke out of the inner loop, it means the connection is likely dead.
                     // Clear the port so try_reconnect can start fresh.
                     info!("USB connection broken, clearing port handle.");
-                    let mut port_guard = service.port.lock().unwrap();
+                    let mut port_guard = service.port.lock().expect("lock poisoned");
                     *port_guard = None;
                 }
                 Err(e) => {
@@ -305,7 +305,7 @@ fn process_event(service: &UsbService, event: StateChangeEvent) {
         StateChangeEvent::PlaybackModeChangedEvent(mode) => {
             let mode_str: &str = mode.into();
             debug!("PlaybackModeChangedEvent received: {mode_str}");
-            *service.last_playback_mode_cache.lock().unwrap() = Some(mode_str.to_string());
+            *service.last_playback_mode_cache.lock().expect("lock poisoned") = Some(mode_str.to_string());
             let _ = service.send_command(&format!("SetPlaybackMode({mode_str})"));
         }
         _ => {}

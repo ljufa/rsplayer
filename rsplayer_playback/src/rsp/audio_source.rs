@@ -17,58 +17,67 @@ pub fn probe_http_source(
 ) -> Result<(Box<dyn MediaSource>, Option<RadioMeta>)> {
     use std::time::Duration;
 
-    let agent = ureq::AgentBuilder::new()
-        .timeout_connect(Duration::from_secs(3))
-        .timeout_read(Duration::from_secs(3))
-        .timeout_write(Duration::from_secs(3))
-        .build();
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_connect(Some(Duration::from_secs(3)))
+        .timeout_global(Some(Duration::from_secs(30)))
+        .build()
+        .into();
 
     let resp = agent
         .get(url)
-        .set("accept", "*/*")
-        .set("Icy-Metadata", "1")
+        .header("accept", "*/*")
+        .header("Icy-Metadata", "1")
         .call()
         .map_err(|e| format_err!("Failed to get url {url}: {e}"))?;
 
-    let status = resp.status();
-    info!("response status code:{status} / status text:{}", resp.status_text());
-    resp.headers_names()
+    let status = resp.status().as_u16();
+    info!(
+        "response status code:{status} / status text:{}",
+        resp.status().canonical_reason().unwrap_or("")
+    );
+    resp.headers()
         .iter()
-        .for_each(|header| info!("{header} = {:?}", resp.header(header).unwrap_or("")));
+        .for_each(|(name, value)| info!("{name} = {:?}", value.to_str().unwrap_or("")));
 
     let radio_meta = radio_meta::get_external_radio_meta(&agent, &resp);
 
-    if let Some(ct) = resp.header("content-type") {
-        let ext = match ct {
-            "audio/mpeg" => Some("mp3"),
-            "audio/aac" | "audio/aacp" | "audio/x-aac" => Some("aac"),
-            "audio/ogg" | "application/ogg" => Some("ogg"),
-            "audio/flac" | "audio/x-flac" => Some("flac"),
-            "audio/wav" | "audio/x-wav" => Some("wav"),
-            "audio/mp4" | "audio/x-m4a" => Some("m4a"),
-            _ => None,
-        };
-        if let Some(ext) = ext {
-            hint.with_extension(ext);
-        }
+    let ct_str = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    let ext = match ct_str.as_str() {
+        "audio/mpeg" => Some("mp3"),
+        "audio/aac" | "audio/aacp" | "audio/x-aac" => Some("aac"),
+        "audio/ogg" | "application/ogg" => Some("ogg"),
+        "audio/flac" | "audio/x-flac" => Some("flac"),
+        "audio/wav" | "audio/x-wav" => Some("wav"),
+        "audio/mp4" | "audio/x-m4a" => Some("m4a"),
+        _ => None,
+    };
+    if let Some(ext) = ext {
+        hint.with_extension(ext);
     }
 
     if status != 200 {
         return Err(format_err!("Invalid streaming url {url}"));
     }
 
-    let media_source: Box<dyn MediaSource> = if let Some(metaint_str) = resp.header("icy-metaint") {
-        if let Ok(metaint_val) = metaint_str.parse::<usize>() {
-            info!("ICY stream detected with metaint={metaint_val}");
-            let reader = resp.into_reader();
-            let icy_reader =
-                IcyMetadataReader::new(reader, metaint_val, changes_tx.clone(), radio_meta.clone().unwrap());
-            Box::new(ReadOnlySource::new(Box::new(icy_reader)))
-        } else {
-            Box::new(ReadOnlySource::new(resp.into_reader()))
-        }
+    let metaint_val = resp
+        .headers()
+        .get("icy-metaint")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<usize>().ok());
+
+    let media_source: Box<dyn MediaSource> = if let Some(metaint_val) = metaint_val {
+        info!("ICY stream detected with metaint={metaint_val}");
+        let reader = resp.into_body().into_reader();
+        let icy_reader =
+            IcyMetadataReader::new(reader, metaint_val, changes_tx.clone(), radio_meta.clone().unwrap());
+        Box::new(ReadOnlySource::new(Box::new(icy_reader)))
     } else {
-        Box::new(ReadOnlySource::new(resp.into_reader()))
+        Box::new(ReadOnlySource::new(resp.into_body().into_reader()))
     };
 
     Ok((media_source, radio_meta))

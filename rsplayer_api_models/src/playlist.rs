@@ -22,9 +22,8 @@ pub struct Album {
 }
 
 impl Album {
-    pub fn from_bytes(value: &[u8]) -> Self {
-        let album: Album = serde_json::from_slice(value).expect("Failed to deserialize album!");
-        album
+    pub fn from_bytes(value: &[u8]) -> Option<Self> {
+        serde_json::from_slice(value).ok()
     }
     pub fn to_json_string_bytes(&self) -> Vec<u8> {
         serde_json::to_vec(self).expect("Album serialization failed!")

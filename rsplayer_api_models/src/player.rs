@@ -108,7 +108,7 @@ impl Song {
         result
     }
     pub fn get_file_name_without_path(&self) -> String {
-        self.file.rsplit('/').next().unwrap().to_owned()
+        self.file.rsplit('/').next().unwrap_or(&self.file).to_owned()
     }
 
     /// Returns the track-level gain from `R128_TRACK_GAIN` or `REPLAYGAIN_TRACK_GAIN` tags.

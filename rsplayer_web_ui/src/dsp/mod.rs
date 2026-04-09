@@ -41,11 +41,11 @@ struct DspPipelineStep {
 struct DspFilterDef {
     #[serde(rename = "type")]
     filter_type: String,
-    parameters: serde_yaml::Value,
+    parameters: yaml_serde::Value,
 }
 
 pub fn parse_dsp_config(yaml_content: &str) -> Vec<FilterConfig> {
-    let config: DspConfig = match serde_yaml::from_str(yaml_content) {
+    let config: DspConfig = match yaml_serde::from_str(yaml_content) {
         Ok(c) => c,
         Err(e) => {
             warn!(format!("Failed to parse YAML: {}", e));
@@ -185,7 +185,7 @@ fn convert_filter(def: &DspFilterDef) -> Option<DspFilter> {
     }
 }
 
-fn get_f64(value: &serde_yaml::Value, key: &str) -> Option<f64> {
+fn get_f64(value: &yaml_serde::Value, key: &str) -> Option<f64> {
     value
         .get(key)
         .and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)))

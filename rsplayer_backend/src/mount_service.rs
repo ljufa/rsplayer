@@ -187,8 +187,12 @@ impl MountService {
 
     pub fn mount_all(settings: &NetworkStorageSettings) {
         for mount_config in &settings.mounts {
-            if mount_config.mount_point.is_some() {
-                info!("Skipping external mount: {}", mount_config.name);
+            let mount_point = mount_config
+                .mount_point
+                .clone()
+                .unwrap_or_else(|| format!("{MOUNT_BASE}/{}", mount_config.name));
+            if Self::is_mounted(&mount_point) {
+                info!("Skipping already-mounted share: {}", mount_config.name);
                 continue;
             }
             info!("Auto-mounting network share: {}", mount_config.name);

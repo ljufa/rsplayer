@@ -7,7 +7,7 @@ use std::sync::{
 };
 
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
-use rand::Rng;
+use rand::RngExt;
 
 use api_models::{common::PlaybackMode, player::Song, playlist::PlaylistPage, state::CurrentQueueQuery};
 
@@ -94,11 +94,11 @@ impl QueueService {
             _ = self.random_history_db.remove(key);
         }
         self.random_history_index.store(0, Ordering::Relaxed);
-        self.random_played_keys.write().unwrap().clear();
+        self.random_played_keys.write().expect("lock poisoned").clear();
     }
 
     pub fn cycle_playback_mode(&self) -> PlaybackMode {
-        let mut mode_lock = self.playback_mode.write().unwrap();
+        let mut mode_lock = self.playback_mode.write().expect("lock poisoned");
         let modes: Vec<_> = PlaybackMode::all();
         let current_index = modes.iter().position(|&m| m == *mode_lock).unwrap_or(0);
         let next_mode = modes[(current_index + 1) % modes.len()];
@@ -110,7 +110,7 @@ impl QueueService {
     }
 
     pub fn get_playback_mode(&self) -> PlaybackMode {
-        *self.playback_mode.read().unwrap()
+        *self.playback_mode.read().expect("lock poisoned")
     }
 
     pub fn get_current_song(&self) -> Option<Song> {
@@ -172,7 +172,7 @@ impl QueueService {
                     return false;
                 }
                 let current_key = self.get_current_or_first_song_key();
-                let mut played = self.random_played_keys.write().unwrap();
+                let mut played = self.random_played_keys.write().expect("lock poisoned");
                 // Mark current song as played
                 if let Some(ref ck) = current_key {
                     played.insert(ck.clone());

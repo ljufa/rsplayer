@@ -137,7 +137,10 @@ pub fn start(
                 }
                 Ok(ev) => {
                     trace!("Received state changed event {ev:?}");
-                    let json_msg = serde_json::to_string(&ev).unwrap();
+                    let Ok(json_msg) = serde_json::to_string(&ev) else {
+                        error!("Failed to serialize state change event: {ev:?}");
+                        continue;
+                    };
                     if !json_msg.is_empty() && ws_bcast_tx_handle.send(Arc::new(json_msg)).is_err() {
                         trace!("No active ws clients, not sending state change");
                     }
@@ -226,8 +229,8 @@ mod handlers {
     ) -> Result<impl warp::Reply, Infallible> {
         debug!("Settings to save {settings:?} and reload {query:?}");
         config.save_settings(&settings);
-        let param = query.get("reload").unwrap();
-        if param == "true" {
+        let reload = query.get("reload").map_or("false", String::as_str);
+        if reload == "true" {
             info!("Reloading service");
             // systemd should start the service again
             exit(1);

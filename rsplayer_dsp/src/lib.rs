@@ -1,9 +1,9 @@
 use anyhow::Result;
-use camilladsp::basicfilters::Gain;
-use camilladsp::biquad::Biquad;
-use camilladsp::biquad::BiquadCoefficients;
+use camilladsp::filters::basicfilters::Gain;
+use camilladsp::filters::biquad::Biquad;
+use camilladsp::filters::biquad::BiquadCoefficients;
 pub use camilladsp::config::{self, BiquadParameters};
-use camilladsp::filters::Filter;
+use camilladsp::filters::Filter as CamillaDspFilter;
 use log::error;
 
 use symphonia::core::audio::conv::{FromSample, IntoSample};
@@ -16,7 +16,7 @@ pub struct Equalizer {
     channels: usize,
     // We use Box<dyn Filter + Send> to allow storing different filter types if needed,
     // and Send to allow moving between threads.
-    filters: Vec<Vec<Box<dyn Filter + Send>>>,
+    filters: Vec<Vec<Box<dyn CamillaDspFilter + Send>>>,
     scratch_buffers: Vec<Vec<f32>>,
     conversion_scratch: Vec<f32>,
 }

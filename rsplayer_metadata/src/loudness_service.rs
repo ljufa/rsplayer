@@ -143,6 +143,10 @@ impl LoudnessService {
             self.repository.flush();
             let total = scanned.load(Ordering::Relaxed);
             info!("Loudness scan: pass complete, {total} songs analysed");
+            if total == 0 {
+                warn!("Loudness scan: no files could be read (files unavailable?), sleeping 60s before retry");
+                thread::sleep(Duration::from_secs(60));
+            }
         }
     }
 }

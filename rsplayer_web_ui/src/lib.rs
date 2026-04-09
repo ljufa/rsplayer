@@ -846,7 +846,7 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 }
                 StateChangeEvent::VolumeChangeEvent(vol) => {
                     if model.player_model.volume_state.current != vol.current {
-                        model.player_model.volume_state = vol.clone();
+                        model.player_model.volume_state = *vol;
                         if model.local_browser_playback {
                             if let Some(window) = web_sys::window() {
                                 if let Some(document) = window.document() {

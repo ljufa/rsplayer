@@ -8,7 +8,7 @@ pub fn process_radiosphere_meta(agent: &ureq::Agent, final_url: &str, radio_meta
 
     if let Some(url) = track_url {
         if let Ok(api_resp) = agent.get(&url).call() {
-            if let Ok(body) = api_resp.into_string() {
+            if let Ok(body) = api_resp.into_body().read_to_string() {
                 if let Some(song) = parse_song_metadata(&body) {
                     radio_meta.name = Some(format!(
                         "{} - {}",
@@ -22,7 +22,7 @@ pub fn process_radiosphere_meta(agent: &ureq::Agent, final_url: &str, radio_meta
 
     if let Some((channel_url, source)) = build_radiosphere_channel_api_url(final_url) {
         if let Ok(api_resp) = agent.get(&channel_url).call() {
-            if let Ok(api_body) = api_resp.into_string() {
+            if let Ok(api_body) = api_resp.into_body().read_to_string() {
                 if let Ok(json_body) = serde_json::from_str::<serde_json::Value>(&api_body) {
                     if let Some(cover_image_url) = json_body.get("coverImageUrl").and_then(|v| v.as_str()) {
                         radio_meta.image_url = Some(cover_image_url.to_string());
@@ -56,7 +56,7 @@ pub fn process_quantumcast_meta(agent: &ureq::Agent, channel_key: &str, radio_me
     let track_url = format!("https://api.streamabc.net/metadata/channel/{channel_key}.json");
 
     if let Ok(api_resp) = agent.get(&track_url).call() {
-        if let Ok(body) = api_resp.into_string() {
+        if let Ok(body) = api_resp.into_body().read_to_string() {
             if let Some(song) = parse_song_metadata(&body) {
                 radio_meta.name = Some(format!(
                     "{} - {}",

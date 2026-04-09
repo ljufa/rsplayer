@@ -1,7 +1,8 @@
 use anyhow::{Error, Result};
 use api_models::settings::RsPlayerSettings;
 use log::info;
-use rubato::Resampler;
+use rubato::audioadapter_buffers::direct::SequentialSliceOfVecs;
+use rubato::{Fft, FixedSync, Resampler};
 use std::sync::Arc;
 use symphonia::core::audio::{AudioSpec, GenericAudioBufferRef};
 
@@ -149,7 +150,7 @@ where
 {
     producer: rb::Producer<T>,
     samples: Vec<f32>,
-    resampler: rubato::FftFixedIn<f32>,
+    resampler: Fft<f32>,
     channels: usize,
     output_channels: usize,
     channel_in: Vec<Vec<f32>>,
@@ -182,9 +183,21 @@ where
         }
 
         // Resample.
+        let actual_frames = self.channel_in.first().map_or(0, Vec::len);
+        let indexing = rubato::Indexing {
+            input_offset: 0,
+            output_offset: 0,
+            partial_len: Some(actual_frames),
+            active_channels_mask: None,
+        };
+        let input_adapter = SequentialSliceOfVecs::new(&self.channel_in, self.channels, actual_frames)
+            .map_err(|e| Error::msg(format!("resampler input buffer error: {e}")))?;
+        let out_max = self.resampler.output_frames_max();
+        let mut output_adapter = SequentialSliceOfVecs::new_mut(&mut self.channel_out, self.channels, out_max)
+            .map_err(|e| Error::msg(format!("resampler output buffer error: {e}")))?;
         let (_in_frames, out_frames) = self
             .resampler
-            .process_partial_into_buffer(Some(&self.channel_in), &mut self.channel_out, None)
+            .process_into_buffer(&input_adapter, &mut output_adapter, Some(&indexing))
             .map_err(|e| Error::msg(format!("resample error: {e}")))?;
 
         // Re-interleave and convert to target sample type, mapping
@@ -532,7 +545,7 @@ impl AlsaOutput {
                         Error::from(e)
                     })?;
                 let writer: Box<dyn AudioWriter> = if let Some(dev_rate) = device_rate {
-                    let resampler = rubato::FftFixedIn::<f32>::new(
+                    let resampler = Fft::<f32>::new(
                         #[allow(clippy::cast_possible_truncation)]
                         {
                             spec.rate() as usize
@@ -547,10 +560,11 @@ impl AlsaOutput {
                         },
                         2,
                         source_channels,
+                        FixedSync::Input,
                     )
                     .map_err(|e| Error::msg(format!("failed to create resampler: {e}")))?;
-                    let channel_in = resampler.input_buffer_allocate(true);
-                    let mut channel_out = resampler.output_buffer_allocate(true);
+                    let channel_in = vec![vec![0.0f32; resampler.input_frames_max()]; source_channels];
+                    let mut channel_out = vec![vec![0.0f32; resampler.output_frames_max()]; source_channels];
                     // Ensure output buffers have capacity for max output frames.
                     for ch in &mut channel_out {
                         ch.resize(resampler.output_frames_max(), 0.0);

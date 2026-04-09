@@ -15,9 +15,9 @@ impl PlayStatisticsRepository {
     }
 
     pub fn find_by_id(&self, play_item_id: &str) -> Option<PlayItemStatistics> {
-        let data = self.db.get(play_item_id).expect("Failed to get play item statistics")?;
-        let json = String::from_utf8(data.to_vec()).unwrap();
-        Some(serde_json::from_str(&json).unwrap())
+        let data = self.db.get(play_item_id).ok()??;
+        let json = String::from_utf8(data.to_vec()).ok()?;
+        serde_json::from_str(&json).ok()
     }
     pub fn find_by_key_prefix(&self, prefix: &str) -> Vec<PlayItemStatistics> {
         self.db
@@ -43,7 +43,7 @@ impl PlayStatisticsRepository {
 
     pub fn save(&self, play_item_statistics: &PlayItemStatistics) {
         let play_item_id = play_item_statistics.play_item_id.clone();
-        let json = serde_json::to_string(play_item_statistics).unwrap();
+        let json = serde_json::to_string(play_item_statistics).expect("failed to serialize play statistics");
         self.db
             .insert(play_item_id, json.as_bytes())
             .expect("Failed to save play item statistics");

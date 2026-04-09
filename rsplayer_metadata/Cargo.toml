@@ -20,14 +20,14 @@ uuid.workspace = true
 ureq.workspace = true
 
 api_models = {path = "../rsplayer_api_models"}
-walkdir = "2.5.0"
+walkdir = "2"
 ebur128 = "0.1"
 rayon = "1"
 unicode-normalization = "0.1"
-mockall = "0.13.0"
-mockall_double = "0.3.1"
+mockall = "0.14"
+mockall_double = "0.3"
 
-rand = "0.9.0-alpha.2"
+rand = "0.10"
 
 [dev-dependencies]
-random-string = "1.1.0"
+random-string = "1"

@@ -13,7 +13,7 @@ TARGET = "aarch64-unknown-linux-gnu"
 # TARGET = "x86_64-unknown-linux-gnu"
 # TARGET = "riscv64gc-unknown-linux-gnu"
 
-RELEASE_VERSION = "2.7.0"
+RELEASE_VERSION = "2.7.5"
 RELEASE_BRANCH = "main_public"
 
 [config]

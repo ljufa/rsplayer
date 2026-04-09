@@ -47,8 +47,8 @@ impl AlbumRepository {
             .iter()
             .filter_map(|guard| {
                 let (key, value) = guard.into_inner().ok()?;
-                let mut album = Album::from_bytes(&value);
-                album.id = String::from_utf8(key.to_vec()).unwrap();
+                let mut album = Album::from_bytes(&value)?;
+                album.id = String::from_utf8(key.to_vec()).ok()?;
                 album.song_keys.clear();
                 Some(album)
             })
@@ -62,7 +62,7 @@ impl AlbumRepository {
             .expect("Album DB error")
             .or_else(|| self.albums_db.get(album_id.as_bytes()).expect("Album DB error"))?;
 
-        let mut album = Album::from_bytes(&bytes);
+        let mut album = Album::from_bytes(&bytes)?;
         album_id.clone_into(&mut album.id);
         Some(album)
     }
@@ -144,7 +144,7 @@ impl AlbumRepository {
             .iter()
             .filter_map(|guard| {
                 let value = guard.value().ok()?;
-                Some(Album::from_bytes(&value))
+                Album::from_bytes(&value)
             })
             .filter(|a| a.artist.as_ref().is_some_and(|a| normalize_name(a) == normalized_query))
             .collect()
@@ -157,7 +157,9 @@ impl AlbumRepository {
         };
         let key = normalize_name(&raw_album);
         let existing_album = self.albums_db.get(key.as_bytes()).expect("Album DB error");
-        let mut album = existing_album.map_or_else(Album::default, |bytes| Album::from_bytes(&bytes));
+        let mut album = existing_album
+            .and_then(|bytes| Album::from_bytes(&bytes))
+            .unwrap_or_default();
 
         if !album.song_keys.contains(&song.file) {
             album.song_keys.push(song.file);

@@ -1,5 +1,31 @@
 # Release Notes
 
+## v2.7.5 — 2026-04-09
+
+### Bug Fixes
+
+#### Network Volumes Not Mounted on Startup
+Managed network shares with a custom mount point path were silently skipped at startup. The auto-mount logic treated any share with an explicit `mount_point` as externally managed (e.g. via `/etc/fstab`) and never attempted to mount it. The check now inspects whether the share is actually mounted rather than whether the path is customized — shares that are not yet mounted are always attempted, regardless of how the mount point is configured.
+
+#### Loudness Analysis Thread Spinning on Unavailable Files
+When the music volume was unmounted (or otherwise unreachable), the loudness scan background thread entered a busy loop: it collected all un-analysed songs, found none of the files on disk, skipped them all without recording anything, and immediately started the next pass. This repeated indefinitely at high CPU usage. The thread now detects a pass in which no files could be read and backs off for 60 seconds before retrying.
+
+#### Genre List — Action Buttons Not Vertically Centered
+The play and add buttons on the right side of each genre/decade row were not vertically centered within the row. The `<a>` elements were inline by default, so the parent flex container's `align-items: center` had no effect on the icon alignment inside them. Fixed by making both button elements `display: flex` with `align-items: center`.
+
+### Improvements
+
+#### Dependency Upgrades
+All workspace and web UI dependencies updated to their latest versions.
+
+#### Error Handling
+Replaced `unwrap()` and `expect()` calls across the codebase with proper error propagation and logging, reducing the risk of unexpected panics in edge cases.
+
+#### Code Quality
+Clippy and redundant `.clone()` cleanup pass across multiple crates.
+
+---
+
 ## v2.7.0 — 2026-04-05
 
 ### New Features

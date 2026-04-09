@@ -12,30 +12,44 @@ pub struct RadioMeta {
     pub bitrate: Option<u32>,
 }
 
-pub fn get_external_radio_meta(agent: &ureq::Agent, resp: &ureq::Response) -> Option<RadioMeta> {
-    let final_url = resp.get_url();
+pub fn get_external_radio_meta(
+    agent: &ureq::Agent,
+    resp: &ureq::http::Response<ureq::Body>,
+) -> Option<RadioMeta> {
+    use ureq::ResponseExt;
+
+    let final_url = resp.get_uri().to_string();
+    let header_str = |name: &str| -> Option<String> {
+        resp.headers()
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .map(ToString::to_string)
+    };
+
     let mut radio_meta = RadioMeta {
-        name: resp.header("icy-name").map(ToString::to_string),
-        description: resp.header("icy-description").map(ToString::to_string),
-        genre: resp.header("icy-genre").map(ToString::to_string),
-        url: resp
-            .header("icy-url")
-            .map_or_else(|| final_url.to_string(), ToString::to_string),
+        name: header_str("icy-name"),
+        description: header_str("icy-description"),
+        genre: header_str("icy-genre"),
+        url: header_str("icy-url").unwrap_or_else(|| final_url.clone()),
         image_url: None,
         samplerate: None,
         channels: None,
         bitrate: None,
     };
 
-    if let Some(audio_info) = resp.header("ice-audio-info") {
-        parse_audio_info(audio_info, &mut radio_meta);
+    if let Some(audio_info) = header_str("ice-audio-info") {
+        parse_audio_info(&audio_info, &mut radio_meta);
     }
 
-    let server = resp.header("Server").unwrap_or_default();
+    let server = resp
+        .headers()
+        .get("Server")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
     if server == "radiosphere" {
-        radio_providers::process_radiosphere_meta(agent, final_url, &mut radio_meta);
+        radio_providers::process_radiosphere_meta(agent, &final_url, &mut radio_meta);
     } else if server.starts_with("QuantumCast Streamer") {
-        if let Some(channel_key) = resp.header("x-quantumcast-channelkey") {
+        if let Some(channel_key) = resp.headers().get("x-quantumcast-channelkey").and_then(|v| v.to_str().ok()) {
             radio_providers::process_quantumcast_meta(agent, channel_key, &mut radio_meta);
         }
     }

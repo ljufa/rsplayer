@@ -7,7 +7,7 @@ use crate::common::{AudioCard, CardMixer, PcmOutputDevice, VolumeCrtlType};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 pub struct Settings {
     pub volume_ctrl_settings: VolumeControlSettings,
-    #[validate]
+    #[validate(nested)]
     pub alsa_settings: AlsaSettings,
     #[serde(default)]
     pub auto_resume_playback: bool,
@@ -16,13 +16,13 @@ pub struct Settings {
     #[serde(default)]
     pub playlist_settings: PlaylistSetting,
     #[serde(default)]
-    #[validate]
+    #[validate(nested)]
     pub rs_player_settings: RsPlayerSettings,
     #[serde(default)]
-    #[validate]
+    #[validate(nested)]
     pub usb_settings: UsbCmdChannelSettings,
     #[serde(default)]
-    #[validate]
+    #[validate(nested)]
     pub network_storage_settings: NetworkStorageSettings,
     #[serde(default)]
     pub local_browser_playback: bool,
@@ -64,7 +64,7 @@ pub struct RsPlayerSettings {
     #[serde(default)]
     pub fixed_output_sample_rate: Option<u32>,
     #[serde(default)]
-    #[validate]
+    #[validate(nested)]
     pub dsp_settings: DspSettings,
     #[serde(default = "default_vu_meter_enabled")]
     pub vu_meter_enabled: bool,
@@ -81,7 +81,7 @@ pub struct DspSettings {
     #[serde(default = "default_dsp_enabled")]
     pub enabled: bool,
     #[serde(default)]
-    #[validate]
+    #[validate(nested)]
     pub filters: Vec<FilterConfig>,
 }
 
@@ -298,7 +298,7 @@ pub struct PlaylistSetting {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
 pub struct AlsaSettings {
     #[serde(default)]
-    #[validate]
+    #[validate(nested)]
     pub output_device: PcmOutputDevice,
     #[serde(default)]
     pub available_audio_cards: Vec<AudioCard>,

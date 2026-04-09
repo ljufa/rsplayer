@@ -65,8 +65,9 @@ impl SongRepository {
                 Some((key.to_vec(), value.to_vec()))
             })
             .filter(move |(key, _)| {
-                let key_s = String::from_utf8(key.clone()).unwrap();
-                key_s.to_lowercase().contains(&st)
+                String::from_utf8(key.clone())
+                    .map(|k| k.to_lowercase().contains(&st))
+                    .unwrap_or(false)
             })
             .collect::<Vec<_>>()
             .into_iter()

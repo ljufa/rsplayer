@@ -91,9 +91,8 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 
 ### Planned code improvements
 - Replace Bulma CSS with a modern, maintained alternative.
-- Replace seed-rs with a newer, maintained framework.- Remove unnecessary `.unwrap()` and `.clone()` calls.
+- Replace seed-rs with a newer, maintained framework.
 - Replace `warp` with `axum` or `actix`.
-- Reduce code duplication in UI with generic functions and macros.
 
 ## Supported Platforms
 

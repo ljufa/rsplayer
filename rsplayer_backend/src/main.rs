@@ -116,12 +116,14 @@ async fn main() {
         None
     };
 
-    let ai_service = AudioInterfaceService::new(&config, usb_service.clone());
-    if let Err(e) = &ai_service {
-        error!("Audio service interface can't be created. error: {e}");
-        start_degraded(&mut term_signal, e, &config).await;
-    }
-    let ai_service = Arc::new(ai_service.unwrap());
+    let ai_service = match AudioInterfaceService::new(&config, usb_service.clone()) {
+        Ok(s) => Arc::new(s),
+        Err(e) => {
+            error!("Audio service interface can't be created. error: {e}");
+            start_degraded(&mut term_signal, &e, &config).await;
+            return;
+        }
+    };
     info!("Audio interface service successfully created.");
 
     let (player_commands_tx, player_commands_rx) = tokio::sync::mpsc::channel(5);

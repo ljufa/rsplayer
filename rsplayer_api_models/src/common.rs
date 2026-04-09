@@ -91,7 +91,7 @@ pub enum VolumeCrtlType {
     Pipewire,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Volume {
     pub step: u8,
     pub min: u8,

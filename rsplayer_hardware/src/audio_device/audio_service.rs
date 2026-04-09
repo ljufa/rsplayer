@@ -54,7 +54,7 @@ impl AudioInterfaceService {
                     "USB service is required for RSPlayerFirmware volume control."
                 ));
             }
-            Box::new(RSPlayerFirmwareVolumeControlDevice::new(usb_service.unwrap()))
+            Box::new(RSPlayerFirmwareVolumeControlDevice::new(usb_service.expect("usb_service checked above")))
         } else {
             match settings.volume_ctrl_settings.ctrl_device {
                 #[cfg(feature = "alsa")]
@@ -78,16 +78,16 @@ impl AudioInterfaceService {
     }
 
     pub fn get_volume(&self) -> Volume {
-        self.volume_ctrl_device.lock().unwrap().get_vol()
+        self.volume_ctrl_device.lock().expect("lock poisoned").get_vol()
     }
 
     pub fn set_volume(&self, value: u8) -> Volume {
-        self.volume_ctrl_device.lock().unwrap().set_vol(value)
+        self.volume_ctrl_device.lock().expect("lock poisoned").set_vol(value)
     }
     pub fn volume_up(&self) -> Volume {
-        self.volume_ctrl_device.lock().unwrap().vol_up()
+        self.volume_ctrl_device.lock().expect("lock poisoned").vol_up()
     }
     pub fn volume_down(&self) -> Volume {
-        self.volume_ctrl_device.lock().unwrap().vol_down()
+        self.volume_ctrl_device.lock().expect("lock poisoned").vol_down()
     }
 }

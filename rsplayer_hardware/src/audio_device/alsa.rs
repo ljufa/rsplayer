@@ -54,10 +54,10 @@ pub fn get_all_cards() -> Vec<AudioCard> {
         result.push(AudioCard {
             id: card_name.clone(),
             index: card_index,
-            name: card_name.clone(),
             description: card.get_longname().unwrap_or_default(),
             pcm_devices,
             mixers: get_card_mixers(&card_name, card.get_index()),
+            name: card_name,
         });
     }
 
