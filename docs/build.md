@@ -28,31 +28,77 @@ The `cross` tool uses a container engine to manage the cross-compilation environ
 
 ### 3. Cargo Build Tools
 
-Install the necessary cargo tools for building the application, UI, and Debian package:
+Install the necessary cargo tools for building the application and Debian package:
 ```bash
 cargo install cross
 cargo install cargo-deb
-cargo install wasm-pack
 cargo install cargo-make
 ```
 
+### 4. Dioxus CLI
+
+Install the Dioxus CLI for building the frontend:
+```bash
+cargo install dioxus-cli
+```
+
+### 5. Node.js and npm
+
+Required for frontend CSS compilation and font asset setup:
+```bash
+# Install Node.js via your package manager, e.g.:
+sudo apt install nodejs npm
+```
+
+## Frontend Setup (one-time after clone)
+
+The frontend lives in `rsplayer_web_ui/`. Run once after cloning to install npm packages and copy font assets to `public/`:
+
+```bash
+cd rsplayer_web_ui
+npm install
+```
+
+`npm install` automatically runs a `postinstall` script that copies FontAwesome and Material Icons font files from `node_modules/` into `public/`. These directories are gitignored — do not commit them.
+
 ## Build Process
 
-The build is orchestrated using `cargo-make`. The process involves building the WebAssembly UI first, followed by the backend application, and finally packaging everything into a `.deb` file.
+### Frontend (Web UI)
 
-1.  **Set the Target Environment Variable:**
-    Export the target architecture for the build. For a 64-bit Raspberry Pi 4, use `aarch64-unknown-linux-gnu`.
-    Set target value in `Makefile.toml`. Possible values are listed in `.cargo/config.toml` file.
-    ```bash
+The frontend is a Rust/WASM app built with the Dioxus framework.
+
+**Development** — served with hot-reload, proxies `/api` and `/artwork` to the backend on `localhost:8000`:
+```bash
+cd rsplayer_web_ui
+dx serve
+```
+
+**Release** — produces a self-contained output under `target/dx/rsplayer_web_ui/release/web/public/`, which is embedded into the backend binary at compile time:
+```bash
+cd rsplayer_web_ui
+dx build --release --platform web
+```
+
+**Updating CSS** — only needed when `input.css` is changed (Tailwind source):
+```bash
+cd rsplayer_web_ui
+npx tailwindcss -i input.css -o public/tw.css --minify
+# commit public/tw.css after regenerating
+```
+
+### Backend
+
+The build is orchestrated using `cargo-make`. Build the frontend release first, then the backend.
+
+1. **Set the target architecture** in `Makefile.toml`. Possible values are listed in `.cargo/config.toml`. For a 64-bit Raspberry Pi 4:
+    ```
     TARGET="aarch64-unknown-linux-gnu"
     ```
 
-2.  **Run the Build:**
-    Execute the following commands to build the UI, the backend, and create the Debian package.
-
+2. **Run the build:**
     ```bash
-    # Build the UI components (WASM)
-    cargo make build_ui_release
+    # Build the frontend (must be done before backend)
+    cd rsplayer_web_ui && dx build --release --platform web && cd ..
 
     # Build the backend application using cross-compilation
     cargo make build_release

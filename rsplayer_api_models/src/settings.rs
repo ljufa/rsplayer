@@ -255,6 +255,8 @@ pub struct VolumeControlSettings {
     pub alsa_mixer: Option<CardMixer>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub saved_volume: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub volume_before_mute: Option<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]

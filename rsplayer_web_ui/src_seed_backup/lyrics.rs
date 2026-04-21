@@ -7,7 +7,7 @@ pub struct LrcLibResponse {
     pub synced_lyrics: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct LyricLine {
     pub time_secs: f64,
     pub text: String,
@@ -20,25 +20,28 @@ pub fn parse_lrc(lrc: &str) -> Vec<LyricLine> {
         if line.is_empty() {
             continue;
         }
+        // LRCLIB sometimes has empty bracket lines for spacing [00:10.00]
         if let Some(end_bracket) = line.find(']') {
             if let Some(start_bracket) = line.find('[') {
                 let time_str = &line[start_bracket + 1..end_bracket];
                 let text = line[end_bracket + 1..].trim().to_string();
                 if let Some(time) = parse_time(time_str) {
-                    lines.push(LyricLine { time_secs: time, text });
+                    lines.push(LyricLine {
+                        time_secs: time,
+                        text,
+                    });
                 }
             }
         }
     }
-    lines.sort_by(|a, b| {
-        a.time_secs
-            .partial_cmp(&b.time_secs)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    // Filter out empty lines that only contain timestamps if they are just for spacing, 
+    // but often they are important for highlighting.
+    lines.sort_by(|a, b| a.time_secs.partial_cmp(&b.time_secs).unwrap_or(std::cmp::Ordering::Equal));
     lines
 }
 
 fn parse_time(time_str: &str) -> Option<f64> {
+    // mm:ss.xx or mm:ss:xx or hh:mm:ss.xx
     let parts: Vec<&str> = time_str.split(':').collect();
     if parts.len() == 2 {
         let mm = parts[0].parse::<f64>().ok()?;

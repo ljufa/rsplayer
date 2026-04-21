@@ -1,21 +1,25 @@
-use crate::Urls;
-use seed::{a, attrs, div, h1, h2, prelude::*, section, strong, C};
+use crate::{navigate, CurrentPath};
+use dioxus::prelude::*;
 
-pub fn view<Ms>(base_url: &Url) -> Node<Ms> {
-    section![
-        C!["hero", "is-medium", "ml-6"],
-        div![
-            C!["hero-body"],
-            h1![C!["title", "is-size-1"], "Welcome to RSPlayer UI",],
-            a![
-                attrs! {At::Href => "https://seed-rs.org/"},
-                h2![C!["subtitle", "is-size-3"], "powered by seed-rs.org"]
-            ],
-            a![
-                C!["button", "is-dark", "mt-5", "is-size-5"],
-                attrs! {At::Href => Urls::new(base_url).settings()},
-                strong!["This is your first first visit, please go to Settings to complete configuration."],
-            ],
-        ],
-    ]
+#[component]
+pub fn HomePage() -> Element {
+    let CurrentPath(path) = use_context::<CurrentPath>();
+    rsx! {
+        section { class: "hero min-h-dvh bg-base-200",
+            div { class: "hero-content text-center",
+                div { class: "max-w-md",
+                    h1 { class: "text-5xl font-bold", "Welcome to RSPlayer" }
+                    p { class: "py-6", "Please go to Settings to complete configuration." }
+                    a {
+                        href: "/settings",
+                        onclick: move |e| {
+                            e.prevent_default();
+                            navigate(path, "/settings");
+                        },
+                        button { class: "btn btn-primary", "Go to Settings" }
+                    }
+                }
+            }
+        }
+    }
 }

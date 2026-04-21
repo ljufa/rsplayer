@@ -1,45 +1,71 @@
 [workspace]
-resolver = "2"
 members = [
     "rsplayer_api_models",
     "rsplayer_backend",
-    "rsplayer_metadata",
     "rsplayer_config",
-    "rsplayer_playback",
-    "rsplayer_hardware", "rsplayer_dsp",
-    #    "rsplayer_web_ui"
+    "rsplayer_dsp",
+    "rsplayer_hardware",
+    "rsplayer_metadata",
+    "rsplayer_playback"
+    
 ]
 exclude = ["rsplayer_web_ui"]
+resolver = "2"
 
 [workspace.dependencies]
-log = { version = "0.4" }
-env_logger = "0.11"
 anyhow = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-fjall = "3"
-
-# symphonia = { version = "0.5.5", features = ["all"] }
-# symphonia-metadata = { version = "0.5.5" }
-symphonia = { git = "https://github.com/ljufa/Symphonia.git", branch = "break_infinite_loop", features = ["all"] }
-symphonia-metadata = { git = "https://github.com/ljufa/Symphonia.git", branch = "break_infinite_loop" }
-# symphonia = { path = "../Symphonia/symphonia", features = ["all"] }
-# symphonia-metadata = { path = "../Symphonia/symphonia-metadata" }
-
-cpal = { git = "https://github.com/ljufa/cpal.git", branch = "master"}
-# cpal = { path = "../cpal" }
-
 cfg-if = "1"
-tokio = { version = "1", features = ["full", "tracing"] }
-futures = { version = "0.3", default-features = false }
+env_logger = "0.11"
+fjall = "3"
+serde_json = "1"
 tokio-stream = "0.1"
-chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1", features = ["serde", "v4"] }
 ureq = "3"
+
+[workspace.dependencies.chrono]
+version = "0.4"
+features = ["serde"]
+
+[workspace.dependencies.cpal]
+git = "https://github.com/ljufa/cpal.git"
+branch = "master"
+
+[workspace.dependencies.futures]
+version = "0.3"
+default-features = false
+
+[workspace.dependencies.log]
+version = "0.4"
+
+[workspace.dependencies.serde]
+version = "1"
+features = ["derive"]
+
+[workspace.dependencies.symphonia]
+git = "https://github.com/ljufa/Symphonia.git"
+branch = "break_infinite_loop"
+features = ["all"]
+
+[workspace.dependencies.symphonia-metadata]
+git = "https://github.com/ljufa/Symphonia.git"
+branch = "break_infinite_loop"
+
+[workspace.dependencies.tokio]
+version = "1"
+features = [
+    "full",
+    "tracing",
+]
+
+[workspace.dependencies.uuid]
+version = "1"
+features = [
+    "serde",
+    "v4",
+]
 
 [profile.release]
 opt-level = 3
-debug = false
-debug-assertions = false
 codegen-units = 1
+debug = 0
+debug-assertions = false
 strip = true

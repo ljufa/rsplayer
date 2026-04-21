@@ -1,0 +1,18 @@
+{
+  "name": "rsplayer_web_ui",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "postinstall": "mkdir -p public/material-icons && cp node_modules/material-icons/iconfont/material-icons.woff2 node_modules/material-icons/iconfont/material-icons.woff public/material-icons/"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "daisyui": "^5.5.19",
+    "material-icons": "^1.13.14",
+    "tailwindcss": "^4.2.2"
+  }
+}

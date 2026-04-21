@@ -1,455 +1,572 @@
-use api_models::common::UserCommand::Player;
-use api_models::common::{MetadataCommand, PlaybackMode, PlayerCommand, SystemCommand, Volume};
-use api_models::player::Song;
-use api_models::state::{PlayerInfo, PlayerState, SongProgress};
+use api_models::{
+    common::{MetadataCommand, PlaybackMode, PlayerCommand, SystemCommand, UserCommand, Volume},
+    player::Song,
+    state::{PlayerInfo, PlayerState, SongProgress},
+};
+use dioxus::prelude::*;
+use gloo_net::http::Request;
+use serde::Deserialize;
+use web_sys::WebSocket;
 
-use seed::{a, attrs, button, canvas, div, empty, h1, h2, h3, i, id, input, p, prelude::*, span, style, C, IF};
+use crate::{
+    hooks::ws_send,
+    lyrics::{self, LrcLibResponse, LyricLine},
+    navigate, send_system_cmd,
+    state::AppState,
+    vumeter::{VUMeter, VisualizerType},
+    CurrentPath, UiState,
+};
 
-use std::str::FromStr;
+// ─── Last.fm album art types ─────────────────────────────────────────────────
 
-use crate::{Msg, PlayerModel};
-
-// ------ ------
-//     View
-// ------ ------
-pub fn view(model: &PlayerModel) -> Node<Msg> {
-    div![
-        C!["player-page"],
-        // Visualizer — absolute background layer, covers full player-page
-        IF!(model.vu_meter_enabled => div![
-            style! {
-                St::Position => "absolute",
-                St::Top => "0",
-                St::Left => "0",
-                St::Width => "100%",
-                St::Height => "100%",
-                St::ZIndex => "0",
-                St::PointerEvents => "none",
-            },
-            canvas![
-                id!("vumeter"),
-                style! {
-                    St::Display => "block",
-                    St::Width => "100%",
-                    St::Height => "100%",
-                }
-            ],
-        ]),
-        div![
-            C!["track-info-container", "has-background-dark-transparent"],
-            view_track_info(model.current_song.as_ref(), model.player_info.as_ref()),
-        ],
-        view_controls(model),
-        IF!(model.lyrics_modal_open => view_lyrics_modal(model)),
-    ]
+#[derive(Debug, Deserialize)]
+struct LastFmAlbumInfo {
+    album: LastFmAlbum,
 }
 
-fn view_lyrics_modal(model: &PlayerModel) -> Node<Msg> {
-    // Offset calculation using the actual ring buffer size in milliseconds.
-    let latency_offset = model.ring_buffer_size_ms as f64 / 1000.0;
-    let current_time = (model.progress.current_time.as_secs_f64() - latency_offset).max(0.0);
-
-    let active_index = model
-        .parsed_lyrics
-        .as_ref()
-        .and_then(|lines| lines.iter().rposition(|line| line.time_secs <= current_time));
-
-    div![
-        C!["modal", "is-active"],
-        div![C!["modal-background"], ev(Ev::Click, |_| Msg::ToggleLyricsModal)],
-        div![
-            C!["modal-content"],
-            id!("lyrics-modal-content"),
-            style! {
-                St::BackgroundColor => "#1a1a1a",
-                St::Color => "white",
-                St::Padding => "2rem",
-                St::BorderRadius => "8px",
-                St::MaxHeight => "80vh",
-                St::OverflowY => "auto",
-                St::Width => "90%",
-                St::MaxWidth => "600px",
-            },
-            if model.lyrics_loading {
-                div![C!["has-text-centered"], "Loading lyrics..."]
-            } else if let Some(lyrics) = &model.parsed_lyrics {
-                div![
-                    C!["lyrics-list"],
-                    lyrics.iter().enumerate().map(|(idx, line)| {
-                        let is_active = Some(idx) == active_index;
-                        div![
-                            IF!(is_active => id!("lyric-active")),
-                            style! {
-                                St::FontSize => "1.25rem",
-                                St::FontWeight => if is_active { "700" } else { "400" },
-                                St::Color => if is_active { "white" } else { "#888" },
-                                St::Padding => "0.6rem 0",
-                                St::Transition => "all 0.3s ease",
-                                St::TextAlign => "center",
-                                St::LineHeight => "1.4",
-                            },
-                            line.text.clone()
-                        ]
-                    })
-                ]
-            } else if let Some(lyrics) = &model.lyrics {
-                if let Some(plain) = &lyrics.plain_lyrics {
-                    div![
-                        style! {
-                            St::WhiteSpace => "pre-wrap",
-                            St::TextAlign => "center",
-                            St::FontSize => "1.2rem",
-                        },
-                        plain.clone()
-                    ]
-                } else {
-                    div![C!["has-text-centered"], "Lyrics not found."]
-                }
-            } else {
-                div![C!["has-text-centered"], "Lyrics not found."]
-            }
-        ],
-        button![
-            C!["modal-close", "is-large"],
-            attrs! {At::AriaLabel => "close"},
-            ev(Ev::Click, |_| Msg::ToggleLyricsModal)
-        ]
-    ]
+#[derive(Debug, Deserialize)]
+struct LastFmAlbum {
+    image: Vec<LastFmImage>,
 }
 
-fn view_track_info(song: Option<&Song>, player_info: Option<&PlayerInfo>) -> Node<Msg> {
-    song.map_or_else(view_skeleton_track_info, |ps| {
-        div![
-            C!["track-info", "has-text-centered"],
-            h1![
-                C![
-                    "title",
-                    "has-text-white",
-                    match ps.title.as_ref().map_or(0, |t| t.len()) {
-                        0..=19 => "is-1",
-                        20..=31 => "is-2",
-                        _ => "is-3",
-                    }
-                ],
-                ps.title.as_ref().map_or("Unknown Track", |f| f)
-            ],
-            ps.artist.as_ref().map_or_else(
-                || empty!(),
-                |artist| a![
-                    style! { St::TextDecoration => "underline" },
-                    attrs! {At::Href => format!("#/library/artists?search={}", artist)},
-                    h2![C!["subtitle", "is-3", "has-text-light"], artist]
-                ]
-            ),
-            ps.album.as_ref().map_or_else(
-                || empty!(),
-                |album| a![
-                    style! { St::TextDecoration => "underline" },
-                    attrs! {At::Href => format!("#/library/files?search={}", album)},
-                    h3![C!["subtitle", "is-5", "has-text-grey-light"], album]
-                ]
-            ),
-            ps.genre.as_ref().map_or_else(
-                || empty!(),
-                |genre| h3![C!["subtitle", "is-5", "has-text-grey-light"], genre],
-            ),
-            ps.date.as_ref().map_or_else(
-                || empty!(),
-                |date| h3![C!["subtitle", "is-5", "has-text-grey-light"], date],
-            ),
-            h3![
-                C!["subtitle", "is-5", "has-text-grey-light"],
-                player_info.map_or("No file playing".to_owned(), |pi| format!(
-                    "{} - {} / {} Hz",
-                    pi.codec.as_ref().map_or("", |c| c),
-                    pi.audio_format_bit.map_or(0, |af| af),
-                    pi.audio_format_rate.map_or(0, |r| r)
-                ))
-            ],
-            IF!(player_info.and_then(|pi| pi.track_loudness_lufs.or(pi.normalization_gain_db)).is_some() =>
-                h3![
-                    C!["subtitle", "is-6", "has-text-grey-light"],
-                    {
-                        let pi = player_info.unwrap();
-                        match (pi.track_loudness_lufs, pi.normalization_gain_db) {
-                            (Some(lufs_hundredths), Some(gain_hundredths)) => {
-                                let lufs = lufs_hundredths as f64 / 100.0;
-                                let gain = gain_hundredths as f64 / 100.0;
-                                let effective = lufs + gain;
-                                format!("{lufs:.1} LUFS  →  {gain:+.1} dB  →  {effective:.1} LUFS")
-                            }
-                            (Some(lufs_hundredths), None) => {
-                                let lufs = lufs_hundredths as f64 / 100.0;
-                                format!("{lufs:.1} LUFS")
-                            }
-                            (None, Some(gain_hundredths)) => {
-                                let gain = gain_hundredths as f64 / 100.0;
-                                format!("{gain:+.1} dB (file tag)")
-                            }
-                            (None, None) => String::new(),
+#[derive(Debug, Deserialize)]
+struct LastFmImage {
+    size: String,
+    #[serde(rename = "#text")]
+    text: String,
+}
+
+// ─── Album art helper ────────────────────────────────────────────────────────
+
+/// Returns a local artwork URL if the song has an embedded image, else None.
+pub fn local_album_image(song: &Song) -> Option<String> {
+    if let Some(image_id) = song.image_id.as_ref() {
+        return Some(format!("/artwork/{}", image_id));
+    }
+    song.image_url.clone()
+}
+
+pub async fn fetch_album_cover(song: &Song) -> Option<String> {
+    if let Some(image_id) = &song.image_id {
+        return Some(format!("/artwork/{}", image_id));
+    }
+    let album = song.album.as_deref()?;
+    let artist = song.artist.as_deref()?;
+    let protocol = web_sys::window()
+        .and_then(|w| w.location().protocol().ok())
+        .unwrap_or_else(|| "http:".to_string());
+    let url = format!(
+        "{protocol}//ws.audioscrobbler.com/2.0/?api_key=3b3df6c5dd3ad07222adc8dd3ccd8cdc&format=json&method=album.getinfo&album={}&artist={}",
+        js_sys::encode_uri_component(album),
+        js_sys::encode_uri_component(artist),
+    );
+    let resp = Request::get(&url).send().await.ok()?;
+    let info: LastFmAlbumInfo = resp.json().await.ok()?;
+    info.album
+        .image
+        .into_iter()
+        .find(|i| i.size == "mega" && !i.text.is_empty())
+        .map(|i| i.text)
+}
+
+async fn fetch_lyrics(song: &Song) -> Option<LrcLibResponse> {
+    let artist = song.artist.as_deref().unwrap_or_default();
+    let title = song.title.as_deref().unwrap_or_default();
+    let album = song.album.as_deref().unwrap_or_default();
+    let duration = song.time.map(|d| d.as_secs()).unwrap_or(0);
+    let url = format!(
+        "https://lrclib.net/api/get?artist_name={}&track_name={}&album_name={}&duration={}",
+        js_sys::encode_uri_component(artist),
+        js_sys::encode_uri_component(title),
+        js_sys::encode_uri_component(album),
+        duration
+    );
+    let resp = Request::get(&url).send().await.ok()?;
+    if resp.status() == 200 {
+        resp.json().await.ok()
+    } else {
+        None
+    }
+}
+
+// ─── Player Page ─────────────────────────────────────────────────────────────
+
+#[component]
+pub fn PlayerPage() -> Element {
+    let state = use_context::<AppState>();
+    let ws = use_context::<Signal<Option<WebSocket>>>();
+
+    let current_song = state.current_song;
+    let player_info = state.player_info;
+    let progress = state.progress;
+    let volume = state.volume;
+    let player_state = state.player_state;
+    let playback_mode = state.playback_mode;
+    let vu_meter_enabled = state.vu_meter_enabled;
+
+    let mut ui = use_context::<UiState>();
+    let mut lyrics_data = use_signal(|| None::<Vec<LyricLine>>);
+    let mut plain_lyrics = use_signal(|| None::<String>);
+    let mut lyrics_loading = use_signal(|| false);
+
+    // Reset lyrics when song changes
+    use_effect(move || {
+        let _ = current_song.read(); // subscribe
+        lyrics_data.set(None);
+        plain_lyrics.set(None);
+    });
+
+    // Fetch lyrics when lyrics panel opens
+    use_effect(move || {
+        if (ui.lyrics_open)() && lyrics_data.peek().is_none() && plain_lyrics.peek().is_none() {
+            if let Some(song) = current_song.peek().clone() {
+                *lyrics_loading.write() = true;
+                wasm_bindgen_futures::spawn_local(async move {
+                    if let Some(resp) = fetch_lyrics(&song).await {
+                        if let Some(synced) = resp.synced_lyrics {
+                            lyrics_data.set(Some(lyrics::parse_lrc(&synced)));
+                        }
+                        if let Some(plain) = resp.plain_lyrics {
+                            plain_lyrics.set(Some(plain));
                         }
                     }
-                ]
-            ),
-        ]
-    })
+                    *lyrics_loading.write() = false;
+                });
+            }
+        }
+    });
+
+    rsx! {
+        div {
+            class: "player-page",
+            // VU meter canvas layer
+            if *vu_meter_enabled.read() && *state.visualizer_type.read() != VisualizerType::None {
+                VUMeterCanvas {}
+            }
+            // Content
+            div { class: "player-page__content",
+                TrackInfo {
+                    song: current_song.read().clone(),
+                    player_info: player_info.read().clone(),
+                }
+                Controls {
+                    ws,
+                    player_state: player_state.read().clone(),
+                    playback_mode: *playback_mode.read(),
+                    progress: progress.read().clone(),
+                    volume: *volume.read(),
+                    current_song: current_song.read().clone(),
+                    vu_meter_enabled: *vu_meter_enabled.read(),
+                    visualizer_type: state.visualizer_type,
+                    on_lyrics: move |_| {
+                        let open = *ui.lyrics_open.peek();
+                        ui.lyrics_open.set(!open);
+                    },
+                }
+            }
+            if (ui.lyrics_open)() {
+                LyricsModal {
+                    on_close: move |_| ui.lyrics_open.set(false),
+                    lyrics_data: lyrics_data.read().clone(),
+                    plain_lyrics: plain_lyrics.read().clone(),
+                    loading: *lyrics_loading.read(),
+                    progress: progress.read().clone(),
+                }
+            }
+        }
+    }
 }
 
-fn view_skeleton_track_info() -> Node<Msg> {
-    div![
-        C!["skeleton-player"],
-        div![C!["skeleton skeleton-player-image"]],
-        div![C!["skeleton skeleton-player-title"]],
-        div![C!["skeleton skeleton-player-artist"]],
-        p![
-            C!["has-text-grey-light"],
-            style! { St::FontSize => "0.9rem", St::MarginTop => "20px" },
-            "Ready to play - add songs from your library"
-        ],
-    ]
+// ─── VU Meter Canvas ─────────────────────────────────────────────────────────
+
+#[component]
+fn VUMeterCanvas() -> Element {
+    let state = use_context::<AppState>();
+    let vu_left = state.vu_left;
+    let vu_right = state.vu_right;
+    let visualizer_type = state.visualizer_type;
+
+    let mut meter: Signal<Option<VUMeter>> = use_signal(|| None);
+
+    use_effect(move || {
+        let vt = *visualizer_type.read();
+        if vt != VisualizerType::None {
+            if let Some(m) = VUMeter::with_type("vumeter", vt) {
+                meter.set(Some(m));
+            }
+        } else {
+            meter.set(None);
+        }
+    });
+
+    use_effect(move || {
+        let l = *vu_left.read();
+        let r = *vu_right.read();
+        if let Some(ref mut m) = *meter.write() {
+            m.update(l, r);
+        }
+    });
+
+    rsx! {
+        div {
+            class: "player-page__vumeter",
+            canvas {
+                id: "vumeter",
+            }
+        }
+    }
 }
 
-fn view_controls(model: &PlayerModel) -> Node<Msg> {
-    let playing = model.player_state == PlayerState::PLAYING;
-    let (shuffle_class, shuffle_title) = match model.playback_mode {
-        PlaybackMode::Sequential => ("fa-list-ol", "Sequential Playback"),
-        PlaybackMode::Random => ("fa-shuffle", "Random Playback"),
-        PlaybackMode::LoopSingle => ("fa-repeat", "Loop Single Song"),
-        PlaybackMode::LoopQueue => ("fa-arrows-rotate", "Loop Queue"),
+fn load_visualizer_type() -> VisualizerType {
+    (|| {
+        let storage = web_sys::window()?.local_storage().ok()??;
+        let value = storage.get_item("rsplayer_visualizer").ok()??;
+        VisualizerType::from_str(&value)
+    })()
+    .unwrap_or(VisualizerType::Lissajous)
+}
+
+fn save_visualizer_type(vt: VisualizerType) {
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            let _ = storage.set_item("rsplayer_visualizer", vt.as_str());
+        }
+    }
+}
+
+// ─── Track Info ──────────────────────────────────────────────────────────────
+
+#[component]
+fn TrackInfo(song: Option<Song>, player_info: Option<PlayerInfo>) -> Element {
+    let CurrentPath(path) = use_context::<CurrentPath>();
+    match song {
+        None => rsx! {
+            div { class: "track-info text-center py-8",
+                div { class: "skeleton-player",
+                    div { class: "skeleton skeleton-player-image" }
+                    div { class: "skeleton skeleton-player-title" }
+                    div { class: "skeleton skeleton-player-artist" }
+                }
+                p { class: "text-base-content/30 text-sm mt-5",
+                    "Ready to play — add songs from your library"
+                }
+            }
+        },
+        Some(ps) => {
+            let title = ps.title.as_deref().unwrap_or("Unknown Track");
+            let title_class = match title.len() {
+                0..=19 => "text-4xl",
+                20..=31 => "text-3xl",
+                _ => "text-2xl",
+            };
+            let codec_info = player_info.as_ref().map_or_else(
+                || "No file playing".to_string(),
+                |pi| {
+                    format!(
+                        "{} - {} / {} Hz",
+                        pi.codec.as_deref().unwrap_or(""),
+                        pi.audio_format_bit.unwrap_or(0),
+                        pi.audio_format_rate.unwrap_or(0),
+                    )
+                },
+            );
+            let loudness =
+                player_info
+                    .as_ref()
+                    .and_then(|pi| match (pi.track_loudness_lufs, pi.normalization_gain_db) {
+                        (Some(l), Some(g)) => Some(format!(
+                            "{:.1} LUFS  →  {:+.1} dB  →  {:.1} LUFS",
+                            l as f64 / 100.0,
+                            g as f64 / 100.0,
+                            (l + g) as f64 / 100.0
+                        )),
+                        (Some(l), None) => Some(format!("{:.1} LUFS", l as f64 / 100.0)),
+                        (None, Some(g)) => Some(format!("{:+.1} dB (file tag)", g as f64 / 100.0)),
+                        _ => None,
+                    });
+            let artist = ps.artist.clone();
+            let album = ps.album.clone();
+            rsx! {
+                div { class: "track-info text-center",
+                    h1 { class: "font-bold text-base-content {title_class} mb-1", "{title}" }
+                    if let Some(ref artist) = artist {
+                        a {
+                            class: "text-xl text-base-content/80 hover:underline block cursor-pointer",
+                            href: "/library/artists?search={artist}",
+                            onclick: {
+                                let artist = artist.clone();
+                                move |e: Event<MouseData>| {
+                                    e.prevent_default();
+                                    navigate(path, &format!("/library/artists?search={artist}"));
+                                }
+                            },
+                            "{artist}"
+                        }
+                    }
+                    if let Some(ref album) = album {
+                        a {
+                            class: "text-base text-base-content/60 hover:underline block cursor-pointer",
+                            href: "/library/files?search={album}",
+                            onclick: {
+                                let album = album.clone();
+                                move |e: Event<MouseData>| {
+                                    e.prevent_default();
+                                    navigate(path, &format!("/library/files?search={album}"));
+                                }
+                            },
+                            "{album}"
+                        }
+                    }
+                    if let Some(genre) = &ps.genre {
+                        p { class: "text-sm text-base-content/50", "{genre}" }
+                    }
+                    if let Some(date) = &ps.date {
+                        p { class: "text-sm text-base-content/50", "{date}" }
+                    }
+                    p { class: "text-sm text-base-content/50 mt-1", "{codec_info}" }
+                    if let Some(l) = loudness {
+                        p { class: "text-xs text-base-content/40", "{l}" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── Controls ────────────────────────────────────────────────────────────────
+
+#[component]
+fn Controls(
+    ws: Signal<Option<WebSocket>>,
+    player_state: PlayerState,
+    playback_mode: PlaybackMode,
+    progress: SongProgress,
+    volume: Volume,
+    current_song: Option<Song>,
+    on_lyrics: EventHandler,
+    vu_meter_enabled: bool,
+    visualizer_type: Signal<VisualizerType>,
+) -> Element {
+    let playing = player_state == PlayerState::PLAYING;
+    let (shuffle_icon, shuffle_title) = match playback_mode {
+        PlaybackMode::Sequential => ("format_list_numbered", "Sequential"),
+        PlaybackMode::Random => ("shuffle", "Random"),
+        PlaybackMode::LoopSingle => ("repeat_one", "Loop Single"),
+        PlaybackMode::LoopQueue => ("repeat", "Loop Queue"),
     };
+    let liked = current_song
+        .as_ref()
+        .and_then(|s| s.statistics.as_ref())
+        .map_or(false, |st| st.liked_count > 0);
+    let song_id = current_song.as_ref().map(|s| s.file.clone());
+    let is_muted = volume.current == 0;
 
-    div![
-        C!["player-controls", "has-text-centered"],
-        div![
-            C!["level", "is-mobile"],
-            // Left side controls
-            div![
-                C!["level-item"],
-                // Visualizer toggle (only shown when Music Visualization is enabled)
-                IF!(model.vu_meter_enabled => button![
-                    C!["button", "is-ghost", "is-medium"],
-                    attrs! {At::Title => "Toggle visualizer (V)"},
-                    span![C!["icon"], i![C!["fas", "fa-chart-bar"]]],
-                    ev(Ev::Click, |_| Msg::ToggleVisualizer)
-                ]),
-                button![
-                    C!["button", "is-ghost", "is-medium"],
-                    attrs! {At::Title => format!("{} (S)", shuffle_title)},
-                    span![C!["icon"], i![C!["fas", shuffle_class]]],
-                    ev(Ev::Click, |_| Msg::SendUserCommand(Player(
-                        PlayerCommand::CyclePlaybackMode
-                    ))),
-                ],
-            ],
-            // Main controls
-            div![
-                C!["level-item"],
-                button![
-                    C!["button", "is-ghost", "is-medium"],
-                    attrs! {At::Title => "Previous (←)"},
-                    span![C!["icon"], i![C!["fas", "fa-backward"]]],
-                    ev(Ev::Click, |_| Msg::SendUserCommand(Player(PlayerCommand::Prev))),
-                ],
-                button![
-                    C!["button", "is-rounded", "is-large", "mx-4"],
-                    attrs! {At::Title => if playing { "Pause (Space)" } else { "Play (Space)" }},
-                    span![
-                        C!["icon", "is-large"],
-                        i![C!["fas", if playing { "fa-pause" } else { "fa-play" }]]
-                    ],
-                    ev(Ev::Click, move |_| if playing {
-                        Msg::SendUserCommand(Player(PlayerCommand::Pause))
-                    } else {
-                        Msg::SendUserCommand(Player(PlayerCommand::Play))
-                    })
-                ],
-                button![
-                    C!["button", "is-ghost", "is-medium"],
-                    attrs! {At::Title => "Next (→)"},
-                    span![C!["icon"], i![C!["fas", "fa-forward"]]],
-                    ev(Ev::Click, |_| Msg::SendUserCommand(Player(PlayerCommand::Next))),
-                ],
-            ],
-            // Right side controls
-            div![
-                C!["level-item"],
-                // Like button
-                model.current_song.as_ref().map(|s| {
-                    let id = s.file.clone();
-                    let (like_class, cmd) = s.statistics.as_ref().map_or_else(
-                        || ("far", MetadataCommand::LikeMediaItem(id.clone())),
-                        |stat| {
-                            if stat.liked_count > 0 {
-                                ("fas", MetadataCommand::DislikeMediaItem(id.clone()))
-                            } else {
-                                ("far", MetadataCommand::LikeMediaItem(id.clone()))
+    rsx! {
+        div { class: "player-controls",
+            // ── Main controls row: prev / play-pause / next ───────────────────────────────────────
+            div { class: "player-controls__main-row",
+                button {
+                    class: "btn btn-ghost btn-md",
+                    title: "Previous",
+                    onclick: { let ws = ws; move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::Prev)) },
+                    i { class: "material-icons text-xl", "skip_previous" }
+                }
+                button {
+                    class: "btn btn-primary btn-circle btn-lg",
+                    title: if playing { "Pause" } else { "Play" },
+                    onclick: {
+                        let ws = ws;
+                        move |_| ws_send(&ws, &UserCommand::Player(if playing { PlayerCommand::Pause } else { PlayerCommand::Play }))
+                    },
+                    i { class: "material-icons text-xl", if playing { "pause" } else { "play_arrow" } }
+                }
+                button {
+                    class: "btn btn-ghost btn-md",
+                    title: "Next",
+                    onclick: { let ws = ws; move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::Next)) },
+                    i { class: "material-icons text-xl", "skip_next" }
+                }
+            }
+            // ── Secondary buttons row ───────────────────────────────────────
+            div { class: "player-controls__secondary-row",
+                if vu_meter_enabled {
+                    button {
+                        class: "btn btn-ghost btn-sm",
+                        title: "Toggle visualizer (V)",
+                        onclick: {
+                            let mut vt = visualizer_type;
+                            move |_| {
+                                let current = *vt.read();
+                                let next = current.cycle();
+                                vt.set(next);
+                                save_visualizer_type(next);
                             }
                         },
-                    );
-                    button![
-                        C!["button", "is-ghost", "is-medium"],
-                        attrs! {At::Title => "Like / Unlike (L)"},
-                        span![C!["icon"], i![C![like_class, "fa-heart"]]],
-                        ev(Ev::Click, |_| Msg::LikeMediaItemClick(cmd))
-                    ]
-                }),
-                // Lyrics button
-                button![
-                    C!["button", "is-ghost", "is-medium"],
-                    attrs! {At::Title => "Lyrics (Y)"},
-                    span![C!["icon"], i![C!["fas", "fa-align-left"]]],
-                    ev(Ev::Click, |_| Msg::ToggleLyricsModal)
-                ],
-            ],
-        ],
-        view_track_progress_bar(&model.progress),
-        view_volume_slider(&model.volume_state, model.volume_state.current),
-    ]
+                        i { class: "material-icons", "equalizer" }
+                    }
+                }
+                button {
+                    class: "btn btn-ghost btn-sm",
+                    title: "{shuffle_title}",
+                    onclick: { let ws = ws; move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::CyclePlaybackMode)) },
+                    i { class: "material-icons", "{shuffle_icon}" }
+                }
+                if let Some(ref id) = song_id {
+                    button {
+                        class: "btn btn-ghost btn-sm",
+                        title: "Like / Unlike",
+                        onclick: {
+                            let ws = ws; let id = id.clone();
+                            move |_| {
+                                let cmd = if liked { MetadataCommand::DislikeMediaItem(id.clone()) }
+                                          else     { MetadataCommand::LikeMediaItem(id.clone()) };
+                                ws_send(&ws, &UserCommand::Metadata(cmd));
+                            }
+                        },
+                        i { class: if liked { "material-icons text-error" } else { "material-icons" }, if liked { "favorite" } else { "favorite_border" } }
+                    }
+                }
+                button {
+                    class: "btn btn-ghost btn-sm",
+                    title: "Lyrics",
+                    onclick: move |_| on_lyrics.call(()),
+                    i { class: "material-icons", "lyrics" }
+                }
+                button {
+                    class: "btn btn-ghost btn-sm",
+                    title: if is_muted { "Unmute" } else { "Mute" },
+                    onclick: { let ws = ws; move |_| send_system_cmd(&ws, SystemCommand::ToggleMute) },
+                    i { class: "material-icons", if is_muted { "volume_off" } else { "volume_up" } }
+                }
+            }
+            SeekBar { ws, progress }
+            VolumeControl { ws, volume }
+        }
+    }
 }
 
-fn view_track_progress_bar(progress: &SongProgress) -> Node<Msg> {
-    let current_secs = progress.current_time.as_secs();
-    let total_secs = progress.total_time.as_secs();
-    let current_formatted = format_time(current_secs);
-    let total_formatted = format_time(total_secs);
+// ─── Seek Bar ────────────────────────────────────────────────────────────────
 
-    div![
-        C!["progress-bar-container"],
-        style! {
-            St::Padding => "1.2rem",
-        },
-        // Time display row
-        div![
-            C!["level", "is-mobile"],
-            style! { St::MarginBottom => "0.5rem" },
-            div![
-                C!["level-item", "is-justify-content-flex-start"],
-                span![
-                    C!["is-size-6", "has-text-light", "progress-time-current"],
-                    current_formatted
-                ],
-            ],
-            div![
-                C!["level-item", "is-justify-content-flex-end"],
-                span![
-                    C!["is-size-6", "has-text-light", "progress-time-total"],
-                    total_formatted
-                ],
-            ],
-        ],
-        // Progress slider wrapper for tooltip
-        div![
-            C!["progress-slider-wrapper"],
-            // Tooltip (shows on hover via CSS)
-            div![C!["progress-tooltip"], id!("progress-tooltip"), "0:00"],
-            input![
-                C![
-                    "slider",
-                    "is-fullwidth",
-                    "is-large",
-                    "is-circle",
-                    "player-progress-slider"
-                ],
-                style! {
-                    St::PaddingRight => "1.2rem"
-                },
-                attrs! {"value"=> current_secs},
-                attrs! {"max"=> total_secs},
-                attrs! {"min"=> 0},
-                attrs! {"type"=> "range"},
-                attrs! {"aria-label"=> "Track progress"},
-                input_ev(Ev::Input, move |selected| Msg::SeekTrackPositionInput(
-                    u16::from_str(selected.as_str()).unwrap_or_default()
-                )),
-                input_ev(Ev::Change, move |selected| Msg::SeekTrackPosition(
-                    u16::from_str(selected.as_str()).unwrap_or_default()
-                )),
-            ],
-        ],
-    ]
+#[component]
+fn SeekBar(ws: Signal<Option<WebSocket>>, progress: SongProgress) -> Element {
+    let cur = progress.current_time.as_secs();
+    let tot = progress.total_time.as_secs();
+    rsx! {
+        div { class: "player-controls__seek",
+            div { class: "flex justify-between text-xs text-base-content/60 mb-1",
+                span { "{format_time(cur)}" }
+                span { "{format_time(tot)}" }
+            }
+            input {
+                r#type: "range",
+                class: "range range-primary range-xs w-full",
+                min: 0, max: tot as i64, value: cur as i64,
+                aria_label: "Track progress",
+                onchange: { let ws = ws; move |e: Event<FormData>| {
+                    if let Ok(v) = e.value().parse::<u16>() {
+                        ws_send(&ws, &UserCommand::Player(PlayerCommand::Seek(v)));
+                    }
+                }},
+            }
+        }
+    }
 }
 
-// Helper function to format seconds to MM:SS
-fn format_time(seconds: u64) -> String {
-    let mins = seconds / 60;
-    let secs = seconds % 60;
-    format!("{}:{:02}", mins, secs)
-}
+// ─── Volume Control ──────────────────────────────────────────────────────────
 
-fn view_volume_slider(volume_state: &Volume, current_volume: u8) -> Node<Msg> {
-    let is_muted = current_volume == 0;
-    let max_vol = volume_state.max;
-    let volume_percent = if max_vol > 0 {
-        (current_volume as f32 / max_vol as f32 * 100.0) as u8
+#[component]
+fn VolumeControl(ws: Signal<Option<WebSocket>>, volume: Volume) -> Element {
+    let pct = if volume.max > 0 {
+        (volume.current as f32 / volume.max as f32 * 100.0) as u8
     } else {
         0
     };
+    rsx! {
+        div { class: "player-controls__volume",
+            div { class: "player-controls__volume-row",
+                button {
+                    class: "btn btn-ghost btn-sm",
+                    title: "Volume down",
+                    onclick: { let ws = ws; move |_| send_system_cmd(&ws, SystemCommand::VolDown) },
+                    i { class: "material-icons", "remove_circle" }
+                }
+                input {
+                    r#type: "range",
+                    class: "range range-sm flex-1",
+                    min: volume.min as i64, max: volume.max as i64, value: volume.current as i64,
+                    aria_label: "Volume",
+                    onchange: { let ws = ws; move |e: Event<FormData>| {
+                        if let Ok(v) = e.value().parse::<u8>() {
+                            send_system_cmd(&ws, SystemCommand::SetVol(v));
+                        }
+                    }},
+                }
+                button {
+                    class: "btn btn-ghost btn-sm",
+                    title: "Volume up",
+                    onclick: { let ws = ws; move |_| send_system_cmd(&ws, SystemCommand::VolUp) },
+                    i { class: "material-icons", "add_circle" }
+                }
+            }
+            span { class: "text-sm text-base-content/60", "Volume: {pct}%" }
+        }
+    }
+}
 
-    div![
-        style! {
-            St::Padding => "1.2rem",
-        },
-        C!["has-text-centered"],
-        div![
-            C!["level", "is-mobile", "volume-control-row"],
-            // Mute toggle button
-            div![
-                C!["level-item"],
-                button![
-                    C!["button", "is-ghost", "is-medium"],
-                    attrs! {At::Title => if is_muted { "Unmute (M)" } else { "Mute (M)" }},
-                    span![
-                        C!["icon"],
-                        i![C!["fas", if is_muted { "fa-volume-xmark" } else { "fa-volume-off" }]]
-                    ],
-                    ev(Ev::Click, |_| Msg::ToggleMute)
-                ],
-            ],
-            div![
-                C!["level-item"],
-                button![
-                    C!["button", "is-ghost", "is-medium"],
-                    attrs! {At::Title => "Volume down (↓)"},
-                    span![C!["icon"], i![C!["fas", "fa-circle-minus"]]],
-                    ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::VolDown))
-                ],
-            ],
-            div![
-                C!["level-item", "is-flex-grow-5", "volume-slider-wrapper"],
-                // Volume percentage tooltip
-                div![
-                    C!["volume-tooltip"],
-                    id!("volume-tooltip"),
-                    format!("{}%", volume_percent)
-                ],
-                input![
-                    C!["slider", "is-fullwidth", "player-volume-slider"],
-                    style! {
-                        St::PaddingRight => "1.2rem"
-                    },
-                    attrs! {"value"=> current_volume},
-                    attrs! {"max"=> max_vol},
-                    attrs! {"min"=> 0},
-                    attrs! {"type"=> "range"},
-                    attrs! {"aria-label"=> "Volume"},
-                    input_ev(Ev::Input, Msg::SetVolumeInput),
-                    input_ev(Ev::Change, Msg::SetVolume),
-                ],
-            ],
-            div![
-                C!["level-item"],
-                button![
-                    C!["button", "is-ghost", "is-medium"],
-                    attrs! {At::Title => "Volume up (↑)"},
-                    span![C!["icon"], i![C!["fas", "fa-circle-plus"]]],
-                    ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::VolUp))
-                ],
-            ],
-        ],
-        // Volume percentage display
-        span![
-            C!["is-size-6", "has-text-light", "volume-percentage-display"],
-            format!("Volume: {}%", volume_percent)
-        ],
-    ]
+// ─── Lyrics Modal ────────────────────────────────────────────────────────────
+
+#[component]
+fn LyricsModal(
+    on_close: EventHandler,
+    lyrics_data: Option<Vec<LyricLine>>,
+    plain_lyrics: Option<String>,
+    loading: bool,
+    progress: SongProgress,
+) -> Element {
+    let current_time = progress.current_time.as_secs_f64();
+    let active_index = lyrics_data
+        .as_ref()
+        .and_then(|lines| lines.iter().rposition(|line| line.time_secs <= current_time));
+
+    rsx! {
+        div { class: "modal modal-open",
+            div { class: "modal-backdrop", onclick: move |_| on_close.call(()) }
+            div { class: "modal-box max-w-lg max-h-[80vh] overflow-y-auto bg-base-300",
+                button {
+                    class: "btn btn-sm btn-circle btn-ghost absolute right-2 top-2",
+                    onclick: move |_| on_close.call(()),
+                    "✕"
+                }
+                if loading {
+                    div { class: "text-center py-8 text-base-content/50", "Loading lyrics..." }
+                } else if let Some(ref lines) = lyrics_data {
+                    div { class: "lyrics-list py-4",
+                        {lines.iter().enumerate().map(|(idx, line)| {
+                            let is_active = Some(idx) == active_index;
+                            rsx! {
+                                div {
+                                    key: "lyric-{idx}",
+                                    id: if is_active { "lyric-active" } else { "" },
+                                    class: if is_active { "lyric-line is-active" } else { "lyric-line" },
+                                    "{line.text}"
+                                }
+                            }
+                        })}
+                    }
+                } else if let Some(ref plain) = plain_lyrics {
+                    div {
+                        class: "py-4 text-center text-lg",
+                        style: "white-space: pre-wrap;",
+                        "{plain}"
+                    }
+                } else {
+                    div { class: "text-center py-8 text-base-content/50", "Lyrics not found." }
+                }
+            }
+        }
+    }
+}
+
+pub fn format_time(seconds: u64) -> String {
+    format!("{}:{:02}", seconds / 60, seconds % 60)
 }

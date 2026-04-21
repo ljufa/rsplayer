@@ -1,28 +1,38 @@
-# ---- BUILD UI----
+# ---- BUILD UI ----
+# Generates Tailwind CSS, then compiles WASM with Dioxus, then copies output to dist/
+
+[tasks.build_css]
+description = "Build Tailwind CSS + DaisyUI"
+command = "tailwindcss"
+args = ["-i", "input.css", "-o", "public/tw.css", "--minify"]
+
+[tasks.build_css_dev]
+description = "Build Tailwind CSS + DaisyUI (dev, no minify)"
+command = "tailwindcss"
+args = ["-i", "input.css", "-o", "public/tw.css"]
+
+[tasks.watch_css]
+description = "Watch input.css and rebuild Tailwind on changes"
+command = "tailwindcss"
+args = ["-i", "input.css", "-o", "public/tw.css", "--watch"]
+
+[tasks.dx_serve]
+description = "Run dx serve for dev"
+command = "dx"
+args = ["serve", "--platform", "web"]
+
+[tasks.serve_dev]
+description = "Run Tailwind watch + dx serve concurrently"
+run_task = { name = ["watch_css", "dx_serve"], parallel = true }
+
 [tasks.build_release]
-# install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V", force = false }
-command = "wasm-pack"
-args = [
-    "build",
-    "--target",
-    "web",
-    "--out-name",
-    "package",
-    "--out-dir",
-    "public/pkg",
-]
+description = "Build release WASM with Dioxus"
+dependencies = ["build_css"]
+command = "dx"
+args = ["build", "--platform", "web", "--release"]
 
 [tasks.build_dev]
-description = "Build with wasm-pack"
-# install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V", force = false }
-command = "wasm-pack"
-args = [
-    "build",
-    "--target",
-    "web",
-    "--out-name",
-    "package",
-    "--dev",
-    "--out-dir",
-    "public/pkg",
-]
+description = "Build dev WASM with Dioxus"
+dependencies = ["build_css_dev"]
+command = "dx"
+args = ["build", "--platform", "web"]

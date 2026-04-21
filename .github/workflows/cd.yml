@@ -13,13 +13,17 @@ jobs:
     runs-on: rsplayer-self-hosted
     steps:
       - uses: actions/checkout@v4
+      - name: Install npm dependencies and copy font assets
+        working-directory: rsplayer_web_ui
+        run: npm install
       - name: Build release
-        run: cargo make build_ui_release
-      - name: Upload pkg dir
+        working-directory: rsplayer_web_ui
+        run: dx build --release --platform web
+      - name: Upload web public dir
         uses: actions/upload-artifact@v4
         with:
           name: web_ui
-          path: rsplayer_web_ui/public/pkg
+          path: rsplayer_web_ui/target/dx/rsplayer_web_ui/release/web/public
 
   build_backend:
     needs: build_ui
@@ -51,7 +55,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: web_ui
-          path: rsplayer_web_ui/public/pkg
+          path: rsplayer_web_ui/target/dx/rsplayer_web_ui/release/web/public
 
       - name: Build and Package
         env:

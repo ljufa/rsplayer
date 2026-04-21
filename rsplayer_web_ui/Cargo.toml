@@ -4,38 +4,43 @@ version = "0.1.0"
 authors = ["dragan <dragan.ljubojevic@gmail.com>"]
 edition = "2021"
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "rsplayer_web_ui"
+path = "src/main.rs"
 
 [dependencies]
-seed = { version = "0.10.0", features = ["routing"] }
-serde = "1"
+dioxus = { version = "0.7", default-features = false, features = ["web", "router", "launch", "logger", "lib", "mounted", "document"] }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["js"] }
 indexmap = { version = "2", features = ["serde"] }
-enclose = "1"
 strum = "0.28"
 strum_macros = "0.28"
 api_models = { path = "../rsplayer_api_models" }
-wasm-sockets = { version = "1" }
 gloo-console = { version = "0.4" }
 gloo-net = { version = "0.7" }
 indextree = "4"
-web-sys = { version = "0.3", features = ["HtmlCanvasElement", "HtmlElement", "CanvasRenderingContext2d", "CanvasGradient", "Window", "Document", "Element", "Node", "DomRect", "CssStyleDeclaration", "HtmlAudioElement", "HtmlMediaElement", "EventTarget"] }
+web-sys = { version = "0.3", features = [
+    "HtmlCanvasElement", "HtmlElement", "CanvasRenderingContext2d",
+    "CanvasGradient", "Window", "Document", "Element", "Node", "DomRect",
+    "CssStyleDeclaration", "HtmlAudioElement", "HtmlMediaElement", "EventTarget",
+    "WebSocket", "MessageEvent", "CloseEvent", "ErrorEvent", "BinaryType",
+    "Storage", "KeyboardEvent",
+] }
 wasm-bindgen = "0.2"
 js-sys = "0.3"
 gloo-file = { version = "0.4", features = ["futures"] }
+gloo-timers = { version = "0.3", features = ["futures"] }
 yaml_serde = "0.10"
-
-
+wasm-bindgen-futures = "0.4"
+console_error_panic_hook = "0.1"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
 
+
 [features]
-remote = []
-local = []
-default = ["remote"]
+default = []
 
 [profile.release]
 lto = true

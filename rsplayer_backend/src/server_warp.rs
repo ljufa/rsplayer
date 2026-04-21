@@ -28,7 +28,7 @@ type UserCommandSender = mpsc::Sender<UserCommand>;
 type SystemCommandSender = mpsc::Sender<SystemCommand>;
 
 #[derive(RustEmbed)]
-#[folder = "../rsplayer_web_ui/public"]
+#[folder = "../rsplayer_web_ui/target/dx/rsplayer_web_ui/release/web/public"]
 #[exclude = "index.html"]
 struct StaticContentDir;
 
@@ -46,12 +46,18 @@ pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Out
     });
     let ui_static_content = warp::get().and(warp_embed::embed(&StaticContentDir));
 
+    let spa_fallback = warp::get().map(|| {
+        let reply = warp::reply::html(INDEX_HTML);
+        let reply = warp::reply::with_header(reply, "Cache-Control", "no-cache, must-revalidate");
+        warp::reply::with_header(reply, "ETag", concat!("\"", env!("APP_VERSION"), "\""))
+    });
     let routes = filters::settings_save(config.clone())
         .or(filters::settings_save(config.clone()))
         .or(filters::get_settings(config.clone()))
         .or(index_html)
         .or(ui_static_content)
         .or(filters::get_startup_error(error))
+        .or(spa_fallback)
         .with(cors);
 
     warp::serve(routes).run(([0, 0, 0, 0], get_ports().0))
@@ -116,6 +122,11 @@ pub fn start(
         })
     };
 
+    let spa_fallback = warp::get().map(|| {
+        let reply = warp::reply::html(INDEX_HTML);
+        let reply = warp::reply::with_header(reply, "Cache-Control", "no-cache, must-revalidate");
+        warp::reply::with_header(reply, "ETag", concat!("\"", env!("APP_VERSION"), "\""))
+    });
     let routes = player_ws_path
         .or(filters::settings_save(config.clone()))
         .or(filters::get_settings(config.clone()))
@@ -123,6 +134,7 @@ pub fn start(
         .or(ui_static_content)
         .or(artwork_static_content)
         .or(music_static_content)
+        .or(spa_fallback)
         .with(cors);
     let ws_bcast_tx_handle = ws_bcast_tx;
     let ws_handle = async move {

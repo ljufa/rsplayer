@@ -1,702 +1,330 @@
-use api_models::common::PlayerCommand;
-use api_models::common::QueueCommand::{self, RemoveItem};
-use api_models::common::UserCommand;
-use api_models::player::Song;
-use api_models::playlist::PlaylistPage;
-use api_models::state::{CurrentQueueQuery, StateChangeEvent};
-use gloo_console::log;
-use gloo_net::Error;
-use seed::prelude::web_sys::KeyboardEvent;
-use seed::{
-    a, attrs, button, div, empty, footer, h3, header, i, id, input, p, prelude::*, progress, section, style, textarea,
-    C, IF,
+use api_models::{
+    common::{dur_to_string, PlayerCommand, QueueCommand, UserCommand},
+    player::Song,
+    state::CurrentQueueQuery,
 };
+use dioxus::prelude::*;
+use web_sys::WebSocket;
 
-use crate::{attachQueueDragScroll, scrollToId};
+use crate::{hooks::ws_send, state::AppState, UiState};
 
-#[derive(Debug)]
-pub struct Model {
-    current_queue: Option<PlaylistPage>,
-    current_song_id: Option<String>,
-    search_input: String,
-    waiting_response: bool,
-    show_add_url_modal: bool,
-    add_url_input: String,
-    show_save_playlist_modal: bool,
-    save_playlist_input: String,
-    dragged_item_index: Option<usize>,
-    show_clear_queue_confirm: bool,
-}
+#[component]
+pub fn QueuePage() -> Element {
+    let state = use_context::<AppState>();
+    let ws = use_context::<Signal<Option<WebSocket>>>();
+    let mut ui = use_context::<UiState>();
+    let current_song_id = state.current_song.read().as_ref().map(|s| s.file.clone());
 
-#[allow(clippy::large_enum_variant)]
-#[derive(Debug)]
-pub enum Msg {
-    CurrentQueueFetched(Result<Option<PlaylistPage>, Error>),
-    SendUserCommand(UserCommand),
-    PlaylistItemSelected(String),
-    PlaylistItemRemove(String),
-    PlaylistItemShowMore,
-    StatusChangeEventReceived(StateChangeEvent),
-    WebSocketOpen,
-    SearchInputChanged(String),
-    DoSearch,
-    ClearSearch,
-    ShowStartingFromCurrentSong,
-    LocateCurrentSong,
-    LoadMoreItems(usize),
-    AddUrlButtonClick,
-    AddUrlInputChanged(String),
-    AddUrlToQueue,
-    CloseAddUrlModal,
-    ShowClearQueueConfirm,
-    CancelClearQueueConfirm,
-    ClearQueue,
-    SaveAsPlaylistButtonClick,
-    SaveAsPlaylistInputChanged(String),
-    CloseSaveAsPlaylistModal,
-    SaveAsPlaylist,
-    KeyPressed(web_sys::KeyboardEvent),
-    DragStart(usize),
-    DragOver(usize),
-    Drop(usize),
-    PlayNext(usize),
-}
+    let queue = state.current_queue;
+    let mut loading = use_signal(|| true);
+    let mut search = use_signal(String::new);
+    let mut dragged_idx: Signal<Option<usize>> = use_signal(|| None);
 
-#[allow(clippy::needless_pass_by_value)]
-pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
-    log!("Queue: init");
-    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-        api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(String::default(), 0)),
-    )));
-    orders.stream(streams::window_event(Ev::KeyDown, |event| {
-        Msg::KeyPressed(event.unchecked_into())
-    }));
+    // Initial load
+    use_effect(move || {
+        ws_send(
+            &ws,
+            &UserCommand::Queue(QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
+                String::new(),
+                0,
+            ))),
+        );
+    });
 
-    Model {
-        current_queue: None,
-        current_song_id: None,
-        waiting_response: true,
-        search_input: String::default(),
-        show_add_url_modal: false,
-        add_url_input: String::default(),
-        show_save_playlist_modal: false,
-        save_playlist_input: String::default(),
-        dragged_item_index: None,
-        show_clear_queue_confirm: false,
-    }
-}
+    // Clear loading when queue data arrives
+    use_effect(move || {
+        if queue.read().is_some() {
+            *loading.write() = false;
+        }
+    });
 
-// ------ ------
-//    Update
-// ------ ------
+    let mut do_search = move || {
+        *loading.write() = true;
+        ws_send(
+            &ws,
+            &UserCommand::Queue(QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
+                search(),
+                0,
+            ))),
+        );
+    };
 
-#[allow(clippy::too_many_lines)]
-pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
-    match msg {
-        Msg::StatusChangeEventReceived(StateChangeEvent::CurrentQueueEvent(pc)) => {
-            model.waiting_response = false;
-            model.current_queue = pc;
-            orders.after_next_render(|_| attachQueueDragScroll());
-        }
-        Msg::StatusChangeEventReceived(StateChangeEvent::CurrentSongEvent(evt)) => {
-            model.waiting_response = false;
-            model.current_song_id = Some(evt.file);
-            // orders.after_next_render(|_| scrollToId("current"));
-        }
-        Msg::PlaylistItemSelected(id) => {
-            model.current_song_id = Some(id.clone());
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Player(PlayerCommand::PlayItem(id))));
-        }
-        Msg::PlaylistItemRemove(id) => {
-            if let Some(queue) = model.current_queue.as_mut() {
-                queue.remove_item(&id);
-                orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(RemoveItem(id))));
-            }
-        }
-        Msg::WebSocketOpen => {
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
-                    String::default(),
-                    0,
-                )),
-            )));
-            // orders.after_next_render(|_| scrollToId("current"));
-            orders.skip();
-        }
-        Msg::SearchInputChanged(term) => {
-            model.search_input = term;
-            orders.skip();
-        }
-        Msg::DoSearch => {
-            model.waiting_response = true;
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
-                    model.search_input.clone(),
-                    0,
-                )),
-            )));
-        }
-        Msg::ShowStartingFromCurrentSong => {
-            model.waiting_response = true;
-            model.search_input = String::new();
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::CurrentSongPage),
-            )));
-        }
-        Msg::ClearSearch => {
-            model.waiting_response = true;
-            model.search_input = String::new();
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
-                    String::new(),
-                    0,
-                )),
-            )));
-        }
-        Msg::LocateCurrentSong => {
-            scrollToId("current");
-        }
-        Msg::LoadMoreItems(offset) => {
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
-                    model.search_input.clone(),
-                    offset,
-                )),
-            )));
-            orders.after_next_render(move |_| scrollToId("top-list-item"));
-        }
-        Msg::AddUrlButtonClick => {
-            model.show_add_url_modal = true;
-            model.add_url_input.clear();
-        }
-        Msg::CloseAddUrlModal => {
-            model.show_add_url_modal = false;
-        }
-        Msg::KeyPressed(event) => {
-            if event.key() == "Escape" {
-                model.show_add_url_modal = false;
-                model.add_url_input = String::default();
-                model.show_save_playlist_modal = false;
-                model.save_playlist_input = String::default();
-            }
-        }
-        Msg::DragStart(idx) => {
-            model.dragged_item_index = Some(idx);
-        }
-        Msg::DragOver(_) => {
-            // Necessary to allow dropping
-        }
-        Msg::Drop(idx) => {
-            if let Some(from_idx) = model.dragged_item_index {
-                if from_idx != idx {
-                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(QueueCommand::MoveItem(
-                        from_idx, idx,
-                    ))));
-                    // Refresh queue to show changes
-                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                        QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
-                            model.search_input.clone(),
-                            model
-                                .current_queue
-                                .as_ref()
-                                .map_or(0, |p| p.offset.saturating_sub(p.limit)),
-                        )),
-                    )));
-                }
-            }
-            model.dragged_item_index = None;
-        }
-        Msg::PlayNext(idx) => {
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                QueueCommand::MoveItemAfterCurrent(idx),
-            )));
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
-                    model.search_input.clone(),
-                    model
-                        .current_queue
-                        .as_ref()
-                        .map_or(0, |p| p.offset.saturating_sub(p.limit)),
-                )),
-            )));
-        }
-        Msg::AddUrlInputChanged(value) => {
-            model.add_url_input = value;
-        }
-        Msg::AddUrlToQueue => {
-            if model.show_add_url_modal && model.add_url_input.len() > 3 {
-                if model.add_url_input.lines().count() > 1 {
-                    model.add_url_input.lines().for_each(|l| {
-                        if l.len() > 5 {
-                            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                                api_models::common::QueueCommand::AddSongToQueue(l.to_string()),
-                            )));
-                        }
-                    });
-                } else {
-                    orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                        api_models::common::QueueCommand::AddSongToQueue(model.add_url_input.clone()),
-                    )));
-                }
-                model.show_add_url_modal = false;
-            }
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
-                    String::default(),
-                    0,
-                )),
-            )));
-        }
-        Msg::SaveAsPlaylistButtonClick => {
-            model.show_save_playlist_modal = true;
-        }
-        Msg::SaveAsPlaylistInputChanged(value) => {
-            model.save_playlist_input = value;
-        }
-        Msg::CloseSaveAsPlaylistModal => {
-            model.save_playlist_input = String::default();
-            model.show_save_playlist_modal = false;
-        }
-        Msg::SaveAsPlaylist => {
-            if model.show_save_playlist_modal && model.save_playlist_input.len() > 3 {
-                orders.send_msg(Msg::SendUserCommand(UserCommand::Playlist(
-                    api_models::common::PlaylistCommand::SaveQueueAsPlaylist(model.save_playlist_input.clone()),
-                )));
-                model.show_save_playlist_modal = false;
-                model.save_playlist_input = String::default();
-            }
-        }
-        Msg::ShowClearQueueConfirm => {
-            model.show_clear_queue_confirm = true;
-        }
-        Msg::CancelClearQueueConfirm => {
-            model.show_clear_queue_confirm = false;
-        }
-        Msg::ClearQueue => {
-            model.show_clear_queue_confirm = false;
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::ClearQueue,
-            )));
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Queue(
-                api_models::common::QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
-                    String::default(),
-                    0,
-                )),
-            )));
-        }
+    let load_more = move |offset: usize| {
+        ws_send(
+            &ws,
+            &UserCommand::Queue(QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
+                search(),
+                offset,
+            ))),
+        );
+    };
 
-        _ => {
-            orders.skip();
-        }
-    }
-}
+    rsx! {
+        div { class: "queue-page",
 
-pub fn view(model: &Model) -> Node<Msg> {
-    div![
-        view_add_url_modal(model),
-        view_save_playlist_modal(model),
-        view_clear_queue_confirm_modal(model),
-        view_queue_items(model)
-    ]
-}
-
-fn view_clear_queue_confirm_modal(model: &Model) -> Node<Msg> {
-    div![
-        C!["modal", IF!(model.show_clear_queue_confirm => "is-active")],
-        div![C!["modal-background"], ev(Ev::Click, |_| Msg::CancelClearQueueConfirm)],
-        div![
-            C!["modal-card"],
-            header![
-                C!["modal-card-head"],
-                p![C!["modal-card-title"], "Warning"],
-                button![
-                    C!["delete"],
-                    attrs! { At::AriaLabel => "close" },
-                    ev(Ev::Click, |_| Msg::CancelClearQueueConfirm)
-                ]
-            ],
-            section![
-                C!["modal-card-body"],
-                p!["This will remove all items from the current queue. Are you sure?"]
-            ],
-            footer![
-                C!["modal-card-foot"],
-                button![
-                    C!["button", "is-warning"],
-                    "Confirm",
-                    ev(Ev::Click, |_| Msg::ClearQueue)
-                ],
-                button![C!["button"], "Cancel", ev(Ev::Click, |_| Msg::CancelClearQueueConfirm)]
-            ]
-        ]
-    ]
-}
-
-fn view_save_playlist_modal(model: &Model) -> Node<Msg> {
-    div![
-        C!["modal", IF!(model.show_save_playlist_modal => "is-active")],
-        div![C!["modal-background"], ev(Ev::Click, |_| Msg::CloseSaveAsPlaylistModal),],
-        div![
-            id!("add-url-items-modal"),
-            C!["modal-card"],
-            header![
-                C!["modal-card-head"],
-                p![C!["modal-card-title"], "Enter playlist name"],
-                button![
-                    C!["delete", "is-large"],
-                    attrs!(At::AriaLabel =>"close"),
-                    ev(Ev::Click, |_| Msg::CloseSaveAsPlaylistModal)
-                ],
-            ],
-            section![
-                C!["modal-card-body"],
-                input![
-                    C!["input"],
-                    attrs! {
-                        At::AutoFocus => true.as_at_value();
-                    },
-                    input_ev(Ev::Input, Msg::SaveAsPlaylistInputChanged),
-                    ev(Ev::KeyDown, |keyboard_event| {
-                        if keyboard_event.value_of().to_string() == "[object KeyboardEvent]" {
-                            let kev: KeyboardEvent = keyboard_event.unchecked_into();
-                            IF!(kev.key_code() == 13 => Msg::SaveAsPlaylist)
-                        } else {
-                            None
-                        }
-                    }),
-                ],
-            ],
-            footer![
-                C!["modal-card-foot"],
-                button![
-                    C!["button", "is-dark"],
-                    "Save",
-                    ev(Ev::Click, move |_| Msg::SaveAsPlaylist)
-                ],
-                button![
-                    C!["button"],
-                    "Cancel",
-                    ev(Ev::Click, move |_| Msg::CloseSaveAsPlaylistModal)
-                ],
-            ]
-        ]
-    ]
-}
-
-fn view_add_url_modal(model: &Model) -> Node<Msg> {
-    if model.show_add_url_modal {
-        div![
-            C!["modal", "is-active"],
-            div![C!["modal-background"], ev(Ev::Click, |_| Msg::CloseAddUrlModal),],
-            div![
-                id!("add-url-items-modal"),
-                C!["modal-card"],
-                header![
-                    C!["modal-card-head"],
-                    p![C!["modal-card-title"], "Add streaming URL(s)"],
-                    button![
-                        C!["delete", "is-medium"],
-                        attrs!(At::AriaLabel =>"close"),
-                        ev(Ev::Click, |_| Msg::CloseAddUrlModal)
-                    ],
-                ],
-                section![
-                    C!["modal-card-body"],
-                    textarea![
-                        C!["textarea"],
-                        attrs! {
-                            At::AutoFocus => true.as_at_value();
+            // ── Toolbar ─────────────────────────────────────────────────────
+            div { class: "flex flex-col gap-1 px-3 py-2 border-b border-base-300",
+                // Row 1: search field + search/clear buttons
+                div { class: "flex items-center gap-2",
+                    input {
+                        class: "input input-sm input-bordered flex-1",
+                        r#type: "text",
+                        placeholder: "Find a song",
+                        value: "{search}",
+                        oninput: move |e| search.set(e.value()),
+                        onkeydown: move |e| {
+                            if e.key() == Key::Enter { do_search(); }
                         },
-                        input_ev(Ev::Input, Msg::AddUrlInputChanged),
-                        ev(Ev::KeyDown, |keyboard_event| {
-                            if keyboard_event.value_of().to_string() == "[object KeyboardEvent]" {
-                                let kev: KeyboardEvent = keyboard_event.unchecked_into();
-                                IF!(kev.key_code() == 13 => Msg::AddUrlToQueue)
-                            } else {
-                                None
-                            }
-                        }),
-                    ],
-                ],
-                footer![
-                    C!["modal-card-foot"],
-                    button![
-                        C!["button", "is-dark"],
-                        "Add",
-                        ev(Ev::Click, move |_| Msg::AddUrlToQueue)
-                    ],
-                    button![C!["button"], "Cancel", ev(Ev::Click, move |_| Msg::CloseAddUrlModal)],
-                ]
-            ]
-        ]
-    } else {
-        empty!()
-    }
-}
+                    }
+                    button {
+                        class: "btn btn-sm btn-ghost",
+                        title: "Search",
+                        onclick: move |_| do_search(),
+                        i { class: "material-icons text-base", "search" }
+                    }
+                    button {
+                        class: "btn btn-sm btn-ghost",
+                        title: "Clear search",
+                        onclick: move |_| {
+                            search.set(String::new());
+                            *loading.write() = true;
+                            ws_send(&ws, &UserCommand::Queue(QueueCommand::QueryCurrentQueue(
+                                CurrentQueueQuery::WithSearchTerm(String::new(), 0)
+                            )));
+                        },
+                        i { class: "material-icons text-base", "backspace" }
+                    }
+                }
+                // Row 2: queue action buttons
+                div { class: "flex items-center gap-1",
+                    button {
+                        class: "btn btn-sm btn-ghost",
+                        title: "Show from current song",
+                        onclick: move |_| {
+                            *loading.write() = true;
+                            ws_send(&ws, &UserCommand::Queue(QueueCommand::QueryCurrentQueue(
+                                CurrentQueueQuery::CurrentSongPage
+                            )));
+                        },
+                        i { class: "material-icons text-base", "filter_center_focus" }
+                        span { class: "hidden sm:inline text-xs", "Focus" }
+                    }
+                    button {
+                        class: "btn btn-sm btn-ghost",
+                        title: "Add URL to queue",
+                        onclick: move |_| { ui.queue_add_url_input.set(String::new()); ui.queue_add_url_open.set(true); },
+                        i { class: "material-icons text-base", "queue" }
+                        span { class: "hidden sm:inline text-xs", "Add URL" }
+                    }
+                    button {
+                        class: "btn btn-sm btn-ghost",
+                        title: "Save queue as playlist",
+                        onclick: move |_| ui.queue_save_playlist_open.set(true),
+                        i { class: "material-icons text-base", "save" }
+                        span { class: "hidden sm:inline text-xs", "Save" }
+                    }
+                    div { class: "flex-1" }
+                    button {
+                        class: "btn btn-sm btn-ghost text-error",
+                        title: "Clear queue",
+                        onclick: move |_| ui.queue_clear_confirm_open.set(true),
+                        i { class: "material-icons text-base", "clear" }
+                        span { class: "hidden sm:inline text-xs", "Clear" }
+                    }
+                }
+            }
 
-#[allow(clippy::too_many_lines)]
-fn view_queue_items(model: &Model) -> Node<Msg> {
-    // Show skeleton screens when initially loading
-    if model.waiting_response && model.current_queue.is_none() {
-        return view_skeleton_queue();
-    }
-
-    // Check if queue is empty
-    let is_empty = !model.waiting_response
-        && model
-            .current_queue
-            .as_ref()
-            .map(|page| page.items.is_empty())
-            .unwrap_or(true);
-
-    if is_empty {
-        return view_empty_queue(model);
-    }
-
-    if model.current_queue.is_none() {
-        return empty!();
-    }
-    div![
-        div![
-            IF!(model.waiting_response => progress![C!["progress", "is-small"], attrs!{ At::Max => "100"}, style!{ St::MarginBottom => "50px"}]),
-        ],
-        div![
-            model.current_queue.as_ref().map_or_else(|| empty!(), |page| {
-                let offset = page.offset;
-                let iter = page.items.iter();
-                let start_index = page.offset.saturating_sub(page.limit);
-                div![
-                    div![
-                        C!["transparent is-flex is-justify-content-center has-background-dark-transparent"],
-                        div![C!["control"],
-                            input![
-                                C!["input", "input-size"],
-                                attrs! {
-                                    At::Value => model.search_input,
-                                    At::Name => "search",
-                                    At::Type => "text",
-                                    At::Placeholder => "Find a song"
+            // ── Queue content ───────────────────────────────────────────────
+            if loading() && queue().is_none() {
+                QueueSkeleton {}
+            } else if queue().as_ref().map_or(true, |p| p.items.is_empty()) {
+                QueueEmpty {
+                    has_search: !search().is_empty(),
+                    on_clear_search: move |_| {
+                        search.set(String::new());
+                        *loading.write() = true;
+                        ws_send(&ws, &UserCommand::Queue(QueueCommand::QueryCurrentQueue(
+                            CurrentQueueQuery::WithSearchTerm(String::new(), 0)
+                        )));
+                    },
+                    on_add_url: move |_| ui.queue_add_url_open.set(true),
+                }
+            } else if let Some(page) = queue() {
+                div { class: "scroll-list overflow-y-auto",
+                    {page.items.iter().enumerate().map(|(idx, song)| {
+                        let song = song.clone();
+                        let is_current = current_song_id.as_ref().is_some_and(|id| *id == song.file);
+                        let file = song.file.clone();
+                        let file2 = song.file.clone();
+                        let file3 = song.file.clone();
+                        let start_idx = page.offset.saturating_sub(page.limit);
+                        let abs_idx = start_idx + idx;
+                        rsx! {
+                            QueueItem {
+                                key: "{song.file}",
+                                song,
+                                idx: abs_idx,
+                                is_current,
+                                on_play: move |_| {
+                                    ws_send(&ws, &UserCommand::Player(PlayerCommand::PlayItem(file.clone())));
                                 },
-                                input_ev(Ev::Input, Msg::SearchInputChanged),
-                                ev(Ev::KeyDown, |keyboard_event| {
-                                    if keyboard_event.value_of().to_string() == "[object KeyboardEvent]"{
-                                        let kev: KeyboardEvent = keyboard_event.unchecked_into();
-                                        IF!(kev.key_code() == 13 => Msg::DoSearch)
-                                    } else {
-                                        None
+                                on_play_next: move |_| {
+                                    ws_send(&ws, &UserCommand::Queue(QueueCommand::MoveItemAfterCurrent(abs_idx)));
+                                    ws_send(&ws, &UserCommand::Queue(QueueCommand::QueryCurrentQueue(
+                                        CurrentQueueQuery::WithSearchTerm(search(), 0)
+                                    )));
+                                },
+                                on_remove: move |_| {
+                                    ws_send(&ws, &UserCommand::Queue(QueueCommand::RemoveItem(file2.clone())));
+                                    let mut cq = state.current_queue;
+                                    let mut guard = cq.write();
+                                    if let Some(q) = guard.as_mut() {
+                                        q.remove_item(&file2);
                                     }
-                                }),
-                            ],
-                        ],
-                        div![C!["control"],
-                            a![
-                                attrs!(At::Title =>"Search"),
-                                i![C!["material-icons", "is-large-icon", "white-icon"], "search"],
-                                ev(Ev::Click, move |_| Msg::DoSearch)
-                            ],
-                            a![
-                                attrs!(At::Title =>"Clear search / Show all songs"),
-                                i![C!["material-icons", "is-large-icon", "white-icon"], "backspace"],
-                                ev(Ev::Click, move |_| Msg::ClearSearch)
-                            ],
-                        ],
-                    ],
-                    div![
-                        C!["transparent field is-flex is-justify-content-center has-background-dark-transparent"],
-                        div![C!["control"],
-                            a![
-                                attrs!(At::Title => "Add URL to queue"),
-                                i![C!["pr-3","pl-2","material-icons","is-large-icon", "white-icon"], "queue"],
-                                ev(Ev::Click, move |_| Msg::AddUrlButtonClick)
-                            ],
-                            a![
-                                attrs!(At::Title =>"Save queue as playlist"),
-                                i![C!["pr-3","material-icons","is-large-icon", "white-icon"], "save"],
-                                ev(Ev::Click, move |_| Msg::SaveAsPlaylistButtonClick)
-                            ],
-                            a![
-                                attrs!(At::Title =>"Show queue starting from current song"),
-                                i![C!["pr-3","material-icons","is-large-icon", "white-icon"], "filter_center_focus"],
-                                ev(Ev::Click, move |_| Msg::ShowStartingFromCurrentSong)
-                            ],
-                            a![
-                                attrs!(At::Title =>"Clear queue"),
-                                i![C!["pr-3", "material-icons","is-large-icon", "white-icon"], "clear"],
-                                ev(Ev::Click, move |_| Msg::ShowClearQueueConfirm)
-                            ],
-                        ]
-                    ],
-
-                    // queue items`
-                    div![C!["scroll-list list has-overflow-ellipsis has-visible-pointer-controls has-hoverable-list-items"],
-                        div![id!("top-list-item")],
-                        iter.enumerate().map(|(idx, it)| { view_queue_item(it, start_index + idx, model)  })
-                    ],
-                    button![
-                        C!["button","is-fullwidth", "is-outlined", "is-primary"],
-                        "Load more", 
-                        ev(Ev::Click, move |_| Msg::LoadMoreItems(offset))
-                    ]
-                ]
-            })
-        ]
-    ]
-}
-
-fn view_empty_queue(model: &Model) -> Node<Msg> {
-    let is_search = !model.search_input.is_empty();
-
-    if is_search {
-        // No search results in queue
-        div![
-            C!["empty-state", "empty-state--search"],
-            i![C!["material-icons", "empty-state__icon"], "search_off"],
-            h3![C!["empty-state__title"], "No matching songs"],
-            p![
-                C!["empty-state__description"],
-                format!(
-                    "No songs in the queue match \"{}\". Try a different search term.",
-                    model.search_input
-                )
-            ],
-            div![
-                C!["empty-state__actions"],
-                button![
-                    C!["empty-state__cta"],
-                    i![C!["material-icons"], "backspace"],
-                    "Clear Search",
-                    ev(Ev::Click, |_| Msg::ClearSearch)
-                ],
-            ],
-        ]
-    } else {
-        // Empty queue
-        div![
-            C!["empty-state"],
-            i![C!["material-icons", "empty-state__icon"], "queue_music"],
-            h3![C!["empty-state__title"], "Queue is empty"],
-            p![
-                C!["empty-state__description"],
-                "Your playback queue is empty. Add songs from your library to start listening."
-            ],
-            div![
-                C!["empty-state__actions"],
-                a![
-                    C!["empty-state__cta"],
-                    attrs! { At::Href => "#/library/files" },
-                    i![C!["material-icons"], "library_music"],
-                    "Browse Library",
-                ],
-                button![
-                    C!["empty-state__secondary"],
-                    i![C!["material-icons"], "add"],
-                    "Add URL",
-                    ev(Ev::Click, |_| Msg::AddUrlButtonClick)
-                ],
-            ],
-        ]
+                                },
+                                on_drag_start: move |_| dragged_idx.set(Some(abs_idx)),
+                                on_drop: move |_| {
+                                    if let Some(from) = dragged_idx() {
+                                        if from != abs_idx {
+                                            ws_send(&ws, &UserCommand::Queue(QueueCommand::MoveItem(from, abs_idx)));
+                                            ws_send(&ws, &UserCommand::Queue(QueueCommand::QueryCurrentQueue(
+                                                CurrentQueueQuery::WithSearchTerm(search(), 0)
+                                            )));
+                                        }
+                                    }
+                                    dragged_idx.set(None);
+                                },
+                            }
+                        }
+                    })}
+                    button {
+                        class: "btn btn-outline btn-primary btn-sm w-full mt-2",
+                        onclick: move |_| load_more(page.offset),
+                        "Load more"
+                    }
+                }
+            }
+        }
     }
 }
 
-fn view_skeleton_queue() -> Node<Msg> {
-    div![
-        C!["skeleton-list"],
-        // Generate 6 skeleton queue items
-        (0..6).map(|_| {
-            div![
-                C!["skeleton-queue-item"],
-                div![C!["skeleton skeleton-queue-number"]],
-                div![
-                    C!["skeleton-queue-info"],
-                    div![C!["skeleton skeleton-queue-title"]],
-                    div![C!["skeleton skeleton-queue-artist"]],
-                ],
-            ]
-        })
-    ]
+#[component]
+fn QueueItem(
+    song: Song,
+    idx: usize,
+    is_current: bool,
+    on_play: EventHandler,
+    on_play_next: EventHandler,
+    on_remove: EventHandler,
+    on_drag_start: EventHandler,
+    on_drop: EventHandler,
+) -> Element {
+    let title = song.get_title();
+    let artist = song.artist.clone().unwrap_or_default();
+    let date = song.date.clone().map(|d| format!(" • {d}")).unwrap_or_default();
+    let duration = song
+        .time
+        .as_ref()
+        .map(|t| format!(" • {}", dur_to_string(t)))
+        .unwrap_or_default();
+    let row_class = if is_current {
+        "flex items-center gap-1 px-2 py-1.5 bg-primary/10 border-l-2 border-primary"
+    } else {
+        "flex items-center gap-1 px-2 py-1.5 border-b border-base-200 hover:bg-base-200/50"
+    };
+    rsx! {
+        div {
+            class: row_class,
+            id: if is_current { "current" } else { "" },
+            draggable: true,
+            ondragstart: move |_| on_drag_start.call(()),
+            ondragover: move |e| e.prevent_default(),
+            ondrop: move |e| { e.prevent_default(); on_drop.call(()); },
+            // drag handle
+            span { class: "queue-item__drag text-base-content/30 cursor-grab px-2",
+                i { class: "material-icons text-base", "drag_handle" }
+            }
+            // track info
+            div {
+                class: "queue-item__info flex-1 min-w-0 cursor-pointer",
+                onclick: move |_| on_play.call(()),
+                p { class: "font-medium truncate text-sm", "{title}" }
+                p { class: "text-xs text-base-content/50 truncate", "{artist}{date}{duration}" }
+            }
+            // action buttons
+            div { class: "queue-item__actions flex items-center gap-1",
+                button {
+                    class: "btn btn-ghost btn-xs",
+                    title: "Play next",
+                    onclick: move |_| on_play_next.call(()),
+                    i { class: "material-icons text-sm", "playlist_play" }
+                }
+                button {
+                    class: "btn btn-ghost btn-xs",
+                    title: "Play",
+                    onclick: move |_| on_play.call(()),
+                    i { class: "material-icons text-sm", "play_arrow" }
+                }
+                button {
+                    class: "btn btn-ghost btn-xs text-error",
+                    title: "Remove",
+                    onclick: move |_| on_remove.call(()),
+                    i { class: "material-icons text-sm", "delete" }
+                }
+            }
+        }
+    }
 }
 
-fn view_queue_item(song: &Song, idx: usize, model: &Model) -> Node<Msg> {
-    let id = song.file.clone();
-    let id1 = song.file.clone();
-    let id2 = song.file.clone();
-    div![
-        attrs! {
-            At::Draggable => "true",
-        },
-        ev(Ev::DragStart, move |_| Msg::DragStart(idx)),
-        ev(Ev::DragOver, move |event| {
-            event.prevent_default();
-            Msg::DragOver(idx)
-        }),
-        ev(Ev::Drop, move |event| {
-            event.prevent_default();
-            Msg::Drop(idx)
-        }),
-        IF!(model.current_song_id.as_ref().is_some_and(|cur| *cur == id ) => id!("current")),
-        C![
-            "list-item",
-            IF!(model.current_song_id.as_ref().is_some_and(|cur| *cur == id ) => "current")
-        ],
-        // Drag handle
-        div![
-            C!["is-flex is-align-items-center"],
-            style! {St::PaddingRight => "10px", St::Cursor => "grab"},
-            attrs!(At::Title => "Drag to reorder"),
-            i![C!["material-icons has-text-grey"], "drag_handle"],
-        ],
-        div![
-            C!["list-item-content"],
-            div![
-                C!["list-item-title", "has-text-light"],
-                style! { St::FontWeight => "bold" }, // Match playlist details look
-                song.get_title()
-            ],
-            div![
-                C!["description", "has-text-grey"], // Grey for artist
-                style! { St::FontSize => "0.9em" },
-                if let Some(artist) = &song.artist {
-                    format!("{} ", artist)
+#[component]
+fn QueueEmpty(has_search: bool, on_clear_search: EventHandler, on_add_url: EventHandler) -> Element {
+    rsx! {
+        div { class: "flex flex-col items-center justify-center py-16 gap-4 text-base-content/40",
+            i { class: "material-icons text-5xl",
+                if has_search { "search_off" } else { "queue_music" }
+            }
+            p { class: "text-lg font-medium",
+                if has_search { "No matching songs" } else { "Queue is empty" }
+            }
+            p { class: "text-sm text-center max-w-xs",
+                if has_search {
+                    "No songs match your search. Try a different term."
                 } else {
-                    String::new()
-                },
-                // Optional: Year
-                song.date.as_ref().map(|d| format!(" • {d}")).unwrap_or_default(),
-                // Duration
-                song.time
-                    .as_ref()
-                    .map(|t| format!(" • {}", api_models::common::dur_to_string(t)))
-                    .unwrap_or_default(),
-            ],
-            ev(Ev::Click, move |_| Msg::PlaylistItemSelected(id)),
-        ],
-        div![
-            C!["list-item-controls"],
-            div![
-                C!["song-actions"],
-                i![C!["material-icons", "song-actions__trigger"], "more_vert"],
-                div![
-                    C!["song-actions__btns"],
-                    a![
-                        C!["white-icon"],
-                        attrs!(At::Title =>"Play Next"),
-                        i![C!("material-icons"), "playlist_play"],
-                        ev(Ev::Click, move |_| Msg::PlayNext(idx))
-                    ],
-                    a![
-                        C!["white-icon"],
-                        attrs!(At::Title =>"Play song"),
-                        i![C!("material-icons"), "play_arrow"],
-                        ev(Ev::Click, move |_| Msg::PlaylistItemSelected(id2))
-                    ],
-                    a![
-                        C!["white-icon"],
-                        attrs!(At::Title =>"Remove from queue"),
-                        i![C!("material-icons"), "delete"],
-                        ev(Ev::Click, move |_| Msg::PlaylistItemRemove(id1))
-                    ],
-                ]
-            ]
-        ],
-    ]
+                    "Add songs from your library to start listening."
+                }
+            }
+            if has_search {
+                button {
+                    class: "btn btn-outline btn-sm",
+                    onclick: move |_| on_clear_search.call(()),
+                    i { class: "material-icons text-sm mr-1", "backspace" }
+                    "Clear Search"
+                }
+            } else {
+                button {
+                    class: "btn btn-outline btn-sm",
+                    onclick: move |_| on_add_url.call(()),
+                    i { class: "material-icons text-sm mr-1", "add" }
+                    "Add URL"
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn QueueSkeleton() -> Element {
+    rsx! {
+        div { class: "flex flex-col gap-2 p-3",
+            {(0..8).map(|_| rsx! {
+                div { class: "flex items-center gap-3 p-2",
+                    div { class: "skeleton w-4 h-4 rounded" }
+                    div { class: "flex-1 flex flex-col gap-1",
+                        div { class: "skeleton h-4 w-3/4 rounded" }
+                        div { class: "skeleton h-3 w-1/2 rounded" }
+                    }
+                }
+            })}
+        }
+    }
 }

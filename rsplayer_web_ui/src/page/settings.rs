@@ -1,177 +1,35 @@
-
 use api_models::{
-    common::{MetadataCommand::RescanMetadata, StorageCommand, SystemCommand, UserCommand, VolumeCrtlType},
-    settings::{DspFilter, FilterConfig, MetadataStoreSettings, NetworkMountConfig, NetworkMountType, NormalizationSource, RsPlayerSettings, Settings},
-    state::{ExternalMount, MountStatus, MusicDirStatus},
-    validator::Validate,
+    common::{MetadataCommand, StorageCommand, SystemCommand, UserCommand, VolumeCrtlType},
+    settings::{
+        DspFilter, DspSettings, FilterConfig, NetworkMountConfig, NetworkMountType, NormalizationSource, Settings,
+    },
 };
+use dioxus::prelude::*;
+use gloo_net::http::Request;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
-use gloo_console::log;
-use gloo_file::futures::read_as_text;
-use gloo_file::File;
-use gloo_net::{http::Request, Error};
-use seed::{a, attrs, button, code, details, div, empty, footer, h1, header, i, input, label, option, p, prelude::*, section, select, span, style, summary, C, IF};
-use wasm_bindgen::JsCast;
-use web_sys::FileList;
+use web_sys::WebSocket;
 
 use crate::dsp::get_dsp_presets;
-use crate::focusAudioInterfaceSelect;
-use crate::getAndClearPlaybackSectionOpen;
-use crate::setBeforeUnloadWarning;
-use crate::setPlaybackSectionOpen;
-use crate::view_spinner_modal;
+use crate::{hooks::ws_send, send_system_cmd, state::AppState};
 
 const API_SETTINGS_PATH: &str = "/api/settings";
 
-// ------ ------
-//     Model
+// ─── Local state helpers ──────────────────────────────────────────────────────
 
-#[derive(Debug, Clone)]
-pub enum ConfirmAction {
+#[derive(Debug, Clone, PartialEq)]
+enum ConfirmAction {
     FullRescan,
     RestartPlayer,
     RestartSystem,
     ShutdownSystem,
     RemoveMusicDirectory(usize),
     RemoveNetworkMount(String),
+    ClearDspFilters,
 }
 
-#[derive(Debug)]
-pub struct Model {
-    settings: Settings,
-    selected_audio_card_id: String,
-    waiting_response: bool,
-    confirm_action: Option<ConfirmAction>,
-    // Network mount form
-    mount_form_name: String,
-    mount_form_type: NetworkMountType,
-    mount_form_server: String,
-    mount_form_share: String,
-    mount_form_username: String,
-    mount_form_password: String,
-    mount_form_domain: String,
-    mount_statuses: Vec<MountStatus>,
-    music_dir_statuses: Vec<MusicDirStatus>,
-    new_music_dir: String,
-    external_mounts: Vec<ExternalMount>,
-    network_mounts_open: bool,
-    /// Whether to auto-focus on audio interface field (set on first visit if not configured)
-    focus_audio_interface: bool,
-    /// Whether the Playback section should be open (set once when settings load)
-    playback_section_should_open: Option<bool>,
-    /// Whether any restart-requiring settings were changed (shows restart banner)
-    pending_restart: bool,
-    /// Whether DSP settings have been edited since the last Apply (or page load)
-    dsp_dirty: bool,
-}
-
-impl Model {
-    pub fn has_unsaved_changes(&self) -> bool {
-        self.dsp_dirty || self.pending_restart
-    }
-}
-
-impl Model {
-    pub fn is_playback_device_configured(&self) -> bool {
-        self.settings.local_browser_playback 
-            || (!self.settings.alsa_settings.output_device.card_id.is_empty() 
-                && !self.settings.alsa_settings.output_device.card_id.starts_with("--")
-                && !self.settings.alsa_settings.output_device.name.is_empty()
-                && !self.settings.alsa_settings.output_device.name.starts_with("--"))
-    }
-    
-    pub fn is_music_library_configured(&self) -> bool {
-        !self.settings.metadata_settings.effective_directories().is_empty()
-    }
-}
-
-#[derive(Debug)]
-#[allow(clippy::large_enum_variant)]
-pub enum Msg {
-    // ---- on off toggles ----
-    ToggleUsbEnabled,
-    ToggleResumePlayback,
-    ToggleRspAlsaBufferSize,
-    // ---- Input capture ----
-    InputNewMusicDir(String),
-    AddMusicDirectory,
-    RemoveMusicDirectory(usize),
-    InputAlsaCardChange(String),
-    InputAlsaPcmChange(String),
-    InputVolumeStepChanged(String),
-
-    InputRspInputBufferSizeChange(String),
-    InputRspAudioBufferSizeChange(String),
-    InputRspAlsaBufferSizeChange(String),
-    InputRspThreadPriorityChange(String),
-    InputRspFixedSampleRateChange(String),
-    InputVolumeAlsaMixerChanged(String),
-    ClickRescanMetadataButton(bool),
-
-    InputAlsaDeviceChanged(String),
-
-        // --- DSP ---
-        ToggleDspEnabled,
-        ToggleVuMeterEnabled,
-        ToggleLoudnessNormalization,
-        InputNormalizationTargetLufs(String),
-        SelectNormalizationSource(NormalizationSource),
-        DspAddFilter,
-        DspRemoveAllFilters,
-        DspRemoveFilter(usize),
-        DspUpdateFilterType(usize, FilterType),
-        DspUpdateFilterValue(usize, DspField, String),
-        DspUpdateFilterChannels(usize, String),
-        DspApplySettings,
-        DspLoadPreset(usize),
-        DspImportConfig(FileList),
-        DspConfigLoaded(String),
-
-    // --- Confirm dialog ---
-    ShowConfirm(ConfirmAction),
-    ConfirmAccepted,
-    ConfirmCancelled,
-
-    // --- Buttons ----
-    /// Auto-save settings without restart. bool = restart required for change to take effect.
-    SaveCurrentSettings(bool),
-    SettingsSaved(Result<String, Error>),
-
-    SettingsFetched(Settings),
-    SendSystemCommand(SystemCommand),
-    SendUserCommand(UserCommand),
-
-    // --- Network Storage ---
-    InputMountName(String),
-    InputMountType(String),
-    InputMountServer(String),
-    InputMountShare(String),
-    InputMountUsername(String),
-    InputMountPassword(String),
-    InputMountDomain(String),
-    MountAdd,
-    MountRemove(String),
-    MountShare(String),
-    UnmountShare(String),
-    MountStatusReceived(Vec<MountStatus>),
-    MusicDirStatusReceived(Vec<MusicDirStatus>),
-    ExternalMountsReceived(Vec<ExternalMount>),
-    SaveExternalMount(String),
-    ToggleNetworkMounts,
-
-    // --- Appearance ---
-    /// Emitted when the user picks a theme in the settings page.
-    /// The parent (lib.rs) intercepts this and calls applyTheme().
-    SelectTheme(String),
-    
-    // --- First-time setup ---
-    /// Focus on the audio interface dropdown (for first-time setup)
-    FocusAudioInterface,
-}
-
-#[derive(Debug, Clone, EnumIter, PartialEq, Eq)]
-pub enum FilterType {
+#[derive(Debug, Clone, PartialEq, EnumIter)]
+enum DspFilterType {
     Peaking,
     LowShelf,
     HighShelf,
@@ -185,1842 +43,1544 @@ pub enum FilterType {
     LowShelfFO,
     HighShelfFO,
     Gain,
-    // LinkwitzTransform is complex, maybe skip for now in simple UI or add later
 }
 
-impl FilterType {
-    fn to_string(&self) -> &str {
+impl DspFilterType {
+    fn label(&self) -> &'static str {
         match self {
-            FilterType::Peaking => "Peaking",
-            FilterType::LowShelf => "LowShelf",
-            FilterType::HighShelf => "HighShelf",
-            FilterType::LowPass => "LowPass",
-            FilterType::HighPass => "HighPass",
-            FilterType::BandPass => "BandPass",
-            FilterType::Notch => "Notch",
-            FilterType::AllPass => "AllPass",
-            FilterType::LowPassFO => "LowPassFO",
-            FilterType::HighPassFO => "HighPassFO",
-            FilterType::LowShelfFO => "LowShelfFO",
-            FilterType::HighShelfFO => "HighShelfFO",
-            FilterType::Gain => "Gain",
+            DspFilterType::Peaking => "Peaking",
+            DspFilterType::LowShelf => "LowShelf",
+            DspFilterType::HighShelf => "HighShelf",
+            DspFilterType::LowPass => "LowPass",
+            DspFilterType::HighPass => "HighPass",
+            DspFilterType::BandPass => "BandPass",
+            DspFilterType::Notch => "Notch",
+            DspFilterType::AllPass => "AllPass",
+            DspFilterType::LowPassFO => "LowPassFO",
+            DspFilterType::HighPassFO => "HighPassFO",
+            DspFilterType::LowShelfFO => "LowShelfFO",
+            DspFilterType::HighShelfFO => "HighShelfFO",
+            DspFilterType::Gain => "Gain",
+        }
+    }
+    fn default_filter(&self) -> DspFilter {
+        match self {
+            DspFilterType::Peaking => DspFilter::Peaking {
+                freq: 1000.0,
+                gain: 0.0,
+                q: 0.707,
+            },
+            DspFilterType::LowShelf => DspFilter::LowShelf {
+                freq: 80.0,
+                gain: 0.0,
+                q: Some(0.707),
+                slope: None,
+            },
+            DspFilterType::HighShelf => DspFilter::HighShelf {
+                freq: 12000.0,
+                gain: 0.0,
+                q: Some(0.707),
+                slope: None,
+            },
+            DspFilterType::LowPass => DspFilter::LowPass {
+                freq: 20000.0,
+                q: 0.707,
+            },
+            DspFilterType::HighPass => DspFilter::HighPass { freq: 20.0, q: 0.707 },
+            DspFilterType::BandPass => DspFilter::BandPass { freq: 1000.0, q: 0.707 },
+            DspFilterType::Notch => DspFilter::Notch { freq: 1000.0, q: 0.707 },
+            DspFilterType::AllPass => DspFilter::AllPass { freq: 1000.0, q: 0.707 },
+            DspFilterType::LowPassFO => DspFilter::LowPassFO { freq: 20000.0 },
+            DspFilterType::HighPassFO => DspFilter::HighPassFO { freq: 20.0 },
+            DspFilterType::LowShelfFO => DspFilter::LowShelfFO { freq: 80.0, gain: 0.0 },
+            DspFilterType::HighShelfFO => DspFilter::HighShelfFO {
+                freq: 12000.0,
+                gain: 0.0,
+            },
+            DspFilterType::Gain => DspFilter::Gain { gain: 0.0 },
         }
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum DspField {
-    Freq,
-    Gain,
-    Q,
-    Slope,
+fn filter_type_of(f: &DspFilter) -> DspFilterType {
+    match f {
+        DspFilter::Peaking { .. } => DspFilterType::Peaking,
+        DspFilter::LowShelf { .. } => DspFilterType::LowShelf,
+        DspFilter::HighShelf { .. } => DspFilterType::HighShelf,
+        DspFilter::LowPass { .. } => DspFilterType::LowPass,
+        DspFilter::HighPass { .. } => DspFilterType::HighPass,
+        DspFilter::BandPass { .. } => DspFilterType::BandPass,
+        DspFilter::Notch { .. } => DspFilterType::Notch,
+        DspFilter::AllPass { .. } => DspFilterType::AllPass,
+        DspFilter::LowPassFO { .. } => DspFilterType::LowPassFO,
+        DspFilter::HighPassFO { .. } => DspFilterType::HighPassFO,
+        DspFilter::LowShelfFO { .. } => DspFilterType::LowShelfFO,
+        DspFilter::HighShelfFO { .. } => DspFilterType::HighShelfFO,
+        DspFilter::Gain { .. } | DspFilter::LinkwitzTransform { .. } => DspFilterType::Gain,
+    }
 }
 
-// ------ ------
-//     Init
-// ------ ------
-#[allow(clippy::needless_pass_by_value)]
-pub fn init(_url: Url, orders: &mut impl Orders<Msg>) -> Model {
-    log!("Settings Init called");
-    orders.perform_cmd(async {
-        let response = Request::get(API_SETTINGS_PATH)
-            .send()
-            .await
-            .expect("Failed to get settings from backend");
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
-        let sett = response
-            .json::<Settings>()
-            .await
-            .expect("failed to deserialize to Configuration");
-        Msg::SettingsFetched(sett)
+#[component]
+pub fn SettingsPage() -> Element {
+    let state = use_context::<AppState>();
+    let ws = use_context::<Signal<Option<WebSocket>>>();
+
+    let mut settings: Signal<Settings> = use_signal(Settings::default);
+    let mut loading = use_signal(|| true);
+    let mut saving = use_signal(|| false);
+    let mut confirm: Signal<Option<ConfirmAction>> = use_signal(|| None);
+    let mut dsp_dirty = use_signal(|| false);
+    let mut pending_restart = use_signal(|| false);
+
+    // Fetch settings on mount
+    use_effect(move || {
+        spawn(async move {
+            if let Ok(resp) = Request::get(API_SETTINGS_PATH).send().await {
+                if let Ok(s) = resp.json::<Settings>().await {
+                    *settings.write() = s;
+                }
+            }
+            *loading.write() = false;
+            // Query mount/dir status
+            ws_send(&ws, &UserCommand::Storage(StorageCommand::QueryMountStatus));
+            ws_send(&ws, &UserCommand::Storage(StorageCommand::QueryMusicDirStatus));
+        });
     });
-    Model {
-        settings: Settings::default(),
-        selected_audio_card_id: String::new(),
-        waiting_response: true,
-        confirm_action: None,
-        mount_form_name: String::new(),
-        mount_form_type: NetworkMountType::Smb,
-        mount_form_server: String::new(),
-        mount_form_share: String::new(),
-        mount_form_username: String::new(),
-        mount_form_password: String::new(),
-        mount_form_domain: String::new(),
-        mount_statuses: Vec::new(),
-        music_dir_statuses: Vec::new(),
-        new_music_dir: String::new(),
-        external_mounts: Vec::new(),
-        network_mounts_open: false,
-        focus_audio_interface: false,
-        playback_section_should_open: None,
-        pending_restart: false,
-        dsp_dirty: false,
+
+    let mut auto_save = move || {
+        *saving.write() = true;
+        let s = settings.read().clone();
+        spawn(async move {
+            let _ = Request::post(API_SETTINGS_PATH)
+                .json(&s)
+                .expect("serialize settings")
+                .send()
+                .await;
+            *saving.write() = false;
+        });
+    };
+
+    let mut auto_save_restart = move || {
+        *pending_restart.write() = true;
+        auto_save();
+    };
+
+    let mut do_confirm = move || {
+        let action = confirm.read().clone();
+        match action {
+            Some(ConfirmAction::FullRescan) => {
+                let s = settings.read().clone();
+                spawn(async move {
+                    let _ = Request::post(API_SETTINGS_PATH).json(&s).expect("s").send().await;
+                });
+                ws_send(
+                    &ws,
+                    &UserCommand::Metadata(MetadataCommand::RescanMetadata(String::new(), true)),
+                );
+            }
+            Some(ConfirmAction::RestartPlayer) => {
+                *pending_restart.write() = false;
+                send_system_cmd(&ws, SystemCommand::RestartRSPlayer);
+            }
+            Some(ConfirmAction::RestartSystem) => {
+                send_system_cmd(&ws, SystemCommand::RestartSystem);
+            }
+            Some(ConfirmAction::ShutdownSystem) => {
+                send_system_cmd(&ws, SystemCommand::PowerOff);
+            }
+            Some(ConfirmAction::RemoveMusicDirectory(idx)) => {
+                let mut s = settings.write();
+                s.metadata_settings.music_directories.remove(idx);
+                drop(s);
+                auto_save();
+            }
+            Some(ConfirmAction::RemoveNetworkMount(ref name)) => {
+                let mount_point = settings
+                    .read()
+                    .network_storage_settings
+                    .mounts
+                    .iter()
+                    .find(|m| &m.name == name)
+                    .map(|m| {
+                        m.mount_point
+                            .clone()
+                            .unwrap_or_else(|| format!("/mnt/rsplayer/{}", m.name))
+                    })
+                    .unwrap_or_default();
+                {
+                    let mut s = settings.write();
+                    s.network_storage_settings.mounts.retain(|m| &m.name != name);
+                    s.metadata_settings.music_directories.retain(|d| d != &mount_point);
+                }
+                ws_send(&ws, &UserCommand::Storage(StorageCommand::Remove(name.clone())));
+                auto_save();
+            }
+            Some(ConfirmAction::ClearDspFilters) => {
+                settings.write().rs_player_settings.dsp_settings.filters.clear();
+                *dsp_dirty.write() = true;
+            }
+            None => {}
+        }
+        *confirm.write() = None;
+    };
+
+    if loading() {
+        return rsx! {
+            div { class: "flex items-center justify-center py-20",
+                span { class: "loading loading-spinner loading-lg" }
+            }
+        };
+    }
+
+    rsx! {
+        div { class: "max-w-2xl mx-auto px-3 py-4 pb-20 space-y-3",
+
+            // ── Header ──────────────────────────────────────────────────────
+            div { class: "flex items-center justify-between",
+                // h1 { class: "text-xl font-bold", "Settings" }
+                if saving() {
+                    span { class: "loading loading-spinner loading-sm text-primary" }
+                }
+            }
+
+            // ── Appearance section ───────────────────────────────────────────
+            SettingsSection {
+                title: "Appearance",
+                icon: "palette",
+                content: rsx! {
+                    AppearanceSection {}
+                },
+            }
+
+            // ── Playback section ─────────────────────────────────────────────
+            SettingsSection {
+                title: "Playback",
+                icon: "speaker",
+                content: rsx! {
+                    // Audio card selection
+                    div { class: "form-control mb-3",
+                        label { class: "label",
+                            span { class: "label-text font-medium", "Audio interface" }
+                        }
+                        select {
+                            class: "select select-bordered select-sm w-full",
+                            id: "audio-interface-select",
+                            onchange: {
+                                move |e: Event<FormData>| {
+                                    let val = e.value();
+                                    if val == "browser" {
+                                        settings.write().local_browser_playback = true;
+                                    } else {
+                                        {
+                                            let mut s = settings.write();
+                                            s.local_browser_playback = false;
+                                            s.alsa_settings.output_device.card_id = val.clone();
+                                            if val == "pipewire" {
+                                                s.volume_ctrl_settings.ctrl_device = VolumeCrtlType::Pipewire;
+                                            } else {
+                                                s.volume_ctrl_settings.ctrl_device = VolumeCrtlType::Alsa;
+                                            }
+                                        }
+                                    }
+                                    auto_save_restart();
+                                }
+                            },
+                            option { value: "--", "-- Select audio card --" }
+                            option {
+                                value: "browser",
+                                selected: settings.read().local_browser_playback,
+                                "Browser (local playback)"
+                            }
+                            {
+                                let cards = settings.read().alsa_settings.available_audio_cards.clone();
+                                cards
+                                    .into_iter()
+                                    .map(|card| {
+                                        let selected = settings.read().alsa_settings.output_device.card_id
+                                            == card.id;
+                                        rsx! {
+                                            option { value: "{card.id}", selected, "{card.name} - {card.description}" }
+                                        }
+                                    })
+                            }
+                        }
+                    }
+
+                    // PCM device (only shown when a card is selected and not browser)
+                    {
+                        let card_id = settings.read().alsa_settings.output_device.card_id.clone();
+                        let pcms = settings.read().alsa_settings.find_pcms_by_card_id(&card_id);
+                        let show = !card_id.is_empty() && !card_id.starts_with("--")
+                            && !settings.read().local_browser_playback;
+                        if show && !pcms.is_empty() {
+                            rsx! {
+                                div { class: "form-control mb-3",
+                                    label { class: "label",
+                                        span { class: "label-text font-medium", "PCM output device" }
+                                    }
+                                    select {
+                                        class: "select select-bordered select-sm w-full",
+                                        onchange: move |e: Event<FormData>| {
+                                            let pcm_name = e.value();
+                                            let cid = settings.read().alsa_settings.output_device.card_id.clone();
+                                            settings.write().alsa_settings.set_output_device(&cid, &pcm_name);
+                                            auto_save_restart();
+                                        },
+                                        {
+                                            let current_pcm = settings.read().alsa_settings.output_device.name.clone();
+                                            pcms.into_iter()
+                                                .map(move |pcm| {
+                                                    let selected = pcm.name == current_pcm;
+                                                    rsx! {
+                                                        option { value: "{pcm.name}", selected, "{pcm.description}" }
+                                                    }
+                                                })
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            rsx! {}
+                        }
+                    }
+
+                    // Auto-resume
+                    ToggleRow {
+                        label: "Auto-resume playback on startup",
+                        checked: settings.read().auto_resume_playback,
+                        onchange: move |_| {
+                            let v = !settings.read().auto_resume_playback;
+                            settings.write().auto_resume_playback = v;
+                            auto_save();
+                        },
+                    }
+
+                    // RSPlayer advanced
+                    div { class: "divider text-xs text-base-content/40 my-2", "RSPlayer Engine" }
+                    NumberInput {
+                        label: "Input buffer (MB)",
+                        value: settings.read().rs_player_settings.input_stream_buffer_size_mb.to_string(),
+                        min: "1",
+                        max: "200",
+                        onchange: move |v: String| {
+                            if let Ok(n) = v.parse::<usize>() {
+                                settings.write().rs_player_settings.input_stream_buffer_size_mb = n;
+                            }
+                        },
+                    }
+                    NumberInput {
+                        label: "Ring buffer (ms)",
+                        value: settings.read().rs_player_settings.ring_buffer_size_ms.to_string(),
+                        min: "100",
+                        max: "10000",
+                        onchange: move |v: String| {
+                            if let Ok(n) = v.parse::<usize>() {
+                                settings.write().rs_player_settings.ring_buffer_size_ms = n;
+                            }
+                        },
+                    }
+                    NumberInput {
+                        label: "Thread priority (1-99)",
+                        value: settings.read().rs_player_settings.player_threads_priority.to_string(),
+                        min: "1",
+                        max: "99",
+                        onchange: move |v: String| {
+                            if let Ok(n) = v.parse::<u8>() {
+                                settings.write().rs_player_settings.player_threads_priority = n;
+                            }
+                        },
+                    }
+                    NumberInput {
+                        label: "ALSA buffer size (frames, 0=default)",
+                        value: settings.read().rs_player_settings.alsa_buffer_size.unwrap_or(0).to_string(),
+                        min: "0",
+                        max: "100000",
+                        onchange: move |v: String| {
+                            let n = v.parse::<u32>().unwrap_or(0);
+                            settings.write().rs_player_settings.alsa_buffer_size = if n == 0 {
+                                None
+                            } else {
+                                Some(n)
+                            };
+                        },
+                    }
+                    div { class: "form-control mb-2",
+                        label { class: "label py-0.5",
+                            span { class: "label-text text-sm", "Fixed output sample rate" }
+                        }
+                        select {
+                            class: "select select-sm select-bordered w-full",
+                            onchange: move |e: Event<FormData>| {
+                                let n = e.value().parse::<u32>().unwrap_or(0);
+                                settings.write().rs_player_settings.fixed_output_sample_rate = if n == 0 {
+                                    None
+                                } else {
+                                    Some(n)
+                                };
+                                auto_save_restart();
+                            },
+                            {
+                                let current = settings
+                                    .read()
+                                    .rs_player_settings
+                                    .fixed_output_sample_rate
+                                    .unwrap_or(0);
+                                [
+                                    0u32, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600,
+                                    768000,
+                                ]
+                                    .iter()
+                                    .map(move |&v| {
+                                        rsx! {
+                                            option { value: "{v}", selected: current == v,
+                                                if v == 0 {
+                                                    "Off"
+                                                } else {
+                                                    "{v} Hz"
+                                                }
+                                            }
+                                        }
+                                    })
+                            }
+                        }
+                    }
+                    div { class: "flex gap-2 mt-3",
+                        button {
+                            class: "btn btn-sm btn-primary flex-1",
+                            onclick: move |_| auto_save_restart(),
+                            "Save playback settings"
+                        }
+                    }
+                },
+            }
+
+            // ── Volume section ───────────────────────────────────────────────
+            SettingsSection {
+                title: "Volume Control",
+                icon: "volume_up",
+                content: rsx! {
+                    div { class: "form-control mb-3",
+                        label { class: "label",
+                            span { class: "label-text font-medium", "Volume control type" }
+                        }
+                        select {
+                            class: "select select-bordered select-sm w-full",
+                            onchange: move |e: Event<FormData>| {
+                                if let Ok(v) = e.value().parse::<VolumeCrtlType>() {
+                                    settings.write().volume_ctrl_settings.ctrl_device = v;
+                                    auto_save_restart();
+                                }
+                            },
+                            {
+                                let current = settings.read().volume_ctrl_settings.ctrl_device;
+                                VolumeCrtlType::iter()
+                                    .map(move |vt| {
+                                        let label: &'static str = vt.into();
+                                        rsx! {
+                                            option { value: "{label}", selected: current == vt, "{label}" }
+                                        }
+                                    })
+                            }
+                        }
+                    }
+
+                    // ALSA mixer selection
+                    {
+                        let card_id = settings.read().alsa_settings.output_device.card_id.clone();
+                        let mixers = settings.read().alsa_settings.find_mixers_by_card_id(&card_id);
+                        let ctrl = settings.read().volume_ctrl_settings.ctrl_device;
+                        if ctrl == VolumeCrtlType::Alsa && !mixers.is_empty() {
+                            rsx! {
+                                div { class: "form-control mb-3",
+                                    label { class: "label",
+                                        span { class: "label-text font-medium", "ALSA mixer" }
+                                    }
+                                    select {
+                                        class: "select select-bordered select-sm w-full",
+                                        onchange: move |e: Event<FormData>| {
+                                            settings.write().volume_ctrl_settings.alsa_mixer_name = Some(e.value());
+                                            auto_save_restart();
+                                        },
+                                        {
+                                            let current = settings.read().volume_ctrl_settings.alsa_mixer_name.clone();
+                                            mixers
+                                                .into_iter()
+                                                .map(move |m| {
+                                                    let selected = current.as_deref() == Some(&m.name);
+                                                    rsx! {
+                                                        option { value: "{m.name}", selected, "{m.name}" }
+                                                    }
+                                                })
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            rsx! {}
+                        }
+                    }
+
+                    NumberInput {
+                        label: "Volume step",
+                        value: settings.read().volume_ctrl_settings.volume_step.to_string(),
+                        min: "1",
+                        max: "50",
+                        onchange: move |v: String| {
+                            if let Ok(n) = v.parse::<u8>() {
+                                settings.write().volume_ctrl_settings.volume_step = n;
+                                auto_save();
+                            }
+                        },
+                    }
+                },
+            }
+
+            // ── VU Meter & Normalization ──────────────────────────────────────
+            SettingsSection {
+                title: "Visualization & Normalization",
+                icon: "graphic_eq",
+                content: rsx! {
+                    ToggleRow {
+                        label: "Enable Visualization",
+                        checked: settings.read().rs_player_settings.vu_meter_enabled,
+                        onchange: move |_| {
+                            let v = !settings.read().rs_player_settings.vu_meter_enabled;
+                            settings.write().rs_player_settings.vu_meter_enabled = v;
+                            auto_save_restart();
+                        },
+                    }
+                    div { class: "divider my-2" }
+                    ToggleRow {
+                        label: "Enable loudness normalization",
+                        checked: settings.read().rs_player_settings.loudness_normalization_enabled,
+                        onchange: move |_| {
+                            let v = !settings.read().rs_player_settings.loudness_normalization_enabled;
+                            settings.write().rs_player_settings.loudness_normalization_enabled = v;
+                            auto_save_restart();
+                        },
+                    }
+                    if settings.read().rs_player_settings.loudness_normalization_enabled {
+                        div { class: "mt-3 space-y-3",
+                            NumberInput {
+                                label: "Target LUFS",
+                                value: settings.read().rs_player_settings.loudness_normalization_target_lufs.to_string(),
+                                min: "-40",
+                                max: "0",
+                                onchange: move |v: String| {
+                                    if let Ok(n) = v.parse::<f64>() {
+                                        settings.write().rs_player_settings.loudness_normalization_target_lufs = n;
+                                        auto_save_restart();
+                                    }
+                                },
+                            }
+                            div { class: "form-control",
+                                label { class: "label",
+                                    span { class: "label-text font-medium", "Normalization source" }
+                                }
+                                select {
+                                    class: "select select-bordered select-sm w-full",
+                                    onchange: move |e: Event<FormData>| {
+                                        let src = match e.value().as_str() {
+                                            "Auto" => NormalizationSource::Auto,
+                                            "FileTagsTrack" => NormalizationSource::FileTagsTrack,
+                                            "FileTagsAlbum" => NormalizationSource::FileTagsAlbum,
+                                            "Calculated" => NormalizationSource::Calculated,
+                                            _ => NormalizationSource::Auto,
+                                        };
+                                        settings.write().rs_player_settings.loudness_normalization_source = src;
+                                        auto_save_restart();
+                                    },
+                                    {
+                                        let current = settings
+                                            .read()
+                                            .rs_player_settings
+                                            .loudness_normalization_source
+                                            .clone();
+                                        [
+                                            ("Auto", NormalizationSource::Auto),
+                                            ("FileTagsTrack", NormalizationSource::FileTagsTrack),
+                                            ("FileTagsAlbum", NormalizationSource::FileTagsAlbum),
+                                            ("Calculated", NormalizationSource::Calculated),
+                                        ]
+                                            .into_iter()
+                                            .map(move |(label, src)| {
+                                                rsx! {
+                                                    option { value: "{label}", selected: current == src, "{label}" }
+                                                }
+                                            })
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+            }
+
+            // ── DSP section ───────────────────────────────────────────────────
+            SettingsSection {
+                title: "DSP Equalizer",
+                icon: "tune",
+                content: rsx! {
+                    ToggleRow {
+                        label: "Enable DSP",
+                        checked: settings.read().rs_player_settings.dsp_settings.enabled,
+                        onchange: move |_| {
+                            let v = !settings.read().rs_player_settings.dsp_settings.enabled;
+                            settings.write().rs_player_settings.dsp_settings.enabled = v;
+                            *dsp_dirty.write() = true;
+                            *pending_restart.write() = true;
+                        },
+                    }
+
+                    if settings.read().rs_player_settings.dsp_settings.enabled {
+                        div { class: "mt-3",
+                            // Presets dropdown
+                            div { class: "mb-3",
+                                label { class: "label text-xs", "Load Preset" }
+                                select {
+                                    class: "select select-bordered select-sm w-full",
+                                    onchange: move |e: Event<FormData>| {
+                                        if let Ok(idx) = e.value().parse::<usize>() {
+                                            if let Some(preset) = get_dsp_presets().get(idx) {
+                                                settings.write().rs_player_settings.dsp_settings.filters = preset
+                                                    .filters
+                                                    .clone();
+                                                *dsp_dirty.write() = true;
+                                            }
+                                        }
+                                    },
+                                    option { value: "", "Select a preset..." }
+                                    {
+                                        get_dsp_presets()
+                                            .iter()
+                                            .enumerate()
+                                            .map(|(i, preset)| {
+                                                rsx! {
+                                                    option { value: "{i}", "{preset.name}" }
+                                                }
+                                            })
+                                    }
+                                }
+                            }
+
+                            // Filter list
+                            {
+                                let filters: Vec<(usize, FilterConfig)> = settings
+                                    .read()
+                                    .rs_player_settings
+                                    .dsp_settings
+                                    .filters
+                                    .iter()
+                                    .cloned()
+                                    .enumerate()
+                                    .collect();
+                                filters
+                                    .into_iter()
+                                    .map(|(i, fc)| {
+                                        let ft = filter_type_of(&fc.filter);
+                                        rsx! {
+                                            div { class: "border border-base-300 rounded p-2 mb-2",
+                                                div { class: "flex items-center gap-2 mb-2",
+                                                    select {
+                                                        class: "select select-bordered select-xs flex-1",
+                                                        onchange: move |e: Event<FormData>| {
+                                                            let new_ft = DspFilterType::iter()
+                                                                .find(|t| t.label() == e.value())
+                                                                .unwrap_or(DspFilterType::Peaking);
+                                                            if let Some(fc) = settings
+                                                                .write()
+                                                                .rs_player_settings
+                                                                .dsp_settings
+                                                                .filters
+                                                                .get_mut(i)
+                                                            {
+                                                                fc.filter = new_ft.default_filter();
+                                                            }
+                                                            *dsp_dirty.write() = true;
+                                                        },
+                                                        {
+                                                            DspFilterType::iter()
+                                                                .map(move |t| {
+                                                                    rsx! {
+                                                                        option { value: "{t.label()}", selected: t == ft, "{t.label()}" }
+                                                                    }
+                                                                })
+                                                        }
+                                                    }
+                                                    button {
+                                                        class: "btn btn-ghost btn-xs text-error",
+                                                        onclick: move |_| {
+                                                            settings.write().rs_player_settings.dsp_settings.filters.remove(i);
+                                                            *dsp_dirty.write() = true;
+                                                        },
+                                                        i { class: "material-icons text-sm", "delete" }
+                                                    }
+                                                }
+                                                DspFilterFields {
+                                                    filter: fc.filter.clone(),
+                                                    index: i,
+                                                    settings,
+                                                    dsp_dirty,
+                                                }
+                                            }
+                                        }
+                                    })
+                            }
+
+                            // Add filter / clear / apply buttons
+                            div { class: "flex gap-2 mt-2 flex-wrap",
+                                button {
+                                    class: "btn btn-sm btn-ghost",
+                                    onclick: move |_| {
+                                        settings
+                                            .write()
+                                            .rs_player_settings
+                                            .dsp_settings
+                                            .filters
+                                            .push(FilterConfig {
+                                                filter: DspFilter::Peaking {
+                                                    freq: 1000.0,
+                                                    gain: 0.0,
+                                                    q: 0.707,
+                                                },
+                                                channels: vec![],
+                                            });
+                                        *dsp_dirty.write() = true;
+                                    },
+                                    i { class: "material-icons text-sm mr-1", "add" }
+                                    "Add filter"
+                                }
+                                if !settings.read().rs_player_settings.dsp_settings.filters.is_empty() {
+                                    button {
+                                        class: "btn btn-sm btn-ghost text-error",
+                                        onclick: move |_| *confirm.write() = Some(ConfirmAction::ClearDspFilters),
+                                        i { class: "material-icons text-sm mr-1", "clear_all" }
+                                        "Clear all"
+                                    }
+                                }
+                                if dsp_dirty() {
+                                    button {
+                                        class: "btn btn-sm btn-primary",
+                                        onclick: move |_| {
+                                            let dsp = settings.read().rs_player_settings.dsp_settings.clone();
+                                            ws_send(
+                                                &ws,
+                                                &UserCommand::UpdateDsp(DspSettings {
+                                                    enabled: dsp.enabled,
+                                                    filters: dsp.filters,
+                                                }),
+                                            );
+                                            *dsp_dirty.write() = false;
+                                            auto_save();
+                                        },
+                                        i { class: "material-icons text-sm mr-1", "check" }
+                                        "Apply DSP"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+            }
+
+            // ── Music Library section ─────────────────────────────────────────
+            SettingsSection {
+                title: "Music Library",
+                icon: "library_music",
+                content: rsx! {
+                    MusicLibraryContent {
+                        settings,
+                        confirm,
+                        ws,
+                        saving,
+                    }
+                },
+            }
+
+            // ── USB ───────────────────────────────────────────────────────────
+            SettingsSection {
+                title: "RSPlayer firmware control channel",
+                icon: "usb",
+                content: rsx! {
+                    ToggleRow {
+                        label: "Enable USB command channel",
+                        checked: settings.read().usb_settings.enabled,
+                        onchange: move |_| {
+                            let v = !settings.read().usb_settings.enabled;
+                            settings.write().usb_settings.enabled = v;
+                            auto_save_restart();
+                        },
+                    }
+                    if settings.read().usb_settings.enabled {
+                        div { class: "flex flex-wrap gap-2 mt-3",
+                            button {
+                                class: "btn btn-sm btn-error w-fit",
+                                onclick: move |_| send_system_cmd(&ws, SystemCommand::SetFirmwarePower(false)),
+                                i { class: "material-icons text-sm mr-1", "power_off" }
+                                "Power Off"
+                            }
+                            button {
+                                class: "btn btn-sm btn-success w-fit",
+                                onclick: move |_| send_system_cmd(&ws, SystemCommand::SetFirmwarePower(true)),
+                                i { class: "material-icons text-sm mr-1", "power" }
+                                "Power On"
+                            }
+                        }
+                    }
+                },
+            }
+
+            // ── Restart pending banner ────────────────────────────────────────
+            if pending_restart() {
+                div { class: "alert alert-warning shadow-sm",
+                    i { class: "material-icons text-lg", "restart_alt" }
+                    span { "Some changes require a player restart to take effect." }
+                    button {
+                        class: "btn btn-sm btn-warning ml-auto",
+                        onclick: move |_| *confirm.write() = Some(ConfirmAction::RestartPlayer),
+                        "Restart now"
+                    }
+                }
+            }
+
+            // ── System ────────────────────────────────────────────────────────
+            SettingsSection {
+                title: "System",
+                icon: "settings_power",
+                content: rsx! {
+                    div { class: "flex flex-wrap gap-2",
+                        button {
+                            class: "btn btn-sm btn-warning w-fit",
+                            onclick: move |_| *confirm.write() = Some(ConfirmAction::RestartPlayer),
+                            i { class: "material-icons text-sm mr-1", "restart_alt" }
+                            "Restart RSPlayer"
+                        }
+                        button {
+                            class: "btn btn-sm btn-warning w-fit",
+                            onclick: move |_| *confirm.write() = Some(ConfirmAction::RestartSystem),
+                            i { class: "material-icons text-sm mr-1", "power_settings_new" }
+                            "Restart system"
+                        }
+                        button {
+                            class: "btn btn-sm btn-error w-fit",
+                            onclick: move |_| *confirm.write() = Some(ConfirmAction::ShutdownSystem),
+                            i { class: "material-icons text-sm mr-1", "power_off" }
+                            "Shutdown"
+                        }
+                    }
+                    p { class: "text-xs text-base-content/40 mt-2", "Version: {settings.read().version}" }
+                },
+            }
+        
+        }
+
+        // ── Confirm dialog ────────────────────────────────────────────────────
+        if confirm.read().is_some() {
+            div { class: "modal modal-open",
+                div { class: "modal-box",
+                    h3 { class: "font-bold text-lg", "Confirm" }
+                    p { class: "py-4",
+                        match confirm.read().as_ref() {
+                            Some(ConfirmAction::FullRescan) => {
+                                "Perform a full rescan of the music library? This may take a while."
+                            }
+                            Some(ConfirmAction::RestartPlayer) => "Restart RSPlayer service?",
+                            Some(ConfirmAction::RestartSystem) => "Restart the system?",
+                            Some(ConfirmAction::ShutdownSystem) => "Shut down the system?",
+                            Some(ConfirmAction::RemoveMusicDirectory(_)) => "Remove this music directory?",
+                            Some(ConfirmAction::RemoveNetworkMount(_)) => "Remove this network mount?",
+                            Some(ConfirmAction::ClearDspFilters) => "Remove all DSP filters?",
+                            None => "",
+                        }
+                    }
+                    div { class: "modal-action",
+                        button {
+                            class: "btn btn-sm",
+                            onclick: move |_| *confirm.write() = None,
+                            "Cancel"
+                        }
+                        button {
+                            class: "btn btn-sm btn-error",
+                            onclick: move |_| do_confirm(),
+                            "Confirm"
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
-// ------ ------
-//    Update
-// ------ ------
-#[allow(clippy::too_many_lines)]
-pub fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
-    match msg {
-        Msg::ShowConfirm(action) => {
-            model.confirm_action = Some(action);
-        }
-        Msg::ConfirmCancelled => {
-            model.confirm_action = None;
-        }
-        Msg::ConfirmAccepted => {
-            if let Some(action) = model.confirm_action.take() {
-                match action {
-                    ConfirmAction::FullRescan => {
-                        orders.send_msg(Msg::ClickRescanMetadataButton(true));
+// ─── Music Library component ──────────────────────────────────────────────────
+// Owns its own signal subscriptions so that add/remove immediately re-renders this
+// component without waiting for the parent to propagate new content props.
+
+#[component]
+fn MusicLibraryContent(
+    settings: Signal<Settings>,
+    confirm: Signal<Option<ConfirmAction>>,
+    ws: Signal<Option<WebSocket>>,
+    saving: Signal<bool>,
+) -> Element {
+    let state = use_context::<AppState>();
+
+    let mut mf_name = use_signal(String::new);
+    let mut mf_type = use_signal(|| NetworkMountType::Nfs);
+    let mut mf_server = use_signal(String::new);
+    let mut mf_share = use_signal(String::new);
+    let mut mf_username = use_signal(String::new);
+    let mut mf_password = use_signal(String::new);
+    let mut mf_domain = use_signal(String::new);
+    let mut network_mounts_open = use_signal(|| false);
+    let mut new_dir = use_signal(String::new);
+
+    let mount_statuses = state.mount_statuses.read().clone();
+    let music_dir_statuses = state.music_dir_statuses.read().clone();
+    let external_mounts = state.external_mounts.read().clone();
+
+    let mut auto_save = move || {
+        *saving.write() = true;
+        let s = settings.read().clone();
+        spawn(async move {
+            let _ = Request::post(API_SETTINGS_PATH)
+                .json(&s)
+                .expect("serialize settings")
+                .send()
+                .await;
+            *saving.write() = false;
+        });
+    };
+
+    rsx! {
+        // Existing network mounts with status badge
+        {
+            let mounts = settings.read().network_storage_settings.mounts.clone();
+            mounts
+                .into_iter()
+                .map(|m| {
+                    let name = m.name.clone();
+                    let name2 = m.name.clone();
+                    let name3 = m.name.clone();
+                    let status = mount_statuses.iter().find(|s| s.name == m.name).cloned();
+                    let mount_point = m
+                        .mount_point
+                        .clone()
+                        .unwrap_or_else(|| format!("/mnt/rsplayer/{}", m.name));
+                    let type_label = match m.mount_type {
+                        NetworkMountType::Smb => "SMB",
+                        NetworkMountType::Nfs => "NFS",
+                    };
+                    let source = match m.mount_type {
+                        NetworkMountType::Smb => format!("//{}/{}", m.server, m.share),
+                        NetworkMountType::Nfs => format!("{}:{}", m.server, m.share),
+                    };
+                    let is_mounted = status.as_ref().map_or(false, |s| s.is_mounted);
+                    let (status_label, status_class) = match status.as_ref() {
+                        Some(s) if s.readable && s.writable => {
+                            ("Read / Write", "badge-success")
+                        }
+                        Some(s) if s.readable => ("Read only", "badge-warning"),
+                        Some(s) if s.is_mounted => ("Not accessible", "badge-error"),
+                        Some(_) => ("Not mounted", "badge-error"),
+                        None => ("Unknown", "badge-ghost"),
+                    };
+                    rsx! {
+                        div { class: "flex items-center gap-2 py-1.5 border-b border-base-300",
+                            span { class: "badge badge-sm {status_class} shrink-0", "{status_label}" }
+                            div { class: "flex-1 min-w-0",
+                                p { class: "text-sm font-medium truncate", "{m.name} ({type_label})" }
+                                p { class: "text-xs text-base-content/50 truncate", "{source} → {mount_point}" }
+                            }
+                            if is_mounted {
+                                button {
+                                    class: "btn btn-warning btn-xs",
+                                    onclick: move |_| ws_send(&ws, &UserCommand::Storage(StorageCommand::Unmount(name.clone()))),
+                                    "Unmount"
+                                }
+                            } else {
+                                button {
+                                    class: "btn btn-success btn-xs",
+                                    onclick: move |_| {
+                                        let cfg = NetworkMountConfig {
+                                            name: name2.clone(),
+                                            mount_type: m.mount_type.clone(),
+                                            server: m.server.clone(),
+                                            share: m.share.clone(),
+                                            username: m.username.clone(),
+                                            password: m.password.clone(),
+                                            domain: m.domain.clone(),
+                                            mount_point: m.mount_point.clone(),
+                                        };
+                                        ws_send(&ws, &UserCommand::Storage(StorageCommand::Mount(cfg)));
+                                    },
+                                    "Mount"
+                                }
+                            }
+                            button {
+                                class: "btn btn-ghost btn-xs text-error",
+                                onclick: move |_| *confirm.write() = Some(ConfirmAction::RemoveNetworkMount(name3.clone())),
+                                i { class: "material-icons text-sm", "delete" }
+                            }
+                        }
                     }
-                    ConfirmAction::RestartPlayer => {
-                        model.pending_restart = false;
-                        model.dsp_dirty = false;
-                        setBeforeUnloadWarning(false);
-                        orders.send_msg(Msg::SendSystemCommand(SystemCommand::RestartRSPlayer));
-                    }
-                    ConfirmAction::RestartSystem => {
-                        orders.send_msg(Msg::SendSystemCommand(SystemCommand::RestartSystem));
-                    }
-                    ConfirmAction::ShutdownSystem => {
-                        orders.send_msg(Msg::SendSystemCommand(SystemCommand::PowerOff));
-                    }
-                    ConfirmAction::RemoveMusicDirectory(idx) => {
-                        orders.send_msg(Msg::RemoveMusicDirectory(idx));
-                    }
-                    ConfirmAction::RemoveNetworkMount(name) => {
-                        orders.send_msg(Msg::MountRemove(name));
-                    }
-                }
-            }
-        }
-        Msg::SaveCurrentSettings(needs_restart) => {
-            if needs_restart {
-                model.pending_restart = true;
-                setBeforeUnloadWarning(true);
-            }
-            let settings = model.settings.clone();
-            orders.perform_cmd(async move {
-                _ = save_settings(settings, "reload=false".to_string()).await;
-            });
-        }
-        Msg::ToggleUsbEnabled => {
-            model.settings.usb_settings.enabled = !model.settings.usb_settings.enabled;
-            orders.send_msg(Msg::SaveCurrentSettings(true));
+                })
         }
 
-        Msg::ToggleResumePlayback => {
-            model.settings.auto_resume_playback = !model.settings.auto_resume_playback;
-            orders.send_msg(Msg::SaveCurrentSettings(false));
-        }
-        Msg::ToggleRspAlsaBufferSize => {
-            if model.settings.rs_player_settings.alsa_buffer_size.is_some() {
-                model.settings.rs_player_settings.alsa_buffer_size = None;
-            } else {
-                model.settings.rs_player_settings.alsa_buffer_size = Some(10000);
-            }
-            orders.send_msg(Msg::SaveCurrentSettings(true));
-        }
-
-        Msg::InputNewMusicDir(value) => {
-            model.new_music_dir = value;
-        }
-        Msg::AddMusicDirectory => {
-            let dir = model.new_music_dir.trim().to_string();
-            if !dir.is_empty() && !model.settings.metadata_settings.music_directories.contains(&dir) {
-                model.settings.metadata_settings.music_directories.push(dir);
-                model.new_music_dir.clear();
-                let settings = model.settings.clone();
-                orders.perform_cmd(async move {
-                    _ = save_settings(settings, "reload=false".to_string()).await;
-                    Msg::SendUserCommand(UserCommand::Storage(StorageCommand::QueryMusicDirStatus))
-                });
-            }
-        }
-        Msg::RemoveMusicDirectory(idx) => {
-            if idx < model.settings.metadata_settings.music_directories.len() {
-                model.settings.metadata_settings.music_directories.remove(idx);
-                let settings = model.settings.clone();
-                orders.perform_cmd(async move {
-                    _ = save_settings(settings, "reload=false".to_string()).await;
-                });
-            }
-        }
-
-        Msg::InputAlsaCardChange(value) => {
-            let browser_playback_involved =
-                value == "browser" || model.settings.local_browser_playback;
-            if value == "browser" {
-                model.settings.local_browser_playback = true;
-            } else {
-                model.settings.local_browser_playback = false;
-                model.selected_audio_card_id = value.clone();
-                model.settings.alsa_settings.output_device.card_id = value.clone();
-                if value == "pipewire" {
-                    model.settings.volume_ctrl_settings.ctrl_device = VolumeCrtlType::Pipewire;
-                } else {
-                    model.settings.volume_ctrl_settings.ctrl_device = VolumeCrtlType::Alsa;
-                }
-            }
-            if browser_playback_involved {
-                let settings = model.settings.clone();
-                orders.perform_cmd(async move {
-                    _ = save_settings(settings, "reload=false".to_string()).await;
-                    setPlaybackSectionOpen(true);
-                    if let Some(w) = web_sys::window() {
-                        _ = w.location().reload();
-                    }
-                });
-            } else {
-                orders.send_msg(Msg::SaveCurrentSettings(true));
-            }
-        }
-        Msg::InputAlsaPcmChange(value) => {
-            model
-                .settings
-                .alsa_settings
-                .set_output_device(&model.selected_audio_card_id, &value);
-            orders.send_msg(Msg::SaveCurrentSettings(true));
-        }
-
-        Msg::InputVolumeStepChanged(step) => {
-            model.settings.volume_ctrl_settings.volume_step = step.parse::<u8>().unwrap_or_default();
-            orders.send_msg(Msg::SaveCurrentSettings(false));
-        }
-        Msg::InputVolumeAlsaMixerChanged(mixer_name) => {
-            model.settings.volume_ctrl_settings.alsa_mixer_name = Some(mixer_name);
-            orders.send_msg(Msg::SaveCurrentSettings(false));
-        }
-
-        Msg::InputRspInputBufferSizeChange(value) => {
-            if let Ok(num) = value.parse::<usize>() {
-                model.settings.rs_player_settings.input_stream_buffer_size_mb = num;
-            };
-        }
-        Msg::InputRspAudioBufferSizeChange(value) => {
-            if let Ok(num) = value.parse::<usize>() {
-                model.settings.rs_player_settings.ring_buffer_size_ms = num;
-            };
-        }
-        Msg::InputRspAlsaBufferSizeChange(value) => {
-            if let Ok(num) = value.parse::<u32>() {
-                model.settings.rs_player_settings.alsa_buffer_size = Some(num);
-            };
-        }
-        Msg::InputRspThreadPriorityChange(value) => {
-            if let Ok(num) = value.parse::<u8>() {
-                if num > 0 && num < 100 {
-                    model.settings.rs_player_settings.player_threads_priority = num;
-                }
-            };
-        }
-        Msg::InputRspFixedSampleRateChange(value) => {
-            model.settings.rs_player_settings.fixed_output_sample_rate = value.parse::<u32>().ok().filter(|&r| r > 0);
-            orders.send_msg(Msg::SaveCurrentSettings(true));
-        }
-        Msg::SettingsFetched(sett) => {
-            model.waiting_response = false;
-            model.pending_restart = false;
-            model.dsp_dirty = false;
-            setBeforeUnloadWarning(false);
-            model.selected_audio_card_id = sett.alsa_settings.output_device.card_id.clone();
-            model.settings = sett;
-            // Set whether Playback section should be open (only once, on first load)
-            if model.playback_section_should_open.is_none() {
-                let force_open = getAndClearPlaybackSectionOpen();
-                model.playback_section_should_open = Some(force_open || !model.is_playback_device_configured());
-            }
-            // Query mount status on load
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(StorageCommand::QueryMountStatus)));
-            // Focus on audio interface if needed (flag was set by parent)
-            log!(format!("SettingsFetched: focus_audio_interface={}, is_playback_device_configured={}, local_browser_playback={}, card_id={}, pcm_name={}", 
-                model.focus_audio_interface,
-                model.is_playback_device_configured(),
-                model.settings.local_browser_playback,
-                model.settings.alsa_settings.output_device.card_id,
-                model.settings.alsa_settings.output_device.name
-            ));
-            if model.focus_audio_interface && !model.is_playback_device_configured() {
-                log!("Focusing audio interface select");
-                focusAudioInterfaceSelect();
-            }
-        }
-        Msg::SettingsSaved(_saved) => {
-            model.waiting_response = false;
-        }
-        Msg::ClickRescanMetadataButton(full_scan) => {
-            let settings = model.settings.clone();
-            orders.perform_cmd(async move {
-                _ = save_settings(settings, "reload=false".to_string()).await;
-            });
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Metadata(RescanMetadata(
-                String::new(),
-                full_scan,
-            ))));
-        }
-        Msg::ToggleDspEnabled => {
-            model.settings.rs_player_settings.dsp_settings.enabled = !model.settings.rs_player_settings.dsp_settings.enabled;
-            model.dsp_dirty = true;
-            setBeforeUnloadWarning(true);
-        }
-        Msg::ToggleVuMeterEnabled => {
-            model.settings.rs_player_settings.vu_meter_enabled = !model.settings.rs_player_settings.vu_meter_enabled;
-            orders.send_msg(Msg::SaveCurrentSettings(true));
-        }
-        Msg::ToggleLoudnessNormalization => {
-            model.settings.rs_player_settings.loudness_normalization_enabled =
-                !model.settings.rs_player_settings.loudness_normalization_enabled;
-            orders.send_msg(Msg::SaveCurrentSettings(true));
-        }
-        Msg::SelectNormalizationSource(source) => {
-            model.settings.rs_player_settings.loudness_normalization_source = source;
-            orders.send_msg(Msg::SaveCurrentSettings(true));
-        }
-        Msg::InputNormalizationTargetLufs(val) => {
-            if let Ok(v) = val.parse::<f64>() {
-                model.settings.rs_player_settings.loudness_normalization_target_lufs = v;
-            }
-        }
-        Msg::DspAddFilter => {
-            model.dsp_dirty = true;
-            setBeforeUnloadWarning(true);
-            model.settings.rs_player_settings.dsp_settings.filters.push(FilterConfig {
-                filter: DspFilter::Peaking {
-                    freq: 1000.0,
-                    gain: 0.0,
-                    q: 0.707,
-                },
-                channels: vec![],
-            });
-        }
-        Msg::DspRemoveAllFilters => {
-            model.settings.rs_player_settings.dsp_settings.filters.clear();
-            model.dsp_dirty = true;
-            setBeforeUnloadWarning(true);
-        }
-        Msg::DspRemoveFilter(index) => {
-            if index < model.settings.rs_player_settings.dsp_settings.filters.len() {
-                model.settings.rs_player_settings.dsp_settings.filters.remove(index);
-                model.dsp_dirty = true;
-                setBeforeUnloadWarning(true);
-            }
-        }
-        Msg::DspUpdateFilterType(index, filter_type) => {
-            model.dsp_dirty = true;
-            setBeforeUnloadWarning(true);
-            if let Some(filter_config) = model.settings.rs_player_settings.dsp_settings.filters.get_mut(index) {
-                filter_config.filter = match filter_type {
-                    FilterType::Peaking => DspFilter::Peaking { freq: 1000.0, gain: 0.0, q: 0.707 },
-                    FilterType::LowShelf => DspFilter::LowShelf { freq: 80.0, gain: 0.0, q: Some(0.707), slope: None },
-                    FilterType::HighShelf => DspFilter::HighShelf { freq: 12000.0, gain: 0.0, q: Some(0.707), slope: None },
-                    FilterType::LowPass => DspFilter::LowPass { freq: 20000.0, q: 0.707 },
-                    FilterType::HighPass => DspFilter::HighPass { freq: 20.0, q: 0.707 },
-                    FilterType::BandPass => DspFilter::BandPass { freq: 1000.0, q: 0.707 },
-                    FilterType::Notch => DspFilter::Notch { freq: 1000.0, q: 0.707 },
-                    FilterType::AllPass => DspFilter::AllPass { freq: 1000.0, q: 0.707 },
-                    FilterType::LowPassFO => DspFilter::LowPassFO { freq: 20000.0 },
-                    FilterType::HighPassFO => DspFilter::HighPassFO { freq: 20.0 },
-                    FilterType::LowShelfFO => DspFilter::LowShelfFO { freq: 80.0, gain: 0.0 },
-                    FilterType::HighShelfFO => DspFilter::HighShelfFO { freq: 12000.0, gain: 0.0 },
-                    FilterType::Gain => DspFilter::Gain { gain: 0.0 },
-                };
-            }
-        }
-        Msg::DspUpdateFilterValue(index, field, value) => {
-            model.dsp_dirty = true;
-            setBeforeUnloadWarning(true);
-             if let Some(filter_config) = model.settings.rs_player_settings.dsp_settings.filters.get_mut(index) {
-                if let Ok(val) = value.parse::<f64>() {
-                    match (&mut filter_config.filter, field) {
-                        (DspFilter::Peaking { freq, .. }, DspField::Freq) => *freq = val,
-                        (DspFilter::Peaking { gain, .. }, DspField::Gain) => *gain = val,
-                        (DspFilter::Peaking { q, .. }, DspField::Q) => *q = val,
-
-                        (DspFilter::LowShelf { freq, .. }, DspField::Freq) => *freq = val,
-                        (DspFilter::LowShelf { gain, .. }, DspField::Gain) => *gain = val,
-                        (DspFilter::LowShelf { q, .. }, DspField::Q) => *q = Some(val),
-                        (DspFilter::LowShelf { slope, .. }, DspField::Slope) => *slope = Some(val),
-
-                        (DspFilter::HighShelf { freq, .. }, DspField::Freq) => *freq = val,
-                        (DspFilter::HighShelf { gain, .. }, DspField::Gain) => *gain = val,
-                        (DspFilter::HighShelf { q, .. }, DspField::Q) => *q = Some(val),
-                        (DspFilter::HighShelf { slope, .. }, DspField::Slope) => *slope = Some(val),
-
-                        (DspFilter::LowPass { freq, .. }, DspField::Freq) => *freq = val,
-                        (DspFilter::LowPass { q, .. }, DspField::Q) => *q = val,
-
-                        (DspFilter::HighPass { freq, .. }, DspField::Freq) => *freq = val,
-                        (DspFilter::HighPass { q, .. }, DspField::Q) => *q = val,
-
-                        (DspFilter::BandPass { freq, .. }, DspField::Freq) => *freq = val,
-                        (DspFilter::BandPass { q, .. }, DspField::Q) => *q = val,
-
-                        (DspFilter::Notch { freq, .. }, DspField::Freq) => *freq = val,
-                        (DspFilter::Notch { q, .. }, DspField::Q) => *q = val,
-
-                        (DspFilter::AllPass { freq, .. }, DspField::Freq) => *freq = val,
-                        (DspFilter::AllPass { q, .. }, DspField::Q) => *q = val,
-
-                        (DspFilter::LowPassFO { freq, .. }, DspField::Freq) => *freq = val,
-                        (DspFilter::HighPassFO { freq, .. }, DspField::Freq) => *freq = val,
-
-                        (DspFilter::LowShelfFO { freq, .. }, DspField::Freq) => *freq = val,
-                        (DspFilter::LowShelfFO { gain, .. }, DspField::Gain) => *gain = val,
-
-                        (DspFilter::HighShelfFO { freq, .. }, DspField::Freq) => *freq = val,
-                        (DspFilter::HighShelfFO { gain, .. }, DspField::Gain) => *gain = val,
-
-                        (DspFilter::Gain { gain }, DspField::Gain) => *gain = val,
-                        _ => {}
-                    }
-                }
-             }
-        }
-        Msg::DspUpdateFilterChannels(index, val) => {
-            model.dsp_dirty = true;
-            setBeforeUnloadWarning(true);
-            if let Some(filter_config) = model.settings.rs_player_settings.dsp_settings.filters.get_mut(index) {
-                match val.as_str() {
-                    "Left" => filter_config.channels = vec![0],
-                    "Right" => filter_config.channels = vec![1],
-                    _ => filter_config.channels = vec![],
-                }
-            }
-        }
-        Msg::DspApplySettings => {
-            model.dsp_dirty = false;
-            setBeforeUnloadWarning(model.pending_restart);
-            orders.send_msg(Msg::SendUserCommand(UserCommand::UpdateDsp(model.settings.rs_player_settings.dsp_settings.clone())));
-        }
-        Msg::DspLoadPreset(index) => {
-            if let Some(preset) = get_dsp_presets().get(index) {
-                model.settings.rs_player_settings.dsp_settings.filters = preset.filters.clone();
-                model.dsp_dirty = true;
-                setBeforeUnloadWarning(true);
-            }
-        }
-        Msg::DspImportConfig(file_list) => {
-            if let Some(file) = file_list.get(0) {
-                let file = File::from(file);
-                orders.perform_cmd(async move {
-                    if let Ok(content) = read_as_text(&file).await {
-                        Msg::DspConfigLoaded(content)
-                    } else {
-                        Msg::DspConfigLoaded(String::new()) // Error handling simplified
-                    }
-                });
-            }
-        }
-        Msg::DspConfigLoaded(content) => {
-            if !content.is_empty() {
-                let filters = crate::dsp::parse_dsp_config(&content);
-                if !filters.is_empty() {
-                    model.settings.rs_player_settings.dsp_settings.filters = filters;
-                    model.dsp_dirty = true;
-                    setBeforeUnloadWarning(true);
-                }
-            }
-        }
-        // --- Network Storage ---
-        Msg::InputMountName(val) => { model.mount_form_name = val; }
-        Msg::InputMountType(val) => {
-            model.mount_form_type = if val == "Nfs" { NetworkMountType::Nfs } else { NetworkMountType::Smb };
-        }
-        Msg::InputMountServer(val) => { model.mount_form_server = val; }
-        Msg::InputMountShare(val) => { model.mount_form_share = val; }
-        Msg::InputMountUsername(val) => { model.mount_form_username = val; }
-        Msg::InputMountPassword(val) => { model.mount_form_password = val; }
-        Msg::InputMountDomain(val) => { model.mount_form_domain = val; }
-        Msg::MountAdd => {
-            if model.mount_form_server.is_empty() || model.mount_form_share.is_empty() {
-                return;
-            }
-            // Auto-derive name from share if not provided
-            let name = if model.mount_form_name.is_empty() {
-                model.mount_form_share.replace(['/', ' '], "_")
-            } else {
-                model.mount_form_name.clone()
-            };
-            let config = NetworkMountConfig {
-                name,
-                mount_type: model.mount_form_type.clone(),
-                server: model.mount_form_server.clone(),
-                share: model.mount_form_share.clone(),
-                username: if model.mount_form_username.is_empty() { None } else { Some(model.mount_form_username.clone()) },
-                password: if model.mount_form_password.is_empty() { None } else { Some(model.mount_form_password.clone()) },
-                domain: if model.mount_form_domain.is_empty() { None } else { Some(model.mount_form_domain.clone()) },
-                mount_point: None,
-            };
-            let mount_point = format!("/mnt/rsplayer/{}", config.name);
-            model.settings.network_storage_settings.mounts.push(config.clone());
-            if !model.settings.metadata_settings.music_directories.contains(&mount_point) {
-                model.settings.metadata_settings.music_directories.push(mount_point);
-            }
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(StorageCommand::Mount(config))));
-            // Clear form
-            model.mount_form_name.clear();
-            model.mount_form_server.clear();
-            model.mount_form_share.clear();
-            model.mount_form_username.clear();
-            model.mount_form_password.clear();
-            model.mount_form_domain.clear();
-        }
-        Msg::UnmountShare(name) => {
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(StorageCommand::Unmount(name))));
-        }
-        Msg::MountRemove(name) => {
-            let mount_point = model
-                .settings
+        // Local directories (excluding network mount points) with status badge
+        {
+            let mount_points: Vec<String> = settings
+                .read()
                 .network_storage_settings
                 .mounts
                 .iter()
-                .find(|m| m.name == name)
-                .and_then(|m| m.mount_point.clone())
-                .unwrap_or_else(|| format!("/mnt/rsplayer/{name}"));
-            model.settings.network_storage_settings.mounts.retain(|m| m.name != name);
-            model.mount_statuses.retain(|s| s.name != name);
-            model.settings.metadata_settings.music_directories.retain(|d| d != &mount_point);
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(StorageCommand::Remove(name))));
+                .map(|m| {
+                    m
+                        .mount_point
+                        .clone()
+                        .unwrap_or_else(|| format!("/mnt/rsplayer/{}", m.name))
+                })
+                .collect();
+            let dirs: Vec<(usize, String)> = settings
+                .read()
+                .metadata_settings
+                .effective_directories()
+                .into_iter()
+                .enumerate()
+                .filter(|(_, dir)| !mount_points.contains(dir))
+                .collect();
+            dirs.into_iter()
+                .map(|(i, dir)| {
+                    let dir_status = music_dir_statuses
+                        .iter()
+                        .find(|s| s.path == dir)
+                        .cloned();
+                    let (status_label, status_class) = match dir_status.as_ref() {
+                        Some(s) if s.readable && s.writable => {
+                            ("Read / Write", "badge-success")
+                        }
+                        Some(s) if s.readable => ("Read only", "badge-warning"),
+                        Some(_) => ("Not accessible", "badge-error"),
+                        None => ("Unknown", "badge-ghost"),
+                    };
+                    rsx! {
+                        div { class: "flex items-center gap-2 py-1.5 border-b border-base-300",
+                            span { class: "badge badge-sm {status_class} shrink-0", "{status_label}" }
+                            div { class: "flex-1 min-w-0",
+                                p { class: "text-sm font-medium truncate", "{dir}" }
+                                p { class: "text-xs text-base-content/50", "Local directory" }
+                            }
+                            button {
+                                class: "btn btn-ghost btn-xs text-error",
+                                onclick: move |_| *confirm.write() = Some(ConfirmAction::RemoveMusicDirectory(i)),
+                                i { class: "material-icons text-sm", "delete" }
+                            }
+                        }
+                    }
+                })
         }
-        Msg::MountShare(name) => {
-            if let Some(mount_config) = model.settings.network_storage_settings.mounts.iter().find(|m| m.name == name) {
-                orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(StorageCommand::Mount(mount_config.clone()))));
+
+        // Add Local Directory
+        div { class: "mt-3 p-3 bg-base-200 rounded",
+            p { class: "text-sm font-medium mb-2", "Add Local Directory" }
+            div { class: "flex gap-2",
+                input {
+                    class: "input input-sm input-bordered flex-1",
+                    r#type: "text",
+                    placeholder: "/path/to/music",
+                    oninput: move |e| new_dir.set(e.value()),
+                    value: "{new_dir}",
+                }
+                button {
+                    class: "btn btn-sm btn-primary",
+                    onclick: move |_| {
+                        let dir = new_dir();
+                        if !dir.is_empty() {
+                            settings.write().metadata_settings.music_directories.push(dir);
+                            new_dir.set(String::new());
+                            auto_save();
+                        }
+                    },
+                    "Add"
+                }
             }
         }
-        Msg::MountStatusReceived(statuses) => {
-            model.mount_statuses = statuses;
-        }
-        Msg::MusicDirStatusReceived(statuses) => {
-            model.music_dir_statuses = statuses;
-        }
-        Msg::ExternalMountsReceived(mounts) => {
-            model.external_mounts = mounts;
-        }
-        Msg::SaveExternalMount(mount_point) => {
-            orders.send_msg(Msg::SendUserCommand(UserCommand::Storage(
-                StorageCommand::SaveExternalMount(mount_point),
-            )));
-            // Re-fetch settings so the model reflects the newly saved mount
-            orders.perform_cmd(async {
-                let response = Request::get(API_SETTINGS_PATH)
-                    .send()
-                    .await
-                    .expect("Failed to get settings from backend");
 
-                let sett = response
-                    .json::<Settings>()
-                    .await
-                    .expect("failed to deserialize to Configuration");
-                Msg::SettingsFetched(sett)
-            });
-        }
-        Msg::ToggleNetworkMounts => {
-            model.network_mounts_open = !model.network_mounts_open;
-        }
-        Msg::SelectTheme(_) => {
-            // Handled by the parent (lib.rs) — nothing to do here.
-        }
-        Msg::FocusAudioInterface => {
-            log!("FocusAudioInterface message received");
-            // Set flag to focus after settings are loaded
-            model.focus_audio_interface = true;
-        }
-        _ => {}
-    }
-}
-
-// ------ ------
-//     View
-// ------ ------
-#[allow(clippy::too_many_lines)]
-pub fn view(model: &Model, current_theme: &str) -> Node<Msg> {
-    let settings = &model.settings;
-    div![
-        style! {
-            St::Background => "var(--overlay-bg)",
-            St::BorderRadius => "8px",
-        },
-        view_spinner_modal(model.waiting_response),
-        view_confirm_modal(&model.confirm_action),
-        // Appearance
-        section![
-            style!{St::Padding => "0.5rem 0"},
-            details![
-                C!["settings-details"],
-                summary![C!["settings-details__summary"], "Appearance"],
-                div![C!["settings-details__body"], view_theme_picker(current_theme)],
-            ],
-        ],
-        // Playback
-        section![
-            style!{St::Padding => "0.5rem 0"},
-            details![
-                C!["settings-details"],
-                IF!(model.playback_section_should_open.unwrap_or(false) => attrs! { At::Open => true }),
-                summary![
-                    C!["settings-details__summary"], 
-                    "Playback",
-                    IF!(!model.waiting_response && !model.is_playback_device_configured() => span![
-                        style! {
-                            St::BackgroundColor => "#ffb400",
-                            St::Color => "#000",
-                            St::FontSize => "0.7rem",
-                            St::Padding => "2px 8px",
-                            St::BorderRadius => "4px",
-                            St::FontWeight => "600",
-                            St::MarginLeft => "0.5rem",
-                        },
-                        "Required"
-                    ]),
-                ],
-                div![
-                    C!["settings-details__body"],
-                    IF!(!model.waiting_response && !model.is_playback_device_configured() => div![
-                        C!["notification", "is-warning", "is-light", "mb-4"],
-                        style! { St::Padding => "0.75rem" },
-                        i![C!["material-icons", "mr-2", "is-size-6"], "warning"],
-                        span!["Please select an audio interface and PCM device to enable playback."],
-                    ]),
-                    // Audio interface
-                    div![
-                        C!["field", "is-grouped", "is-grouped-multiline"],
-                        div![C!["control"],
-                            label![
-                                C!["label","has-text-white"],
-                                "Audio interface",
-                                IF!(!model.waiting_response && !model.is_playback_device_configured() => span![
-                                    style! {
-                                        St::Color => "#ffb400",
-                                        St::MarginLeft => "0.25rem",
-                                    },
-                                    "*"
-                                ]),
-                            ],
-                            div![
-                                C!["select"],
-                                IF!(model.focus_audio_interface && !model.waiting_response && !model.is_playback_device_configured() => attrs! { At::Id => "audio-interface-select" }),
-                                select![
-                                    option!["-- Select audio interface --"],
-                                    option![
-                                        IF!(model.settings.local_browser_playback => attrs!(At::Selected => "")),
-                                        attrs! {At::Value => "browser"},
-                                        "Local Browser Playback"
-                                    ],
-                                    model
-                                    .settings
-                                    .alsa_settings
-                                    .available_audio_cards
-                                    .iter()
-                                    .map(|card| option![
-                                        IF!(model.settings.alsa_settings.output_device.card_id == card.id && !model.settings.local_browser_playback => attrs!(At::Selected => "")),
-                                        attrs! {At::Value => card.id},
-                                        card.name.clone()
-                                    ])],
-                                input_ev(Ev::Change, |v| {
-                                    Msg::InputAlsaCardChange(v)
-                                }),
-                            ],
-                        ],
-                        IF!(!model.settings.local_browser_playback => div![C!["control"],
-                            label![
-                                C!["label","has-text-white"],
-                                "PCM Device",
-                                IF!(!model.waiting_response && !model.is_playback_device_configured() => span![
-                                    style! {
-                                        St::Color => "#ffb400",
-                                        St::MarginLeft => "0.25rem",
-                                    },
-                                    "*"
-                                ]),
-                            ],
-                            div![
-                                C!["select"],
-                                select![
-                                    option!["-- Select pcm device --"],
-                                    model.settings.alsa_settings.find_pcms_by_card_id(&model.selected_audio_card_id)
-                                    .iter()
-                                    .map(|pcmd|
-                                        option![
-                                            IF!(model.settings.alsa_settings.output_device.name == pcmd.name => attrs!(At::Selected => "")),
-                                            attrs! {At::Value => pcmd.name},
-                                            pcmd.description.clone()
-                                        ]
-                                    )
-                                ],
-                                input_ev(Ev::Change, Msg::InputAlsaPcmChange),
-                            ],
-                        ]),
-                    ],
-                    // Alsa mixer + Volume step
-                    IF!(!settings.usb_settings.enabled =>
-                        div![
-                            C!["field", "is-grouped", "is-grouped-multiline", "mt-5"],
-                            IF!(model.settings.volume_ctrl_settings.ctrl_device == VolumeCrtlType::Alsa =>
-                                div![C!["control"],
-                                    label!["Alsa mixer", C!["label","has-text-white"]],
-                                    div![
-                                        C!["select"],
-                                        select![
-                                            option!["-- Select mixer --"],
-                                            model.settings.alsa_settings.find_mixers_by_card_id(&model.selected_audio_card_id)
-                                            .iter()
-                                            .map(|pcmd|
-                                                option![
-                                                    IF!(model.settings.volume_ctrl_settings.alsa_mixer_name.as_ref().is_some_and(|name| &pcmd.name == name) => attrs!(At::Selected => "")),
-                                                    attrs! {At::Value => pcmd.name.clone()},
-                                                    pcmd.name.clone()
-                                                ]
-                                            ),
-                                            input_ev(Ev::Change, Msg::InputVolumeAlsaMixerChanged),
-                                        ],
-                                    ],
-                                ]
-                            ),
-                            div![C!["control"],
-                                label!["Volume step", C!["label","has-text-white"]],
-                                input![
-                                    C!["input"],
-                                    attrs! {
-                                        At::Value => model.settings.volume_ctrl_settings.volume_step
-                                        At::Type => "number"
-                                    },
-                                    input_ev(Ev::Input, move |value| { Msg::InputVolumeStepChanged(value) }),
-                                ],
-                            ],
-                        ]
-                    ),
-                    // Auto resume
-                    div![
-                        C!["field", "mt-5"],
-                        ev(Ev::Click, |_| Msg::ToggleResumePlayback),
-                        input![
-                            C!["switch"],
-                            attrs! {
-                                At::Name => "resume_playback_cb"
-                                At::Type => "checkbox"
-                                At::Checked => settings.auto_resume_playback.as_at_value(),
-                            },
-                        ],
-                        label![
-                            C!["label","has-text-white"],
-                            "Auto resume playback on start",
-                            attrs! {
-                                At::For => "resume_playback_cb"
-                            }
-                        ]
-                    ],
-                    view_rsp(&settings.rs_player_settings, settings.local_browser_playback),
-                    view_metadata_storage(&model.settings.metadata_settings),
-                ],
-            ],
-        ],
-
-        // Audio Processing
-        section![
-            style!{St::Padding => "0.5rem 0"},
-            details![
-                C!["settings-details"],
-                summary![C!["settings-details__summary"], "Audio Processing"],
-                div![
-                    C!["settings-details__body"],
-                    div![
-                        C!["field", "mt-5"],
-                        ev(Ev::Click, |_| Msg::ToggleVuMeterEnabled),
-                        input![
-                            C!["switch"],
-                            attrs! {
-                                At::Name => "vu_meter_enabled_cb"
-                                At::Type => "checkbox"
-                                At::Checked => settings.rs_player_settings.vu_meter_enabled.as_at_value(),
-                            },
-                        ],
-                        label![
-                            C!["label","has-text-white"],
-                            "Enable Music Visualization",
-                            attrs! {
-                                At::For => "vu_meter_enabled_cb"
-                            }
-                        ]
-                    ],
-                    div![
-                        C!["field", "mt-5"],
-                        ev(Ev::Click, |_| Msg::ToggleLoudnessNormalization),
-                        input![
-                            C!["switch"],
-                            attrs! {
-                                At::Name => "loudness_norm_cb"
-                                At::Type => "checkbox"
-                                At::Checked => settings.rs_player_settings.loudness_normalization_enabled.as_at_value(),
-                            },
-                        ],
-                        label![
-                            C!["label","has-text-white"],
-                            "Enable loudness normalization (EBU R128)",
-                            attrs! {
-                                At::For => "loudness_norm_cb"
-                            }
-                        ]
-                    ],
-                    IF!(settings.rs_player_settings.loudness_normalization_enabled =>
-                        div![
-                            div![
-                                C!["field", "mt-2"],
-                                label![C!["label", "has-text-white"], "Normalization source"],
-                                div![
-                                    C!["control"],
-                                    div![
-                                        C!["select", "is-small"],
-                                        select![
-                                            input_ev(Ev::Change, |val| {
-                                                let source = match val.as_str() {
-                                                    "FileTagsTrack" => NormalizationSource::FileTagsTrack,
-                                                    "FileTagsAlbum" => NormalizationSource::FileTagsAlbum,
-                                                    "Calculated" => NormalizationSource::Calculated,
-                                                    _ => NormalizationSource::Auto,
-                                                };
-                                                Msg::SelectNormalizationSource(source)
-                                            }),
-                                            option![
-                                                attrs! { At::Value => "Auto",
-                                                    At::Selected => (settings.rs_player_settings.loudness_normalization_source == NormalizationSource::Auto).as_at_value() },
-                                                "Auto (file tags if present, else calculated)"
-                                            ],
-                                            option![
-                                                attrs! { At::Value => "FileTagsTrack",
-                                                    At::Selected => (settings.rs_player_settings.loudness_normalization_source == NormalizationSource::FileTagsTrack).as_at_value() },
-                                                "File tags \u{2013} track gain"
-                                            ],
-                                            option![
-                                                attrs! { At::Value => "FileTagsAlbum",
-                                                    At::Selected => (settings.rs_player_settings.loudness_normalization_source == NormalizationSource::FileTagsAlbum).as_at_value() },
-                                                "File tags \u{2013} album gain"
-                                            ],
-                                            option![
-                                                attrs! { At::Value => "Calculated",
-                                                    At::Selected => (settings.rs_player_settings.loudness_normalization_source == NormalizationSource::Calculated).as_at_value() },
-                                                "Calculated (RSPlayer EBU R128)"
-                                            ],
-                                        ]
-                                    ]
-                                ]
-                            ],
-                            IF!(matches!(settings.rs_player_settings.loudness_normalization_source,
-                                    NormalizationSource::Calculated | NormalizationSource::Auto) =>
-                                div![
-                                    C!["field", "mt-2"],
-                                    label![C!["label", "has-text-white"], "Target loudness (LUFS)"],
-                                    div![
-                                        C!["control"],
-                                        input![
-                                            C!["input", "is-small"],
-                                            attrs! {
-                                                At::Type => "number"
-                                                At::Value => settings.rs_player_settings.loudness_normalization_target_lufs
-                                                At::Step => "0.5"
-                                                At::Min => "-30"
-                                                At::Max => "-5"
-                                            },
-                                            input_ev(Ev::Change, Msg::InputNormalizationTargetLufs),
-                                            ev(Ev::Blur, |_| Msg::SaveCurrentSettings(true)),
-                                        ]
-                                    ]
-                                ]
-                            ),
-                            div![
-                                C!["notification", "mt-4"],
-                                i![C!["material-icons", "mr-2", "is-size-6"], "info"],
-                                span![
-                                    "Loudness analysis runs automatically in the background while playback is stopped. ",
-                                    "Each song is measured once (EBU R128) and the result is stored permanently. ",
-                                    "You can track progress on the ",
-                                    a![attrs! { At::Href => "/#/library/stats" }, "Library Statistics"],
-                                    " page."
-                                ],
-                            ]
-                        ]
-                    ),
-                    view_dsp_settings(&settings.rs_player_settings, model.dsp_dirty),
-                ],
-            ],
-        ],
-
-        // Music Library
-        section![
-            style!{St::Padding => "0.5rem 0"},
-            details![
-                C!["settings-details"],
-                summary![
-                    C!["settings-details__summary"],
-                    "Music Library",
-                    IF!(!model.waiting_response && !model.is_music_library_configured() => span![
-                        style! {
-                            St::BackgroundColor => "#3273dc",
-                            St::Color => "#fff",
-                            St::FontSize => "0.7rem",
-                            St::Padding => "2px 8px",
-                            St::BorderRadius => "4px",
-                            St::FontWeight => "600",
-                            St::MarginLeft => "0.5rem",
-                        },
-                        "Recommended"
-                    ]),
-                ],
-                div![
-                    C!["settings-details__body"],
-                    IF!(!model.waiting_response && !model.is_music_library_configured() => div![
-                        C!["notification", "is-info", "is-light", "mb-4"],
-                        style! { St::Padding => "0.75rem" },
-                        i![C!["material-icons", "mr-2", "is-size-6"], "info"],
-                        span!["Add music directories to browse your local library. Optional if you only use radio streaming."],
-                    ]),
-                    view_music_directories(model),
-                    view_network_storage(model),
-                    div![
-                        C!["field", "is-grouped", "is-grouped-right", "mt-4"],
-                        div![
-                            C!["control"],
-                            button![
-                                C!["button"],
-                                ev(Ev::Click, move |_| Msg::ClickRescanMetadataButton(false)),
-                                "Update library"
-                            ],
-                        ],
-                        div![
-                            C!["control"],
-                            button![
-                                C!["button", "is-warning"],
-                                ev(Ev::Click, move |_| Msg::ShowConfirm(ConfirmAction::FullRescan)),
-                                "Full rescan"
-                            ],
-                        ],
-                    ],
-                ],
-            ],
-        ],
-
-        // Hardware
-        section![
-            style!{St::Padding => "0.5rem 0"},
-            details![
-                C!["settings-details"],
-                summary![C!["settings-details__summary"], "Hardware"],
-                div![
-                    C!["settings-details__body"],
-                    div![
-                        C!["field"],
-                        ev(Ev::Click, |_| Msg::ToggleUsbEnabled),
-                        input![
-                            C!["switch"],
-                            attrs! {
-                                At::Name => "usb_cb"
-                                At::Type => "checkbox"
-                                At::Checked => settings.usb_settings.enabled.as_at_value(),
-                            },
-                        ],
-                        label![
-                            C!["label","has-text-white"],
-                            "Enable link with rsplayer firmware",
-                            attrs! {
-                                At::For => "usb_cb"
-                            }
-                        ]
-                    ],
-                    div![
-                        C!["buttons", "mt-4"],
-                        IF!(model.settings.usb_settings.enabled =>
-                            button![
-                                C!["button", "is-danger", "is-small"],
-                                "Power Off",
-                                ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::SetFirmwarePower(false)))
-                            ]
-                        ),
-                        IF!(model.settings.usb_settings.enabled =>
-                            button![
-                                C!["button", "is-success", "is-small"],
-                                "Power On",
-                                ev(Ev::Click, |_| Msg::SendSystemCommand(SystemCommand::SetFirmwarePower(true)))
-                            ]
-                        )
-                    ],
-                ],
-            ],
-        ],
-
-        // restart pending banner
-        IF!(model.pending_restart => div![
-            C!["notification", "is-warning", "is-light", "mb-3"],
-            style! { St::Padding => "0.75rem" },
-            i![C!["material-icons", "mr-2", "is-size-6"], "restart_alt"],
-            "Some changes require a player restart to take effect.",
-        ]),
-
-        // buttons
-        div![
-            C!["buttons"],
-            button![
-                C!["button", "is-warning"],
-                "Restart player",
-                ev(Ev::Click, |_| Msg::ShowConfirm(ConfirmAction::RestartPlayer))
-            ],
-        ],
-
-        // Danger zone
-        section![
-            style!{ St::Padding => "0.5rem 0" },
-            p![C!["settings-details__summary"], "Danger Zone"],
-            div![
-                C!["buttons", "mt-2"],
-                button![
-                    C!["button", "is-danger"],
-                    "Restart system",
-                    ev(Ev::Click, |_| Msg::ShowConfirm(ConfirmAction::RestartSystem))
-                ],
-                button![
-                    C!["button", "is-danger"],
-                    "Shutdown system",
-                    ev(Ev::Click, |_| Msg::ShowConfirm(ConfirmAction::ShutdownSystem))
-                ],
-            ],
-        ],
-
-        // version
-        div![
-            style! {
-                St::TextAlign => "center",
-                St::Padding => "1rem",
-                St::Opacity => "0.6",
-            },
-            p![C!["has-text-grey-light", "is-size-7"],
-                &format!("RSPlayer v{}", settings.version)
-            ]
-        ]
-    ]
-}
-fn view_confirm_modal(confirm_action: &Option<ConfirmAction>) -> Node<Msg> {
-    let Some(action) = confirm_action else {
-        return empty!();
-    };
-    let message = match action {
-        ConfirmAction::FullRescan => "Full rescan will destroy the current music database and rebuild it from scratch. All metadata and playback state will be lost. Are you sure?",
-        ConfirmAction::RestartPlayer => "If the player was not started via systemd, it will exit and must be started again manually. Are you sure you want to restart?",
-        ConfirmAction::RestartSystem => "This will reboot the entire system. All active connections will be lost and playback will stop. You will need to wait for the system to come back online. Are you sure?",
-        ConfirmAction::ShutdownSystem => "This will power off the entire system. Playback will stop and you will lose all connections. The system will need to be physically powered on again. Are you sure?",
-        ConfirmAction::RemoveMusicDirectory(_) => "This will remove the directory from music sources. Songs from this directory will no longer be scanned. No data or directory will be deleted. Are you sure?",
-        ConfirmAction::RemoveNetworkMount(_) => "This will unmount and remove the network share. Songs from this mount will no longer be accessible. No data or directory will be deleted. Are you sure?",
-    };
-    let title = match action {
-        ConfirmAction::RestartSystem | ConfirmAction::ShutdownSystem => "System Action",
-        _ => "Warning",
-    };
-    let confirm_class = match action {
-        ConfirmAction::ShutdownSystem | ConfirmAction::RestartSystem => "is-danger",
-        _ => "is-warning",
-    };
-    div![
-        C!["modal", "is-active"],
-        div![
-            C!["modal-background"],
-            ev(Ev::Click, |_| Msg::ConfirmCancelled)
-        ],
-        div![
-            C!["modal-card"],
-            header![
-                C!["modal-card-head"],
-                p![C!["modal-card-title"], title],
-                button![
-                    C!["delete"],
-                    attrs! { At::AriaLabel => "close" },
-                    ev(Ev::Click, |_| Msg::ConfirmCancelled)
-                ]
-            ],
-            section![
-                C!["modal-card-body"],
-                p![message]
-            ],
-            footer![
-                C!["modal-card-foot"],
-                button![
-                    C!["button", confirm_class],
-                    "Confirm",
-                    ev(Ev::Click, |_| Msg::ConfirmAccepted)
-                ],
-                button![
-                    C!["button"],
-                    "Cancel",
-                    ev(Ev::Click, |_| Msg::ConfirmCancelled)
-                ]
-            ]
-        ]
-    ]
-}
-
-fn view_validation_icon<Ms>(val: &impl Validate, key: &str) -> Node<Ms> {
-    let class = if let Err(errors) = val.validate() {
-        if errors.errors().contains_key(key) {
-            "fa-exclamation-triangle"
-        } else {
-            "fa-check"
-        }
-    } else {
-        "fa-check"
-    };
-
-    span![C!["icon", "is-small", "is-right"], i![C!["fas", class]]]
-}
-
-// ------ sub view functions ------
-
-fn view_metadata_storage(_metadata_settings: &MetadataStoreSettings) -> Node<Msg> {
-    empty!()
-}
-
-fn view_rsp(rsp_settings: &RsPlayerSettings, local_browser_playback: bool) -> Node<Msg> {
-    if local_browser_playback {
-        return empty!();
-    }
-    div![
-        C!["field"],
-        details![
-            C!["settings-details", "mt-5"],
-            summary![C!["settings-details__summary"], "Advanced"],
-            div![
-                C!["settings-details__body"],
-                label!["Input buffer size (MB) (1-200)", C!["label", "has-text-white", "mt-5"]],
-                div![
-                    C!["control", "has-icons-right"],
-                    style! {St::Width => "max-content"},
-                    input![
-                        C!["input"],
-                        attrs! {At::Value => rsp_settings.input_stream_buffer_size_mb, At::Type => "number"},
-                        input_ev(Ev::Input, move |value| { Msg::InputRspInputBufferSizeChange(value) }),
-                        ev(Ev::Blur, |_| Msg::SaveCurrentSettings(true)),
-                    ],
-                    view_validation_icon(rsp_settings, "input_stream_buffer_size_mb")
-                ],
-                label!["Ring buffer size (1-10000ms)", C!["label", "has-text-white", "mt-5"]],
-                p![
-                    C!["help", "has-text-grey-light", "mb-2"],
-                    "Software ring buffer between the decoder and ALSA. Default: 1000 ms. \
-                     Increase if you hear dropouts with CPU-intensive formats (e.g. APE at high compression)."
-                ],
-                div![
-                    C!["control", "has-icons-right"],
-                    style! {St::Width => "max-content"},
-                    input![
-                        C!["input"],
-                        attrs! {At::Value => rsp_settings.ring_buffer_size_ms, At::Type => "number"},
-                        input_ev(Ev::Input, move |value| { Msg::InputRspAudioBufferSizeChange(value) }),
-                        ev(Ev::Blur, |_| Msg::SaveCurrentSettings(true)),
-                    ],
-                    view_validation_icon(rsp_settings, "ring_buffer_size_ms")
-                ],
-                label!["Player thread priority (1-99)", C!["label", "has-text-white", "mt-5"]],
-                div![
-                    C!["control", "has-icons-right"],
-                    style! {St::Width => "max-content"},
-                    input![
-                        C!["input"],
-                        attrs! {At::Value => rsp_settings.player_threads_priority, At::Type => "number"},
-                        input_ev(Ev::Input, move |value| { Msg::InputRspThreadPriorityChange(value) }),
-                        ev(Ev::Blur, |_| Msg::SaveCurrentSettings(true)),
-                    ],
-                    view_validation_icon(rsp_settings, "player_threads_priority")
-                ],
-                label!["Fixed output sample rate", C!["label", "has-text-white", "mt-5"]],
-                p![
-                    C!["help", "has-text-grey-light", "mb-2"],
-                    "Force all tracks to be resampled to this rate. Use only if auto-detection fails for your device."
-                ],
-                div![
-                    C!["select"],
-                    select![
-                        input_ev(Ev::Change, Msg::InputRspFixedSampleRateChange),
-                        option![
-                            attrs! { At::Value => "" },
-                            IF!(rsp_settings.fixed_output_sample_rate.is_none() => attrs! { At::Selected => true }),
-                            "Auto (recommended)"
-                        ],
-                        [44100u32, 48000, 88200, 96000, 176400, 192000].iter().map(|&rate| {
-                            option![
-                                attrs! { At::Value => rate },
-                                IF!(rsp_settings.fixed_output_sample_rate == Some(rate) => attrs! { At::Selected => true }),
-                                format!("{} Hz", rate),
-                            ]
-                        }),
-                    ],
-                ],
-                div![
-                    C!["field", "mt-5"],
-                    ev(Ev::Click, |_| Msg::ToggleRspAlsaBufferSize),
-                    input![
-                        C!["switch"],
-                        attrs! {
-                            At::Name => "alsabufsize_cb"
-                            At::Type => "checkbox"
-                            At::Checked => rsp_settings.alsa_buffer_size.is_some().as_at_value(),
-                        },
-                    ],
-                    label![
-                        C!["label", "has-text-white"],
-                        "Override ALSA period size (frames)",
-                        attrs! { At::For => "alsabufsize_cb" }
-                    ]
-                ],
-                p![
-                    C!["help", "has-text-grey-light", "mb-2"],
-                    "When not overridden, rsplayer uses 4096 frames by default. \
-                     This is the ALSA hardware period — how many frames ALSA processes per interrupt. \
-                     Larger values reduce USB scheduling pressure and fix ",
-                    code!["alsa::poll() POLLERR"],
-                    " on async USB audio devices (e.g. Amanero Combo768 on RPi). \
-                     At 44.1 kHz: 4096 frames ≈ 93 ms. Leave unset unless you have a specific reason."
-                ],
-                IF!(rsp_settings.alsa_buffer_size.is_some() =>
-                    div![
-                        C!["field"],
-                        div![
-                            C!["control"],
-                            input![
-                                C!["input"],
-                                attrs! {
-                                    At::Value => rsp_settings.alsa_buffer_size.unwrap_or(4096),
-                                    At::Type => "number"
-                                },
-                                input_ev(Ev::Input, move |value| { Msg::InputRspAlsaBufferSizeChange(value) }),
-                                ev(Ev::Blur, |_| Msg::SaveCurrentSettings(true)),
-                            ],
-                        ],
-                    ]
-                ),
-            ],
-        ],
-    ]
-}
-
-fn view_dsp_settings(rsp_settings: &RsPlayerSettings, dsp_dirty: bool) -> Node<Msg> {
-    div![
-        div![
-            C!["field", "mt-5"],
-            ev(Ev::Click, |_| Msg::ToggleDspEnabled),
-            input![
-                C!["switch"],
-                attrs! {
-                    At::Name => "dsp_enabled_cb"
-                    At::Type => "checkbox"
-                    At::Checked => rsp_settings.dsp_settings.enabled.as_at_value(),
+        // Collapsible Network Mounts subsection
+        div { class: "mt-3",
+            div {
+                class: "flex items-center justify-between cursor-pointer select-none py-2 border-b border-base-300",
+                onclick: move |_| {
+                    let v = !*network_mounts_open.read();
+                    *network_mounts_open.write() = v;
                 },
-            ],
-            label![
-                C!["label","has-text-white"],
-                "Enable DSP processing",
-                attrs! {
-                    At::For => "dsp_enabled_cb"
-                }
-            ]
-        ],
-        IF!(rsp_settings.dsp_settings.enabled =>
-            div![
-                C!["box", "has-background-dark", "mt-4"],
-                div![
-                    C!["field", "mb-4"],
-                    label!["Load Preset", C!["label", "has-text-white"]],
-                    div![
-                        C!["control"],
-                        div![
-                            C!["select"],
-                            select![
-                                option![attrs!{At::Value => ""}, "Select a preset..."],
-                                get_dsp_presets().iter().enumerate().map(|(i, preset)| {
-                                    option![
-                                        attrs! {At::Value => i},
-                                        &preset.name
-                                    ]
-                                }),
-                                input_ev(Ev::Change, |val| {
-                                    if let Ok(idx) = val.parse::<usize>() {
-                                        Msg::DspLoadPreset(idx)
-                                    } else {
-                                        Msg::DspLoadPreset(999) // Invalid index to do nothing
-                                    }
-                                })
-                            ]
-                        ]
-                    ]
-                ],
-                rsp_settings.dsp_settings.filters.iter().enumerate().map(|(index, filter)| {
-                    view_filter(index, filter)
-                }),
-                div![
-                    C!["buttons", "mt-4"],
-                    button![
-                        C!["button", "is-primary", "is-small"],
-                        "Add Filter",
-                        ev(Ev::Click, |_| Msg::DspAddFilter)
-                    ],
-                    button![
-                        C!["button", "is-danger", "is-small"],
-                        "Remove All",
-                        ev(Ev::Click, |_| Msg::DspRemoveAllFilters)
-                    ],
-                    button![
-                        C!["button", "is-warning", "is-small"],
-                        IF!(dsp_dirty => C!["is-outlined"]),
-                        "Apply (Live)",
-                        ev(Ev::Click, |_| Msg::DspApplySettings)
-                    ],
-                    IF!(dsp_dirty => span![
-                        C!["tag", "is-warning", "is-light", "ml-2"],
-                        "Unapplied changes"
-                    ]),
-                    div![
-                        C!["file", "is-primary", "is-small", "ml-2"],
-                        label![
-                            C!["file-label"],
-                            input![
-                                C!["file-input"],
-                                attrs! { At::Type => "file", At::Accept => ".yml,.yaml" },
-                                ev(Ev::Change, |event| {
-                                    let target = event.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap();
-                                    if let Some(files) = target.files() {
-                                        Msg::DspImportConfig(files)
-                                    } else {
-                                        Msg::DspApplySettings // Dummy
-                                    }
-                                })
-                            ],
-                            span![
-                                C!["file-cta"],
-                                span![C!["file-icon"], i![C!["fas", "fa-upload"]]],
-                                span![C!["file-label"], "Import CamillaDSP config"]
-                            ]
-                        ]
-                    ]
-                ]
-            ]
-        )
-    ]
-}
-
-fn view_filter(index: usize, filter_config: &FilterConfig) -> Node<Msg> {
-    let filter = &filter_config.filter;
-    let (current_type, freq, gain, q, slope) = match filter {
-        DspFilter::Peaking { freq, gain, q } => (FilterType::Peaking, Some(*freq), Some(*gain), Some(*q), None),
-        DspFilter::LowShelf { freq, gain, q, slope } => (FilterType::LowShelf, Some(*freq), Some(*gain), *q, *slope),
-        DspFilter::HighShelf { freq, gain, q, slope } => (FilterType::HighShelf, Some(*freq), Some(*gain), *q, *slope),
-        DspFilter::LowPass { freq, q } => (FilterType::LowPass, Some(*freq), None, Some(*q), None),
-        DspFilter::HighPass { freq, q } => (FilterType::HighPass, Some(*freq), None, Some(*q), None),
-        DspFilter::BandPass { freq, q } => (FilterType::BandPass, Some(*freq), None, Some(*q), None),
-        DspFilter::Notch { freq, q } => (FilterType::Notch, Some(*freq), None, Some(*q), None),
-        DspFilter::AllPass { freq, q } => (FilterType::AllPass, Some(*freq), None, Some(*q), None),
-        DspFilter::LowPassFO { freq } => (FilterType::LowPassFO, Some(*freq), None, None, None),
-        DspFilter::HighPassFO { freq } => (FilterType::HighPassFO, Some(*freq), None, None, None),
-        DspFilter::LowShelfFO { freq, gain } => (FilterType::LowShelfFO, Some(*freq), Some(*gain), None, None),
-        DspFilter::HighShelfFO { freq, gain } => (FilterType::HighShelfFO, Some(*freq), Some(*gain), None, None),
-        DspFilter::LinkwitzTransform { .. } => (FilterType::Gain, None, None, None, None), // Placeholder
-        DspFilter::Gain { gain } => (FilterType::Gain, None, Some(*gain), None, None),
-    };
-
-    let current_channel = if filter_config.channels.is_empty() {
-        "Global"
-    } else if filter_config.channels == vec![0] {
-        "Left"
-    } else if filter_config.channels == vec![1] {
-        "Right"
-    } else {
-        "Custom"
-    };
-
-    div![
-        C!["field", "is-grouped", "is-grouped-multiline", "p-3", "mb-3"],
-        style! { St::Border => "1px solid #4a4a4a", St::BorderRadius => "4px"},
-
-        // Channel Selector
-        div![
-            C!["control"],
-            label!["Channel", C!["label", "has-text-white"]],
-            div![
-                C!["select"],
-                select![
-                    option![attrs!{At::Value => "Global"}, IF!(current_channel == "Global" => attrs!{At::Selected => ""}), "Global"],
-                    option![attrs!{At::Value => "Left"}, IF!(current_channel == "Left" => attrs!{At::Selected => ""}), "Left"],
-                    option![attrs!{At::Value => "Right"}, IF!(current_channel == "Right" => attrs!{At::Selected => ""}), "Right"],
-                    input_ev(Ev::Change, move |val| Msg::DspUpdateFilterChannels(index, val))
-                ]
-            ]
-        ],
-
-        // Filter Type
-        div![
-            C!["control"],
-            label!["Type", C!["label", "has-text-white"]],
-            div![
-                C!["select"],
-                select![
-                    FilterType::iter().map(|ft| {
-                        option![
-                            attrs! { At::Value => ft.to_string() },
-                            IF!(ft == current_type => attrs!{At::Selected => ""}),
-                            ft.to_string()
-                        ]
-                    }),
-                    input_ev(Ev::Change, move |val| {
-                        let new_type = match val.as_str() {
-                            "Peaking" => FilterType::Peaking,
-                            "LowShelf" => FilterType::LowShelf,
-                            "HighShelf" => FilterType::HighShelf,
-                            "LowPass" => FilterType::LowPass,
-                            "HighPass" => FilterType::HighPass,
-                            "Gain" => FilterType::Gain,
-                            _ => unreachable!(),
-                        };
-                        Msg::DspUpdateFilterType(index, new_type)
-                    })
-                ]
-            ]
-        ],
-
-        // Freq
-        freq.map(|f| div![
-            C!["control"],
-            label!["Freq", C!["label", "has-text-white"]],
-            input![
-                C!["input"],
-                attrs! { At::Type => "number", At::Value => f.to_string() },
-                input_ev(Ev::Input, move |v| Msg::DspUpdateFilterValue(index, DspField::Freq, v))
-            ]
-        ]),
-
-        // Gain
-        gain.map(|g| div![
-            C!["control"],
-            label!["Gain", C!["label", "has-text-white"]],
-            input![
-                C!["input"],
-                attrs! { At::Type => "number", At::Value => g.to_string() },
-                input_ev(Ev::Input, move |v| Msg::DspUpdateFilterValue(index, DspField::Gain, v))
-            ]
-        ]),
-        
-        // Q
-        q.map(|q_val| div![
-            C!["control"],
-            label!["Q", C!["label", "has-text-white"]],
-            input![
-                C!["input"],
-                attrs! { At::Type => "number", At::Value => q_val.to_string() },
-                input_ev(Ev::Input, move |v| Msg::DspUpdateFilterValue(index, DspField::Q, v))
-            ]
-        ]),
-
-        // Slope
-        slope.map(|s_val| div![
-            C!["control"],
-            label!["Slope", C!["label", "has-text-white"]],
-            input![
-                C!["input"],
-                attrs! { At::Type => "number", At::Value => s_val.to_string() },
-                input_ev(Ev::Input, move |v| Msg::DspUpdateFilterValue(index, DspField::Slope, v))
-            ]
-        ]),
-
-        // Remove button
-        div![
-            C!["control", "is-flex", "is-align-items-flex-end"],
-            button![
-                C!["button", "is-danger", "is-small"],
-                "Remove",
-                ev(Ev::Click, move |_| Msg::DspRemoveFilter(index))
-            ]
-        ]
-    ]
-}
-
-
-
-/// (bg, primary-text, accent, ui-elements, label)
-const THEMES: &[(&str, &str, &str, &str, &str)] = &[
-    ("dark",          "#121212", "#FFFFFF", "#1DB954", "#282828", ),
-    ("light",         "#f5f5f5", "#1a1a1a", "#1a8f3c", "#e0e0e0", ),
-    ("solarized",     "#002b36", "#eee8d5", "#2aa198", "#073642", ),
-    ("dracula",       "#282a36", "#f8f8f2", "#bd93f9", "#44475a", ),
-    ("nord",          "#2e3440", "#eceff4", "#88c0d0", "#3b4252", ),
-    ("rose-pine",     "#191724", "#e0def4", "#eb6f92", "#26233a", ),
-    ("ocean",         "#0f1923", "#cdd6f4", "#4fc3f7", "#1a2a3a", ),
-    ("gruvbox",       "#282828", "#ebdbb2", "#b8bb26", "#3c3836", ),
-    ("catppuccin",    "#1e1e2e", "#cdd6f4", "#cba6f7", "#313244", ),
-    ("high-contrast", "#000000", "#ffffff", "#00ff00", "#1a1a1a", ),
-];
-
-const THEME_LABELS: &[(&str, &str)] = &[
-    ("dark",          "Dark"),
-    ("light",         "Light"),
-    ("solarized",     "Solarized"),
-    ("dracula",       "Dracula"),
-    ("nord",          "Nord"),
-    ("rose-pine",     "Rose Pine"),
-    ("ocean",         "Ocean"),
-    ("gruvbox",       "Gruvbox"),
-    ("catppuccin",    "Catppuccin"),
-    ("high-contrast", "Hi-Contrast"),
-];
-
-fn view_theme_picker(current_theme: &str) -> Node<Msg> {
-    div![
-        C!["theme-picker"],
-        THEMES.iter().zip(THEME_LABELS.iter()).map(|((id, bg, _text, accent, ui), (_id2, label))| {
-            let theme_id = id.to_string();
-            let is_active = *id == current_theme;
-            div![
-                C!["theme-card", IF!(is_active => "is-active")],
-                // colour swatch: bg | ui | accent
-                div![
-                    C!["theme-card__swatch"],
-                    span![style! { St::Background => *bg }],
-                    span![style! { St::Background => *ui }],
-                    span![style! { St::Background => *accent }],
-                ],
-                span![C!["theme-card__name"], *label],
-                ev(Ev::Click, move |_| Msg::SelectTheme(theme_id)),
-            ]
-        })
-    ]
-}
-
-fn view_music_directories(model: &Model) -> Node<Msg> {
-    let mount_points: Vec<String> = model.settings.network_storage_settings.mounts
-        .iter()
-        .map(|m| {
-            m.mount_point
-                .clone()
-                .unwrap_or_else(|| format!("/mnt/rsplayer/{}", m.name))
-        })
-        .collect();
-    div![
-        // Local directory entries (same style as network mounts)
-        model.settings.metadata_settings.music_directories.iter().enumerate()
-            .filter(|(_, dir)| !mount_points.contains(dir))
-            .map(|(idx, dir)| {
-                let dir_status = model.music_dir_statuses.iter().find(|s| s.path == *dir);
-                let status_label = match dir_status {
-                    Some(s) if s.readable && s.writable => "Read / Write",
-                    Some(s) if s.readable => "Read only",
-                    Some(_) => "Not accessible",
-                    None => "Unknown",
-                };
-                let status_class = match dir_status {
-                    Some(s) if s.readable => "is-success",
-                    Some(_) => "is-danger",
-                    None => "is-warning",
-                };
-                div![
-                    C!["field", "is-grouped", "is-grouped-multiline", "p-3", "mb-3"],
-                    style! { St::Border => "1px solid #4a4a4a", St::BorderRadius => "4px" },
-                    div![
-                        C!["control"],
-                        span![
-                            C!["tag", status_class, "mr-2"],
-                            status_label
-                        ],
-                    ],
-                    div![
-                        C!["control", "is-expanded"],
-                        label![C!["label", "has-text-white"], format!("{dir}")],
-                        p![C!["has-text-grey-light"], "Local directory"],
-                    ],
-                    div![
-                        C!["control"],
-                        button![
-                            C!["button", "is-danger", "is-small"],
-                            "Remove",
-                            ev(Ev::Click, move |_| Msg::ShowConfirm(ConfirmAction::RemoveMusicDirectory(idx)))
-                        ],
-                    ],
-                ]
-            }),
-    ]
-}
-
-fn view_network_storage(model: &Model) -> Node<Msg> {
-    div![
-        // Existing mounts
-        model.settings.network_storage_settings.mounts.iter().map(|mount| {
-            let mount_name2 = mount.name.clone();
-            let status = model.mount_statuses.iter().find(|s| s.name == mount.name);
-            let is_mounted = status.is_some_and(|s| s.is_mounted);
-            let mount_point = mount
-                .mount_point
-                .clone()
-                .unwrap_or_else(|| format!("/mnt/rsplayer/{}", mount.name));
-            let type_label = match mount.mount_type { NetworkMountType::Smb => "SMB", NetworkMountType::Nfs => "NFS" };
-            let source = match mount.mount_type {
-                NetworkMountType::Smb => format!("//{}/{}", mount.server, mount.share),
-                NetworkMountType::Nfs => format!("{}:{}", mount.server, mount.share),
-            };
-            let (status_label, status_class) = match status {
-                Some(s) if s.readable && s.writable => ("Read / Write", "is-success"),
-                Some(s) if s.readable => ("Read only", "is-warning"),
-                Some(s) if s.is_mounted => ("Not accessible", "is-danger"),
-                Some(_) => ("Not mounted", "is-danger"),
-                None => ("Unknown", "is-light"),
-            };
-            div![
-                C!["field", "is-grouped", "is-grouped-multiline", "p-3", "mb-3"],
-                style! { St::Border => "1px solid #4a4a4a", St::BorderRadius => "4px" },
-                div![
-                    C!["control"],
-                    span![
-                        C!["tag", status_class, "mr-2"],
-                        status_label
-                    ],
-                ],
-                div![
-                    C!["control", "is-expanded"],
-                    label![C!["label", "has-text-white"], format!("{} ({})", mount.name, type_label)],
-                    p![C!["has-text-grey-light"], format!("{source} → {mount_point}")],
-                ],
-                div![
-                    C!["control"],
-                    div![
-                        C!["buttons"],
-                        {
-                            let mount_name = mount.name.clone();
-                            if is_mounted {
-                                button![
-                                    C!["button", "is-warning", "is-small"],
-                                    "Unmount",
-                                    ev(Ev::Click, move |_| Msg::UnmountShare(mount_name))
-                                ]
-                            } else {
-                                button![
-                                    C!["button", "is-success", "is-small"],
-                                    "Mount",
-                                    ev(Ev::Click, move |_| Msg::MountShare(mount_name))
-                                ]
-                            }
-                        },
-                        button![
-                            C!["button", "is-danger", "is-small"],
-                            "Remove",
-                            ev(Ev::Click, move |_| Msg::ShowConfirm(ConfirmAction::RemoveNetworkMount(mount_name2)))
-                        ],
-                    ]
-                ],
-            ]
-        }),
-
-        // Add local directory form
-        div![
-            C!["box", "has-background-dark", "mt-4"],
-            h1![C!["title", "is-6", "has-text-white"], "Add Local Directory"],
-            div![
-                C!["field", "has-addons"],
-                div![
-                    C!["control", "is-expanded"],
-                    input![
-                        C!["input", "is-small"],
-                        attrs! { At::Type => "text", At::Value => &model.new_music_dir, At::Placeholder => "/path/to/music" },
-                        input_ev(Ev::Input, Msg::InputNewMusicDir),
-                    ],
-                ],
-                div![
-                    C!["control"],
-                    button![
-                        C!["button", "is-small", "is-primary"],
-                        ev(Ev::Click, |_| Msg::AddMusicDirectory),
-                        "Add"
-                    ],
-                ],
-            ],
-        ],
-
-        // Network mount management (collapsible)
-        div![
-            C!["settings-details", "mt-4"],
-            div![
-                C!["settings-details__summary"],
-                "Network Mounts",
-                i![
-                    C!["material-icons"],
-                    style! { St::MarginLeft => "auto", St::Transition => "transform 0.2s ease",
-                             St::Transform => if model.network_mounts_open { "rotate(180deg)" } else { "rotate(0deg)" } },
+                span { class: "text-sm font-medium", "Network Mounts" }
+                i {
+                    class: "material-icons text-sm transition-transform",
+                    style: if *network_mounts_open.read() { "transform: rotate(180deg)" } else { "" },
                     "expand_more"
-                ],
-                ev(Ev::Click, |_| Msg::ToggleNetworkMounts),
-            ],
-            IF!(model.network_mounts_open =>
-            div![
-                C!["settings-details__body"],
-                div![
-                    C!["box", "has-background-dark", "mt-3"],
-            h1![C!["title", "is-6", "has-text-white"], "Add Network Mount"],
-            div![
-                C!["field", "is-grouped", "is-grouped-multiline"],
-                div![
-                    C!["control"],
-                    label![C!["label", "has-text-white"], "Name (optional)"],
-                    input![
-                        C!["input", "is-small"],
-                        attrs! { At::Type => "text", At::Value => &model.mount_form_name, At::Placeholder => "auto from share" },
-                        input_ev(Ev::Input, Msg::InputMountName),
-                    ],
-                ],
-                div![
-                    C!["control"],
-                    label![C!["label", "has-text-white"], "Type"],
-                    div![
-                        C!["select", "is-small"],
-                        select![
-                            option![
-                                attrs! { At::Value => "Smb" },
-                                IF!(matches!(model.mount_form_type, NetworkMountType::Smb) => attrs!(At::Selected => "")),
-                                "SMB/CIFS"
-                            ],
-                            option![
-                                attrs! { At::Value => "Nfs" },
-                                IF!(matches!(model.mount_form_type, NetworkMountType::Nfs) => attrs!(At::Selected => "")),
-                                "NFS"
-                            ],
-                            input_ev(Ev::Change, Msg::InputMountType),
-                        ],
-                    ],
-                ],
-                div![
-                    C!["control"],
-                    label![C!["label", "has-text-white"], "Server *"],
-                    input![
-                        C!["input", "is-small"],
-                        attrs! { At::Type => "text", At::Value => &model.mount_form_server, At::Placeholder => "192.168.1.100", At::Required => true },
-                        input_ev(Ev::Input, Msg::InputMountServer),
-                    ],
-                ],
-                div![
-                    C!["control"],
-                    label![C!["label", "has-text-white"], "Share *"],
-                    input![
-                        C!["input", "is-small"],
-                        attrs! { At::Type => "text", At::Value => &model.mount_form_share, At::Placeholder => "music", At::Required => true },
-                        input_ev(Ev::Input, Msg::InputMountShare),
-                    ],
-                ],
-            ],
-            IF!(matches!(model.mount_form_type, NetworkMountType::Smb) =>
-                div![
-                    C!["field", "is-grouped", "is-grouped-multiline", "mt-3"],
-                    div![
-                        C!["control"],
-                        label![C!["label", "has-text-white"], "Username (optional)"],
-                        input![
-                            C!["input", "is-small"],
-                            attrs! { At::Type => "text", At::Value => &model.mount_form_username, At::Placeholder => "guest" },
-                            input_ev(Ev::Input, Msg::InputMountUsername),
-                        ],
-                    ],
-                    div![
-                        C!["control"],
-                        label![C!["label", "has-text-white"], "Password (optional)"],
-                        input![
-                            C!["input", "is-small"],
-                            attrs! { At::Type => "password", At::Value => &model.mount_form_password },
-                            input_ev(Ev::Input, Msg::InputMountPassword),
-                        ],
-                    ],
-                    div![
-                        C!["control"],
-                        label![C!["label", "has-text-white"], "Domain (optional)"],
-                        input![
-                            C!["input", "is-small"],
-                            attrs! { At::Type => "text", At::Value => &model.mount_form_domain, At::Placeholder => "WORKGROUP" },
-                            input_ev(Ev::Input, Msg::InputMountDomain),
-                        ],
-                    ],
-                ]
-            ),
-            div![
-                C!["field", "mt-3"],
-                button![
-                    C!["button", "is-primary", "is-small"],
-                    "Mount",
-                    ev(Ev::Click, |_| Msg::MountAdd),
-                ],
-            ],
-            div![
-                C!["notification", "mt-3", "p-3"],
-                i![C!["material-icons", "mr-2", "is-size-6"], "info"],
-                span![
-                    "Mounts are created under /mnt/rsplayer/<name> and automatically added as music directories.",
-                ],
-            ],
-        ],
-        view_external_mounts(model),
-        ] // settings-details__body
-        ), // IF
-        ] // div settings-details
-    ]
-}
+                }
+            }
+            if *network_mounts_open.read() {
+                div { class: "mt-3 space-y-2",
+                    p { class: "text-sm font-medium", "Add Network Mount" }
+                    div { class: "flex flex-wrap gap-2",
+                        div { class: "flex flex-col gap-1",
+                            label { class: "text-xs text-base-content/60", "Type" }
+                            select {
+                                class: "select select-bordered select-sm",
+                                onchange: move |e: Event<FormData>| {
+                                    *mf_type.write() = match e.value().as_str() {
+                                        "Nfs" => NetworkMountType::Nfs,
+                                        _ => NetworkMountType::Smb,
+                                    };
+                                },
+                                option {
+                                    value: "Nfs",
+                                    selected: *mf_type.read() == NetworkMountType::Nfs,
+                                    "NFS"
+                                }
+                                option {
+                                    value: "Smb",
+                                    selected: *mf_type.read() == NetworkMountType::Smb,
+                                    "SMB/CIFS"
+                                }
+                            }
+                        }
+                        div { class: "flex flex-col gap-1",
+                            label { class: "text-xs text-base-content/60", "Server *" }
+                            input {
+                                class: "input input-sm input-bordered",
+                                placeholder: "192.168.1.100",
+                                value: "{mf_server}",
+                                oninput: move |e| mf_server.set(e.value()),
+                            }
+                        }
+                        div { class: "flex flex-col gap-1",
+                            label { class: "text-xs text-base-content/60", "Share (remote dir) *" }
+                            input {
+                                class: "input input-sm input-bordered",
+                                placeholder: "music",
+                                value: "{mf_share}",
+                                oninput: move |e| mf_share.set(e.value()),
+                            }
+                        }
+                        div { class: "flex flex-col gap-1",
+                            label { class: "text-xs text-base-content/60", "Name - local dir (optional)" }
+                            input {
+                                class: "input input-sm input-bordered",
+                                placeholder: "auto from share",
+                                value: "{mf_name}",
+                                oninput: move |e| mf_name.set(e.value()),
+                            }
+                        }
+                    
+                    }
+                    if *mf_type.read() == NetworkMountType::Smb {
+                        div { class: "flex flex-wrap gap-2",
+                            div { class: "flex flex-col gap-1",
+                                label { class: "text-xs text-base-content/60", "Username (optional)" }
+                                input {
+                                    class: "input input-sm input-bordered",
+                                    placeholder: "guest",
+                                    value: "{mf_username}",
+                                    oninput: move |e| mf_username.set(e.value()),
+                                }
+                            }
+                            div { class: "flex flex-col gap-1",
+                                label { class: "text-xs text-base-content/60", "Password (optional)" }
+                                input {
+                                    class: "input input-sm input-bordered",
+                                    r#type: "password",
+                                    value: "{mf_password}",
+                                    oninput: move |e| mf_password.set(e.value()),
+                                }
+                            }
+                            div { class: "flex flex-col gap-1",
+                                label { class: "text-xs text-base-content/60", "Domain (optional)" }
+                                input {
+                                    class: "input input-sm input-bordered",
+                                    placeholder: "WORKGROUP",
+                                    value: "{mf_domain}",
+                                    oninput: move |e| mf_domain.set(e.value()),
+                                }
+                            }
+                        }
+                    }
+                    button {
+                        class: "btn btn-sm btn-primary",
+                        onclick: move |_| {
+                            let name = {
+                                let n = mf_name();
+                                let raw = if n.is_empty() { mf_share() } else { n };
+                                raw.replace('/', "_")
+                            };
+                            let cfg = NetworkMountConfig {
+                                name: name.clone(),
+                                mount_type: mf_type.read().clone(),
+                                server: mf_server(),
+                                share: mf_share(),
+                                username: if mf_username().is_empty() { None } else { Some(mf_username()) },
+                                password: if mf_password().is_empty() { None } else { Some(mf_password()) },
+                                domain: if mf_domain().is_empty() { None } else { Some(mf_domain()) },
+                                mount_point: None,
+                            };
+                            let mount_point = format!("/mnt/rsplayer/{}", name);
+                            {
+                                let mut s = settings.write();
+                                s.network_storage_settings.mounts.push(cfg.clone());
+                                if !s.metadata_settings.music_directories.contains(&mount_point) {
+                                    s.metadata_settings.music_directories.push(mount_point);
+                                }
+                            }
+                            ws_send(&ws, &UserCommand::Storage(StorageCommand::Mount(cfg)));
+                            auto_save();
+                            mf_name.set(String::new());
+                            mf_server.set(String::new());
+                            mf_share.set(String::new());
+                            mf_username.set(String::new());
+                            mf_password.set(String::new());
+                            mf_domain.set(String::new());
+                        },
+                        "Mount"
+                    }
+                    div { class: "alert alert-info py-2 text-xs",
+                        i { class: "material-icons text-sm mr-1", "info" }
+                        span {
+                            "Mounts are created under /mnt/rsplayer/<name> and automatically added as music directories."
+                        }
+                    }
+                }
+            }
+        }
 
-#[allow(clippy::future_not_send)]
-fn view_external_mounts(model: &Model) -> Node<Msg> {
-    if model.external_mounts.is_empty() {
-        return empty![];
+        // Detected external network mounts
+        if !external_mounts.is_empty() {
+            div { class: "mt-3 p-3 rounded border border-info bg-info/10",
+                p { class: "text-sm font-medium mb-1", "Detected External Network Mounts" }
+                p { class: "text-xs text-base-content/60 mb-3",
+                    "These network mounts were found on the system but are not managed by rsplayer. Click Save to add them as music sources."
+                }
+                {
+                    external_mounts
+                        .iter()
+                        .map(|em| {
+                            let mp = em.mount_point.clone();
+                            let (status_label, status_class) = match (em.readable, em.writable) {
+                                (true, true) => ("Read / Write", "badge-success"),
+                                (true, false) => ("Read only", "badge-warning"),
+                                _ => ("Not accessible", "badge-error"),
+                            };
+                            rsx! {
+                                div { class: "flex items-center gap-2 py-1",
+                                    span { class: "badge badge-sm {status_class} shrink-0", "{status_label}" }
+                                    div { class: "flex-1 min-w-0",
+                                        p { class: "text-sm font-medium truncate", "{em.source}" }
+                                        p { class: "text-xs text-base-content/50 truncate", "{em.mount_point}" }
+                                    }
+                                    button {
+                                        class: "btn btn-sm btn-primary",
+                                        onclick: move |_| ws_send(
+                                            &ws,
+                                            &UserCommand::Storage(StorageCommand::SaveExternalMount(mp.clone())),
+                                        ),
+                                        "Save"
+                                    }
+                                }
+                            }
+                        })
+                }
+            }
+        }
+
+        ToggleRow {
+            label: "Follow symlinks",
+            checked: settings.read().metadata_settings.follow_links,
+            onchange: move |_| {
+                let v = !settings.read().metadata_settings.follow_links;
+                settings.write().metadata_settings.follow_links = v;
+                auto_save();
+            },
+        }
+
+        // Scan status message
+        {
+            let msg = state.metadata_scan_msg.read().clone();
+            if let Some(m) = msg {
+                rsx! {
+                    p { class: "text-xs text-base-content/60 mt-2 truncate", "{m}" }
+                }
+            } else {
+                rsx! {}
+            }
+        }
+
+        div { class: "flex gap-2 mt-3 justify-end",
+            button {
+                class: "btn btn-sm",
+                onclick: move |_| {
+                    ws_send(
+                        &ws,
+                        &UserCommand::Metadata(MetadataCommand::RescanMetadata(String::new(), false)),
+                    );
+                },
+                "Update library"
+            }
+            button {
+                class: "btn btn-sm btn-warning",
+                onclick: move |_| *confirm.write() = Some(ConfirmAction::FullRescan),
+                "Full rescan"
+            }
+        }
     }
-    div![
-        C!["box", "mt-4"],
-        style! {
-            St::Background => "rgba(32, 64, 100, 0.4)",
-            St::Border => "1px solid #3273dc",
-            St::BorderRadius => "6px",
-        },
-        h1![
-            C!["title", "is-6", "has-text-white"],
-            "Detected External Network Mounts"
-        ],
-        p![
-            C!["has-text-grey-light", "mb-3", "is-size-7"],
-            "These network mounts were found on the system but are not managed by rsplayer. ",
-            "Click Save to add them as music sources."
-        ],
-        model.external_mounts.iter().map(|ext| {
-            let mp = ext.mount_point.clone();
-            let (status_label, status_class) = match (ext.readable, ext.writable) {
-                (true, true) => ("Read / Write", "is-success"),
-                (true, false) => ("Read only", "is-warning"),
-                _ => ("Not accessible", "is-danger"),
-            };
-            div![
-                C!["field", "is-grouped", "is-grouped-multiline", "p-3", "mb-3"],
-                style! { St::Border => "1px solid #4a6a8a", St::BorderRadius => "4px" },
-                div![
-                    C!["control"],
-                    span![C!["tag", status_class, "mr-2"], status_label],
-                ],
-                div![
-                    C!["control", "is-expanded"],
-                    label![
-                        C!["label", "has-text-white"],
-                        format!("{} ({})", ext.source, ext.fs_type.to_uppercase())
-                    ],
-                    p![C!["has-text-grey-light"], &ext.mount_point],
-                ],
-                div![
-                    C!["control"],
-                    button![
-                        C!["button", "is-info", "is-small"],
-                        "Save",
-                        ev(Ev::Click, move |_| Msg::SaveExternalMount(mp))
-                    ],
-                ],
-            ]
-        }),
-    ]
 }
 
-async fn save_settings(settings: Settings, query: String) -> Result<String, Error> {
-    let response = Request::post(format!("{API_SETTINGS_PATH}?{query}").as_str())
-        .json(&settings)?
-        .send()
-        .await?;
-    response.text().await
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+#[component]
+fn SettingsSection(title: &'static str, icon: &'static str, content: Element) -> Element {
+    let mut open = use_signal(|| false);
+    rsx! {
+        div { class: "border border-base-300 rounded-lg overflow-hidden",
+            button {
+                class: "w-full flex items-center gap-3 px-4 py-3 text-left bg-base-200 hover:bg-base-300 transition-colors",
+                onclick: move |_| open.toggle(),
+                i { class: "material-icons text-base text-primary", "{icon}" }
+                span { class: "flex-1 font-medium", "{title}" }
+                i { class: if open() { "material-icons text-base transition-transform rotate-180" } else { "material-icons text-base transition-transform" },
+                    "expand_more"
+                }
+            }
+            if open() {
+                div { class: "px-4 py-3", {content} }
+            }
+        }
+    }
+}
+
+#[component]
+fn ToggleRow(label: &'static str, checked: bool, onchange: EventHandler<MouseEvent>) -> Element {
+    rsx! {
+        div { class: "flex items-center justify-between py-1.5",
+            span { class: "text-sm", "{label}" }
+            input {
+                r#type: "checkbox",
+                class: "toggle toggle-sm toggle-primary",
+                checked,
+                onclick: move |e| onchange.call(e),
+            }
+        }
+    }
+}
+
+#[component]
+fn NumberInput(
+    label: &'static str,
+    value: String,
+    min: &'static str,
+    max: &'static str,
+    onchange: EventHandler<String>,
+) -> Element {
+    rsx! {
+        div { class: "form-control mb-2",
+            label { class: "label py-0.5",
+                span { class: "label-text text-sm", "{label}" }
+            }
+            input {
+                r#type: "number",
+                class: "input input-sm input-bordered w-full",
+                value,
+                min,
+                max,
+                onchange: move |e| onchange.call(e.value()),
+            }
+        }
+    }
+}
+
+#[component]
+fn DspFilterFields(
+    filter: DspFilter,
+    index: usize,
+    mut settings: Signal<Settings>,
+    mut dsp_dirty: Signal<bool>,
+) -> Element {
+    let mut update = move |field: &'static str, val: String| {
+        if let Ok(v) = val.parse::<f64>() {
+            if let Some(fc) = settings.write().rs_player_settings.dsp_settings.filters.get_mut(index) {
+                match (&mut fc.filter, field) {
+                    (DspFilter::Peaking { freq, .. }, "freq") => *freq = v,
+                    (DspFilter::Peaking { gain, .. }, "gain") => *gain = v,
+                    (DspFilter::Peaking { q, .. }, "q") => *q = v,
+                    (DspFilter::LowShelf { freq, .. }, "freq") => *freq = v,
+                    (DspFilter::LowShelf { gain, .. }, "gain") => *gain = v,
+                    (DspFilter::LowShelf { q, .. }, "q") => *q = Some(v),
+                    (DspFilter::HighShelf { freq, .. }, "freq") => *freq = v,
+                    (DspFilter::HighShelf { gain, .. }, "gain") => *gain = v,
+                    (DspFilter::HighShelf { q, .. }, "q") => *q = Some(v),
+                    (DspFilter::LowPass { freq, .. }, "freq") => *freq = v,
+                    (DspFilter::LowPass { q, .. }, "q") => *q = v,
+                    (DspFilter::HighPass { freq, .. }, "freq") => *freq = v,
+                    (DspFilter::HighPass { q, .. }, "q") => *q = v,
+                    (DspFilter::BandPass { freq, .. }, "freq") => *freq = v,
+                    (DspFilter::BandPass { q, .. }, "q") => *q = v,
+                    (DspFilter::Notch { freq, .. }, "freq") => *freq = v,
+                    (DspFilter::Notch { q, .. }, "q") => *q = v,
+                    (DspFilter::AllPass { freq, .. }, "freq") => *freq = v,
+                    (DspFilter::AllPass { q, .. }, "q") => *q = v,
+                    (DspFilter::LowPassFO { freq }, "freq") => *freq = v,
+                    (DspFilter::HighPassFO { freq }, "freq") => *freq = v,
+                    (DspFilter::LowShelfFO { freq, .. }, "freq") => *freq = v,
+                    (DspFilter::LowShelfFO { gain, .. }, "gain") => *gain = v,
+                    (DspFilter::HighShelfFO { freq, .. }, "freq") => *freq = v,
+                    (DspFilter::HighShelfFO { gain, .. }, "gain") => *gain = v,
+                    (DspFilter::Gain { gain }, "gain") => *gain = v,
+                    _ => {}
+                }
+            }
+            *dsp_dirty.write() = true;
+        }
+    };
+
+    let fields: Vec<(&'static str, String)> = match &filter {
+        DspFilter::Peaking { freq, gain, q } => vec![
+            ("freq", format!("{freq}")),
+            ("gain", format!("{gain}")),
+            ("q", format!("{q}")),
+        ],
+        DspFilter::LowShelf { freq, gain, q, .. } | DspFilter::HighShelf { freq, gain, q, .. } => vec![
+            ("freq", format!("{freq}")),
+            ("gain", format!("{gain}")),
+            ("q", format!("{}", q.unwrap_or(0.707))),
+        ],
+        DspFilter::LowPass { freq, q }
+        | DspFilter::HighPass { freq, q }
+        | DspFilter::BandPass { freq, q }
+        | DspFilter::Notch { freq, q }
+        | DspFilter::AllPass { freq, q } => vec![("freq", format!("{freq}")), ("q", format!("{q}"))],
+        DspFilter::LowPassFO { freq } | DspFilter::HighPassFO { freq } => vec![("freq", format!("{freq}"))],
+        DspFilter::LowShelfFO { freq, gain } | DspFilter::HighShelfFO { freq, gain } => {
+            vec![("freq", format!("{freq}")), ("gain", format!("{gain}"))]
+        }
+        DspFilter::Gain { gain } => vec![("gain", format!("{gain}"))],
+        DspFilter::LinkwitzTransform {
+            freq_act,
+            q_act,
+            freq_target,
+            q_target,
+        } => vec![
+            ("freq", format!("{freq_act}")),
+            ("q", format!("{q_act}")),
+            ("freq", format!("{freq_target}")),
+            ("q", format!("{q_target}")),
+        ],
+    };
+
+    rsx! {
+        div { class: "grid grid-cols-3 gap-1",
+            {
+                fields
+                    .into_iter()
+                    .map(|(field, val)| {
+                        rsx! {
+                            div { class: "form-control",
+                                label { class: "label py-0",
+                                    span { class: "label-text text-xs", "{field}" }
+                                }
+                                input {
+                                    r#type: "number",
+                                    class: "input input-xs input-bordered w-full",
+                                    value: "{val}",
+                                    step: "0.001",
+                                    onchange: move |e| update(field, e.value()),
+                                }
+                            }
+                        }
+                    })
+            }
+        }
+    }
+}
+
+// ─── Appearance / Theme picker ────────────────────────────────────────────────
+
+/// (id, display label)
+const THEMES: &[(&str, &str)] = &[
+    ("dark", "Dark"),
+    ("light", "Light"),
+    ("synthwave", "Synthwave"),
+    ("dracula", "Dracula"),
+    ("nord", "Nord"),
+    ("dim", "Dim"),
+    ("aqua", "Aqua"),
+    ("coffee", "Coffee"),
+    ("caramellatte", "Caramel"),
+    ("black", "Black"),
+];
+
+#[component]
+fn AppearanceSection() -> Element {
+    let mut state = use_context::<AppState>();
+    let current = state.current_theme.read().clone();
+    let show_bg = *state.show_bg_image.read();
+
+    rsx! {
+        div { class: "flex items-center justify-between py-1.5 mb-3",
+            span { class: "text-sm", "Album art background" }
+            input {
+                r#type: "checkbox",
+                class: "toggle toggle-sm toggle-primary",
+                checked: show_bg,
+                onclick: move |_| {
+                    let next = !*state.show_bg_image.peek();
+                    *state.show_bg_image.write() = next;
+                    if let Some(window) = web_sys::window() {
+                        if let Ok(Some(storage)) = window.local_storage() {
+                            let _ = storage
+                                .set_item(
+                                    "rsplayer_show_bg_image",
+                                    if next { "true" } else { "false" },
+                                );
+                        }
+                    }
+                },
+            }
+        }
+        div { class: "flex flex-wrap gap-3",
+            {
+                THEMES
+                    .iter()
+                    .map(|(id, label)| {
+                        let id = *id;
+                        let label = *label;
+                        let active = current == id;
+                        rsx! {
+                            button {
+                                key: "{id}",
+                                class: if active { "flex flex-col items-center gap-1 p-1 rounded-lg border-2 border-primary cursor-pointer" } else { "flex flex-col items-center gap-1 p-1 rounded-lg border-2 border-transparent cursor-pointer hover:border-base-content/20" }, // Swatch preview — rendered in its own data-theme context so colors
+                                onclick: move |_| {
+                                    *state.current_theme.write() = id.to_string();
+                                    if let Some(window) = web_sys::window() {
+                                        if let Ok(Some(storage)) = window.local_storage() {
+                                            let _ = storage.set_item("rsplayer_theme", id);
+                                        }
+                                    }
+                                },
+                                // Swatch preview — rendered in its own data-theme context so colors
+                                // reflect that theme regardless of the active page theme.
+                                div {
+                                    "data-theme": id,
+                                    class: "w-14 h-10 rounded overflow-hidden grid grid-cols-2",
+                                    div { class: "bg-base-100 col-span-1 row-span-2" }
+                                    div { class: "bg-primary" }
+                                    div { class: "bg-secondary" }
+                                }
+                                span { class: "text-xs font-medium", "{label}" }
+                            }
+                        }
+                    })
+            }
+        }
+    }
 }

@@ -23,7 +23,8 @@
 # Examples:
 #   ./test_install.sh debian                  # Debian 12 on native arch
 #   ./test_install.sh fedora                  # Fedora 40 on native arch
-#   ./test_install.sh arch                    # Arch Linux on native arch (no systemd)
+#   ./test_install.sh arch                    # Arch Linux on native arch
+#   ./test_install.sh nixos                   # NixOS on native arch
 #   ./test_install.sh debian linux/arm64      # Debian 12 on aarch64
 #   ./test_install.sh fedora linux/arm64      # Fedora 40 on aarch64
 #   ./test_install.sh debian linux/riscv64    # Debian 12 on riscv64
@@ -36,9 +37,9 @@ PLATFORM="${2:-}"
 CONTAINER_NAME="rsplayer-test-${DISTRO:-none}"
 
 if [ -z "$DISTRO" ]; then
-    echo "Usage: $0 <debian|fedora|arch> [linux/amd64|linux/arm64|linux/riscv64]"
+    echo "Usage: $0 <debian|fedora|arch|nixos> [linux/amd64|linux/arm64|linux/riscv64]"
     echo
-    echo "Supported distros:   debian, fedora, arch"
+    echo "Supported distros:   debian, fedora, arch, nixos"
     echo "Supported platforms: linux/amd64, linux/arm64, linux/riscv64 (default: native)"
     echo
     echo "Note: arm/v7 and arm/v6 are NOT supported by the systemd docker images."
@@ -82,8 +83,12 @@ case "$DISTRO" in
             exit 1
         fi
         ;;
+    nixos)
+        IMAGE="nixos/nix:latest"
+        INSTALL_DEPS=""
+        ;;
     *)
-        echo "Unknown distro: $DISTRO (use debian, fedora, or arch)"
+        echo "Unknown distro: $DISTRO (use debian, fedora, arch, or nixos)"
         exit 1
         ;;
 esac
@@ -100,27 +105,50 @@ echo "Container: $CONTAINER_NAME"
 echo "UI:        http://localhost:8010 (after install)"
 echo "========================================"
 
-MOUNT_FLAG="-v ${SCRIPT_DIR}/install.sh:/mnt/install.sh:ro"
-echo "Mode: LOCAL (install.sh mounted at /mnt/install.sh)"
-INSTALL_CMD="bash /mnt/install.sh"
+if [ "$DISTRO" = "nixos" ]; then
+    MOUNT_FLAG="-v ${SCRIPT_DIR}/PKGS/nix:/mnt/nix:ro"
+    echo "Mode: NIX (PKGS/nix mounted at /mnt/nix)"
+    INSTALL_CMD="nix-build /mnt/nix/default.nix"
+else
+    MOUNT_FLAG="-v ${SCRIPT_DIR}/install.sh:/mnt/install.sh:ro"
+    echo "Mode: LOCAL (install.sh mounted at /mnt/install.sh)"
+    INSTALL_CMD="bash /mnt/install.sh"
+fi
 
 echo
-echo "Starting container with systemd..."
+if [ "$DISTRO" = "nixos" ]; then
+    echo "Starting Nix container..."
+else
+    echo "Starting container with systemd..."
+fi
 echo "========================================"
 
-# Start container with systemd as PID 1
-docker run -d \
-    $PLATFORM_FLAG \
-    --name "$CONTAINER_NAME" \
-    --privileged \
-    --cgroupns=host \
-    -p 8010:80 \
-    $MOUNT_FLAG \
-    -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-    "$IMAGE"
+if [ "$DISTRO" = "nixos" ]; then
+    docker run -d \
+        $PLATFORM_FLAG \
+        --name "$CONTAINER_NAME" \
+        -p 8010:80 \
+        $MOUNT_FLAG \
+        "$IMAGE" \
+        sleep infinity
+else
+    docker run -d \
+        $PLATFORM_FLAG \
+        --name "$CONTAINER_NAME" \
+        --privileged \
+        --cgroupns=host \
+        -p 8010:80 \
+        $MOUNT_FLAG \
+        -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+        "$IMAGE"
+fi
 
-echo "Waiting for systemd to boot..."
-sleep 3
+if [ "$DISTRO" = "nixos" ]; then
+    echo "Container ready."
+else
+    echo "Waiting for systemd to boot..."
+    sleep 3
+fi
 
 if [ -n "$PLATFORM" ]; then
     echo
@@ -128,11 +156,17 @@ if [ -n "$PLATFORM" ]; then
     echo "[WARN] Package installs (dnf/apt) can take 5-15 minutes."
     echo "[WARN] For faster testing, use real arm64/riscv64 hardware."
     echo
-    echo "Skipping dependency install from host (too slow)."
-    echo "Install deps manually inside the container."
+    if [ "$DISTRO" = "nixos" ]; then
+        echo "Nix build will download prebuilt binary (fast)."
+    else
+        echo "Skipping dependency install from host (too slow)."
+        echo "Install deps manually inside the container."
+    fi
 else
-    echo "Installing dependencies..."
-    docker exec "$CONTAINER_NAME" bash -c "$INSTALL_DEPS"
+    if [ "$DISTRO" != "nixos" ]; then
+        echo "Installing dependencies..."
+        docker exec "$CONTAINER_NAME" bash -c "$INSTALL_DEPS"
+    fi
 fi
 
 echo
@@ -140,7 +174,16 @@ echo "========================================"
 echo "Container ready. Entering shell."
 echo "========================================"
 echo
-if [ -n "$PLATFORM" ]; then
+if [ "$DISTRO" = "nixos" ]; then
+    echo "Run this to build rsplayer:"
+    echo "  $INSTALL_CMD"
+    echo
+    echo "Or install to profile:"
+    echo "  nix profile install /mnt/nix#default"
+    echo
+    echo "The binary will be at:"
+    echo "  ./result/bin/rsplayer"
+elif [ -n "$PLATFORM" ]; then
     echo "1. Install deps first:"
     echo "   $INSTALL_DEPS"
     echo
@@ -151,20 +194,30 @@ else
     echo "  $INSTALL_CMD"
 fi
 echo
-echo "After install:"
-echo "  systemctl status rsplayer"
-echo "  journalctl -u rsplayer -f -n 50"
-echo
+if [ "$DISTRO" != "nixos" ]; then
+    echo "After install:"
+    echo "  systemctl status rsplayer"
+    echo "  journalctl -u rsplayer -f -n 50"
+    echo
+fi
 echo "UI: http://localhost:8010"
 echo "========================================"
 echo
 
 # Exec into the container
-docker exec -it "$CONTAINER_NAME" bash
+if [ "$DISTRO" = "nixos" ]; then
+    docker exec -it "$CONTAINER_NAME" sh
+else
+    docker exec -it "$CONTAINER_NAME" bash
+fi
 
 echo
 echo "========================================"
 echo "Exited shell. Container is still running."
-echo "  Re-enter:  docker exec -it $CONTAINER_NAME bash"
+if [ "$DISTRO" = "nixos" ]; then
+    echo "  Re-enter:  docker exec -it $CONTAINER_NAME sh"
+else
+    echo "  Re-enter:  docker exec -it $CONTAINER_NAME bash"
+fi
 echo "  Stop:      docker rm -f $CONTAINER_NAME"
 echo "========================================"

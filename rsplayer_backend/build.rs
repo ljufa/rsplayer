@@ -18,14 +18,16 @@ fn main() {
 
     let out_dir = env::var("OUT_DIR").unwrap();
 
-    let template =
-        fs::read_to_string("../rsplayer_web_ui/public/index.html").expect("Failed to read index.html template");
-
-    let processed = template.replace("__VERSION__", &version);
+    // Read the index.html produced by `dx build --release --platform web`.
+    // Run that command before building the backend.
+    let dx_index = "../rsplayer_web_ui/target/dx/rsplayer_web_ui/release/web/public/index.html";
+    let index_html = fs::read_to_string(dx_index)
+        .expect("index.html not found — run `dx build --release --platform web` in rsplayer_web_ui first");
 
     let dest = Path::new(&out_dir).join("index.html");
-    fs::write(&dest, processed).expect("Failed to write processed index.html");
+    fs::write(&dest, index_html).expect("Failed to write index.html");
 
-    println!("cargo:rerun-if-changed=../rsplayer_web_ui/public/index.html");
+    println!("cargo:rerun-if-changed={dx_index}");
+    println!("cargo:rerun-if-changed=../rsplayer_web_ui/target/dx/rsplayer_web_ui/release/web/public/tw.css");
     println!("cargo:rerun-if-changed=../Makefile.toml");
 }

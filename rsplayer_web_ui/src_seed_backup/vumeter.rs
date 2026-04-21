@@ -55,24 +55,6 @@ impl VisualizerType {
             _ => None,
         }
     }
-
-    pub fn cycle(self) -> Self {
-        match self {
-            Self::None => Self::NeonBar,
-            Self::NeonBar => Self::Spectrum,
-            Self::Spectrum => Self::Wave,
-            Self::Wave => Self::Circular,
-            Self::Circular => Self::Lissajous,
-            Self::Lissajous => Self::Particles,
-            Self::Particles => Self::Mirror,
-            Self::Mirror => Self::Starfield,
-            Self::Starfield => Self::Dna,
-            Self::Dna => Self::Plasma,
-            Self::Plasma => Self::Tunnel,
-            Self::Tunnel => Self::Bounce,
-            Self::Bounce => Self::None,
-        }
-    }
 }
 
 /// Particle: [x_px, y_px, vx_px, vy_px, life (0–1)]
@@ -108,6 +90,7 @@ pub struct VUMeter {
 }
 
 impl VUMeter {
+
     pub fn with_type(canvas_id: &str, visualizer_type: VisualizerType) -> Option<Self> {
         let window = web_sys::window()?;
         let document = window.document()?;
@@ -300,11 +283,7 @@ impl VUMeter {
             .filter_map(|mut r| {
                 r[0] += 0.07;
                 r[1] -= 0.07;
-                if r[1] > 0.01 {
-                    Some(r)
-                } else {
-                    None
-                }
+                if r[1] > 0.01 { Some(r) } else { None }
             })
             .collect();
 
@@ -374,22 +353,10 @@ impl VUMeter {
         for ball in &mut self.bounce_balls {
             ball[0] += ball[2] * speed_factor;
             ball[1] += ball[3] * speed_factor;
-            if ball[0] < 0.0 {
-                ball[0] = 0.0;
-                ball[2] = ball[2].abs();
-            }
-            if ball[0] > 1.0 {
-                ball[0] = 1.0;
-                ball[2] = -ball[2].abs();
-            }
-            if ball[1] < 0.0 {
-                ball[1] = 0.0;
-                ball[3] = ball[3].abs();
-            }
-            if ball[1] > 1.0 {
-                ball[1] = 1.0;
-                ball[3] = -ball[3].abs();
-            }
+            if ball[0] < 0.0 { ball[0] = 0.0; ball[2] = ball[2].abs(); }
+            if ball[0] > 1.0 { ball[0] = 1.0; ball[2] = -ball[2].abs(); }
+            if ball[1] < 0.0 { ball[1] = 0.0; ball[3] = ball[3].abs(); }
+            if ball[1] > 1.0 { ball[1] = 1.0; ball[3] = -ball[3].abs(); }
             ball[4] = (ball[4] + 0.5 + intensity * 1.5) % 360.0;
         }
     }
@@ -497,9 +464,9 @@ impl VUMeter {
             // Hue: violet (270°) at left → red (0°) at right
             let hue = 270.0 - (i as f64 / (bar_count_f - 1.0)) * 270.0;
 
-            let h_left = (self.spectrum_bars_left[i] / 255.0) * max_bar_h;
+            let h_left  = (self.spectrum_bars_left[i]  / 255.0) * max_bar_h;
             let h_right = (self.spectrum_bars_right[i] / 255.0) * max_bar_h;
-            let ph_left = (self.spectrum_peaks_left[i] / 255.0) * max_bar_h;
+            let ph_left  = (self.spectrum_peaks_left[i]  / 255.0) * max_bar_h;
             let ph_right = (self.spectrum_peaks_right[i] / 255.0) * max_bar_h;
 
             // Left channel — grows upward from centre
@@ -528,7 +495,7 @@ impl VUMeter {
             (base_y, base_y, base_y + h)
         };
 
-        let color_tip = format!("hsl({:.0}, 100%, 65%)", hue);
+        let color_tip  = format!("hsl({:.0}, 100%, 65%)", hue);
         let color_base = format!("hsla({:.0}, 100%, 40%, 0.55)", hue);
 
         let grad = self.ctx.create_linear_gradient(x, grad_top, x, grad_bot);
@@ -581,11 +548,7 @@ impl VUMeter {
             for i in 0..point_count {
                 let x = (i as f64 / point_count as f64) * width;
                 let y = center_y + points[i] * amp * 0.48;
-                if i == 0 {
-                    self.ctx.move_to(x, y);
-                } else {
-                    self.ctx.line_to(x, y);
-                }
+                if i == 0 { self.ctx.move_to(x, y); } else { self.ctx.line_to(x, y); }
             }
             self.ctx.stroke();
 
@@ -598,11 +561,7 @@ impl VUMeter {
             for i in 0..point_count {
                 let x = (i as f64 / point_count as f64) * width;
                 let y = center_y + points[i] * amp * 0.48;
-                if i == 0 {
-                    self.ctx.move_to(x, y);
-                } else {
-                    self.ctx.line_to(x, y);
-                }
+                if i == 0 { self.ctx.move_to(x, y); } else { self.ctx.line_to(x, y); }
             }
             self.ctx.stroke();
             self.ctx.set_shadow_blur(0.0);
@@ -611,12 +570,7 @@ impl VUMeter {
         // Left channel — top half, cyan (3 cycles)
         draw_channel(&self.wave_points, half / 2.0, "#00ffcc", "rgba(0,255,200,0.12)");
         // Right channel — bottom half, magenta (5 cycles)
-        draw_channel(
-            &self.wave_points_right,
-            half + half / 2.0,
-            "#ff44cc",
-            "rgba(255,50,180,0.12)",
-        );
+        draw_channel(&self.wave_points_right, half + half / 2.0, "#ff44cc", "rgba(255,50,180,0.12)");
     }
 
     fn draw_circular(&self, width: f64, height: f64) {
@@ -665,17 +619,17 @@ impl VUMeter {
     }
 
     fn draw_neon_bar(&self, x: f64, y: f64, w: f64, h: f64, value: f64, peak: f64) {
-        let percent = (value / 255.0).min(1.0);
-        let fill_w = w * percent;
+        let percent  = (value / 255.0).min(1.0);
+        let fill_w   = w * percent;
         let peak_pct = (peak / 255.0).min(1.0);
         let glow_hue = 220.0 - percent * 220.0; // 220° blue → 0° red
 
         // === Ghost track (full width, dim gradient shows potential max) ===
         let bg = self.ctx.create_linear_gradient(x, y, x + w, y);
-        let _ = bg.add_color_stop(0.0, "rgba(30, 80, 255, 0.13)");
+        let _ = bg.add_color_stop(0.0,  "rgba(30, 80, 255, 0.13)");
         let _ = bg.add_color_stop(0.45, "rgba(0,  200, 80, 0.13)");
         let _ = bg.add_color_stop(0.75, "rgba(255, 210, 0, 0.13)");
-        let _ = bg.add_color_stop(1.0, "rgba(255, 20,  0, 0.13)");
+        let _ = bg.add_color_stop(1.0,  "rgba(255, 20,  0, 0.13)");
         self.ctx.set_fill_style_canvas_gradient(&bg);
         self.ctx.fill_rect(x, y, w, h);
 
@@ -687,24 +641,23 @@ impl VUMeter {
         if fill_w > 0.5 {
             // === Rainbow fill bar ===
             let fg = self.ctx.create_linear_gradient(x, y, x + w, y);
-            let _ = fg.add_color_stop(0.0, "hsl(220, 100%, 58%)");
+            let _ = fg.add_color_stop(0.0,  "hsl(220, 100%, 58%)");
             let _ = fg.add_color_stop(0.35, "hsl(165, 100%, 52%)");
-            let _ = fg.add_color_stop(0.6, "hsl(100, 100%, 48%)");
+            let _ = fg.add_color_stop(0.6,  "hsl(100, 100%, 48%)");
             let _ = fg.add_color_stop(0.78, "hsl(55,  100%, 50%)");
             let _ = fg.add_color_stop(0.92, "hsl(25,  100%, 54%)");
-            let _ = fg.add_color_stop(1.0, "hsl(0,   100%, 54%)");
+            let _ = fg.add_color_stop(1.0,  "hsl(0,   100%, 54%)");
             self.ctx.set_shadow_blur(18.0);
-            self.ctx
-                .set_shadow_color(&format!("hsla({:.0},100%,60%,0.75)", glow_hue));
+            self.ctx.set_shadow_color(&format!("hsla({:.0},100%,60%,0.75)", glow_hue));
             self.ctx.set_fill_style_canvas_gradient(&fg);
             self.ctx.fill_rect(x, y, fill_w, h);
             self.ctx.set_shadow_blur(0.0);
 
             // Top highlight stripe — makes bar look lit from above
             let hi = self.ctx.create_linear_gradient(x, y, x + w, y);
-            let _ = hi.add_color_stop(0.0, "rgba(130, 170, 255, 0.50)");
+            let _ = hi.add_color_stop(0.0,  "rgba(130, 170, 255, 0.50)");
             let _ = hi.add_color_stop(0.45, "rgba(130, 255, 200, 0.50)");
-            let _ = hi.add_color_stop(1.0, "rgba(255, 140, 100, 0.50)");
+            let _ = hi.add_color_stop(1.0,  "rgba(255, 140, 100, 0.50)");
             self.ctx.set_fill_style_canvas_gradient(&hi);
             self.ctx.fill_rect(x, y, fill_w, (h * 0.20).max(2.0));
 
@@ -720,8 +673,8 @@ impl VUMeter {
 
         // === Peak hold marker ===
         if peak > 3.0 {
-            let phue = 220.0 - peak_pct * 220.0;
-            let pcol = format!("hsl({:.0},100%,85%)", phue);
+            let phue  = 220.0 - peak_pct * 220.0;
+            let pcol  = format!("hsl({:.0},100%,85%)", phue);
             let peak_x = x + w * peak_pct;
             self.ctx.set_shadow_blur(12.0);
             self.ctx.set_shadow_color(&pcol);
@@ -808,7 +761,7 @@ impl VUMeter {
 
             let line_w = (life * 3.5 + 0.5).max(0.5);
             let color = format!("hsla({:.0},100%,65%,{:.3})", hue, life);
-            let glow = format!("hsl({:.0},100%,65%)", hue);
+            let glow  = format!("hsl({:.0},100%,65%)", hue);
 
             self.ctx.set_stroke_style_str(&color);
             self.ctx.set_shadow_blur(life * 22.0);
@@ -833,8 +786,8 @@ impl VUMeter {
         for star in &self.stars {
             let z = star[2];
             let prev_z = star[3];
-            let sx = (star[0] / z) * scale + cx;
-            let sy = (star[1] / z) * scale * (height / width) + cy;
+            let sx     = (star[0] / z)      * scale + cx;
+            let sy     = (star[1] / z)      * scale * (height / width) + cy;
             let prev_sx = (star[0] / prev_z) * scale + cx;
             let prev_sy = (star[1] / prev_z) * scale * (height / width) + cy;
 
@@ -862,23 +815,21 @@ impl VUMeter {
     fn draw_dna(&self, width: f64, height: f64) {
         self.ctx.clear_rect(0.0, 0.0, width, height);
         let mid_y = height / 2.0;
-        let amp_l = (self.smoothed_left / 255.0).max(0.08);
+        let amp_l = (self.smoothed_left  / 255.0).max(0.08);
         let amp_r = (self.smoothed_right / 255.0).max(0.08);
-        let amp = mid_y * 0.82;
+        let amp   = mid_y * 0.82;
         let steps = 80usize;
 
         // Rungs
         for i in 0..=steps {
-            let t = i as f64 / steps as f64;
-            let x = t * width;
+            let t     = i as f64 / steps as f64;
+            let x     = t * width;
             let phase = t * std::f64::consts::TAU * 2.5 + self.wave_phase;
-            let y1 = mid_y + phase.sin() * amp * amp_l;
-            let y2 = mid_y + (phase + std::f64::consts::PI).sin() * amp * amp_r;
+            let y1    = mid_y + phase.sin()                           * amp * amp_l;
+            let y2    = mid_y + (phase + std::f64::consts::PI).sin() * amp * amp_r;
             let persp = (phase.cos() + 1.0) * 0.5;
-            if persp < 0.08 {
-                continue;
-            }
-            let hue = t * 180.0 + 180.0;
+            if persp < 0.08 { continue; }
+            let hue   = t * 180.0 + 180.0;
             let color = format!("hsla({:.0},100%,70%,{:.2})", hue, persp * 0.55);
             self.ctx.set_stroke_style_str(&color);
             self.ctx.set_line_width(persp * 2.5 + 0.5);
@@ -901,11 +852,7 @@ impl VUMeter {
             let t = i as f64 / steps as f64;
             let x = t * width;
             let y = mid_y + (t * std::f64::consts::TAU * 2.5 + self.wave_phase).sin() * amp * amp_l;
-            if i == 0 {
-                self.ctx.move_to(x, y);
-            } else {
-                self.ctx.line_to(x, y);
-            }
+            if i == 0 { self.ctx.move_to(x, y); } else { self.ctx.line_to(x, y); }
         }
         self.ctx.stroke();
 
@@ -916,13 +863,8 @@ impl VUMeter {
         for i in 0..=steps {
             let t = i as f64 / steps as f64;
             let x = t * width;
-            let y =
-                mid_y + (t * std::f64::consts::TAU * 2.5 + self.wave_phase + std::f64::consts::PI).sin() * amp * amp_r;
-            if i == 0 {
-                self.ctx.move_to(x, y);
-            } else {
-                self.ctx.line_to(x, y);
-            }
+            let y = mid_y + (t * std::f64::consts::TAU * 2.5 + self.wave_phase + std::f64::consts::PI).sin() * amp * amp_r;
+            if i == 0 { self.ctx.move_to(x, y); } else { self.ctx.line_to(x, y); }
         }
         self.ctx.stroke();
         self.ctx.set_shadow_blur(0.0);
@@ -930,25 +872,25 @@ impl VUMeter {
 
     fn draw_plasma(&self, width: f64, height: f64) {
         self.ctx.clear_rect(0.0, 0.0, width, height);
-        let t = self.plasma_time;
+        let t         = self.plasma_time;
         let intensity = (self.smoothed_left + self.smoothed_right) / 510.0;
-        let r = (width.min(height) * (0.5 + intensity * 0.4)).max(10.0);
+        let r         = (width.min(height) * (0.5 + intensity * 0.4)).max(10.0);
 
         let _ = self.ctx.set_global_composite_operation("screen");
 
         let blobs: [(f64, f64, f64); 3] = [
             (
-                width * (0.5 + 0.42 * (t * 0.71).sin()),
+                width  * (0.5 + 0.42 * (t * 0.71).sin()),
                 height * (0.5 + 0.42 * (t * 0.89).cos()),
                 190.0 + t.sin() * 40.0,
             ),
             (
-                width * (0.5 + 0.42 * (t * 1.13).cos()),
+                width  * (0.5 + 0.42 * (t * 1.13).cos()),
                 height * (0.5 + 0.42 * (t * 0.67).sin()),
                 270.0 + t.cos() * 40.0,
             ),
             (
-                width * (0.5 + 0.35 * (t * 0.83).sin()),
+                width  * (0.5 + 0.35 * (t * 0.83).sin()),
                 height * (0.5 + 0.35 * (t * 1.17).cos()),
                 330.0 + (t * 1.3).sin() * 40.0,
             ),
@@ -957,7 +899,7 @@ impl VUMeter {
         for (cx, cy, hue) in blobs {
             if let Ok(grad) = self.ctx.create_radial_gradient(cx, cy, 0.0, cx, cy, r) {
                 let _ = grad.add_color_stop(0.0, &format!("hsla({:.0},100%,65%,0.75)", hue));
-                let _ = grad.add_color_stop(1.0, &format!("hsla({:.0},100%,65%,0.0)", hue));
+                let _ = grad.add_color_stop(1.0, &format!("hsla({:.0},100%,65%,0.0)",  hue));
                 self.ctx.set_fill_style_canvas_gradient(&grad);
                 self.ctx.fill_rect(0.0, 0.0, width, height);
             }
@@ -968,23 +910,21 @@ impl VUMeter {
 
     fn draw_tunnel(&self, width: f64, height: f64) {
         self.ctx.clear_rect(0.0, 0.0, width, height);
-        let cx = width / 2.0;
+        let cx = width  / 2.0;
         let cy = height / 2.0;
 
         for (idx, ring) in self.pulse_rings.iter().enumerate() {
             let size = ring[0];
             let life = ring[1];
-            let hue = ring[2];
-            let rx = cx * size * 1.1;
-            let ry = cy * size * 1.1;
-            if rx < 0.5 || ry < 0.5 {
-                continue;
-            }
+            let hue  = ring[2];
+            let rx   = cx * size * 1.1;
+            let ry   = cy * size * 1.1;
+            if rx < 0.5 || ry < 0.5 { continue; }
 
             let rotation = self.lissajous_phase * 0.3 + idx as f64 * 0.12;
-            let color = format!("hsla({:.0},100%,65%,{:.3})", hue, life);
-            let glow = format!("hsl({:.0},100%,65%)", hue);
-            let line_w = (life * 2.5 + 0.5).max(0.5);
+            let color    = format!("hsla({:.0},100%,65%,{:.3})", hue, life);
+            let glow     = format!("hsl({:.0},100%,65%)", hue);
+            let line_w   = (life * 2.5 + 0.5).max(0.5);
 
             self.ctx.save();
             let _ = self.ctx.translate(cx, cy);
@@ -1004,7 +944,7 @@ impl VUMeter {
 
     fn draw_bounce(&self, width: f64, height: f64) {
         self.ctx.clear_rect(0.0, 0.0, width, height);
-        let n = self.bounce_balls.len();
+        let n        = self.bounce_balls.len();
         let max_dist = width.min(height) * 0.6;
 
         // Connecting lines
@@ -1017,9 +957,8 @@ impl VUMeter {
                 let dist = ((x2 - x1).powi(2) + (y2 - y1).powi(2)).sqrt();
                 if dist < max_dist {
                     let alpha = (1.0 - dist / max_dist) * 0.45;
-                    let hue = (self.bounce_balls[i][4] + self.bounce_balls[j][4]) / 2.0;
-                    self.ctx
-                        .set_stroke_style_str(&format!("hsla({:.0},100%,65%,{:.2})", hue, alpha));
+                    let hue   = (self.bounce_balls[i][4] + self.bounce_balls[j][4]) / 2.0;
+                    self.ctx.set_stroke_style_str(&format!("hsla({:.0},100%,65%,{:.2})", hue, alpha));
                     self.ctx.set_line_width(1.5);
                     self.ctx.set_shadow_blur(0.0);
                     self.ctx.begin_path();
@@ -1032,9 +971,9 @@ impl VUMeter {
 
         // Balls
         for ball in &self.bounce_balls {
-            let x = ball[0] * width;
-            let y = ball[1] * height;
-            let hue = ball[4];
+            let x     = ball[0] * width;
+            let y     = ball[1] * height;
+            let hue   = ball[4];
             let color = format!("hsl({:.0},100%,70%)", hue);
             self.ctx.set_fill_style_str(&color);
             self.ctx.set_shadow_blur(20.0);

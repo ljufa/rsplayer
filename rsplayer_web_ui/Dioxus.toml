@@ -1,0 +1,29 @@
+[application]
+asset_dir = "public"
+
+[web.wasm_opt]
+level = "4"
+
+[web.app]
+title = "RSPlayer"
+
+[web.watcher]
+index_on_404 = true
+watch_path = ["src"]
+
+[[web.proxy]]
+path = "/api"
+backend = "http://localhost:8000/api"
+
+[[web.proxy]]
+path = "/artwork"
+backend = "http://localhost:8000/artwork"
+
+[bundle]
+identifier = "io.github.rsplayer"
+publisher = "rsplayer"
+icon = ["public/favicon.ico"]
+copyright = ""
+category = "Utility"
+short_description = "RSPlayer — Raspberry Pi music player"
+long_description = "RSPlayer — Raspberry Pi music player"

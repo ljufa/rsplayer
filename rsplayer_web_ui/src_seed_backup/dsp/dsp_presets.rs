@@ -24,7 +24,7 @@ pub fn get_dsp_presets() -> Vec<DspPreset> {
                     slope: None,
                     gain: 6.0,
                 },
-                channels: vec![],
+                channels: vec![], // Global
             }],
         },
         DspPreset {
