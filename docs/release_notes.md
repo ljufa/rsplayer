@@ -1,5 +1,67 @@
 # Release Notes
 
+## v2.8.0 — 2026-04-21
+
+### Frontend: Rewritten in Dioxus
+
+The web UI has been fully rewritten from the [Seed](https://seed-rs.org/) framework to [Dioxus 0.7](https://dioxuslabs.com/). Seed required an Elm-like message-passing architecture that was verbose and hard to extend; Dioxus uses a React-style component model with fine-grained reactive signals, making the code substantially more direct. The rewrite also served as a complete visual redesign — the old Bulma + FontAwesome stylesheet has been replaced with Tailwind CSS + DaisyUI + Material Icons.
+
+#### Architecture
+
+- **Reactive signals**: Global application state (`AppState`) is a flat struct of `Signal<T>` values, provided via context and subscribed to at the component level. Components re-render only when the signals they read change.
+- **SPA routing**: Navigation uses the browser History API (`pushState`) and a `popstate` listener. A `CurrentPath` context signal holds the active route; the root `App` component pattern-matches on it to render the correct page.
+- **WebSocket hook**: A dedicated `use_websocket` hook manages the connection lifecycle — connects on mount, dispatches incoming `StateChangeEvent` messages directly into `AppState` signals, and auto-reconnects with a 3-second delay on close or error.
+- **Panic overlay**: Unhandled WASM panics now show a full-screen recovery overlay instead of a blank page, with an error details section and buttons to go home or reload.
+
+#### Visual Redesign
+
+- **Tailwind CSS + DaisyUI**: Replaces the Bulma CSS framework. All theming is driven by DaisyUI CSS variables applied to the `<html data-theme>` attribute, enabling consistent dark/light themes across every component.
+- **Material Icons (woff2 only)**: FontAwesome has been removed. The icon set is now Material Icons served from a single self-hosted woff2 file, reducing static asset size significantly.
+- **Immersive background**: The current album art is displayed as a blurred, blended full-page background behind all content. Toggled per-user preference (persisted in `localStorage`).
+- **Footer player bar**: Playback controls live in a persistent footer bar visible on every page, so transport controls are always accessible without navigating to the player page.
+- **Skeleton loading states**: All list and tree views show animated skeleton placeholders while data is being fetched over WebSocket, replacing blank flashes.
+
+#### Player Page
+
+- Album art, song title, artist, and album displayed prominently with adaptive font sizing.
+- Progress bar with seek support.
+- Volume control, mute, playback mode cycle, like/unlike, lyrics toggle, and visualizer toggle all on one screen.
+- Gain/LUFS info line shown below the progress bar when loudness normalization is active.
+
+#### Queue Page
+
+- Paginated queue list with drag-and-drop reordering (HTML5 drag events).
+- Per-item actions: Play, Play Next, Remove.
+- Search bar with clear button; "Focus current song" button jumps to the playing track's page.
+- Save queue as playlist and add URL to queue actions in the toolbar.
+- Clear queue with confirmation modal.
+- Load More button for paginated queues.
+
+#### Library Pages
+
+All library pages are new or substantially rewritten:
+
+- **Artists**: Collapsible tree — Artist → Album → Song. Lazy-loads children on expand. Per-node queue actions: Load, Add, Play Next (songs only).
+- **Files**: Directory tree with recursive lazy loading. Search switches to a flat results view. Per-node queue actions: Load (directories), Add (directories), Add / Play Next (files).
+- **Playlists**: Horizontally scrollable album/playlist carousels organized into collapsible sections — Recently Added, New Releases, Saved, Favorites, By Genre, By Decade. Section headers have Load All / Add All buttons. Clicking a card opens a modal with the full track list.
+- **Radio**: Filter tabs (Favorites, Top, Country, Language, Search). Per-station Add and Play Now actions. Favorite/unfavorite toggle. Browse hierarchy (country → language → station).
+- **Stats**: Library summary cards, playback statistics, loudness analysis progress, and bar charts for top genres and albums by decade — all unchanged in functionality but restyled.
+
+#### Modals
+
+- **Welcome / first-time setup**: Shown on first visit; guides to Settings to configure a playback device.
+- **Keyboard shortcuts**: Full reference overlay, toggled with `?`.
+- **Playlist / album detail**: Opens from any album or playlist card; shows the full track list with pagination.
+- **Add URL to queue**: Text input modal for adding a stream URL directly to the queue.
+- **Save queue as playlist**: Names and saves the current queue as a static playlist.
+- **Clear queue confirmation**: Prevents accidental queue wipe.
+
+#### Notifications
+
+Toast notifications for success and error events from the backend are displayed in the bottom-right corner and auto-dismiss after a few seconds.
+
+---
+
 ## v2.7.5 — 2026-04-09
 
 ### Bug Fixes
