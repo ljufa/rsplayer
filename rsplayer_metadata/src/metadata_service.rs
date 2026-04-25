@@ -403,24 +403,21 @@ impl MetadataService {
         state_changes_sender: &Sender<StateChangeEvent>,
         settings: &MetadataStoreSettings,
     ) -> u32 {
-        use rayon::prelude::*;
-        use std::sync::atomic::{AtomicU32, Ordering};
-
-        let count = AtomicU32::new(0);
-        files.par_iter().for_each(|file| {
-            let c = count.fetch_add(1, Ordering::Relaxed);
+        let mut count = 0u32;
+        for file in files {
             state_changes_sender
-                .send(StateChangeEvent::MetadataSongScanned(format!("Scanning: {c}. {file}")))
+                .send(StateChangeEvent::MetadataSongScanned(format!("Scanning: {count}. {file}")))
                 .ok();
             if let Err(e) = self.scan_single_file(Path::new(file), settings) {
                 log::error!("Unable to scan file {file}. Error: {e}");
             }
-            if c.is_multiple_of(100) {
+            count += 1;
+            if count.is_multiple_of(100) {
                 self.song_repository.flush();
             }
-        });
+        }
         self.song_repository.flush();
-        count.load(Ordering::Relaxed)
+        count
     }
 
     /// Fast metadata extraction for APE files using the `ape_decoder` crate directly.
@@ -502,8 +499,8 @@ impl MetadataService {
         song.file.clone_from(&file_p);
         song.file_date = file_modification_date;
         debug!("Add/update song in database: {song:?}");
-        self.song_repository.save(&song);
-        self.album_repository.update_from_song(song);
+        self.song_repository.save(&song)?;
+        self.album_repository.update_from_song(song)?;
         Ok(())
     }
 
@@ -576,8 +573,8 @@ impl MetadataService {
             };
 
             log::debug!("SACD track {idx}: {virtual_key} ({duration_secs:.1}s)");
-            self.song_repository.save(&song);
-            self.album_repository.update_from_song(song);
+            self.song_repository.save(&song)?;
+            self.album_repository.update_from_song(song)?;
         }
 
         Ok(())
@@ -634,8 +631,8 @@ impl MetadataService {
                 song.file.clone_from(file_p);
                 song.file_date = file_modification_date;
                 log::debug!("Add/update song in database: {song:?}");
-                self.song_repository.save(&song);
-                self.album_repository.update_from_song(song);
+                self.song_repository.save(&song)?;
+                self.album_repository.update_from_song(song)?;
 
                 Ok(())
             }

@@ -15,10 +15,10 @@ impl SongRepository {
         }
     }
 
-    pub fn save(&self, song: &Song) {
+    pub fn save(&self, song: &Song) -> anyhow::Result<()> {
         self.songs_db
             .insert(&song.file, song.to_json_string_bytes())
-            .expect("Failed to save song");
+            .map_err(|e| anyhow::anyhow!("Failed to save song '{}': {e}", song.file))
     }
     pub fn delete(&self, id: &str) {
         self.songs_db.remove(id).expect("Failed to delete song");

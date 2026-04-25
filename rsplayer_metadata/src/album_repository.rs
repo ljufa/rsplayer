@@ -143,13 +143,16 @@ impl AlbumRepository {
             .collect()
     }
 
-    pub fn update_from_song(&self, song: Song) {
+    pub fn update_from_song(&self, song: Song) -> anyhow::Result<()> {
         let raw_album = match song.album.as_ref() {
             Some(a) if !a.is_empty() => a.clone(),
-            _ => return,
+            _ => return Ok(()),
         };
         let key = normalize_name(&raw_album);
-        let existing_album = self.albums_db.get(key.as_bytes()).expect("Album DB error");
+        let existing_album = self
+            .albums_db
+            .get(key.as_bytes())
+            .map_err(|e| anyhow::anyhow!("Album DB read error for '{raw_album}': {e}"))?;
         let mut album = existing_album
             .and_then(|bytes| Album::from_bytes(&bytes))
             .unwrap_or_default();
@@ -189,8 +192,9 @@ impl AlbumRepository {
             album.title = raw_album;
         }
         album.added = song.file_date;
-        _ = self.albums_db.insert(key.as_bytes(), album.to_json_string_bytes());
-        drop(album);
+        self.albums_db
+            .insert(key.as_bytes(), album.to_json_string_bytes())
+            .map_err(|e| anyhow::anyhow!("Album DB write error for '{}': {e}", album.title))
     }
 }
 
@@ -360,7 +364,8 @@ mod test {
                 artist: Some("Pink Floyd".to_string()),
                 file_date: Utc::now(),
                 ..Default::default()
-            });
+            })
+            .expect("update_from_song failed");
         }
         let all = repo.find_all();
         assert_eq!(all.len(), 1);
@@ -381,7 +386,8 @@ mod test {
                 artist: Some(artist.to_string()),
                 file_date: Utc::now(),
                 ..Default::default()
-            });
+            })
+            .expect("update_from_song failed");
         }
         let artists = repo.find_all_album_artists();
         assert_eq!(artists.len(), 1);
@@ -398,14 +404,16 @@ mod test {
             artist: Some("Pink Floyd".to_string()),
             file_date: Utc::now(),
             ..Default::default()
-        });
+        })
+        .expect("update_from_song failed");
         repo.update_from_song(Song {
             file: "pink_floyd/dsotm/time.flac".to_string(),
             album: Some("Dark Side of the Moon".to_string()),
             artist: Some("Pink Floyd".to_string()),
             file_date: Utc::now(),
             ..Default::default()
-        });
+        })
+        .expect("update_from_song failed");
         let albums = repo.find_by_artist("Pink Floyd");
         assert_eq!(albums.len(), 1);
         let found = repo.find_by_id(&albums[0].title);
@@ -424,7 +432,8 @@ mod test {
             artist: Some("Pink Floyd".to_string()),
             file_date: Utc::now(),
             ..Default::default()
-        });
+        })
+        .expect("update_from_song failed");
         assert_eq!(repo.find_by_artist("pink floyd").len(), 1);
         assert_eq!(repo.find_by_artist("PINK FLOYD").len(), 1);
     }

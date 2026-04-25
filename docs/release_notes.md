@@ -28,6 +28,17 @@ RSPlayer can now scan, browse, and play tracks directly from SACD ISO disc image
 
 The `ignored_files.db` database (tracked via `MetadataStoreSettings.db_path`) has been removed. It was originally intended to persist files that failed scanning so they could be skipped on subsequent scans. In practice it was never read — scan failures were always just logged and skipped. The field remains in the settings struct for backward-compatible deserialization of existing configs, but no database file is created or consulted at runtime.
 
+### Bug Fixes
+
+#### Metadata Scan Crash — fjall Lock Poisoning ([#8](https://github.com/ljufa/rsplayer/issues/8))
+
+During a library scan, multiple rayon worker threads were writing to the fjall database concurrently. If any thread encountered a fjall error (I/O, disk pressure), the `.expect()` call in `song_repository.save()` or `album_repository.update_from_song()` would panic. A panic inside a rayon thread while fjall held its internal journal mutex poisoned that lock, causing all other scanning threads to cascade-fail with `PoisonError` and abort the scan.
+
+Two changes were made to fix this:
+
+- `save()` and `update_from_song()` now return `Result<()>` instead of calling `.expect()`. Errors are propagated up to `add_songs_to_db`, where they are logged and the scan continues with the remaining files.
+- Metadata scanning is now sequential (plain `for` loop) instead of parallel (`rayon::par_iter`). This eliminates the lock-poisoning failure mode entirely and also fixes a secondary race condition in `update_from_song` where two threads processing tracks from the same album could overwrite each other's `song_keys` updates, silently dropping tracks from the album index.
+
 ### Build
 
 #### Release WASM Build Fix
