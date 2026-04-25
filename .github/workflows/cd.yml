@@ -48,6 +48,11 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
       # Mount host Docker socket so cross can launch cross-compilation containers
       options: -v /var/run/docker.sock:/var/run/docker.sock
+    env:
+      # Tell cross it is running inside a container so it doesn't try to mount
+      # ~/.cargo / ~/.rustup from the host (those paths resolve on the host machine,
+      # not inside this builder container, causing "cargo: not found" in cross containers)
+      CROSS_CONTAINER_IN_CONTAINER: "true"
     strategy:
       max-parallel: 1
       fail-fast: false
