@@ -84,7 +84,8 @@ impl UsbService {
     }
 
     pub fn send_track_info(&self, title: &str, artist: &str, album: &str) -> Result<()> {
-        *self.last_song_cache.lock().expect("lock poisoned") = Some((title.to_string(), artist.to_string(), album.to_string()));
+        *self.last_song_cache.lock().expect("lock poisoned") =
+            Some((title.to_string(), artist.to_string(), album.to_string()));
         self.send_command(&format!("SetTrack({title}|{artist}|{album})"))
     }
 

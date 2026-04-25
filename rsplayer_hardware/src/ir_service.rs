@@ -56,16 +56,29 @@ impl IrService {
         debug!("keycode:{key_code}; remotename:{remote_name}");
         if remote_name == "Apple_A1156" {
             match key_code {
-                "KEY_KPPLUS" => { let _ = self.system_commands_tx.send(SystemCommand::VolUp).await; }
-                "KEY_KPMINUS" => { let _ = self.system_commands_tx.send(SystemCommand::VolDown).await; }
+                "KEY_KPPLUS" => {
+                    let _ = self.system_commands_tx.send(SystemCommand::VolUp).await;
+                }
+                "KEY_KPMINUS" => {
+                    let _ = self.system_commands_tx.send(SystemCommand::VolDown).await;
+                }
                 "KEY_FASTFORWARD" => {
-                    let _ = self.user_command_tx.send(UserCommand::Player(PlayerCommand::Next)).await;
+                    let _ = self
+                        .user_command_tx
+                        .send(UserCommand::Player(PlayerCommand::Next))
+                        .await;
                 }
                 "KEY_REWIND" => {
-                    let _ = self.user_command_tx.send(UserCommand::Player(PlayerCommand::Prev)).await;
+                    let _ = self
+                        .user_command_tx
+                        .send(UserCommand::Player(PlayerCommand::Prev))
+                        .await;
                 }
                 "KEY_PLAY" => {
-                    let _ = self.user_command_tx.send(UserCommand::Player(PlayerCommand::TogglePlay)).await;
+                    let _ = self
+                        .user_command_tx
+                        .send(UserCommand::Player(PlayerCommand::TogglePlay))
+                        .await;
                 }
                 _ => {}
             }

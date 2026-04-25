@@ -357,7 +357,7 @@ fn Controls(
     let liked = current_song
         .as_ref()
         .and_then(|s| s.statistics.as_ref())
-        .map_or(false, |st| st.liked_count > 0);
+        .is_some_and(|st| st.liked_count > 0);
     let song_id = current_song.as_ref().map(|s| s.file.clone());
     let is_muted = volume.current == 0;
 

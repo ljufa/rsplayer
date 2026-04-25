@@ -345,7 +345,8 @@ impl Default for MetadataStoreSettings {
                 "mp3", "mp2", "mp1", "m4a", "ogg", "oga", // Lossless containers
                 "caf", // Matroska / WebM (audio-only containers)
                 "mka", "weba", // DSD
-                "dsf", "dff",
+                "dsf", "dff", // SACD disc image
+                "iso",
             ]
             .into_iter()
             .map(std::borrow::ToOwned::to_owned)

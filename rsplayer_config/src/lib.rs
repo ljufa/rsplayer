@@ -35,7 +35,10 @@ impl Configuration {
                     {
                         settings.metadata_settings.music_directories =
                             vec![settings.metadata_settings.music_directory.clone()];
-                        _ = tree.insert(SETTINGS_KEY, serde_json::to_vec(&settings).expect("failed to serialize settings"));
+                        _ = tree.insert(
+                            SETTINGS_KEY,
+                            serde_json::to_vec(&settings).expect("failed to serialize settings"),
+                        );
                         log::info!(
                             "Migrated legacy music_directory '{}' to music_directories",
                             settings.metadata_settings.music_directory
@@ -50,7 +53,10 @@ impl Configuration {
             }
         } else {
             let s = Settings::default();
-            _ = tree.insert(SETTINGS_KEY, serde_json::to_vec(&s).expect("failed to serialize settings"));
+            _ = tree.insert(
+                SETTINGS_KEY,
+                serde_json::to_vec(&s).expect("failed to serialize settings"),
+            );
             s
         };
         Self {
@@ -69,7 +75,10 @@ impl Configuration {
 
     pub fn save_settings(&self, settings: &Settings) {
         *self.settings.write().expect("settings lock poisoned") = settings.clone();
-        _ = self.tree.insert(SETTINGS_KEY, serde_json::to_vec(settings).expect("failed to serialize settings"));
+        _ = self.tree.insert(
+            SETTINGS_KEY,
+            serde_json::to_vec(settings).expect("failed to serialize settings"),
+        );
     }
 }
 

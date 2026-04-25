@@ -18,14 +18,7 @@ impl AlbumRepository {
     }
 
     pub fn delete_all(&self) {
-        let keys: Vec<Vec<u8>> = self
-            .albums_db
-            .iter()
-            .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
-            .collect();
-        for key in keys {
-            _ = self.albums_db.remove(key);
-        }
+        _ = self.albums_db.clear();
     }
 
     pub fn find_all_album_artists(&self) -> Vec<String> {
@@ -107,7 +100,7 @@ impl AlbumRepository {
                 (display_name, albums)
             })
             .collect();
-        result.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+        result.sort_by_key(|a| a.0.to_lowercase());
         result
     }
 
@@ -438,7 +431,9 @@ mod test {
 
     #[test]
     fn test_delete_all() {
-        let album_repository = create_album_repo();
+        // Keep ctx alive so the database directory exists on disk — clear() needs it.
+        let ctx = test_shared::Context::default();
+        let album_repository = AlbumRepository::new_standalone(&ctx.db_dir);
         insert_albums!(
             &album_repository,
             "a1",

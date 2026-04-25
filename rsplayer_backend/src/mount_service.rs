@@ -351,13 +351,11 @@ impl MountService {
     }
 
     fn is_mounted(mount_point: &str) -> bool {
-        fs::read_to_string("/proc/mounts")
-            .map(|content| {
-                content
-                    .lines()
-                    .any(|line| line.split_whitespace().nth(1) == Some(mount_point))
-            })
-            .unwrap_or(false)
+        fs::read_to_string("/proc/mounts").is_ok_and(|content| {
+            content
+                .lines()
+                .any(|line| line.split_whitespace().nth(1) == Some(mount_point))
+        })
     }
 }
 

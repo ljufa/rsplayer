@@ -342,7 +342,7 @@ pub fn LibraryRadioPage() -> Element {
                 // Browse items list (country/language/tag)
                 div { class: "overflow-y-auto",
                     {browse_items.read().iter().cloned().map(|item| {
-                        let (label, count) = match &item {
+                        let (label, _count) = match &item {
                             BrowseItem::Country(c) => (format!("{} ({})", c.name, c.stationcount), c.stationcount),
                             BrowseItem::Language(l) => (format!("{} ({})", l.name, l.stationcount), l.stationcount),
                             BrowseItem::Tag(t) => (format!("{} ({})", t.name, t.stationcount), t.stationcount),

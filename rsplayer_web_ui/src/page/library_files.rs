@@ -61,11 +61,7 @@ pub fn LibraryFilesPage() -> Element {
             .and_then(|s| {
                 s.split('&').chain(s.split('?')).find_map(|p| {
                     let p = p.trim_start_matches('?');
-                    if let Some(v) = p.strip_prefix("search=") {
-                        Some(v.to_string())
-                    } else {
-                        None
-                    }
+                    p.strip_prefix("search=").map(|v| v.to_string())
                 })
             })
             .unwrap_or_default()
@@ -249,17 +245,9 @@ fn LibraryNode(
                         button {
                             class: "btn btn-ghost btn-xs",
                             title: "Load directory to queue",
-                            onclick: {
-                                let search_mode = search_mode;
-                                move |e| {
-                                    e.stop_propagation();
-                                    let path = if search_mode {
-                                        tree.read().full_path(node_id)
-                                    } else {
-                                        tree.read().full_path(node_id)
-                                    };
-                                    ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadLocalLibDirectory(path)));
-                                }
+                            onclick: move |e| {
+                                e.stop_propagation();
+                                ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadLocalLibDirectory(tree.read().full_path(node_id))));
                             },
                             i { class: "material-icons text-sm", "playlist_play" }
                         }

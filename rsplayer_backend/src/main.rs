@@ -45,7 +45,7 @@ async fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     #[cfg(feature = "console-subscriber")]
     console_subscriber::ConsoleLayer::builder()
-        .retention(Duration::from_secs(60))
+        .retention(Duration::from_mins(1))
         .server_addr(([0, 0, 0, 0], 6669))
         .init();
     let version = env!("APP_VERSION");
@@ -92,7 +92,6 @@ async fn main() {
             song_repository.clone(),
             album_repository.clone(),
             statistics_repository.clone(),
-            version,
         )
         .expect("Failed to start metadata service"),
     );

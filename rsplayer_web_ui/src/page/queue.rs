@@ -137,7 +137,7 @@ pub fn QueuePage() -> Element {
             // ── Queue content ───────────────────────────────────────────────
             if loading() && queue().is_none() {
                 QueueSkeleton {}
-            } else if queue().as_ref().map_or(true, |p| p.items.is_empty()) {
+            } else if queue().as_ref().is_none_or(|p| p.items.is_empty()) {
                 QueueEmpty {
                     has_search: !search().is_empty(),
                     on_clear_search: move |_| {
@@ -156,7 +156,7 @@ pub fn QueuePage() -> Element {
                         let is_current = current_song_id.as_ref().is_some_and(|id| *id == song.file);
                         let file = song.file.clone();
                         let file2 = song.file.clone();
-                        let file3 = song.file.clone();
+                        let _file3 = song.file.clone();
                         let start_idx = page.offset.saturating_sub(page.limit);
                         let abs_idx = start_idx + idx;
                         rsx! {

@@ -73,8 +73,7 @@ pub fn probe_http_source(
     let media_source: Box<dyn MediaSource> = if let Some(metaint_val) = metaint_val {
         info!("ICY stream detected with metaint={metaint_val}");
         let reader = resp.into_body().into_reader();
-        let icy_reader =
-            IcyMetadataReader::new(reader, metaint_val, changes_tx.clone(), radio_meta.clone().unwrap());
+        let icy_reader = IcyMetadataReader::new(reader, metaint_val, changes_tx.clone(), radio_meta.clone().unwrap());
         Box::new(ReadOnlySource::new(Box::new(icy_reader)))
     } else {
         Box::new(ReadOnlySource::new(resp.into_body().into_reader()))
@@ -116,4 +115,21 @@ pub fn resolve_ape_path(path_str: &str, music_dirs: &[String]) -> Option<PathBuf
 
 pub fn is_http_stream(path: &str) -> bool {
     path.starts_with("http")
+}
+
+/// If `path_str` contains the SACD virtual-track marker `#SACD_NNNN`, resolve the ISO file
+/// across music directories and return `(full_iso_path, track_idx)`.
+pub fn resolve_sacd_iso_path(path_str: &str, music_dirs: &[String]) -> Option<(PathBuf, usize)> {
+    const MARKER: &str = rsplayer_metadata::sacd_bundle::SACD_TRACK_MARKER;
+    let marker_pos = path_str.find(MARKER)?;
+    let iso_rel = &path_str[..marker_pos];
+    let track_idx: usize = path_str[marker_pos + MARKER.len()..].parse().ok()?;
+
+    for dir in music_dirs {
+        let iso_path = Path::new(dir).join(iso_rel);
+        if iso_path.exists() {
+            return Some((iso_path, track_idx));
+        }
+    }
+    None
 }

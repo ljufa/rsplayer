@@ -1,6 +1,8 @@
 use std::process::exit;
 
-use api_models::common::SystemCommand::{self, PowerOff, RestartRSPlayer, RestartSystem, SetVol, ToggleMute, VolDown, VolUp};
+use api_models::common::SystemCommand::{
+    self, PowerOff, RestartRSPlayer, RestartSystem, SetVol, ToggleMute, VolDown, VolUp,
+};
 use api_models::state::StateChangeEvent;
 use log::info;
 
@@ -26,7 +28,10 @@ pub async fn handle_system_command(cmd: SystemCommand, ctx: &SystemCommandContex
             let current = ctx.audio_service.get_volume();
             let mut settings = ctx.config.get_settings();
             let nv = if current.current == 0 {
-                let restore = settings.volume_ctrl_settings.volume_before_mute.unwrap_or(current.max / 2);
+                let restore = settings
+                    .volume_ctrl_settings
+                    .volume_before_mute
+                    .unwrap_or(current.max / 2);
                 settings.volume_ctrl_settings.volume_before_mute = None;
                 settings.volume_ctrl_settings.saved_volume = Some(restore);
                 ctx.audio_service.set_volume(restore)

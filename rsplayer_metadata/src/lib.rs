@@ -13,6 +13,7 @@ pub mod playlist_service;
 pub mod queue_service;
 pub mod radio_meta;
 pub mod radio_providers;
+pub mod sacd_bundle;
 pub mod song_repository;
 #[cfg(test)]
 mod test;

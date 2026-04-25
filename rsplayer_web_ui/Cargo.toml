@@ -45,3 +45,4 @@ default = []
 [profile.release]
 lto = true
 opt-level = "s"
+debug = false

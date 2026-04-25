@@ -12,10 +12,7 @@ pub struct RadioMeta {
     pub bitrate: Option<u32>,
 }
 
-pub fn get_external_radio_meta(
-    agent: &ureq::Agent,
-    resp: &ureq::http::Response<ureq::Body>,
-) -> Option<RadioMeta> {
+pub fn get_external_radio_meta(agent: &ureq::Agent, resp: &ureq::http::Response<ureq::Body>) -> Option<RadioMeta> {
     use ureq::ResponseExt;
 
     let final_url = resp.get_uri().to_string();
@@ -49,7 +46,11 @@ pub fn get_external_radio_meta(
     if server == "radiosphere" {
         radio_providers::process_radiosphere_meta(agent, &final_url, &mut radio_meta);
     } else if server.starts_with("QuantumCast Streamer") {
-        if let Some(channel_key) = resp.headers().get("x-quantumcast-channelkey").and_then(|v| v.to_str().ok()) {
+        if let Some(channel_key) = resp
+            .headers()
+            .get("x-quantumcast-channelkey")
+            .and_then(|v| v.to_str().ok())
+        {
             radio_providers::process_quantumcast_meta(agent, channel_key, &mut radio_meta);
         }
     }

@@ -10,7 +10,7 @@ use std::{
 
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
-use fjall::{Database, Keyspace, KeyspaceCreateOptions, PersistMode};
+use fjall::{Database, PersistMode};
 use log::{debug, info, warn};
 use symphonia::core::{formats::probe::Hint, formats::FormatOptions, io::MediaSourceStream, meta::MetadataOptions};
 use tokio::sync::broadcast::Sender;
@@ -25,13 +25,13 @@ use api_models::{
 };
 
 use crate::audio_metadata_extractor::AudioMetadataExtractor;
+use crate::sacd_bundle::{detect_sector_mode, read_areas, read_tracks, SACD_TRACK_MARKER};
 use crate::song_repository::SongRepository;
 use crate::{album_repository::AlbumRepository, play_statistic_repository::PlayStatisticsRepository};
 
 const ARTWORK_DIR: &str = "artwork";
 
 pub struct MetadataService {
-    ignored_files_db: Keyspace,
     settings: RwLock<MetadataStoreSettings>,
     scan_running: AtomicBool,
     song_repository: Arc<SongRepository>,
@@ -47,21 +47,10 @@ impl MetadataService {
         song_repository: Arc<SongRepository>,
         album_repository: Arc<AlbumRepository>,
         statistic_repository: Arc<PlayStatisticsRepository>,
-        version: &str,
     ) -> Result<Self> {
         let settings = settings.clone();
-        let ignored_files_db = db
-            .keyspace("ignored_files", KeyspaceCreateOptions::default)
-            .expect("Failed to open ignored_files keyspace");
-
-        // db  migration for version 2.6.0
-        if version == "2.6.0" {
-            info!("Version 2.6.0 detected - clearing ignored files database to rescan APE files");
-            ignored_files_db.clear()?;
-        }
 
         Ok(Self {
-            ignored_files_db,
             settings: RwLock::new(settings),
             scan_running: AtomicBool::new(false),
             song_repository,
@@ -76,7 +65,10 @@ impl MetadataService {
     }
 
     pub fn effective_directories(&self) -> Vec<String> {
-        self.settings.read().expect("settings lock poisoned").effective_directories()
+        self.settings
+            .read()
+            .expect("settings lock poisoned")
+            .effective_directories()
     }
 
     pub fn get_favorite_radio_stations(&self) -> Vec<String> {
@@ -204,7 +196,9 @@ impl MetadataService {
             if right.contains('/') {
                 let (left, _) = right.split_once('/')?;
                 Some(MetadataLibraryItem::Directory { name: left.to_owned() })
-            } else if let Some(song) = Song::bytes_to_song(&value) { Some(MetadataLibraryItem::SongItem(song)) } else {
+            } else if let Some(song) = Song::bytes_to_song(&value) {
+                Some(MetadataLibraryItem::SongItem(song))
+            } else {
                 warn!("Failed to deserialize song for key: {key}");
                 None
             }
@@ -225,7 +219,9 @@ impl MetadataService {
                 if let Some((path, _)) = key.rsplit_once('/') {
                     if path.to_lowercase().contains(search_term.to_lowercase().as_str()) {
                         Some(MetadataLibraryItem::Directory { name: path.to_owned() })
-                    } else if let Some(song) = Song::bytes_to_song(&value) { Some(MetadataLibraryItem::SongItem(song)) } else {
+                    } else if let Some(song) = Song::bytes_to_song(&value) {
+                        Some(MetadataLibraryItem::SongItem(song))
+                    } else {
                         warn!("Failed to deserialize song for key: {key}");
                         None
                     }
@@ -253,7 +249,6 @@ impl MetadataService {
         if full_scan {
             self.song_repository.delete_all();
             self.album_repository.delete_all();
-            self.ignored_files_db.clear().ok();
         }
 
         if !Path::new(ARTWORK_DIR).exists() {
@@ -337,16 +332,22 @@ impl MetadataService {
                 .follow_links(settings.follow_links)
                 .sort_by_file_name()
                 .into_iter()
-                .filter_map(std::result::Result::ok)
+                .filter_map(|e| match e {
+                    Ok(entry) => Some(entry),
+                    Err(err) => {
+                        warn!("WalkDir error in {music_dir}: {err}");
+                        None
+                    }
+                })
                 .filter(|de| {
                     debug!("Checking file: {}", de.path().display());
                     de.file_type().is_file()
                 })
                 .filter(|de| {
-                    let ext = de
-                        .path()
-                        .extension()
-                        .map_or_else(|| "no_ext".to_string(), |ex| ex.to_str().unwrap_or("no_ext").to_lowercase());
+                    let ext = de.path().extension().map_or_else(
+                        || "no_ext".to_string(),
+                        |ex| ex.to_str().unwrap_or("no_ext").to_lowercase(),
+                    );
                     let is_supported = MetadataStoreSettings::default().supported_extensions.contains(&ext);
                     if !is_supported {
                         debug!("File {} has unsupported extension: {}", de.path().display(), ext);
@@ -360,16 +361,26 @@ impl MetadataService {
                         Self::full_path_to_database_key_for_dir(music_dir, path_str),
                     ))
                 })
-                .filter(|de| {
-                    let in_ignored = self.ignored_files_db.contains_key(&de.1).unwrap_or(false);
-                    if in_ignored {
-                        debug!("File {} is in ignored database", de.0);
-                    }
-                    !in_ignored
-                })
             {
                 debug!("Processing file: {} -> key: {}", entry.0, entry.1);
-                if self.song_repository.find_by_id(&entry.1).is_some() {
+                let is_iso = entry.0.to_lowercase().ends_with(".iso");
+                if is_iso {
+                    // SACD ISO: each track is stored as a virtual key "{iso_key}#SACD_{idx}".
+                    // Treat the ISO as unchanged if any such tracks are already in the database.
+                    let sacd_prefix = format!("{}{}", entry.1, SACD_TRACK_MARKER);
+                    let existing: Vec<String> = self
+                        .song_repository
+                        .find_by_key_prefix(&sacd_prefix)
+                        .map(|(k, _)| String::from_utf8_lossy(&k).to_string())
+                        .collect();
+                    if existing.is_empty() {
+                        debug!("SACD ISO {} is NEW", entry.0);
+                        added_files.push(entry.0.clone());
+                    } else {
+                        debug!("SACD ISO {} already scanned ({} tracks)", entry.0, existing.len());
+                        unchanged_keys.extend(existing);
+                    }
+                } else if self.song_repository.find_by_id(&entry.1).is_some() {
                     debug!("File {} already in database (unchanged)", entry.0);
                     unchanged_keys.push(entry.1.clone());
                 } else {
@@ -403,12 +414,6 @@ impl MetadataService {
                 .ok();
             if let Err(e) = self.scan_single_file(Path::new(file), settings) {
                 log::error!("Unable to scan file {file}. Error: {e}");
-                self.ignored_files_db
-                    .insert(
-                        Self::full_path_to_database_key(settings, file),
-                        e.to_string().as_bytes(),
-                    )
-                    .expect("DB error");
             }
             if c.is_multiple_of(100) {
                 self.song_repository.flush();
@@ -525,13 +530,72 @@ impl MetadataService {
         }
     }
 
+    /// Scan an SACD ISO file and create one `Song` entry per audio track using virtual paths.
+    fn scan_sacd_iso_file(
+        &self,
+        file_path: &Path,
+        settings: &MetadataStoreSettings,
+        file_modification_date: DateTime<Utc>,
+    ) -> Result<()> {
+        let path_str = file_path
+            .to_str()
+            .ok_or_else(|| Error::msg("SACD ISO path is not valid UTF-8"))?;
+        let iso_key = Self::full_path_to_database_key(settings, path_str);
+        info!("Scanning SACD ISO:\t{iso_key}");
+
+        let mut file = File::open(file_path).map_err(|e| Error::msg(format!("Cannot open SACD ISO: {e}")))?;
+
+        let mode = detect_sector_mode(&mut file).map_err(|e| Error::msg(format!("Not a valid SACD ISO ({e})")))?;
+        let areas = read_areas(&mut file, mode).map_err(|e| Error::msg(format!("Failed to read SACD areas: {e}")))?;
+
+        // Prefer stereo area; fall back to first.
+        let area = areas
+            .iter()
+            .find(|a| a.is_stereo)
+            .or_else(|| areas.first())
+            .ok_or_else(|| Error::msg("No playable SACD area found"))?;
+
+        let tracks = read_tracks(&mut file, mode, area)
+            .map_err(|e| Error::msg(format!("Failed to read SACD track list: {e}")))?;
+
+        if tracks.is_empty() {
+            return Err(Error::msg("SACD ISO contains no tracks"));
+        }
+
+        for (idx, track) in tracks.iter().enumerate() {
+            let virtual_key = format!("{iso_key}{SACD_TRACK_MARKER}{idx:04}");
+            let duration_secs = track.duration_secs(area.channel_count, area.frame_format);
+
+            let song = Song {
+                title: Some(format!("Track {}", idx + 1)),
+                track: Some(format!("{}", idx + 1)),
+                time: Some(std::time::Duration::from_secs_f64(duration_secs)),
+                file: virtual_key.clone(),
+                file_date: file_modification_date,
+                ..Default::default()
+            };
+
+            log::debug!("SACD track {idx}: {virtual_key} ({duration_secs:.1}s)");
+            self.song_repository.save(&song);
+            self.album_repository.update_from_song(song);
+        }
+
+        Ok(())
+    }
+
     fn scan_single_file(&self, file_path: &Path, settings: &MetadataStoreSettings) -> Result<()> {
         info!("Scanning file:\t{}", file_path.display());
 
-        // Fast path for APE files: read tags directly without loading entire file
+        // Fast path for APE files: read tags directly without loading entire file.
         if file_path.extension().is_some_and(|e| e.eq_ignore_ascii_case("ape")) {
             let file_modification_date: DateTime<Utc> = file_path.metadata()?.modified()?.into();
             return self.scan_ape_file_fast(file_path, settings, file_modification_date);
+        }
+
+        // SACD ISO: expand to one Song entry per audio track.
+        if file_path.extension().is_some_and(|e| e.eq_ignore_ascii_case("iso")) {
+            let file_modification_date: DateTime<Utc> = file_path.metadata()?.modified()?.into();
+            return self.scan_sacd_iso_file(file_path, settings, file_modification_date);
         }
 
         let file = Box::new(File::open(file_path)?);

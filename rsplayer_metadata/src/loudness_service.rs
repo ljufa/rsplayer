@@ -84,7 +84,7 @@ impl LoudnessService {
 
             if pending.is_empty() {
                 debug!("Loudness scan: all songs analysed, sleeping 60s");
-                thread::sleep(Duration::from_secs(60));
+                thread::sleep(Duration::from_mins(1));
                 continue;
             }
 
@@ -145,7 +145,7 @@ impl LoudnessService {
             info!("Loudness scan: pass complete, {total} songs analysed");
             if total == 0 {
                 warn!("Loudness scan: no files could be read (files unavailable?), sleeping 60s before retry");
-                thread::sleep(Duration::from_secs(60));
+                thread::sleep(Duration::from_mins(1));
             }
         }
     }

@@ -40,63 +40,43 @@ impl AudioMetadataExtractor {
         for tag in tags.iter().filter(|t| t.has_std_tag()) {
             if let Some(std_tag) = &tag.std {
                 match std_tag {
-                    StandardTag::Album(_) => {
-                        if song.album.is_none() {
-                            song.album = Some(Self::tag_value_to_option(tag));
-                        }
+                    StandardTag::Album(_) if song.album.is_none() => {
+                        song.album = Some(Self::tag_value_to_option(tag));
                     }
-                    StandardTag::AlbumArtist(_) => {
-                        if song.album_artist.is_none() {
-                            song.album_artist = Some(Self::tag_value_to_option(tag));
-                        }
+                    StandardTag::AlbumArtist(_) if song.album_artist.is_none() => {
+                        song.album_artist = Some(Self::tag_value_to_option(tag));
                     }
-                    StandardTag::Artist(_) => {
-                        if song.artist.is_none() {
-                            song.artist = Some(Self::tag_value_to_option(tag));
-                        }
+                    StandardTag::Artist(_) if song.artist.is_none() => {
+                        song.artist = Some(Self::tag_value_to_option(tag));
                     }
-                    StandardTag::Composer(_) => {
-                        if song.composer.is_none() {
-                            song.composer = Some(Self::tag_value_to_option(tag));
-                        }
+                    StandardTag::Composer(_) if song.composer.is_none() => {
+                        song.composer = Some(Self::tag_value_to_option(tag));
                     }
                     StandardTag::RecordingDate(_)
                     | StandardTag::ReleaseDate(_)
                     | StandardTag::RecordingYear(_)
-                    | StandardTag::ReleaseYear(_) => {
-                        if song.date.is_none() {
-                            song.date = Some(Self::tag_value_to_option(tag));
-                        }
+                    | StandardTag::ReleaseYear(_)
+                        if song.date.is_none() =>
+                    {
+                        song.date = Some(Self::tag_value_to_option(tag));
                     }
-                    StandardTag::DiscNumber(_) => {
-                        if song.disc.is_none() {
-                            song.disc = Some(Self::tag_value_to_option(tag));
-                        }
+                    StandardTag::DiscNumber(_) if song.disc.is_none() => {
+                        song.disc = Some(Self::tag_value_to_option(tag));
                     }
-                    StandardTag::Genre(_) => {
-                        if song.genre.is_none() {
-                            song.genre = Some(Self::tag_value_to_option(tag));
-                        }
+                    StandardTag::Genre(_) if song.genre.is_none() => {
+                        song.genre = Some(Self::tag_value_to_option(tag));
                     }
-                    StandardTag::Label(_) => {
-                        if song.label.is_none() {
-                            song.label = Some(Self::tag_value_to_option(tag));
-                        }
+                    StandardTag::Label(_) if song.label.is_none() => {
+                        song.label = Some(Self::tag_value_to_option(tag));
                     }
-                    StandardTag::Performer(_) => {
-                        if song.performer.is_none() {
-                            song.performer = Some(Self::tag_value_to_option(tag));
-                        }
+                    StandardTag::Performer(_) if song.performer.is_none() => {
+                        song.performer = Some(Self::tag_value_to_option(tag));
                     }
-                    StandardTag::TrackNumber(_) => {
-                        if song.track.is_none() {
-                            song.track = Some(Self::tag_value_to_option(tag));
-                        }
+                    StandardTag::TrackNumber(_) if song.track.is_none() => {
+                        song.track = Some(Self::tag_value_to_option(tag));
                     }
-                    StandardTag::TrackTitle(_) => {
-                        if song.title.is_none() {
-                            song.title = Some(Self::tag_value_to_option(tag));
-                        }
+                    StandardTag::TrackTitle(_) if song.title.is_none() => {
+                        song.title = Some(Self::tag_value_to_option(tag));
                     }
                     // Loudness tags: store under their raw key so playback can read them.
                     StandardTag::ReplayGainTrackGain(_)

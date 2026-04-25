@@ -23,7 +23,9 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::{Time, TimeBase, Timestamp};
 
 use crate::rsp::alsa_output::AlsaOutput;
-use crate::rsp::audio_source::{is_http_stream, probe_http_source, probe_local_file, resolve_ape_path};
+use crate::rsp::audio_source::{
+    is_http_stream, probe_http_source, probe_local_file, resolve_ape_path, resolve_sacd_iso_path,
+};
 use crate::rsp::device_capabilities::DeviceCapabilities;
 use crate::rsp::playback_config::PlaybackConfig;
 use crate::rsp::playback_context::PlaybackContext;
@@ -62,9 +64,25 @@ pub fn play_file(
         resolve_ape_path(path_str, &config.music_dirs)
     };
 
+    // For SACD ISO virtual paths (e.g. "album.iso#SACD_0002"): open the ISO directly
+    // and construct a SacdIsoReader for the specified track index.
+    let sacd_path = if is_http_stream(path_str) {
+        None
+    } else {
+        resolve_sacd_iso_path(path_str, &config.music_dirs)
+    };
+
     let mut radio_meta: Option<RadioMeta> = None;
 
-    let mut reader: Box<dyn FormatReader + '_> = if let Some(ape_path) = ape_path {
+    let mut reader: Box<dyn FormatReader + '_> = if let Some((iso_path, track_idx)) = sacd_path {
+        debug!("SACD ISO: {} track {}", iso_path.display(), track_idx);
+        let file = std::fs::File::open(&iso_path)
+            .map_err(|e| format_err!("Failed to open SACD ISO {}: {e}", iso_path.display()))?;
+        Box::new(
+            rsplayer_metadata::sacd_bundle::SacdIsoReader::try_new_for_track(file, track_idx)
+                .map_err(|e| format_err!("Failed to open SACD track: {e}"))?,
+        )
+    } else if let Some(ape_path) = ape_path {
         debug!("APE direct file path: {}", ape_path.display());
         // 1 MB buffer to amortize NFS round trips — default 8 KB causes
         // dozens of small reads per frame, starving the audio ring buffer on slow links.
@@ -107,9 +125,12 @@ pub fn play_file(
         return Err(format_err!("Invalid track"));
     };
     let track_id = track.id;
-    let tb = track
-        .time_base
-        .unwrap_or_else(|| TimeBase::new(std::num::NonZero::<u32>::new(1).expect("1 is non-zero"), std::num::NonZero::<u32>::new(1).expect("1 is non-zero")));
+    let tb = track.time_base.unwrap_or_else(|| {
+        TimeBase::new(
+            std::num::NonZero::<u32>::new(1).expect("1 is non-zero"),
+            std::num::NonZero::<u32>::new(1).expect("1 is non-zero"),
+        )
+    });
     let dur_ts = track
         .num_frames
         .map_or(1, |frames| track.start_ts.get().unsigned_abs().saturating_add(frames));

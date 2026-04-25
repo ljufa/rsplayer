@@ -29,7 +29,7 @@ run_task = { name = ["watch_css", "dx_serve"], parallel = true }
 description = "Build release WASM with Dioxus"
 dependencies = ["build_css"]
 command = "dx"
-args = ["build", "--platform", "web", "--release"]
+args = ["build", "--platform", "web", "--release", "--debug-symbols", "false"]
 
 [tasks.build_dev]
 description = "Build dev WASM with Dioxus"

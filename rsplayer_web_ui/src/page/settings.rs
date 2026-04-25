@@ -124,7 +124,7 @@ fn filter_type_of(f: &DspFilter) -> DspFilterType {
 
 #[component]
 pub fn SettingsPage() -> Element {
-    let state = use_context::<AppState>();
+    let _state = use_context::<AppState>();
     let ws = use_context::<Signal<Option<WebSocket>>>();
 
     let mut settings: Signal<Settings> = use_signal(Settings::default);
@@ -976,7 +976,7 @@ fn MusicLibraryContent(
                         NetworkMountType::Smb => format!("//{}/{}", m.server, m.share),
                         NetworkMountType::Nfs => format!("{}:{}", m.server, m.share),
                     };
-                    let is_mounted = status.as_ref().map_or(false, |s| s.is_mounted);
+                    let is_mounted = status.as_ref().is_some_and(|s| s.is_mounted);
                     let (status_label, status_class) = match status.as_ref() {
                         Some(s) if s.readable && s.writable => {
                             ("Read / Write", "badge-success")

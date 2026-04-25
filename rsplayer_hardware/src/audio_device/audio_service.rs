@@ -54,7 +54,9 @@ impl AudioInterfaceService {
                     "USB service is required for RSPlayerFirmware volume control."
                 ));
             }
-            Box::new(RSPlayerFirmwareVolumeControlDevice::new(usb_service.expect("usb_service checked above")))
+            Box::new(RSPlayerFirmwareVolumeControlDevice::new(
+                usb_service.expect("usb_service checked above"),
+            ))
         } else {
             match settings.volume_ctrl_settings.ctrl_device {
                 #[cfg(feature = "alsa")]

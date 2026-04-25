@@ -55,7 +55,7 @@ fn create_biquad_params(filter: &DspFilter) -> BiquadParameters {
             || {
                 BiquadParameters::Lowshelf(crate::config::ShelfSteepness::Q {
                     freq: *freq as f32,
-                    q: q.map(|v| v as f32).unwrap_or(0.707),
+                    q: q.map_or(0.707, |v| v as f32),
                     gain: *gain as f32,
                 })
             },
@@ -71,7 +71,7 @@ fn create_biquad_params(filter: &DspFilter) -> BiquadParameters {
             || {
                 BiquadParameters::Highshelf(crate::config::ShelfSteepness::Q {
                     freq: *freq as f32,
-                    q: q.map(|v| v as f32).unwrap_or(0.707),
+                    q: q.map_or(0.707, |v| v as f32),
                     gain: *gain as f32,
                 })
             },

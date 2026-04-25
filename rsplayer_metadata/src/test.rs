@@ -702,7 +702,6 @@ pub mod test_shared {
                     song_repository.clone(),
                     album_repository.clone(),
                     stat_repository.clone(),
-                    "test",
                 )
                 .expect("Failed to create service"),
                 sender,

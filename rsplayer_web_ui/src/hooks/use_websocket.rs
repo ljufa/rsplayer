@@ -10,7 +10,7 @@ use web_sys::{CloseEvent, ErrorEvent, MessageEvent, WebSocket};
 
 /// Manage the WebSocket connection.  Returns a signal for the sender function.
 /// Auto-reconnects with a simple 3-second delay on close/error.
-pub fn use_websocket(mut app_state: AppState) -> Signal<Option<WebSocket>> {
+pub fn use_websocket(app_state: AppState) -> Signal<Option<WebSocket>> {
     let ws_signal: Signal<Option<WebSocket>> = use_signal(|| None);
     let ws_ref = use_signal(|| ws_signal);
 
@@ -21,7 +21,7 @@ pub fn use_websocket(mut app_state: AppState) -> Signal<Option<WebSocket>> {
     ws_signal
 }
 
-fn connect(mut app_state: AppState, ws_holder: Signal<Signal<Option<WebSocket>>>) {
+fn connect(app_state: AppState, ws_holder: Signal<Signal<Option<WebSocket>>>) {
     let window = web_sys::window().expect("no window");
     let host = window.location().host().unwrap_or_else(|_| "localhost".to_string());
     let protocol = window.location().protocol().unwrap_or_default();

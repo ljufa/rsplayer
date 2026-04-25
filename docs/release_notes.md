@@ -1,5 +1,41 @@
 # Release Notes
 
+## v2.9.0 — 2026-04-25
+
+### New Features
+
+#### SACD ISO Playback
+
+RSPlayer can now scan, browse, and play tracks directly from SACD ISO disc images (`.iso` files).
+
+- Both sector encodings are supported: 2048-byte data-only ISOs and 2064-byte physical-sector ISOs. The sector format is auto-detected from the SACDMTOC signature.
+- The stereo area is preferred for playback; the system falls back to the first available area if no stereo area is present.
+- Only uncompressed DSD (frame_format 2) is supported. DST-compressed discs produce a clear error during scanning.
+- Each audio track in the disc is stored as a virtual library entry (`album.iso#SACD_NNNN`), so individual tracks appear in the queue and library like regular files.
+- Seeking within a track is supported, aligned to sector boundaries.
+- Multichannel (6-channel) disc areas are handled correctly with proper channel layout (FL, FR, FC, LFE, RL, RR).
+
+#### SACD ISO Library Scanning
+
+- `.iso` is now a recognised music extension and is included in library scans.
+- Discs that are already scanned (virtual track keys present) are skipped on incremental scans.
+- Invalid ISOs (missing SACDMTOC, no valid areas, DST-compressed) log a clear error and are skipped without aborting the scan.
+
+
+### Removals
+
+#### Ignored Files Database Removed
+
+The `ignored_files.db` database (tracked via `MetadataStoreSettings.db_path`) has been removed. It was originally intended to persist files that failed scanning so they could be skipped on subsequent scans. In practice it was never read — scan failures were always just logged and skipped. The field remains in the settings struct for backward-compatible deserialization of existing configs, but no database file is created or consulted at runtime.
+
+### Build
+
+#### Release WASM Build Fix
+
+`dx build --release` was failing with a wasm-opt SIGABRT due to DWARF debug info embedded in the WASM binary by default. Added `--debug-symbols false` to the release build task in `Makefile.toml` to suppress DWARF output and allow wasm-opt to complete successfully.
+
+---
+
 ## v2.8.0 — 2026-04-21
 
 ### Frontend: Rewritten in Dioxus

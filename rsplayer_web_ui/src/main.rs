@@ -176,7 +176,7 @@ fn App() -> Element {
     let ws = hooks::use_websocket(app_state);
     use_context_provider(|| ws);
 
-    let mut path = use_signal(|| current_pathname());
+    let mut path = use_signal(current_pathname);
     use_context_provider(|| CurrentPath(path));
 
     let ui_state = UiState {
@@ -388,7 +388,7 @@ fn setup_keyboard_shortcuts(
                 }
                 "l" | "L" if on_player => {
                     if let Some(song) = app_state.current_song.peek().clone() {
-                        let liked = song.statistics.as_ref().map_or(false, |st| st.liked_count > 0);
+                        let liked = song.statistics.as_ref().is_some_and(|st| st.liked_count > 0);
                         let cmd = if liked {
                             MetadataCommand::DislikeMediaItem(song.file.clone())
                         } else {
@@ -944,20 +944,20 @@ fn FooterPlayer() -> Element {
                 div { class: "flex items-center gap-2",
                     button {
                         class: "btn btn-ghost btn-xs",
-                        onclick: { let ws = ws; move |_| ws_user_cmd(&ws, UserCommand::Player(PlayerCommand::Prev)) },
+                        onclick: move |_| ws_user_cmd(&ws, UserCommand::Player(PlayerCommand::Prev)),
                         i { class: "material-icons", "skip_previous" }
                     }
                     button {
                         class: "btn btn-primary btn-circle btn-sm",
                         onclick: {
-                            let ws = ws;
+                            
                             move |_| ws_user_cmd(&ws, UserCommand::Player(if playing { PlayerCommand::Pause } else { PlayerCommand::Play }))
                         },
                         i { class: "material-icons", if playing { "pause" } else { "play_arrow" } }
                     }
                     button {
                         class: "btn btn-ghost btn-xs",
-                        onclick: { let ws = ws; move |_| ws_user_cmd(&ws, UserCommand::Player(PlayerCommand::Next)) },
+                        onclick: move |_| ws_user_cmd(&ws, UserCommand::Player(PlayerCommand::Next)),
                         i { class: "material-icons", "skip_next" }
                     }
                 }
