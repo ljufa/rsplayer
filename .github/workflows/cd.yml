@@ -19,8 +19,9 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      options: --network host
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: Swatinem/rust-cache@v2
 
       - name: Install npm dependencies
@@ -46,8 +47,8 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-      # Mount the host Docker socket so cross can launch cross-compilation containers
-      options: -v /var/run/docker.sock:/var/run/docker.sock
+      # Mount host Docker socket for cross, and use host network for GitHub/registry access
+      options: --network host -v /var/run/docker.sock:/var/run/docker.sock
     strategy:
       max-parallel: 1
       fail-fast: false
@@ -59,7 +60,7 @@ jobs:
           - "x86_64-unknown-linux-gnu"
           - "riscv64gc-unknown-linux-gnu"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           clean: true
 
