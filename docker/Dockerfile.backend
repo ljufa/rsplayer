@@ -1,4 +1,4 @@
-FROM rust:1-slim-bookworm
+FROM rust:1-slim-bullseye
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git pkg-config ca-certificates \
@@ -10,4 +10,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Compile and cache cargo tools in image layers so jobs start instantly
 RUN cargo install cargo-make --locked
 RUN cargo install cargo-deb --locked
-RUN cargo install cross --locked
+RUN cargo install cross@0.2.5 --locked
