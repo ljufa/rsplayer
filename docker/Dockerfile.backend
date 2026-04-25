@@ -1,0 +1,13 @@
+FROM rust:1-slim-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git pkg-config ca-certificates \
+    libasound2-dev \
+    rpm \
+    docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
+# Compile and cache cargo tools in image layers so jobs start instantly
+RUN cargo install cargo-make --locked
+RUN cargo install cargo-deb --locked
+RUN cargo install cross --locked

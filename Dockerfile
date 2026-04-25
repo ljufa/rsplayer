@@ -7,4 +7,4 @@ RUN chmod +x /usr/bin/rsplayer
 EXPOSE 80
 VOLUME [ "/opt/rsplayer" ]
 WORKDIR /opt/rsplayer
-CMD "/usr/bin/rsplayer"
+CMD ["/usr/bin/rsplayer"]
