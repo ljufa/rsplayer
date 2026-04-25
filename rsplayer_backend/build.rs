@@ -18,11 +18,13 @@ fn main() {
 
     let out_dir = env::var("OUT_DIR").unwrap();
 
-    // Read the index.html produced by `dx build --release --platform web`.
-    // Run that command before building the backend.
     let dx_index = "../rsplayer_web_ui/target/dx/rsplayer_web_ui/release/web/public/index.html";
-    let index_html = fs::read_to_string(dx_index)
-        .expect("index.html not found — run `dx build --release --platform web` in rsplayer_web_ui first");
+    let index_html = if env::var("PROFILE").as_deref() == Ok("release") {
+        fs::read_to_string(dx_index)
+            .expect("index.html not found — run `dx build --release --platform web` in rsplayer_web_ui first")
+    } else {
+        fs::read_to_string(dx_index).unwrap_or_else(|_| String::from("<!-- dev build: UI not embedded -->"))
+    };
 
     let dest = Path::new(&out_dir).join("index.html");
     fs::write(&dest, index_html).expect("Failed to write index.html");
