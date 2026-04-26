@@ -1,5 +1,36 @@
 # Release Notes
 
+## v2.9.5 — 2026-04-26
+
+### Bug Fixes
+
+#### Metadata Scan Crash — Whitespace-Only Album Tag
+
+Library scans crashed with `key may not be empty` (lsm-tree panic) when a file contained an album tag consisting entirely of whitespace (e.g. `" "` or a non-breaking space). The raw value passed the existing `!a.is_empty()` guard, but `normalize_name` — which strips diacritics, lowercases, and collapses whitespace via `split_whitespace` — reduced it to an empty string. Passing an empty byte slice to `Keyspace::insert` triggered an unconditional panic inside lsm-tree, poisoning the fjall journal lock and aborting the scan.
+
+Three guards were added:
+
+- `album_repository::update_from_song`: returns `Ok(())` early if `normalize_name(album)` is empty, skipping albums whose title normalises to nothing.
+- `album_repository::find_by_id`: returns `None` early if the normalised key is empty, preventing an empty-key read.
+- `song_repository::save`: returns `Err` if `song.file` is empty rather than letting lsm-tree panic, turning an unrecoverable crash into a logged, skippable error.
+
+### Build / CI-CD
+
+#### Containerised CI/CD Pipeline
+
+CI and CD workflows now run entirely inside Docker containers pulled from GHCR, replacing the previous approach of manually provisioning tools on self-hosted runners. Any generic runner with Docker available can now execute the full pipeline.
+
+- **`rsplayer-backend-builder`** — Rust toolchain, `cargo-make`, `cargo-deb`, `cross 0.2.5`, and `docker.io` pre-installed.
+- **`rsplayer-ui-builder`** — Rust + wasm32 target, Dioxus CLI, Node.js LTS, and Binaryen pre-installed.
+- **Custom cross images** (`rsplayer-cross-armv6/7`, `rsplayer-cross-aarch64`, `rsplayer-cross-x86_64`, `rsplayer-cross-riscv64`) — each extends the matching `cross-rs 0.2.5` base image with the target-arch ALSA and OpenSSL development libraries baked in. This replaces the previous `pre-build` hooks in `Cross.toml`, which were incompatible with Docker-in-Docker environments because `cross` generated Dockerfiles at container-side paths that the host Docker daemon could not access.
+- `Cross.toml` no longer contains any `pre-build` entries; every target points directly to a pre-built GHCR image.
+- A new **`build-images.yml`** workflow rebuilds and pushes all builder and cross images to GHCR whenever a `Dockerfile.*` changes.
+- **Dependabot** is configured for monthly updates across GitHub Actions, Docker images, and Cargo dependencies.
+- Backend cross-compilation jobs now run in **parallel** across available runners (the previous `max-parallel: 1` serialisation is removed).
+- Node.js 20 deprecation warnings eliminated by setting `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` in all workflows.
+
+---
+
 ## v2.9.0 — 2026-04-25
 
 ### New Features
