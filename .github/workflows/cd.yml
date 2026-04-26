@@ -54,7 +54,6 @@ jobs:
       # not inside this builder container, causing "cargo: not found" in cross containers)
       CROSS_CONTAINER_IN_CONTAINER: "true"
     strategy:
-      max-parallel: 1
       fail-fast: false
       matrix:
         target:

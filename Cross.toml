@@ -2,7 +2,7 @@
 image = "ghcr.io/ljufa/rsplayer-cross-armv7:latest"
 
 [target.arm-unknown-linux-gnueabihf]
-image = "ljufa/rsplayer_cross_armhf:0.0.1"
+image = "ghcr.io/ljufa/rsplayer-cross-armv6:latest"
 
 [target.aarch64-unknown-linux-gnu]
 image = "ghcr.io/ljufa/rsplayer-cross-aarch64:latest"
