@@ -1,9 +1,19 @@
 FROM ghcr.io/cross-rs/riscv64gc-unknown-linux-gnu:0.2.5
 
+# riscv64 was added to Ubuntu in Focal (20.04). The base image is Bionic, so
+# apt's dependency solver hits libc6:riscv64 conflicts. We bypass this by
+# downloading the .deb files without installing (apt-get download skips dep
+# checks) and extracting only the headers and link stubs we need.
 RUN dpkg --add-architecture riscv64 && \
+    echo "deb [arch=riscv64] http://ports.ubuntu.com/ubuntu-ports focal main universe" > /etc/apt/sources.list.d/focal-riscv64.list && \
+    echo "deb [arch=riscv64] http://ports.ubuntu.com/ubuntu-ports focal-updates main universe" >> /etc/apt/sources.list.d/focal-riscv64.list && \
+    echo "deb [arch=riscv64] http://ports.ubuntu.com/ubuntu-ports focal-security main universe" >> /etc/apt/sources.list.d/focal-riscv64.list && \
     apt-get update && \
-    apt-get install -y --no-install-recommends \
-        libasound-dev:riscv64 && \
+    cd /tmp && \
+    apt-get download libasound2:riscv64 libasound2-dev:riscv64 && \
+    dpkg-deb -x libasound2_*.deb / && \
+    dpkg-deb -x libasound2-dev_*.deb / && \
+    rm -f /tmp/libasound2*.deb && \
     rm -rf /var/lib/apt/lists/*
 
 ENV PKG_CONFIG_PATH=/usr/lib/riscv64-linux-gnu/pkgconfig
