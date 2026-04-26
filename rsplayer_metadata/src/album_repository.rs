@@ -49,6 +49,9 @@ impl AlbumRepository {
     }
     pub fn find_by_id(&self, album_id: &str) -> Option<Album> {
         let normalized_key = normalize_name(album_id);
+        if normalized_key.is_empty() {
+            return None;
+        }
         let bytes = self
             .albums_db
             .get(normalized_key.as_bytes())
@@ -149,6 +152,9 @@ impl AlbumRepository {
             _ => return Ok(()),
         };
         let key = normalize_name(&raw_album);
+        if key.is_empty() {
+            return Ok(());
+        }
         let existing_album = self
             .albums_db
             .get(key.as_bytes())

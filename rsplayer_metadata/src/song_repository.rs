@@ -16,6 +16,9 @@ impl SongRepository {
     }
 
     pub fn save(&self, song: &Song) -> anyhow::Result<()> {
+        if song.file.is_empty() {
+            return Err(anyhow::anyhow!("Refusing to save song with empty file key"));
+        }
         self.songs_db
             .insert(&song.file, song.to_json_string_bytes())
             .map_err(|e| anyhow::anyhow!("Failed to save song '{}': {e}", song.file))

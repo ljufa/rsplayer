@@ -13,10 +13,10 @@ TARGET = "aarch64-unknown-linux-gnu"
 # TARGET = "x86_64-unknown-linux-gnu"
 # TARGET = "riscv64gc-unknown-linux-gnu"
 
-RELEASE_VERSION = "2.9.0"
+RELEASE_VERSION = "2.9.5"
 RELEASE_BRANCH = "main_public"
 
-[config]
+[config]    
 default_to_workspace = false
 
 
