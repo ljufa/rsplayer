@@ -55,6 +55,7 @@ pub fn handle_metadata_command(cmd: MetadataCommand, ctx: &CommandContext) {
                 .iter()
                 .map(|alb| MetadataLibraryItem::Album {
                     name: alb.title.clone(),
+                    id: alb.id.clone(),
                     year: alb.released,
                 })
                 .collect();

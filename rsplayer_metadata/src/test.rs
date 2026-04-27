@@ -398,7 +398,7 @@ mod metadata {
         while let Ok(ev) = context.receiver.try_recv() {
             events.push(ev);
         }
-        assert_eq!(events.len(), 13);
+        assert_eq!(events.len(), 5);
         assert!(events.iter().any(|ev| match ev {
             StateChangeEvent::MetadataSongScanned(msg) => {
                 msg.contains("music_new.wav") || msg.contains("music_new.flac") || msg.contains("deleted from database")

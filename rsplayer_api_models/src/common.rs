@@ -17,7 +17,7 @@ pub enum MetadataLibraryItem {
     SongItem(Song),
     Directory { name: String },
     Artist { name: String },
-    Album { name: String, year: Option<DateTime<Utc>> },
+    Album { name: String, #[serde(default)] id: String, year: Option<DateTime<Utc>> },
     Empty,
 }
 
@@ -26,16 +26,17 @@ impl MetadataLibraryItem {
         match self {
             MetadataLibraryItem::SongItem(song) => song.get_title(),
             MetadataLibraryItem::Directory { name } | MetadataLibraryItem::Artist { name } => name.clone(),
-            MetadataLibraryItem::Album { name, year } => year
+            MetadataLibraryItem::Album { name, year, .. } => year
                 .as_ref()
-                .map_or_else(|| name.clone(), |year| format!("{name} ({year})")),
+                .map_or_else(|| name.clone(), |year| format!("{name} ({})", year.format("%Y"))),
             MetadataLibraryItem::Empty => String::new(),
         }
     }
     pub fn get_id(&self) -> String {
         match self {
             MetadataLibraryItem::Directory { name } => format!("{name}/"),
-            MetadataLibraryItem::Artist { name } | MetadataLibraryItem::Album { name, year: _ } => name.to_owned(),
+            MetadataLibraryItem::Artist { name } => name.to_owned(),
+            MetadataLibraryItem::Album { id, name, .. } => if id.is_empty() { name.to_owned() } else { id.to_owned() },
             MetadataLibraryItem::SongItem(song) => song.get_file_name_without_path(),
             MetadataLibraryItem::Empty => String::new(),
         }

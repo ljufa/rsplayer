@@ -139,11 +139,23 @@ impl AlbumRepository {
         self.albums_db
             .iter()
             .filter_map(|guard| {
-                let value = guard.value().ok()?;
-                Album::from_bytes(&value)
+                let (key, value) = guard.into_inner().ok()?;
+                let mut album = Album::from_bytes(&value)?;
+                album.id = String::from_utf8(key.to_vec()).ok()?;
+                Some(album)
             })
             .filter(|a| a.artist.as_ref().is_some_and(|a| normalize_name(a) == normalized_query))
             .collect()
+    }
+
+    pub fn album_db_key(artist: &str, album: &str) -> String {
+        let na = normalize_name(artist);
+        let nb = normalize_name(album);
+        if na.is_empty() {
+            nb
+        } else {
+            format!("{na}|{nb}")
+        }
     }
 
     pub fn update_from_song(&self, song: Song) -> anyhow::Result<()> {
@@ -151,7 +163,12 @@ impl AlbumRepository {
             Some(a) if !a.is_empty() => a.clone(),
             _ => return Ok(()),
         };
-        let key = normalize_name(&raw_album);
+        let artist_for_key = song
+            .album_artist
+            .as_deref()
+            .or(song.artist.as_deref())
+            .unwrap_or("");
+        let key = Self::album_db_key(artist_for_key, &raw_album);
         if key.is_empty() {
             return Ok(());
         }
@@ -376,7 +393,8 @@ mod test {
         let all = repo.find_all();
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].title, "Dark Side of the Moon");
-        let full = repo.find_by_id("Dark Side of the Moon").expect("album not found");
+        let key = AlbumRepository::album_db_key("Pink Floyd", "Dark Side of the Moon");
+        let full = repo.find_by_id(&key).expect("album not found");
         assert_eq!(full.song_keys.len(), 3);
     }
 
@@ -422,7 +440,7 @@ mod test {
         .expect("update_from_song failed");
         let albums = repo.find_by_artist("Pink Floyd");
         assert_eq!(albums.len(), 1);
-        let found = repo.find_by_id(&albums[0].title);
+        let found = repo.find_by_id(&albums[0].id);
         assert!(found.is_some());
         assert_eq!(found.unwrap().song_keys.len(), 2);
     }

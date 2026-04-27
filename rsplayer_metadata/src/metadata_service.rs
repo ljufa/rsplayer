@@ -405,15 +405,15 @@ impl MetadataService {
     ) -> u32 {
         let mut count = 0u32;
         for file in files {
-            state_changes_sender
-                .send(StateChangeEvent::MetadataSongScanned(format!("Scanning: {count}. {file}")))
-                .ok();
             if let Err(e) = self.scan_single_file(Path::new(file), settings) {
                 log::error!("Unable to scan file {file}. Error: {e}");
             }
             count += 1;
             if count.is_multiple_of(100) {
                 self.song_repository.flush();
+                state_changes_sender
+                    .send(StateChangeEvent::MetadataSongScanned(format!("Scanning: {count} files processed")))
+                    .ok();
             }
         }
         self.song_repository.flush();

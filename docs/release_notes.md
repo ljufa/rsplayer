@@ -1,5 +1,48 @@
 # Release Notes
 
+## v2.9.6 — 2026-04-27
+
+### Bug Fixes
+
+#### Library/Artists — Albums with Common Names Disappear (e.g. "Greatest Hits")
+
+Artists who had only one album with a common title (such as "Greatest Hits", "Best Of", or any name shared by multiple artists) were invisible in the Library/Artists view. Artists with multiple albums were shown, but the commonly-named album was missing from their list.
+
+**Root cause:** The album database key was derived solely from the normalised album title (`normalize_name(album)`). Every artist whose album shared a title wrote to the same key, with the last-scanned artist overwriting all previous entries. Artists whose only album was overwritten ended up with zero DB entries and therefore never appeared in the artist list.
+
+**Fix:** The album key is now artist-qualified: `normalize_name(artist)|normalize_name(album)`. Each artist's albums occupy their own key namespace, so "Greatest Hits" by Happy Mondays and "Greatest Hits" by Yello are stored and retrieved independently.
+
+> ⚠️ **Action required:** A full library rescan (Settings → Rescan — Full) is required after upgrading to rebuild the album database with the new keys. Without it, the artist and album views will remain empty.
+
+Additional related fixes included in this change:
+
+- `find_by_artist` now sets `album.id` from the DB key (previously only the value was read, so the compound key was never propagated to callers).
+- Genre and decade song lookups in the queue handler now use `album.id` instead of `album.title` when resolving albums, preventing the same collision for those code paths.
+- `MetadataLibraryItem::Album` gains an `id` field (backward-compatible, `serde(default)`) that carries the compound DB key to the UI, so all album operations (expand, queue, load) use the correct key rather than the display title.
+
+#### WebSocket Broadcast Channel Overflow During Large Library Scans
+
+When scanning a large library, the backend sent one `MetadataSongScanned` progress event per file. With the top-level broadcast channel capacity of 20, the channel saturated almost immediately. Any `MetadataLocalItems` response (e.g. the artist list) sent while the channel was full was silently dropped by Tokio's broadcast receiver, leaving the Library/Artists page stuck in a loading state even though the data was correctly in the database. Users with large libraries on slow storage (e.g. Samba network shares) were most affected.
+
+- Scan progress events now fire every 100 files instead of every file, matching the existing flush cadence.
+- Broadcast channel capacity increased from 20 to 64 as a secondary defence against burst overflow.
+
+### Improvements
+
+#### Album Release Year — Year Only
+
+Album entries in the Library/Artists tree previously displayed the full internal timestamp (e.g. `Greatest Hits (1999-01-01 00:00:00 UTC)`). They now show only the year: `Greatest Hits (1999)`.
+
+#### Taller Bottom Player Bar
+
+The footer mini-player bar has increased vertical padding (`py-1` → `py-3`) for a more comfortable tap target and better visual presence.
+
+#### Library Files — No Scroll Reset on Directory Expand
+
+Expanding a directory node in Library/Files and Library/Artists no longer resets the scroll position to the top of the list. The spurious `loading = true` signal write that triggered a full re-render on every expand has been removed.
+
+---
+
 ## v2.9.5 — 2026-04-26
 
 ### Bug Fixes

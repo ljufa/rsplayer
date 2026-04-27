@@ -129,7 +129,7 @@ async fn main() {
 
     let (system_commands_tx, system_commands_rx) = tokio::sync::mpsc::channel(5);
 
-    let (state_changes_tx, _) = broadcast::channel(20);
+    let (state_changes_tx, _) = broadcast::channel(64);
 
     let loudness_repository = Arc::new(LoudnessRepository::new(&shared_db));
     let loudness_service = LoudnessService::new(

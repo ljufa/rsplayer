@@ -192,8 +192,8 @@ fn ArtistNode(
                                     MetadataLibraryItem::Artist { name } => {
                                         ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryAlbumsByArtist(name.clone())));
                                     }
-                                    MetadataLibraryItem::Album { name, .. } => {
-                                        ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QuerySongsByAlbum(name.clone())));
+                                    MetadataLibraryItem::Album { .. } => {
+                                        ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QuerySongsByAlbum(item.get_id())));
                                     }
                                     _ => {}
                                 }
@@ -219,8 +219,8 @@ fn ArtistNode(
                                         MetadataLibraryItem::Artist { name } => {
                                             ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryAlbumsByArtist(name.clone())));
                                         }
-                                        MetadataLibraryItem::Album { name, .. } => {
-                                            ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QuerySongsByAlbum(name.clone())));
+                                        MetadataLibraryItem::Album { .. } => {
+                                            ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QuerySongsByAlbum(item.get_id())));
                                         }
                                         _ => {}
                                     }
@@ -312,10 +312,10 @@ fn send_queue_cmd(item: &MetadataLibraryItem, ws: &Signal<Option<WebSocket>>, ac
         (MetadataLibraryItem::SongItem(s), "after") => QueueCommand::AddSongAfterCurrent(s.file.clone()),
         (MetadataLibraryItem::SongItem(s), "load") => QueueCommand::LoadSongToQueue(s.file.clone()),
         (MetadataLibraryItem::SongItem(s), "play") => QueueCommand::AddSongAndPlay(s.file.clone()),
-        (MetadataLibraryItem::Album { name, .. }, "add") => QueueCommand::AddAlbumToQueue(name.clone()),
-        (MetadataLibraryItem::Album { name, .. }, "after") => QueueCommand::AddAlbumAfterCurrent(name.clone()),
-        (MetadataLibraryItem::Album { name, .. }, "load") => QueueCommand::LoadAlbumInQueue(name.clone()),
-        (MetadataLibraryItem::Album { name, .. }, "play") => QueueCommand::AddAlbumAndPlay(name.clone()),
+        (MetadataLibraryItem::Album { .. }, "add") => QueueCommand::AddAlbumToQueue(item.get_id()),
+        (MetadataLibraryItem::Album { .. }, "after") => QueueCommand::AddAlbumAfterCurrent(item.get_id()),
+        (MetadataLibraryItem::Album { .. }, "load") => QueueCommand::LoadAlbumInQueue(item.get_id()),
+        (MetadataLibraryItem::Album { .. }, "play") => QueueCommand::AddAlbumAndPlay(item.get_id()),
         (MetadataLibraryItem::Artist { name }, "add") => QueueCommand::AddArtistToQueue(name.clone()),
         (MetadataLibraryItem::Artist { name }, "after") => QueueCommand::AddArtistAfterCurrent(name.clone()),
         (MetadataLibraryItem::Artist { name }, "load") => QueueCommand::LoadArtistInQueue(name.clone()),

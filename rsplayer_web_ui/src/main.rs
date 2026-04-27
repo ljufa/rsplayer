@@ -930,7 +930,7 @@ fn FooterPlayer() -> Element {
             div { class: "w-full bg-base-300 h-0.5",
                 div { class: "bg-primary h-0.5", style: "width:{pct}%" }
             }
-            div { class: "flex items-center gap-3 px-3 py-1",
+            div { class: "flex items-center gap-3 px-3 py-3",
                 a {
                     class: "flex-1 min-w-0 cursor-pointer",
                     href: "/",
