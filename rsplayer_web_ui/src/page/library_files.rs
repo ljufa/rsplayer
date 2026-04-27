@@ -172,7 +172,6 @@ pub fn LibraryFilesPage() -> Element {
                                     search_mode,
                                     ws,
                                     tree,
-                                    loading,
                                     search: search_str.clone(),
                                 }
                             }
@@ -191,7 +190,6 @@ fn LibraryNode(
     search_mode: bool,
     ws: Signal<Option<WebSocket>>,
     tree: Signal<Tree>,
-    loading: Signal<bool>,
     search: String,
 ) -> Element {
     let is_dir = item.is_dir();
@@ -209,7 +207,6 @@ fn LibraryNode(
             let path = t.full_path(node_id);
             drop(t);
             tree.write().current = node_id;
-            *loading.write() = true;
             ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryLocalFiles(path, 0)));
         }
     };
@@ -325,7 +322,6 @@ fn LibraryNode(
                                     search_mode,
                                     ws,
                                     tree,
-                                    loading,
                                     search: search.clone(),
                                 }
                             }

@@ -146,7 +146,6 @@ pub fn LibraryArtistsPage() -> Element {
                                     node_id,
                                     ws,
                                     tree,
-                                    loading,
                                 }
                             }
                         })
@@ -163,7 +162,6 @@ fn ArtistNode(
     node_id: NodeId,
     ws: Signal<Option<WebSocket>>,
     tree: Signal<Tree>,
-    loading: Signal<bool>,
 ) -> Element {
     let label = item.get_title();
     let is_song = matches!(item, MetadataLibraryItem::SongItem(_));
@@ -190,7 +188,6 @@ fn ArtistNode(
                                 tree.write().clear_children(node_id);
                             } else {
                                 tree.write().current = node_id;
-                                *loading.write() = true;
                                 match &item {
                                     MetadataLibraryItem::Artist { name } => {
                                         ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryAlbumsByArtist(name.clone())));
@@ -218,7 +215,6 @@ fn ArtistNode(
                                     tree.write().clear_children(node_id);
                                 } else {
                                     tree.write().current = node_id;
-                                    *loading.write() = true;
                                     match &item {
                                         MetadataLibraryItem::Artist { name } => {
                                             ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryAlbumsByArtist(name.clone())));
@@ -262,7 +258,6 @@ fn ArtistNode(
                                     node_id: child_id,
                                     ws,
                                     tree,
-                                    loading,
                                 }
                             }
                         })
