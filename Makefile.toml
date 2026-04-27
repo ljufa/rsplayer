@@ -1,7 +1,11 @@
 [env]
-# ram disk
-# CARGO_TARGET_DIR = "/dev/shm/cargo_target"
+# Native cargo writes to "target". Cross-using tasks override CARGO_TARGET_DIR
+# to "target/cross" locally so host-arch build scripts (linked against the
+# host's glibc) don't get reused inside the older-glibc cross containers.
+# In CI (CI=true), the per-task override is skipped so existing workflow paths
+# (target/${TARGET}/...) keep working.
 CARGO_TARGET_DIR = "target"
+CROSS_TARGET_DIR = { value = "target/cross", condition = { env_not_set = ["CI"] } }
 
 # RPI_HOST = "192.168.5.3"
 # TARGET = "arm-unknown-linux-gnueabihf"
@@ -33,6 +37,9 @@ args = [
     "--bin",
     "rsplayer",
 ]
+
+[tasks.build_release.env]
+CARGO_TARGET_DIR = { value = "target/cross", condition = { env_not_set = ["CI"] } }
 
 [tasks.build_dev]
 command = "cargo"
@@ -220,6 +227,10 @@ script = [
     "rsync -avvP --rsync-path=\"sudo rsync\" ${CARGO_TARGET_DIR}/${TARGET}/release/rsplayer pi@${RPI_HOST}:/usr/bin",
     "ssh -x pi@${RPI_HOST} \"sudo systemctl restart rsplayer\"",
 ]
+
+[tasks.copy_remote.env]
+CARGO_TARGET_DIR = { value = "target/cross", condition = { env_not_set = ["CI"] } }
+
 [tasks.copy_remote_dev]
 dependencies = ["build_dev"]
 script = [
