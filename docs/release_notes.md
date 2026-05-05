@@ -12,10 +12,6 @@ The new protocol is defined in the shared `rsplayer_wire` crate (a `no_std` libr
 
 > ⚠️ **Action required:** Firmware must be updated to the matching version that speaks the new binary protocol. Running v3.0.0 against old firmware will result in garbled communication.
 
-#### Full Library Rescan Required
-
-The album database key format changed in v2.9.6 (included in this release via merge from `main_public`). If upgrading from a version older than v2.9.6, a full rescan is required: **Settings → Rescan — Full**.
-
 ---
 
 ### New Features
@@ -32,21 +28,6 @@ RSPlayer can now stream audio directly to the browser over HTTP, without requiri
 #### Typed System Commands Over WebSocket
 
 Volume and power commands from the frontend are now sent as a typed `SystemRequest` enum (`VolUp`, `VolDown`, `SetVol`, `ToggleMute`, `PowerOff`, `RestartSystem`, `RestartRSPlayer`, `SetFirmwarePower`) rather than ad-hoc strings. This closes a class of silent failures where an unrecognised command string would be dropped without feedback.
-
-#### Settings — Exposed RSPlayer Engine Knobs
-
-The Settings page now exposes low-level engine parameters that were previously only configurable via the config file:
-
-- Input stream buffer size (MB)
-- Ring buffer size (ms)
-- Playback thread priority (1–99)
-- ALSA buffer size (frames; 0 = driver default)
-
-Changes to these fields save automatically and restart the player engine.
-
-#### Settings — Restart / Power Controls
-
-The Settings page now has direct buttons for **Restart RSPlayer**, **Restart System**, and **Power Off**, removing the need to SSH in for routine maintenance.
 
 ---
 
