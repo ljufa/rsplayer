@@ -67,11 +67,15 @@ tokio-stream.workspace = true
 anyhow.workspace = true
 console-subscriber = { version = "0.5", optional = true }
 
-#warp
-warp = { version = "0.3", features = ["compression", "tls"] }
-rust-embed = { version = "8", features = ["warp-ex", "compression", "include-exclude"] }
-warp-embed = "0.5"
+#http
+axum = { version = "0.8", features = ["ws", "macros"] }
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["compression-gzip", "cors", "fs", "set-header"] }
+rust-embed = { version = "8", features = ["mime-guess", "compression", "include-exclude"] }
+mime_guess = "2"
 serde = { workspace = true, features = ["derive"] }
+percent-encoding = "2"
 fjall.workspace = true
 nix = { version = "0.31", features = ["mount", "user"] }
 

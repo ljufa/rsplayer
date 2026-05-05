@@ -25,18 +25,21 @@ use api_models::{
 };
 
 use crate::audio_metadata_extractor::AudioMetadataExtractor;
+use crate::ports::{
+    album_repository::ArcAlbumRepository,
+    play_statistics_repository::ArcPlayStatisticsRepository,
+    song_repository::ArcSongRepository,
+};
 use crate::sacd_bundle::{detect_sector_mode, read_areas, read_tracks, SACD_TRACK_MARKER};
-use crate::song_repository::SongRepository;
-use crate::{album_repository::AlbumRepository, play_statistic_repository::PlayStatisticsRepository};
 
 const ARTWORK_DIR: &str = "artwork";
 
 pub struct MetadataService {
     settings: RwLock<MetadataStoreSettings>,
     scan_running: AtomicBool,
-    song_repository: Arc<SongRepository>,
-    album_repository: Arc<AlbumRepository>,
-    statistic_repository: Arc<PlayStatisticsRepository>,
+    song_repository: ArcSongRepository,
+    album_repository: ArcAlbumRepository,
+    statistic_repository: ArcPlayStatisticsRepository,
     db: Arc<Database>,
 }
 
@@ -44,9 +47,9 @@ impl MetadataService {
     pub fn new(
         db: Arc<Database>,
         settings: &MetadataStoreSettings,
-        song_repository: Arc<SongRepository>,
-        album_repository: Arc<AlbumRepository>,
-        statistic_repository: Arc<PlayStatisticsRepository>,
+        song_repository: ArcSongRepository,
+        album_repository: ArcAlbumRepository,
+        statistic_repository: ArcPlayStatisticsRepository,
     ) -> Result<Self> {
         let settings = settings.clone();
 
@@ -175,22 +178,25 @@ impl MetadataService {
     where
         J: FnMut(&mut PlayItemStatistics),
     {
-        if let Some(mut stat) = self.statistic_repository.find_by_id(media_item_id) {
+        let stat = if let Some(mut stat) = self.statistic_repository.find_by_id(media_item_id) {
             job(&mut stat);
-            self.statistic_repository.save(&stat);
+            stat
         } else {
             let mut stat = PlayItemStatistics {
                 play_item_id: media_item_id.to_string(),
                 ..Default::default()
             };
             job(&mut stat);
-            self.statistic_repository.save(&stat);
+            stat
+        };
+        if let Err(e) = self.statistic_repository.save(&stat) {
+            warn!("Failed to save stats for '{media_item_id}': {e}");
         }
     }
 
     pub fn search_local_files_by_dir(&self, dir: &str) -> Vec<MetadataLibraryItem> {
         let start_time = std::time::Instant::now();
-        let result = self.song_repository.find_by_key_prefix(dir).filter_map(|(key, value)| {
+        let result = self.song_repository.find_by_key_prefix(dir).into_iter().filter_map(|(key, value)| {
             let key = String::from_utf8(key).ok()?;
             let (_, right) = key.split_once(dir)?;
             if right.contains('/') {
@@ -214,6 +220,7 @@ impl MetadataService {
         let result = self
             .song_repository
             .find_by_key_contains(search_term)
+            .into_iter()
             .filter_map(|(key, value)| {
                 let key = String::from_utf8(key).ok()?;
                 if let Some((path, _)) = key.rsplit_once('/') {
@@ -266,7 +273,9 @@ impl MetadataService {
         if !full_scan {
             info!("Deleting {} files from database", deleted_db_keys.len());
             for db_key in &deleted_db_keys {
-                self.song_repository.delete(db_key);
+                if let Err(e) = self.song_repository.delete(db_key) {
+                    warn!("Failed to delete song '{db_key}' from db: {e}");
+                }
                 if let Err(e) = state_changes_sender.send(StateChangeEvent::MetadataSongScanned(format!(
                     "Key {db_key} deleted from database"
                 ))) {
@@ -371,6 +380,7 @@ impl MetadataService {
                     let existing: Vec<String> = self
                         .song_repository
                         .find_by_key_prefix(&sacd_prefix)
+                        .into_iter()
                         .map(|(k, _)| String::from_utf8_lossy(&k).to_string())
                         .collect();
                     if existing.is_empty() {
@@ -389,7 +399,7 @@ impl MetadataService {
                 }
             }
         }
-        for song in self.song_repository.get_all_iterator() {
+        for song in self.song_repository.find_all() {
             if !unchanged_keys.contains(&song.file) {
                 deleted_keys.push(song.file);
             }
@@ -449,21 +459,25 @@ impl MetadataService {
         if let Ok(Some(ape_tag)) = decoder.read_tag() {
             for field in &ape_tag.fields {
                 if let Some(value) = field.value_as_str() {
+                    let trimmed = value.trim().to_string();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
                     let name = field.name.to_ascii_lowercase();
                     match name.as_str() {
-                        "title" => song.title = Some(value.to_string()),
-                        "artist" => song.artist = Some(value.to_string()),
-                        "album" => song.album = Some(value.to_string()),
-                        "album artist" | "albumartist" => song.album_artist = Some(value.to_string()),
-                        "year" | "date" => song.date = Some(value.to_string()),
-                        "track" | "tracknumber" => song.track = Some(value.to_string()),
-                        "disc" | "discnumber" => song.disc = Some(value.to_string()),
-                        "genre" => song.genre = Some(value.to_string()),
-                        "composer" => song.composer = Some(value.to_string()),
-                        "performer" => song.performer = Some(value.to_string()),
-                        "label" => song.label = Some(value.to_string()),
+                        "title" => song.title = Some(trimmed),
+                        "artist" => song.artist = Some(trimmed),
+                        "album" => song.album = Some(trimmed),
+                        "album artist" | "albumartist" => song.album_artist = Some(trimmed),
+                        "year" | "date" => song.date = Some(trimmed),
+                        "track" | "tracknumber" => song.track = Some(trimmed),
+                        "disc" | "discnumber" => song.disc = Some(trimmed),
+                        "genre" => song.genre = Some(trimmed),
+                        "composer" => song.composer = Some(trimmed),
+                        "performer" => song.performer = Some(trimmed),
+                        "label" => song.label = Some(trimmed),
                         _ => {
-                            song.tags.entry(field.name.clone()).or_insert_with(|| value.to_string());
+                            song.tags.entry(field.name.clone()).or_insert_with(|| trimmed);
                         }
                     }
                 }
@@ -519,7 +533,7 @@ impl MetadataService {
             1..=3 => String::from_utf8_lossy(payload).into_owned(),
             _ => return None,
         };
-        let text = text.trim_end_matches('\0').to_string();
+        let text = text.trim_end_matches('\0').trim().to_string();
         if text.is_empty() {
             None
         } else {

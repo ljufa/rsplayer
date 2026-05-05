@@ -19,6 +19,10 @@ backend = "http://localhost:8000/api"
 path = "/artwork"
 backend = "http://localhost:8000/artwork"
 
+[[web.proxy]]
+path = "/music"
+backend = "http://localhost:8000/music"
+
 [bundle]
 identifier = "io.github.rsplayer"
 publisher = "rsplayer"

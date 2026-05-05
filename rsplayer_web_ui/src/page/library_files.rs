@@ -37,6 +37,16 @@ impl Tree {
         }
     }
 
+    fn collapse_siblings(&mut self, node: NodeId) {
+        let Some(parent) = self.arena.get(node).and_then(indextree::Node::parent) else {
+            return;
+        };
+        let siblings: Vec<NodeId> = parent.children(&self.arena).filter(|&id| id != node).collect();
+        for s in siblings {
+            self.clear_children(s);
+        }
+    }
+
     fn append_items(&mut self, parent: NodeId, items: Vec<MetadataLibraryItem>) {
         for item in items {
             let node = self.arena.new_node(item);
@@ -64,6 +74,11 @@ pub fn LibraryFilesPage() -> Element {
                     p.strip_prefix("search=").map(|v| v.to_string())
                 })
             })
+            .map(|raw| {
+                js_sys::decode_uri_component(&raw)
+                    .map(String::from)
+                    .unwrap_or(raw)
+            })
             .unwrap_or_default()
     });
 
@@ -87,20 +102,22 @@ pub fn LibraryFilesPage() -> Element {
     let metadata_items = state.metadata_local_items;
     use_effect(move || {
         let items = metadata_items.read().clone();
-        if !items.is_empty() {
-            let mut t = tree.write();
-            let is_search = !search().is_empty();
-            if is_search {
-                let root = t.root;
-                t.clear_children(root);
+        let mut t = tree.write();
+        let is_search = !search().is_empty();
+        if is_search {
+            let root = t.root;
+            t.clear_children(root);
+            if !items.is_empty() {
                 t.append_items(root, items);
-            } else {
-                let current = t.current;
-                t.clear_children(current);
+            }
+        } else {
+            let current = t.current;
+            t.clear_children(current);
+            if !items.is_empty() {
                 t.append_items(current, items);
             }
-            *loading.write() = false;
         }
+        *loading.write() = false;
     });
 
     let mut do_search = move || {
@@ -153,29 +170,43 @@ pub fn LibraryFilesPage() -> Element {
             if loading() {
                 LibrarySkeleton {}
             } else {
-                div { class: "overflow-y-auto",
-                    {
-                        let search_mode = !search().is_empty();
-                        let search_str = search.read().clone();
-                        let top_nodes: Vec<(NodeId, MetadataLibraryItem)> = {
-                            let t = tree.read();
-                            t.root.children(&t.arena)
-                                .map(|id| (id, t.arena.get(id).unwrap().get().clone()))
-                                .collect()
-                        };
-                        top_nodes.into_iter().map(move |(node_id, item)| {
-                            rsx! {
-                                LibraryNode {
-                                    key: "{node_id:?}",
-                                    item,
-                                    node_id,
-                                    search_mode,
-                                    ws,
-                                    tree,
-                                    search: search_str.clone(),
+                {
+                    let search_mode = !search().is_empty();
+                    let top_nodes: Vec<(NodeId, MetadataLibraryItem)> = {
+                        let t = tree.read();
+                        t.root.children(&t.arena)
+                            .map(|id| (id, t.arena.get(id).unwrap().get().clone()))
+                            .collect()
+                    };
+                    if search_mode && top_nodes.is_empty() {
+                        rsx! {
+                            div { class: "flex flex-col items-center justify-center gap-2 p-8 text-base-content/60",
+                                i { class: "material-icons text-4xl", "search_off" }
+                                span { "No files match your search." }
+                                span { class: "text-sm", "Try a different search term." }
+                            }
+                        }
+                    } else {
+                        rsx! {
+                            div { class: "overflow-y-auto",
+                                {
+                                    let search_str = search.read().clone();
+                                    top_nodes.into_iter().map(move |(node_id, item)| {
+                                        rsx! {
+                                            LibraryNode {
+                                                key: "{node_id:?}",
+                                                item,
+                                                node_id,
+                                                search_mode,
+                                                ws,
+                                                tree,
+                                                search: search_str.clone(),
+                                            }
+                                        }
+                                    })
                                 }
                             }
-                        })
+                        }
                     }
                 }
             }
@@ -206,7 +237,11 @@ fn LibraryNode(
         } else {
             let path = t.full_path(node_id);
             drop(t);
-            tree.write().current = node_id;
+            {
+                let mut tw = tree.write();
+                tw.collapse_siblings(node_id);
+                tw.current = node_id;
+            }
             ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryLocalFiles(path, 0)));
         }
     };

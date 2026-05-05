@@ -1,12 +1,16 @@
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
+use log::error;
 
 use api_models::player::Song;
 
-pub struct SongRepository {
-    songs_db: Keyspace,
+use crate::error::{RepoError, RepoResult};
+pub use crate::ports::song_repository::{ArcSongRepository, SongRepository};
+
+pub struct FjallSongRepository {
+    pub(crate) songs_db: Keyspace,
 }
 
-impl SongRepository {
+impl FjallSongRepository {
     pub fn new(db: &Database) -> Self {
         Self {
             songs_db: db
@@ -15,84 +19,6 @@ impl SongRepository {
         }
     }
 
-    pub fn save(&self, song: &Song) -> anyhow::Result<()> {
-        if song.file.is_empty() {
-            return Err(anyhow::anyhow!("Refusing to save song with empty file key"));
-        }
-        self.songs_db
-            .insert(&song.file, song.to_json_string_bytes())
-            .map_err(|e| anyhow::anyhow!("Failed to save song '{}': {e}", song.file))
-    }
-    pub fn delete(&self, id: &str) {
-        self.songs_db.remove(id).expect("Failed to delete song");
-    }
-    pub fn delete_all(&self) {
-        _ = self.songs_db.clear();
-    }
-
-    pub fn find_by_id(&self, id: &str) -> Option<Song> {
-        self.songs_db
-            .get(id)
-            .expect("Failed to get song")
-            .map(|v| Song::bytes_to_song(&v).expect("Failed to convert bytes to song"))
-    }
-    pub fn find_all(&self) -> Vec<Song> {
-        self.songs_db
-            .iter()
-            .filter_map(|guard| {
-                let value = guard.value().ok()?;
-                Song::bytes_to_song(&value)
-            })
-            .collect()
-    }
-    pub fn get_all_iterator(&self) -> impl Iterator<Item = Song> + '_ {
-        self.songs_db.iter().filter_map(|guard| {
-            let value = guard.value().ok()?;
-            Song::bytes_to_song(&value)
-        })
-    }
-
-    pub fn find_by_key_contains(&self, search_term: &str) -> impl Iterator<Item = (Vec<u8>, Vec<u8>)> {
-        let st = search_term.to_lowercase();
-        self.songs_db
-            .iter()
-            .filter_map(|guard| {
-                let (key, value) = guard.into_inner().ok()?;
-                Some((key.to_vec(), value.to_vec()))
-            })
-            .filter(move |(key, _)| String::from_utf8(key.clone()).is_ok_and(|k| k.to_lowercase().contains(&st)))
-            .collect::<Vec<_>>()
-            .into_iter()
-    }
-
-    pub fn find_by_key_prefix(&self, prefix: &str) -> impl Iterator<Item = (Vec<u8>, Vec<u8>)> {
-        self.songs_db
-            .prefix(prefix.as_bytes())
-            .filter_map(|guard| {
-                let (key, value) = guard.into_inner().ok()?;
-                Some((key.to_vec(), value.to_vec()))
-            })
-            .collect::<Vec<_>>()
-            .into_iter()
-    }
-
-    /// Returns all songs whose key (file path) starts with `prefix`.
-    pub fn find_songs_by_dir_prefix(&self, prefix: &str) -> impl Iterator<Item = Song> {
-        self.songs_db
-            .prefix(prefix.as_bytes())
-            .filter_map(|guard| {
-                let value = guard.value().ok()?;
-                Song::bytes_to_song(&value)
-            })
-            .collect::<Vec<_>>()
-            .into_iter()
-    }
-    pub const fn flush(&self) {
-        // fjall handles persistence at the Database level; this is a no-op.
-    }
-}
-
-impl SongRepository {
     /// Standalone constructor for tests — opens its own fjall Database.
     pub fn new_standalone(db_path: &str) -> Self {
         let db = Database::builder(db_path).open().expect("Failed to open song db");
@@ -104,11 +30,98 @@ impl SongRepository {
     }
 }
 
+impl SongRepository for FjallSongRepository {
+    fn save(&self, song: &Song) -> RepoResult<()> {
+        if song.file.is_empty() {
+            return Err(RepoError::Invalid("refusing to save song with empty file key".to_owned()));
+        }
+        self.songs_db
+            .insert(&song.file, song.to_json_string_bytes())
+            .map_err(|e| RepoError::Storage(format!("save song '{}': {e}", song.file)))
+    }
+
+    fn delete(&self, id: &str) -> RepoResult<()> {
+        self.songs_db
+            .remove(id)
+            .map(|_| ())
+            .map_err(|e| RepoError::Storage(format!("delete song '{id}': {e}")))
+    }
+
+    fn delete_all(&self) {
+        _ = self.songs_db.clear();
+    }
+
+    fn find_by_id(&self, id: &str) -> Option<Song> {
+        match self.songs_db.get(id) {
+            Ok(Some(v)) => Song::bytes_to_song(&v).or_else(|| {
+                error!("song decode failed for key '{id}'");
+                None
+            }),
+            Ok(None) => None,
+            Err(e) => {
+                error!("song read error for key '{id}': {e}");
+                None
+            }
+        }
+    }
+
+    fn find_all(&self) -> Vec<Song> {
+        self.songs_db
+            .iter()
+            .filter_map(|guard| {
+                let value = guard.value().ok()?;
+                Song::bytes_to_song(&value)
+            })
+            .collect()
+    }
+
+    fn find_by_key_contains(&self, search_term: &str) -> Vec<(Vec<u8>, Vec<u8>)> {
+        let st = search_term.to_lowercase();
+        self.songs_db
+            .iter()
+            .filter_map(|guard| {
+                let (key, value) = guard.into_inner().ok()?;
+                Some((key.to_vec(), value.to_vec()))
+            })
+            .filter(|(key, _)| String::from_utf8(key.clone()).is_ok_and(|k| k.to_lowercase().contains(&st)))
+            .collect()
+    }
+
+    fn find_by_key_prefix(&self, prefix: &str) -> Vec<(Vec<u8>, Vec<u8>)> {
+        self.songs_db
+            .prefix(prefix.as_bytes())
+            .filter_map(|guard| {
+                let (key, value) = guard.into_inner().ok()?;
+                Some((key.to_vec(), value.to_vec()))
+            })
+            .collect()
+    }
+
+    /// Returns all songs whose key (file path) starts with `prefix`.
+    fn find_songs_by_dir_prefix(&self, prefix: &str) -> Vec<Song> {
+        self.songs_db
+            .prefix(prefix.as_bytes())
+            .filter_map(|guard| {
+                let value = guard.value().ok()?;
+                Song::bytes_to_song(&value)
+            })
+            .collect()
+    }
+
+    fn flush(&self) {
+        // fjall handles persistence at the Database level; this is a no-op.
+    }
+}
+
 #[cfg(test)]
 mod test {
     use api_models::player::Song;
 
-    use crate::{song_repository::SongRepository, test::test_shared};
+    use crate::{
+        ports::song_repository::SongRepository,
+        song_repository::FjallSongRepository,
+        test::test_shared,
+    };
 
     macro_rules! insert_songs {
         ($repo:expr, $($file:expr, $title:expr, $artist:expr, $album:expr),* $(,)?) => {
@@ -130,9 +143,9 @@ mod test {
         song.to_json_string_bytes()
     }
 
-    fn create_song_repo() -> SongRepository {
+    fn create_song_repo() -> FjallSongRepository {
         let ctx = test_shared::Context::default();
-        SongRepository::new_standalone(&ctx.db_dir)
+        FjallSongRepository::new_standalone(&ctx.db_dir)
     }
 
     #[test]

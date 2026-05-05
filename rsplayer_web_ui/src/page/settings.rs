@@ -1,5 +1,5 @@
 use api_models::{
-    common::{MetadataCommand, StorageCommand, SystemCommand, UserCommand, VolumeCrtlType},
+    common::{MetadataCommand, StorageCommand, SystemRequest, UserCommand, VolumeCrtlType},
     settings::{
         DspFilter, DspSettings, FilterConfig, NetworkMountConfig, NetworkMountType, NormalizationSource, Settings,
     },
@@ -8,10 +8,11 @@ use dioxus::prelude::*;
 use gloo_net::http::Request;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+use wasm_bindgen::JsCast;
 use web_sys::WebSocket;
 
 use crate::dsp::get_dsp_presets;
-use crate::{hooks::ws_send, send_system_cmd, state::AppState};
+use crate::{hooks::ws_send, state::AppState, ws_system};
 
 const API_SETTINGS_PATH: &str = "/api/settings";
 
@@ -149,6 +150,28 @@ pub fn SettingsPage() -> Element {
         });
     });
 
+    // Sync <select>.value property after render.
+    // Dioxus' `selected` attribute sets the content attribute, not the IDL
+    // property, so the <select> won't visually update without this.
+    use_effect(move || {
+        let _ = settings.read();
+        if let Some(window) = web_sys::window() {
+            if let Some(doc) = window.document() {
+                if let Some(el) = doc.get_element_by_id("audio-interface-select") {
+                    let select: web_sys::HtmlSelectElement = el.unchecked_into();
+                    let val = if settings.read().local_browser_playback {
+                        "browser".to_string()
+                    } else {
+                        settings.read().alsa_settings.output_device.card_id.clone()
+                    };
+                    if !val.is_empty() {
+                        select.set_value(&val);
+                    }
+                }
+            }
+        }
+    });
+
     let mut auto_save = move || {
         *saving.write() = true;
         let s = settings.read().clone();
@@ -182,13 +205,13 @@ pub fn SettingsPage() -> Element {
             }
             Some(ConfirmAction::RestartPlayer) => {
                 *pending_restart.write() = false;
-                send_system_cmd(&ws, SystemCommand::RestartRSPlayer);
+                ws_system(&ws, SystemRequest::RestartRSPlayer);
             }
             Some(ConfirmAction::RestartSystem) => {
-                send_system_cmd(&ws, SystemCommand::RestartSystem);
+                ws_system(&ws, SystemRequest::RestartSystem);
             }
             Some(ConfirmAction::ShutdownSystem) => {
-                send_system_cmd(&ws, SystemCommand::PowerOff);
+                ws_system(&ws, SystemRequest::PowerOff);
             }
             Some(ConfirmAction::RemoveMusicDirectory(idx)) => {
                 let mut s = settings.write();
@@ -271,7 +294,9 @@ pub fn SettingsPage() -> Element {
                                 move |e: Event<FormData>| {
                                     let val = e.value();
                                     if val == "browser" {
-                                        settings.write().local_browser_playback = true;
+                                        let mut s = settings.write();
+                                        s.local_browser_playback = true;
+                                        s.alsa_settings.output_device.card_id.clear();
                                     } else {
                                         {
                                             let mut s = settings.write();
@@ -287,6 +312,8 @@ pub fn SettingsPage() -> Element {
                                     auto_save_restart();
                                 }
                             },
+                            // Options use `selected` for the initial render;
+                            // the use_effect below syncs the .value property after hydration.
                             option { value: "--", "-- Select audio card --" }
                             option {
                                 value: "browser",
@@ -357,107 +384,110 @@ pub fn SettingsPage() -> Element {
                         },
                     }
 
-                    // RSPlayer advanced
-                    div { class: "divider text-xs text-base-content/40 my-2", "RSPlayer Engine" }
-                    NumberInput {
-                        label: "Input buffer (MB)",
-                        value: settings.read().rs_player_settings.input_stream_buffer_size_mb.to_string(),
-                        min: "1",
-                        max: "200",
-                        onchange: move |v: String| {
-                            if let Ok(n) = v.parse::<usize>() {
-                                settings.write().rs_player_settings.input_stream_buffer_size_mb = n;
-                            }
-                        },
-                    }
-                    NumberInput {
-                        label: "Ring buffer (ms)",
-                        value: settings.read().rs_player_settings.ring_buffer_size_ms.to_string(),
-                        min: "100",
-                        max: "10000",
-                        onchange: move |v: String| {
-                            if let Ok(n) = v.parse::<usize>() {
-                                settings.write().rs_player_settings.ring_buffer_size_ms = n;
-                            }
-                        },
-                    }
-                    NumberInput {
-                        label: "Thread priority (1-99)",
-                        value: settings.read().rs_player_settings.player_threads_priority.to_string(),
-                        min: "1",
-                        max: "99",
-                        onchange: move |v: String| {
-                            if let Ok(n) = v.parse::<u8>() {
-                                settings.write().rs_player_settings.player_threads_priority = n;
-                            }
-                        },
-                    }
-                    NumberInput {
-                        label: "ALSA buffer size (frames, 0=default)",
-                        value: settings.read().rs_player_settings.alsa_buffer_size.unwrap_or(0).to_string(),
-                        min: "0",
-                        max: "100000",
-                        onchange: move |v: String| {
-                            let n = v.parse::<u32>().unwrap_or(0);
-                            settings.write().rs_player_settings.alsa_buffer_size = if n == 0 {
-                                None
-                            } else {
-                                Some(n)
-                            };
-                        },
-                    }
-                    div { class: "form-control mb-2",
-                        label { class: "label py-0.5",
-                            span { class: "label-text text-sm", "Fixed output sample rate" }
+                    // RSPlayer advanced (hidden when browser local playback is selected)
+                    if !settings.read().local_browser_playback {
+                        div { class: "divider text-xs text-base-content/40 my-2", "RSPlayer Engine" }
+                        NumberInput {
+                            label: "Input buffer (MB)",
+                            value: settings.read().rs_player_settings.input_stream_buffer_size_mb.to_string(),
+                            min: "1",
+                            max: "200",
+                            onchange: move |v: String| {
+                                if let Ok(n) = v.parse::<usize>() {
+                                    settings.write().rs_player_settings.input_stream_buffer_size_mb = n;
+                                    auto_save_restart();
+                                }
+                            },
                         }
-                        select {
-                            class: "select select-sm select-bordered w-full",
-                            onchange: move |e: Event<FormData>| {
-                                let n = e.value().parse::<u32>().unwrap_or(0);
-                                settings.write().rs_player_settings.fixed_output_sample_rate = if n == 0 {
+                        NumberInput {
+                            label: "Ring buffer (ms)",
+                            value: settings.read().rs_player_settings.ring_buffer_size_ms.to_string(),
+                            min: "100",
+                            max: "10000",
+                            onchange: move |v: String| {
+                                if let Ok(n) = v.parse::<usize>() {
+                                    settings.write().rs_player_settings.ring_buffer_size_ms = n;
+                                    auto_save_restart();
+                                }
+                            },
+                        }
+                        NumberInput {
+                            label: "Thread priority (1-99)",
+                            value: settings.read().rs_player_settings.player_threads_priority.to_string(),
+                            min: "1",
+                            max: "99",
+                            onchange: move |v: String| {
+                                if let Ok(n) = v.parse::<u8>() {
+                                    settings.write().rs_player_settings.player_threads_priority = n;
+                                    auto_save_restart();
+                                }
+                            },
+                        }
+                        NumberInput {
+                            label: "ALSA buffer size (frames, 0=default)",
+                            value: settings.read().rs_player_settings.alsa_buffer_size.unwrap_or(0).to_string(),
+                            min: "0",
+                            max: "100000",
+                            onchange: move |v: String| {
+                                let n = v.parse::<u32>().unwrap_or(0);
+                                settings.write().rs_player_settings.alsa_buffer_size = if n == 0 {
                                     None
                                 } else {
                                     Some(n)
                                 };
                                 auto_save_restart();
                             },
-                            {
-                                let current = settings
-                                    .read()
-                                    .rs_player_settings
-                                    .fixed_output_sample_rate
-                                    .unwrap_or(0);
-                                [
-                                    0u32, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600,
-                                    768000,
-                                ]
-                                    .iter()
-                                    .map(move |&v| {
-                                        rsx! {
-                                            option { value: "{v}", selected: current == v,
-                                                if v == 0 {
-                                                    "Off"
-                                                } else {
-                                                    "{v} Hz"
+                        }
+                        div { class: "form-control mb-2",
+                            label { class: "label py-0.5",
+                                span { class: "label-text text-sm", "Fixed output sample rate" }
+                            }
+                            select {
+                                class: "select select-sm select-bordered w-full",
+                                onchange: move |e: Event<FormData>| {
+                                    let n = e.value().parse::<u32>().unwrap_or(0);
+                                    settings.write().rs_player_settings.fixed_output_sample_rate = if n == 0 {
+                                        None
+                                    } else {
+                                        Some(n)
+                                    };
+                                    auto_save_restart();
+                                },
+                                {
+                                    let current = settings
+                                        .read()
+                                        .rs_player_settings
+                                        .fixed_output_sample_rate
+                                        .unwrap_or(0);
+                                    [
+                                        0u32, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600,
+                                        768000,
+                                    ]
+                                        .iter()
+                                        .map(move |&v| {
+                                            rsx! {
+                                                option { value: "{v}", selected: current == v,
+                                                    if v == 0 {
+                                                        "Off"
+                                                    } else {
+                                                        "{v} Hz"
+                                                    }
                                                 }
                                             }
-                                        }
-                                    })
+                                        })
+                                }
                             }
-                        }
-                    }
-                    div { class: "flex gap-2 mt-3",
-                        button {
-                            class: "btn btn-sm btn-primary flex-1",
-                            onclick: move |_| auto_save_restart(),
-                            "Save playback settings"
                         }
                     }
                 },
             }
 
             // ── Volume section ───────────────────────────────────────────────
-            SettingsSection {
+            // Hidden when USB firmware control channel is enabled (firmware owns
+            // the volume) or when browser local playback is selected (volume is
+            // handled by the browser).
+            if !settings.read().usb_settings.enabled && !settings.read().local_browser_playback {
+                SettingsSection {
                 title: "Volume Control",
                 icon: "volume_up",
                 content: rsx! {
@@ -535,6 +565,7 @@ pub fn SettingsPage() -> Element {
                         },
                     }
                 },
+                }
             }
 
             // ── VU Meter & Normalization ──────────────────────────────────────
@@ -817,13 +848,13 @@ pub fn SettingsPage() -> Element {
                         div { class: "flex flex-wrap gap-2 mt-3",
                             button {
                                 class: "btn btn-sm btn-error w-fit",
-                                onclick: move |_| send_system_cmd(&ws, SystemCommand::SetFirmwarePower(false)),
+                                onclick: move |_| ws_system(&ws, SystemRequest::SetFirmwarePower(false)),
                                 i { class: "material-icons text-sm mr-1", "power_off" }
                                 "Power Off"
                             }
                             button {
                                 class: "btn btn-sm btn-success w-fit",
-                                onclick: move |_| send_system_cmd(&ws, SystemCommand::SetFirmwarePower(true)),
+                                onclick: move |_| ws_system(&ws, SystemRequest::SetFirmwarePower(true)),
                                 i { class: "material-icons text-sm mr-1", "power" }
                                 "Power On"
                             }

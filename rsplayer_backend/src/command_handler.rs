@@ -1,8 +1,9 @@
-use log::debug;
+use log::{debug, error};
 use tokio::sync::broadcast::Sender;
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::{self, Receiver};
 
-use api_models::common::UserCommand::{self, Metadata, Player, Playlist, Queue, Storage, UpdateDsp};
+use api_models::common::SystemCommand;
+use api_models::common::UserCommand::{self, Metadata, Player, Playlist, Queue, Storage, System, UpdateDsp};
 use api_models::state::StateChangeEvent;
 
 use crate::command_context::{CommandContext, SystemCommandContext};
@@ -19,11 +20,12 @@ pub async fn handle_user_commands(
     metadata_service: std::sync::Arc<rsplayer_metadata::metadata_service::MetadataService>,
     playlist_service: std::sync::Arc<rsplayer_metadata::playlist_service::PlaylistService>,
     queue_service: std::sync::Arc<rsplayer_metadata::queue_service::QueueService>,
-    album_repository: std::sync::Arc<rsplayer_metadata::album_repository::AlbumRepository>,
-    song_repository: std::sync::Arc<rsplayer_metadata::song_repository::SongRepository>,
-    loudness_repository: std::sync::Arc<rsplayer_metadata::loudness_repository::LoudnessRepository>,
+    album_repository: rsplayer_metadata::ports::album_repository::ArcAlbumRepository,
+    song_repository: rsplayer_metadata::ports::song_repository::ArcSongRepository,
+    loudness_repository: rsplayer_metadata::ports::loudness_repository::ArcLoudnessRepository,
     config_store: rsplayer_config::ArcConfiguration,
     mut input_commands_rx: Receiver<UserCommand>,
+    system_commands_tx: mpsc::Sender<SystemCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) {
     let ctx = CommandContext::new(
@@ -67,6 +69,11 @@ pub async fn handle_user_commands(
                 settings.rs_player_settings.dsp_settings = dsp_settings;
                 ctx.config_store.save_settings(&settings);
                 ctx.send_notification("DSP settings updated and saved");
+            }
+            System(req) => {
+                if let Err(e) = system_commands_tx.send(req.into()).await {
+                    error!("Failed to forward SystemRequest to system handler: {e}");
+                }
             }
         }
     }

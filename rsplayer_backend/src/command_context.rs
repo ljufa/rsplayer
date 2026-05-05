@@ -6,12 +6,14 @@ use api_models::state::StateChangeEvent;
 use rsplayer_config::ArcConfiguration;
 use rsplayer_hardware::audio_device::audio_service::ArcAudioInterfaceSvc;
 use rsplayer_hardware::usb::ArcUsbService;
-use rsplayer_metadata::album_repository::AlbumRepository;
-use rsplayer_metadata::loudness_repository::LoudnessRepository;
 use rsplayer_metadata::metadata_service::MetadataService;
 use rsplayer_metadata::playlist_service::PlaylistService;
+use rsplayer_metadata::ports::{
+    album_repository::ArcAlbumRepository,
+    loudness_repository::ArcLoudnessRepository,
+    song_repository::ArcSongRepository,
+};
 use rsplayer_metadata::queue_service::QueueService;
-use rsplayer_metadata::song_repository::SongRepository;
 use rsplayer_playback::rsp::player_service::PlayerService;
 
 pub struct CommandContext {
@@ -19,9 +21,9 @@ pub struct CommandContext {
     pub metadata_service: Arc<MetadataService>,
     pub playlist_service: Arc<PlaylistService>,
     pub queue_service: Arc<QueueService>,
-    pub album_repository: Arc<AlbumRepository>,
-    pub song_repository: Arc<SongRepository>,
-    pub loudness_repository: Arc<LoudnessRepository>,
+    pub album_repository: ArcAlbumRepository,
+    pub song_repository: ArcSongRepository,
+    pub loudness_repository: ArcLoudnessRepository,
     pub config_store: ArcConfiguration,
     pub state_changes_sender: Sender<StateChangeEvent>,
 }
@@ -33,9 +35,9 @@ impl CommandContext {
         metadata_service: Arc<MetadataService>,
         playlist_service: Arc<PlaylistService>,
         queue_service: Arc<QueueService>,
-        album_repository: Arc<AlbumRepository>,
-        song_repository: Arc<SongRepository>,
-        loudness_repository: Arc<LoudnessRepository>,
+        album_repository: ArcAlbumRepository,
+        song_repository: ArcSongRepository,
+        loudness_repository: ArcLoudnessRepository,
         config_store: ArcConfiguration,
         state_changes_sender: Sender<StateChangeEvent>,
     ) -> Self {

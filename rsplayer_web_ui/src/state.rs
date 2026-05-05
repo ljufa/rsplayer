@@ -40,6 +40,8 @@ pub struct AppState {
     pub vu_right: Signal<u8>,
     pub vu_meter_enabled: Signal<bool>,
     pub visualizer_type: Signal<VisualizerType>,
+    /// Whether browser-based playback mode is active (audio streamed via HTTP, not ALSA).
+    pub local_browser_playback: Signal<bool>,
     /// Resolved album art URL for the current song (local /artwork/ or Last.fm).
     pub album_image: Signal<Option<String>>,
     /// Whether to show the album art as a background image (persisted in localStorage).
@@ -48,6 +50,9 @@ pub struct AppState {
     pub lazy_genre_albums: Signal<HashMap<String, Vec<Album>>>,
     /// Lazily fetched albums by decade label (keyed by decade string like "1990s").
     pub lazy_decade_albums: Signal<HashMap<String, Vec<Album>>>,
+    /// Guard: true while the browser <audio> element is seeking to a new position.
+    /// Suppresses stale timeupdate events that would overwrite the seek target.
+    pub audio_seeking: Signal<bool>,
 }
 
 impl AppState {
@@ -91,9 +96,11 @@ impl AppState {
             vu_right: Signal::new(0),
             vu_meter_enabled: Signal::new(false),
             visualizer_type: Signal::new(visualizer_type),
+            local_browser_playback: Signal::new(false),
             album_image: Signal::new(None),
             lazy_genre_albums: Signal::new(HashMap::new()),
             lazy_decade_albums: Signal::new(HashMap::new()),
+            audio_seeking: Signal::new(false),
             show_bg_image: Signal::new({
                 (|| {
                     let storage = web_sys::window()?.local_storage().ok()??;
@@ -107,12 +114,12 @@ impl AppState {
 
     /// Dispatch a state change event received from the WebSocket into signals.
     pub fn dispatch(&mut self, event: StateChangeEvent) {
-        match &event {
+        match event {
             StateChangeEvent::VolumeChangeEvent(vol) => {
-                *self.volume.write() = *vol;
+                *self.volume.write() = vol;
             }
             StateChangeEvent::PlayerInfoEvent(pi) => {
-                *self.player_info.write() = Some(pi.clone());
+                *self.player_info.write() = Some(pi);
             }
             StateChangeEvent::CurrentSongEvent(song) => {
                 // Resolve local album art synchronously; Last.fm is handled async in App.
@@ -122,18 +129,19 @@ impl AppState {
                     .map(|id| format!("/artwork/{}", id))
                     .or_else(|| song.image_url.clone());
                 *self.album_image.write() = local;
-                *self.current_song.write() = Some(song.clone());
+                *self.current_song.write() = Some(song);
             }
             StateChangeEvent::SongTimeEvent(st) => {
-                *self.progress.write() = st.clone();
+                *self.progress.write() = st;
                 *self.player_state.write() = PlayerState::PLAYING;
             }
             StateChangeEvent::PlaybackModeChangedEvent(mode) => {
-                *self.playback_mode.write() = *mode;
+                *self.playback_mode.write() = mode;
             }
             StateChangeEvent::PlaybackStateEvent(ps) => {
-                *self.player_state.write() = ps.clone();
-                if !matches!(ps, PlayerState::PLAYING) {
+                let stopped = !matches!(ps, PlayerState::PLAYING);
+                *self.player_state.write() = ps;
+                if stopped {
                     *self.vu_left.write() = 0;
                     *self.vu_right.write() = 0;
                 }
@@ -141,54 +149,53 @@ impl AppState {
             StateChangeEvent::MetadataSongScanStarted => {
                 *self.metadata_scan_msg.write() = Some("Music directory scanning started.".to_string());
             }
-            StateChangeEvent::MetadataSongScanned(info) => {
-                *self.metadata_scan_msg.write() = Some(info.clone());
-            }
-            StateChangeEvent::MetadataSongScanFinished(info) => {
-                *self.metadata_scan_msg.write() = Some(info.clone());
+            StateChangeEvent::MetadataSongScanned(info)
+            | StateChangeEvent::MetadataSongScanFinished(info) => {
+                *self.metadata_scan_msg.write() = Some(info);
             }
             StateChangeEvent::CurrentQueueEvent(page) => {
-                *self.current_queue.write() = page.clone();
+                *self.current_queue.write() = page;
             }
             StateChangeEvent::MetadataLocalItems(items) => {
-                *self.metadata_local_items.write() = items.clone();
+                *self.metadata_local_items.write() = items;
             }
             StateChangeEvent::FavoriteRadioStations(stations) => {
-                *self.favorite_radio_stations.write() = stations.clone();
+                *self.favorite_radio_stations.write() = stations;
             }
             StateChangeEvent::PlaylistsEvent(playlists) => {
-                *self.playlists.write() = Some(playlists.clone());
+                *self.playlists.write() = Some(playlists);
             }
             StateChangeEvent::PlaylistItemsEvent(items, _page) => {
-                *self.playlist_items.write() = items.clone();
+                *self.playlist_items.write() = items;
             }
             StateChangeEvent::LibraryStatsEvent(stats) => {
-                *self.library_stats.write() = Some(stats.clone());
+                *self.library_stats.write() = Some(stats);
             }
             StateChangeEvent::MountStatusEvent(statuses) => {
-                *self.mount_statuses.write() = statuses.clone();
+                *self.mount_statuses.write() = statuses;
             }
             StateChangeEvent::MusicDirStatusEvent(statuses) => {
-                *self.music_dir_statuses.write() = statuses.clone();
+                *self.music_dir_statuses.write() = statuses;
             }
             StateChangeEvent::ExternalMountsEvent(mounts) => {
-                *self.external_mounts.write() = mounts.clone();
+                *self.external_mounts.write() = mounts;
             }
             StateChangeEvent::GenreAlbumsEvent(genre, albums) => {
-                self.lazy_genre_albums.write().insert(genre.clone(), albums.clone());
+                self.lazy_genre_albums.write().insert(genre, albums);
             }
             StateChangeEvent::DecadeAlbumsEvent(decade, albums) => {
-                self.lazy_decade_albums.write().insert(decade.clone(), albums.clone());
+                self.lazy_decade_albums.write().insert(decade, albums);
             }
-            StateChangeEvent::NotificationSuccess(_) | StateChangeEvent::NotificationError(_) => {
-                *self.notification.write() = Some(event.clone());
+            ev @ (StateChangeEvent::NotificationSuccess(_)
+                | StateChangeEvent::NotificationError(_)) => {
+                *self.notification.write() = Some(ev);
             }
             StateChangeEvent::VUEvent(l, r) => {
-                *self.vu_left.write() = *l;
-                *self.vu_right.write() = *r;
+                *self.vu_left.write() = l;
+                *self.vu_right.write() = r;
             }
             StateChangeEvent::VuMeterEnabledEvent(enabled) => {
-                *self.vu_meter_enabled.write() = *enabled;
+                *self.vu_meter_enabled.write() = enabled;
             }
             _ => {}
         }

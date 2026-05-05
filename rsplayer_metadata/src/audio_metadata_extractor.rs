@@ -106,6 +106,6 @@ impl AudioMetadataExtractor {
     }
 
     fn tag_value_to_option(tag: &symphonia::core::meta::Tag) -> String {
-        tag.raw.value.to_string()
+        tag.raw.value.to_string().trim().to_owned()
     }
 }

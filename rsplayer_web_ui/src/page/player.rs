@@ -1,20 +1,24 @@
+use std::time::Duration;
+
 use api_models::{
-    common::{MetadataCommand, PlaybackMode, PlayerCommand, SystemCommand, UserCommand, Volume},
+    common::{MetadataCommand, PlaybackMode, PlayerCommand, SystemRequest, UserCommand, Volume},
     player::Song,
     state::{PlayerInfo, PlayerState, SongProgress},
 };
 use dioxus::prelude::*;
 use gloo_net::http::Request;
 use serde::Deserialize;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
 use web_sys::WebSocket;
 
 use crate::{
     hooks::ws_send,
     lyrics::{self, LrcLibResponse, LyricLine},
-    navigate, send_system_cmd,
+    navigate,
     state::AppState,
     vumeter::{VUMeter, VisualizerType},
-    CurrentPath, UiState,
+    ws_system, CurrentPath, UiState,
 };
 
 // ─── Last.fm album art types ─────────────────────────────────────────────────
@@ -435,7 +439,7 @@ fn Controls(
                 button {
                     class: "btn btn-ghost btn-sm",
                     title: if is_muted { "Unmute" } else { "Mute" },
-                    onclick: { let ws = ws; move |_| send_system_cmd(&ws, SystemCommand::ToggleMute) },
+                    onclick: { let ws = ws; move |_| ws_system(&ws, SystemRequest::ToggleMute) },
                     i { class: "material-icons", if is_muted { "volume_off" } else { "volume_up" } }
                 }
             }
@@ -445,10 +449,210 @@ fn Controls(
     }
 }
 
+// ─── Browser Audio Playback ──────────────────────────────────────────────────
+
+#[component]
+pub fn BrowserAudioPlayback() -> Element {
+    let state = use_context::<AppState>();
+    let ws = use_context::<Signal<Option<WebSocket>>>();
+
+    if !*state.local_browser_playback.read() {
+        return rsx! {};
+    }
+
+    let audio_id = "local-audio-player";
+    let mut listeners_attached = use_signal(|| false);
+    let mut src_changing = use_signal(|| false);
+
+    let state_a = state.clone();
+    let ws_a = ws.clone();
+
+    // Create the <audio> element imperatively in <body> on first mount
+    // so it survives Dioxus re-renders and page navigation.
+    // Read current_song inside the closure so Dioxus tracks it as a dependency
+    // and re-runs the effect when the song changes.
+    use_effect(move || {
+        let cur_song = state_a.current_song.read().clone();
+        if let Some(window) = web_sys::window() {
+            if let Some(doc) = window.document() {
+                // Create once if missing — attach to <body> so it survives
+                // Dioxus re-renders and page navigation.
+                if doc.get_element_by_id(audio_id).is_none() {
+                    if let Ok(el) = doc.create_element("audio") {
+                        let _ = el.set_attribute("id", audio_id);
+                        let _ = el.set_attribute("preload", "metadata");
+                        let _ = el.set_attribute("style", "display: none;");
+                        if let Some(body) = doc.body() {
+                            let _ = body.append_child(&el);
+                        }
+                    }
+                }
+
+                if let Some(el) = doc.get_element_by_id(audio_id) {
+                    let audio: web_sys::HtmlAudioElement = el.unchecked_into();
+
+                    let src = cur_song.as_ref().map(|s| {
+                        let file = &s.file;
+                        if file.starts_with("http://") || file.starts_with("https://") {
+                            file.clone()
+                        } else {
+                            let encoded = String::from(js_sys::encode_uri_component(file));
+                            let encoded = encoded.replace("%2F", "/");
+                            format!("/music/{}", encoded)
+                        }
+                    }).unwrap_or_default();
+
+                    if !src.is_empty() {
+                        src_changing.set(true);
+                        audio.set_src(&src);
+                        audio.set_loop(false);
+                        let _ = audio.play();
+                        // Give the browser a moment to process the new src before
+                        // clearing the guard so the spurious pause event is suppressed.
+                        wasm_bindgen_futures::spawn_local(async move {
+                            gloo_timers::future::TimeoutFuture::new(200).await;
+                            src_changing.set(false);
+                        });
+                    }
+
+                    if !*listeners_attached.read() {
+                        let mut s1 = state_a.clone();
+                        let a1 = audio.clone();
+                        let on_timeupdate = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {
+                            if *s1.audio_seeking.read() {
+                                return;
+                            }
+                            let current = a1.current_time();
+                            let duration = a1.duration();
+                            if current.is_finite() {
+                                s1.progress.write().current_time = Duration::from_secs_f64(current);
+                            }
+                            if duration.is_finite() && duration > 0.0 {
+                                s1.progress.write().total_time = Duration::from_secs_f64(duration);
+                            }
+                        });
+                        audio
+                            .add_event_listener_with_callback("timeupdate", on_timeupdate.as_ref().unchecked_ref())
+                            .ok();
+                        on_timeupdate.forget();
+
+                        let ws2 = ws_a.clone();
+                        let on_ended = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {
+                            ws_send(&ws2, &UserCommand::Player(PlayerCommand::Next));
+                        });
+                        audio
+                            .add_event_listener_with_callback("ended", on_ended.as_ref().unchecked_ref())
+                            .ok();
+                        on_ended.forget();
+
+                        let mut s3 = state_a.clone();
+                        let s3_sc = src_changing;
+                        let on_pause = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {
+                            if *s3_sc.read() {
+                                return;
+                            }
+                            *s3.player_state.write() = PlayerState::PAUSED;
+                        });
+                        audio
+                            .add_event_listener_with_callback("pause", on_pause.as_ref().unchecked_ref())
+                            .ok();
+                        on_pause.forget();
+
+                        let mut s4 = state_a.clone();
+                        let on_play = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {
+                            *s4.player_state.write() = PlayerState::PLAYING;
+                        });
+                        audio
+                            .add_event_listener_with_callback("play", on_play.as_ref().unchecked_ref())
+                            .ok();
+                        on_play.forget();
+
+                        let mut s5 = state_a.clone();
+                        let on_seeked = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {
+                            *s5.audio_seeking.write() = false;
+                        });
+                        audio
+                            .add_event_listener_with_callback("seeked", on_seeked.as_ref().unchecked_ref())
+                            .ok();
+                        on_seeked.forget();
+
+                        *listeners_attached.write() = true;
+                    }
+                }
+            }
+        }
+    });
+
+    // Sync play/pause from backend state changes.
+    let state_p = state.clone();
+    use_effect(move || {
+        let ps = state_p.player_state.read().clone();
+        if !*state_p.local_browser_playback.read() {
+            return;
+        }
+        if let Some(window) = web_sys::window() {
+            if let Some(doc) = window.document() {
+                if let Some(el) = doc.get_element_by_id(audio_id) {
+                    let audio: web_sys::HtmlAudioElement = el.unchecked_into();
+                    match ps {
+                        PlayerState::PLAYING => {
+                            let _ = audio.play();
+                        }
+                        PlayerState::PAUSED | PlayerState::STOPPED => {
+                            let _ = audio.pause();
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    });
+
+    // Sync volume from backend state changes.
+    let state_v = state.clone();
+    use_effect(move || {
+        let vol = state_v.volume.read().clone();
+        if !*state_v.local_browser_playback.read() {
+            return;
+        }
+        if let Some(window) = web_sys::window() {
+            if let Some(doc) = window.document() {
+                if let Some(el) = doc.get_element_by_id(audio_id) {
+                    let audio: web_sys::HtmlAudioElement = el.unchecked_into();
+                    if vol.max > 0 {
+                        audio.set_volume(vol.current as f64 / vol.max as f64);
+                    }
+                }
+            }
+        }
+    });
+
+    // Remove the <audio> element from <body> when browser playback is disabled.
+    {
+        let lbp = state.local_browser_playback;
+        use_effect(move || {
+            let enabled = *lbp.read();
+            if !enabled {
+                if let Some(window) = web_sys::window() {
+                    if let Some(doc) = window.document() {
+                        if let Some(el) = doc.get_element_by_id("local-audio-player") {
+                            let _ = el.remove();
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    rsx! {}
+}
+
 // ─── Seek Bar ────────────────────────────────────────────────────────────────
 
 #[component]
 fn SeekBar(ws: Signal<Option<WebSocket>>, progress: SongProgress) -> Element {
+    let state = use_context::<AppState>();
+    let browser = *state.local_browser_playback.read();
     let cur = progress.current_time.as_secs();
     let tot = progress.total_time.as_secs();
     rsx! {
@@ -462,11 +666,28 @@ fn SeekBar(ws: Signal<Option<WebSocket>>, progress: SongProgress) -> Element {
                 class: "range range-primary range-xs w-full",
                 min: 0, max: tot as i64, value: cur as i64,
                 aria_label: "Track progress",
-                onchange: { let ws = ws; move |e: Event<FormData>| {
-                    if let Ok(v) = e.value().parse::<u16>() {
-                        ws_send(&ws, &UserCommand::Player(PlayerCommand::Seek(v)));
+                onchange: {
+                    let ws = ws;
+                    let mut progress_sig = state.progress;
+                    let mut seeking_sig = state.audio_seeking;
+                    move |e: Event<FormData>| {
+                        if let Ok(v) = e.value().parse::<u16>() {
+                            ws_send(&ws, &UserCommand::Player(PlayerCommand::Seek(v)));
+                            if browser {
+                                *seeking_sig.write() = true;
+                                if let Some(window) = web_sys::window() {
+                                    if let Some(doc) = window.document() {
+                                        if let Some(el) = doc.get_element_by_id("local-audio-player") {
+                                            let audio: web_sys::HtmlAudioElement = el.unchecked_into();
+                                            audio.set_current_time(f64::from(v));
+                                        }
+                                    }
+                                }
+                                progress_sig.write().current_time = std::time::Duration::from_secs(v.into());
+                            }
+                        }
                     }
-                }},
+                },
             }
         }
     }
@@ -487,7 +708,7 @@ fn VolumeControl(ws: Signal<Option<WebSocket>>, volume: Volume) -> Element {
                 button {
                     class: "btn btn-ghost btn-sm",
                     title: "Volume down",
-                    onclick: { let ws = ws; move |_| send_system_cmd(&ws, SystemCommand::VolDown) },
+                    onclick: { let ws = ws; move |_| ws_system(&ws, SystemRequest::VolDown) },
                     i { class: "material-icons", "remove_circle" }
                 }
                 input {
@@ -497,14 +718,14 @@ fn VolumeControl(ws: Signal<Option<WebSocket>>, volume: Volume) -> Element {
                     aria_label: "Volume",
                     onchange: { let ws = ws; move |e: Event<FormData>| {
                         if let Ok(v) = e.value().parse::<u8>() {
-                            send_system_cmd(&ws, SystemCommand::SetVol(v));
+                            ws_system(&ws, SystemRequest::SetVol(v));
                         }
                     }},
                 }
                 button {
                     class: "btn btn-ghost btn-sm",
                     title: "Volume up",
-                    onclick: { let ws = ws; move |_| send_system_cmd(&ws, SystemCommand::VolUp) },
+                    onclick: { let ws = ws; move |_| ws_system(&ws, SystemRequest::VolUp) },
                     i { class: "material-icons", "add_circle" }
                 }
             }

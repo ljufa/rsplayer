@@ -1,4 +1,5 @@
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
+use log::error;
 
 use api_models::{
     player::Song,
@@ -62,7 +63,12 @@ impl PlaylistService {
             .into_iter()
             .skip(offset)
             .take(limit)
-            .map(|value| Song::bytes_to_song(&value).expect("Failed to deserialize song"))
+            .filter_map(|value| {
+                Song::bytes_to_song(&value).or_else(|| {
+                    error!("playlist '{playlist_name}': skipping song with malformed bytes");
+                    None
+                })
+            })
             .collect();
         PlaylistPage {
             total,

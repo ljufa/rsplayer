@@ -1,14 +1,18 @@
 use chrono::DateTime;
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
+use log::error;
 
 use api_models::{player::Song, playlist::Album};
 
+use crate::error::{RepoError, RepoResult};
 use crate::genre_utils::{is_junk_genre, normalize_genre_key, normalize_name, resolve_id3v1_genre, title_case_genre};
+pub use crate::ports::album_repository::{AlbumRepository, ArcAlbumRepository};
 
-pub struct AlbumRepository {
-    albums_db: Keyspace,
+pub struct FjallAlbumRepository {
+    pub(crate) albums_db: Keyspace,
 }
-impl AlbumRepository {
+
+impl FjallAlbumRepository {
     pub fn new(db: &Database) -> Self {
         Self {
             albums_db: db
@@ -17,17 +21,42 @@ impl AlbumRepository {
         }
     }
 
-    pub fn delete_all(&self) {
+    /// Standalone constructor for tests — opens its own fjall Database.
+        pub fn new_standalone(db_path: &str) -> Self {
+        let db = Database::builder(db_path).open().expect("Failed to open albums db");
+        Self {
+            albums_db: db
+                .keyspace("albums", KeyspaceCreateOptions::default)
+                .expect("Failed to open albums keyspace"),
+        }
+    }
+
+    pub fn album_db_key(artist: &str, album: &str) -> String {
+        let na = normalize_name(artist);
+        let nb = normalize_name(album);
+        if na.is_empty() {
+            nb
+        } else {
+            format!("{na}|{nb}")
+        }
+    }
+}
+
+impl AlbumRepository for FjallAlbumRepository {
+    fn delete_all(&self) {
         _ = self.albums_db.clear();
     }
 
-    pub fn find_all_album_artists(&self) -> Vec<String> {
+    fn find_all_album_artists(&self) -> Vec<String> {
         let mut pairs: Vec<(String, String)> = self
             .find_all()
             .into_iter()
             .filter_map(|a| {
                 let display = a.artist?;
                 let key = normalize_name(&display);
+                if key.is_empty() {
+                    return None;
+                }
                 Some((key, display))
             })
             .collect();
@@ -35,7 +64,7 @@ impl AlbumRepository {
         pairs.dedup_by(|a, b| a.0 == b.0);
         pairs.into_iter().map(|(_, display)| display).collect()
     }
-    pub fn find_all(&self) -> Vec<Album> {
+    fn find_all(&self) -> Vec<Album> {
         self.albums_db
             .iter()
             .filter_map(|guard| {
@@ -47,35 +76,47 @@ impl AlbumRepository {
             })
             .collect()
     }
-    pub fn find_by_id(&self, album_id: &str) -> Option<Album> {
+
+    fn find_by_id(&self, album_id: &str) -> Option<Album> {
         let normalized_key = normalize_name(album_id);
         if normalized_key.is_empty() {
             return None;
         }
-        let bytes = self
-            .albums_db
-            .get(normalized_key.as_bytes())
-            .expect("Album DB error")
-            .or_else(|| self.albums_db.get(album_id.as_bytes()).expect("Album DB error"))?;
+        let bytes = match self.albums_db.get(normalized_key.as_bytes()) {
+            Ok(Some(b)) => Some(b),
+            Ok(None) => match self.albums_db.get(album_id.as_bytes()) {
+                Ok(b) => b,
+                Err(e) => {
+                    error!("album read error for key '{album_id}': {e}");
+                    return None;
+                }
+            },
+            Err(e) => {
+                error!("album read error for normalized key '{normalized_key}': {e}");
+                return None;
+            }
+        }?;
 
         let mut album = Album::from_bytes(&bytes)?;
         album_id.clone_into(&mut album.id);
         Some(album)
     }
 
-    pub fn find_all_sort_by_added_desc(&self, limit: usize) -> Vec<Album> {
+    fn find_all_sort_by_added_desc(&self, limit: usize) -> Vec<Album> {
         let mut albums = self.find_all();
         albums.sort_by(|a, b| b.added.cmp(&a.added));
         albums.truncate(limit);
         albums
     }
-    pub fn find_all_sort_by_released_desc(&self, limit: usize) -> Vec<Album> {
+
+    fn find_all_sort_by_released_desc(&self, limit: usize) -> Vec<Album> {
         let mut albums = self.find_all();
         albums.sort_by(|a, b| b.released.cmp(&a.released));
         albums.truncate(limit);
         albums
     }
-    pub fn find_all_by_genre(&self, limit_per_genre: usize) -> Vec<(String, Vec<Album>)> {
+
+    fn find_all_by_genre(&self, limit_per_genre: usize) -> Vec<(String, Vec<Album>)> {
         let albums = self.find_all();
         let mut genre_map: std::collections::HashMap<String, (String, Vec<Album>)> = std::collections::HashMap::new();
         for album in albums {
@@ -107,7 +148,7 @@ impl AlbumRepository {
         result
     }
 
-    pub fn find_all_by_decade(&self, limit_per_decade: usize) -> Vec<(String, Vec<Album>)> {
+    fn find_all_by_decade(&self, limit_per_decade: usize) -> Vec<(String, Vec<Album>)> {
         let albums = self.find_all();
         let mut decade_map: std::collections::HashMap<String, Vec<Album>> = std::collections::HashMap::new();
         for album in albums {
@@ -134,7 +175,7 @@ impl AlbumRepository {
         result
     }
 
-    pub fn find_by_artist(&self, artist: &str) -> Vec<Album> {
+    fn find_by_artist(&self, artist: &str) -> Vec<Album> {
         let normalized_query = normalize_name(artist);
         self.albums_db
             .iter()
@@ -148,20 +189,47 @@ impl AlbumRepository {
             .collect()
     }
 
-    pub fn album_db_key(artist: &str, album: &str) -> String {
-        let na = normalize_name(artist);
-        let nb = normalize_name(album);
-        if na.is_empty() {
-            nb
-        } else {
-            format!("{na}|{nb}")
-        }
-    }
-
-    pub fn update_from_song(&self, song: Song) -> anyhow::Result<()> {
+    fn update_from_song(&self, song: Song) -> RepoResult<()> {
         let raw_album = match song.album.as_ref() {
-            Some(a) if !a.is_empty() => a.clone(),
-            _ => return Ok(()),
+            Some(a) if !a.trim().is_empty() => a.trim().to_owned(),
+            _ => {
+                let effective_artist = song
+                    .album_artist
+                    .as_deref()
+                    .or(song.artist.as_deref())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty());
+                if let Some(artist) = effective_artist {
+                    let key = normalize_name(&format!("__singletons__{artist}"));
+                    if key.is_empty() {
+                        return Ok(());
+                    }
+                    let existing_album = self
+                        .albums_db
+                        .get(key.as_bytes())
+                        .map_err(|e| RepoError::Storage(format!("read singleton '{artist}': {e}")))?;
+                    let mut album = existing_album
+                        .and_then(|bytes| Album::from_bytes(&bytes))
+                        .unwrap_or_default();
+                    if !album.song_keys.contains(&song.file) {
+                        album.song_keys.push(song.file);
+                    }
+                    if song.image_id.is_some() {
+                        album.image_id = song.image_id;
+                    }
+                    album.artist = Some(artist.to_owned());
+                    if album.title.is_empty() {
+                        album.title = format!("[{artist}]");
+                    }
+                    album.added = song.file_date;
+                    return self
+                        .albums_db
+                        .insert(key.as_bytes(), album.to_json_string_bytes())
+                        .map(|_| ())
+                        .map_err(|e| RepoError::Storage(format!("write album '{}': {e}", album.title)));
+                }
+                return Ok(());
+            }
         };
         let artist_for_key = song
             .album_artist
@@ -175,7 +243,7 @@ impl AlbumRepository {
         let existing_album = self
             .albums_db
             .get(key.as_bytes())
-            .map_err(|e| anyhow::anyhow!("Album DB read error for '{raw_album}': {e}"))?;
+            .map_err(|e| RepoError::Storage(format!("read album '{raw_album}': {e}")))?;
         let mut album = existing_album
             .and_then(|bytes| Album::from_bytes(&bytes))
             .unwrap_or_default();
@@ -186,10 +254,16 @@ impl AlbumRepository {
         if song.image_id.is_some() {
             album.image_id = song.image_id;
         }
-        if let Some(artist) = song.album_artist {
-            album.artist = Some(artist);
-        } else if let Some(artist) = song.artist {
-            album.artist = Some(artist);
+        let effective_artist = song
+            .album_artist
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                song.artist.as_deref().map(str::trim).filter(|s| !s.is_empty())
+            });
+        if let Some(artist) = effective_artist {
+            album.artist = Some(artist.to_owned());
         }
         if let Some(date) = song.date {
             if date.len() == 4 {
@@ -217,24 +291,14 @@ impl AlbumRepository {
         album.added = song.file_date;
         self.albums_db
             .insert(key.as_bytes(), album.to_json_string_bytes())
-            .map_err(|e| anyhow::anyhow!("Album DB write error for '{}': {e}", album.title))
-    }
-}
-
-impl AlbumRepository {
-    pub fn new_standalone(db_path: &str) -> Self {
-        let db = Database::builder(db_path).open().expect("Failed to open albums db");
-        Self {
-            albums_db: db
-                .keyspace("albums", KeyspaceCreateOptions::default)
-                .expect("Failed to open albums keyspace"),
-        }
+            .map(|_| ())
+            .map_err(|e| RepoError::Storage(format!("write album '{}': {e}", album.title)))
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::album_repository::AlbumRepository;
+    use crate::album_repository::{AlbumRepository, FjallAlbumRepository};
     use crate::test::test_shared;
     use api_models::playlist::Album;
     use chrono::{Months, Utc};
@@ -393,7 +457,7 @@ mod test {
         let all = repo.find_all();
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].title, "Dark Side of the Moon");
-        let key = AlbumRepository::album_db_key("Pink Floyd", "Dark Side of the Moon");
+        let key = FjallAlbumRepository::album_db_key("Pink Floyd", "Dark Side of the Moon");
         let full = repo.find_by_id(&key).expect("album not found");
         assert_eq!(full.song_keys.len(), 3);
     }
@@ -466,7 +530,7 @@ mod test {
     fn test_delete_all() {
         // Keep ctx alive so the database directory exists on disk — clear() needs it.
         let ctx = test_shared::Context::default();
-        let album_repository = AlbumRepository::new_standalone(&ctx.db_dir);
+        let album_repository = FjallAlbumRepository::new_standalone(&ctx.db_dir);
         insert_albums!(
             &album_repository,
             "a1",
@@ -627,8 +691,103 @@ mod test {
         }
         .to_json_string_bytes()
     }
-    fn create_album_repo() -> AlbumRepository {
+    fn create_album_repo() -> FjallAlbumRepository {
         let ctx = test_shared::Context::default();
-        AlbumRepository::new_standalone(&ctx.db_dir)
+        FjallAlbumRepository::new_standalone(&ctx.db_dir)
+    }
+
+    #[test]
+    fn song_without_album_but_with_artist_creates_singleton() {
+        use api_models::player::Song;
+        use chrono::Utc;
+        let repo = create_album_repo();
+        repo.update_from_song(Song {
+            file: "loose/track1.flac".to_string(),
+            album: None,
+            artist: Some("Solo Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+        let artists = repo.find_all_album_artists();
+        assert!(artists.iter().any(|a| a == "Solo Artist"));
+        let albums = repo.find_by_artist("Solo Artist");
+        assert_eq!(albums.len(), 1);
+        assert_eq!(albums[0].song_keys.len(), 1);
+    }
+
+    #[test]
+    fn song_without_album_or_artist_is_skipped() {
+        use api_models::player::Song;
+        use chrono::Utc;
+        let repo = create_album_repo();
+        repo.update_from_song(Song {
+            file: "loose/track2.flac".to_string(),
+            album: None,
+            artist: None,
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+        assert!(repo.find_all_album_artists().is_empty());
+    }
+
+    #[test]
+    fn whitespace_artist_does_not_overwrite_valid_artist() {
+        use api_models::player::Song;
+        use chrono::Utc;
+        let repo = create_album_repo();
+        repo.update_from_song(Song {
+            file: "artist1/album1/track1.flac".to_string(),
+            album: Some("Album 1".to_string()),
+            artist: Some("Real Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+        repo.update_from_song(Song {
+            file: "artist1/album1/track2.flac".to_string(),
+            album: Some("Album 1".to_string()),
+            artist: Some("   ".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+        let albums = repo.find_by_artist("Real Artist");
+        assert_eq!(albums.len(), 1);
+        assert_eq!(albums[0].artist.as_deref(), Some("Real Artist"));
+    }
+
+    #[test]
+    fn find_all_album_artists_filters_empty_string() {
+        let repo = create_album_repo();
+        insert_albums!(&repo, "a1", "Album One", "", Some("Rock"));
+        assert!(repo.find_all_album_artists().is_empty());
+    }
+
+    #[test]
+    fn singleton_albums_merge_multiple_tracks() {
+        use api_models::player::Song;
+        use chrono::Utc;
+        let repo = create_album_repo();
+        repo.update_from_song(Song {
+            file: "singles/track1.flac".to_string(),
+            album: None,
+            artist: Some("Solo Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+        repo.update_from_song(Song {
+            file: "singles/track2.flac".to_string(),
+            album: None,
+            artist: Some("Solo Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+        let albums = repo.find_by_artist("Solo Artist");
+        assert_eq!(albums.len(), 1);
+        assert_eq!(albums[0].song_keys.len(), 2);
     }
 }

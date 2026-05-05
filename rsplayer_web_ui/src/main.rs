@@ -7,13 +7,15 @@ pub mod vumeter;
 
 use api_models::{
     common::{
-        dur_to_string, MetadataCommand, PlayerCommand, PlaylistCommand, QueueCommand, SystemCommand, UserCommand,
+        dur_to_string, MetadataCommand, PlayerCommand, PlaylistCommand, QueueCommand, SystemRequest, UserCommand,
     },
+    settings::Settings,
     state::{CurrentQueueQuery, PlayerState, StateChangeEvent},
 };
 use dioxus::prelude::*;
 use hooks::ws_send;
 use state::AppState;
+use gloo_net::http::Request;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
@@ -23,7 +25,8 @@ use web_sys::WebSocket;
 use page::{
     home::HomePage, library_artists::LibraryArtistsPage, library_files::LibraryFilesPage,
     library_playlists::LibraryPlaylistsPage, library_radio::LibraryRadioPage, library_stats::LibraryStatsPage,
-    not_found::NotFoundPage, player::PlayerPage, queue::QueuePage, settings::SettingsPage,
+    not_found::NotFoundPage, player::PlayerPage, player::BrowserAudioPlayback, queue::QueuePage,
+    settings::SettingsPage,
 };
 
 fn main() {
@@ -147,7 +150,8 @@ pub fn navigate(mut path_sig: Signal<String>, to: &str) {
             .unwrap()
             .push_state_with_url(&JsValue::NULL, "", Some(to));
     }
-    *path_sig.write() = to.to_string();
+    let pathname = to.split('?').next().unwrap_or(to).to_string();
+    *path_sig.write() = pathname;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -157,13 +161,9 @@ pub fn ws_user_cmd(ws: &Signal<Option<WebSocket>>, cmd: UserCommand) {
     hooks::ws_send(ws, &cmd);
 }
 
-/// Send a SystemCommand JSON over WebSocket.
-pub fn send_system_cmd(ws: &Signal<Option<WebSocket>>, cmd: SystemCommand) {
-    if let Some(sock) = ws.read().as_ref() {
-        if let Ok(json) = serde_json::to_string(&cmd) {
-            let _ = sock.send_with_str(&json);
-        }
-    }
+/// Send a `SystemRequest` over the WebSocket, wrapped in `UserCommand::System`.
+pub fn ws_system(ws: &Signal<Option<WebSocket>>, req: SystemRequest) {
+    hooks::ws_send(ws, &UserCommand::System(req));
 }
 
 // ─── Root App ───────────────────────────────────────────────────────────────
@@ -207,6 +207,22 @@ fn App() -> Element {
             }
         }
     });
+
+    // Fetch global settings from the backend to initialise local_browser_playback.
+    {
+        let global_state = use_context::<AppState>();
+        use_effect(move || {
+            let mut gs = global_state.clone();
+            spawn_local(async move {
+                if let Ok(resp) = Request::get("/api/settings").send().await {
+                    if let Ok(settings) = resp.json::<Settings>().await {
+                        *gs.global_settings.write() = Some(settings.clone());
+                        *gs.local_browser_playback.write() = settings.local_browser_playback;
+                    }
+                }
+            });
+        });
+    }
 
     // Fetch Last.fm album art when the song has no local image.
     // Uses use_context (same pattern as child components) to get a stable signal reference.
@@ -292,6 +308,7 @@ fn App() -> Element {
             }
             FooterPlayer {}
             Notifications {}
+            BrowserAudioPlayback {}
         }
     }
 }
@@ -377,14 +394,14 @@ fn setup_keyboard_shortcuts(
                 }
                 "ArrowUp" if on_player => {
                     e.prevent_default();
-                    send_system_cmd(&ws, SystemCommand::VolUp);
+                    ws_system(&ws, SystemRequest::VolUp);
                 }
                 "ArrowDown" if on_player => {
                     e.prevent_default();
-                    send_system_cmd(&ws, SystemCommand::VolDown);
+                    ws_system(&ws, SystemRequest::VolDown);
                 }
                 "m" | "M" if on_player => {
-                    send_system_cmd(&ws, SystemCommand::ToggleMute);
+                    ws_system(&ws, SystemRequest::ToggleMute);
                 }
                 "l" | "L" if on_player => {
                     if let Some(song) = app_state.current_song.peek().clone() {
@@ -951,7 +968,7 @@ fn FooterPlayer() -> Element {
                         class: "btn btn-primary btn-circle btn-sm",
                         onclick: {
                             
-                            move |_| ws_user_cmd(&ws, UserCommand::Player(if playing { PlayerCommand::Pause } else { PlayerCommand::Play }))
+                            move |_| ws_user_cmd(&ws, UserCommand::Player(PlayerCommand::TogglePlay))
                         },
                         i { class: "material-icons", if playing { "pause" } else { "play_arrow" } }
                     }
@@ -969,7 +986,7 @@ fn FooterPlayer() -> Element {
                         min: volume.min as i64, max: volume.max as i64, value: volume.current as i64,
                         onchange: { let ws = ws; move |e: Event<FormData>| {
                             if let Ok(v) = e.value().parse::<u8>() {
-                                send_system_cmd(&ws, SystemCommand::SetVol(v));
+                                ws_system(&ws, SystemRequest::SetVol(v));
                             }
                         }},
                     }

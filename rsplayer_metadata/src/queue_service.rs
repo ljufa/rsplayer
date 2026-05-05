@@ -3,7 +3,7 @@ use std::ops::Bound;
 use std::str::FromStr;
 use std::sync::{
     atomic::{AtomicU16, AtomicU64, Ordering},
-    Arc, RwLock,
+    RwLock,
 };
 
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
@@ -11,7 +11,10 @@ use rand::RngExt;
 
 use api_models::{common::PlaybackMode, player::Song, playlist::PlaylistPage, state::CurrentQueueQuery};
 
-use crate::{play_statistic_repository::PlayStatisticsRepository, song_repository::SongRepository};
+use crate::ports::{
+    play_statistics_repository::ArcPlayStatisticsRepository,
+    song_repository::ArcSongRepository,
+};
 
 pub struct QueueService {
     queue_db: Keyspace,
@@ -21,8 +24,8 @@ pub struct QueueService {
     random_history_index: AtomicU16,
     random_played_keys: RwLock<HashSet<Vec<u8>>>,
     next_id: AtomicU64,
-    song_repository: Arc<SongRepository>,
-    statistics_repository: Arc<PlayStatisticsRepository>,
+    song_repository: ArcSongRepository,
+    statistics_repository: ArcPlayStatisticsRepository,
 }
 
 const CURRENT_SONG_KEY: &str = "current_song_key";
@@ -32,8 +35,8 @@ impl QueueService {
     #[must_use]
     pub fn new(
         db: &Database,
-        song_repository: Arc<SongRepository>,
-        statistics_repository: Arc<PlayStatisticsRepository>,
+        song_repository: ArcSongRepository,
+        statistics_repository: ArcPlayStatisticsRepository,
     ) -> Self {
         let queue_db = db
             .keyspace("queue", KeyspaceCreateOptions::default)
@@ -99,7 +102,7 @@ impl QueueService {
 
     pub fn cycle_playback_mode(&self) -> PlaybackMode {
         let mut mode_lock = self.playback_mode.write().expect("lock poisoned");
-        let modes: Vec<_> = PlaybackMode::all();
+        let modes = api_models::common::all_playback_modes();
         let current_index = modes.iter().position(|&m| m == *mode_lock).unwrap_or(0);
         let next_mode = modes[(current_index + 1) % modes.len()];
         *mode_lock = next_mode;
@@ -326,7 +329,7 @@ impl QueueService {
         Some(first_key)
     }
 
-    pub fn replace_all(&self, iter: impl Iterator<Item = Song>) {
+    pub fn replace_all(&self, iter: impl IntoIterator<Item = Song>) {
         let keys: Vec<Vec<u8>> = self
             .queue_db
             .iter()
@@ -338,10 +341,10 @@ impl QueueService {
         _ = self.status_db.remove(CURRENT_SONG_KEY);
         _ = self.status_db.remove("priority_queue");
         self.reset_random_state();
-        iter.for_each(|song| {
+        for song in iter {
             let key = self.generate_id().to_be_bytes();
             _ = self.queue_db.insert(key, song.to_json_string_bytes());
-        });
+        }
     }
 
     pub fn get_queue_page<F>(&self, offset: usize, limit: usize, song_filter: F) -> (usize, Vec<Song>)
@@ -454,9 +457,9 @@ impl QueueService {
     }
 
     pub fn add_songs_from_dir(&self, dir: &str) {
-        self.song_repository.find_songs_by_dir_prefix(dir).for_each(|song| {
+        for song in self.song_repository.find_songs_by_dir_prefix(dir) {
             self.add_song(&song);
-        });
+        }
     }
 
     pub fn add_songs_after_current(&self, songs: impl IntoIterator<Item = Song>) -> Option<Vec<u8>> {

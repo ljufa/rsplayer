@@ -118,6 +118,39 @@ pub enum UserCommand {
     Metadata(MetadataCommand),
     UpdateDsp(DspSettings),
     Storage(StorageCommand),
+    System(SystemRequest),
+}
+
+/// FE-visible subset of `SystemCommand`. This is what the web UI is allowed to
+/// send over the WebSocket. Internal-only system events (e.g. firmware-reported
+/// state) live on `SystemCommand` and never reach the wire.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub enum SystemRequest {
+    VolUp,
+    VolDown,
+    SetVol(u8),
+    ToggleMute,
+    QueryCurrentVolume,
+    PowerOff,
+    RestartSystem,
+    RestartRSPlayer,
+    SetFirmwarePower(bool),
+}
+
+impl From<SystemRequest> for SystemCommand {
+    fn from(req: SystemRequest) -> Self {
+        match req {
+            SystemRequest::VolUp => SystemCommand::VolUp,
+            SystemRequest::VolDown => SystemCommand::VolDown,
+            SystemRequest::SetVol(v) => SystemCommand::SetVol(v),
+            SystemRequest::ToggleMute => SystemCommand::ToggleMute,
+            SystemRequest::QueryCurrentVolume => SystemCommand::QueryCurrentVolume,
+            SystemRequest::PowerOff => SystemCommand::PowerOff,
+            SystemRequest::RestartSystem => SystemCommand::RestartSystem,
+            SystemRequest::RestartRSPlayer => SystemCommand::RestartRSPlayer,
+            SystemRequest::SetFirmwarePower(b) => SystemCommand::SetFirmwarePower(b),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -147,19 +180,12 @@ pub enum PlayerCommand {
     TogglePlay,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, EnumString, EnumIter, IntoStaticStr)]
-pub enum PlaybackMode {
-    #[default]
-    Sequential,
-    Random,
-    LoopSingle,
-    LoopQueue,
-}
-impl PlaybackMode {
-    pub fn all() -> Vec<PlaybackMode> {
-        use strum::IntoEnumIterator;
-        PlaybackMode::iter().collect()
-    }
+pub use rsplayer_wire::PlaybackMode;
+
+#[must_use]
+pub fn all_playback_modes() -> Vec<PlaybackMode> {
+    use strum::IntoEnumIterator;
+    PlaybackMode::iter().collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]

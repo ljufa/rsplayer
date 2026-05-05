@@ -1,6 +1,6 @@
 use crate::state::AppState;
 use api_models::{
-    common::{PlayerCommand, QueueCommand, SystemCommand, UserCommand},
+    common::{PlayerCommand, QueueCommand, SystemRequest, UserCommand},
     state::StateChangeEvent,
 };
 use dioxus::prelude::*;
@@ -71,7 +71,7 @@ fn connect(app_state: AppState, ws_holder: Signal<Signal<Option<WebSocket>>>) {
             if let Ok(json) = serde_json::to_string(&UserCommand::Player(PlayerCommand::QueryCurrentPlayerInfo)) {
                 send(&json);
             }
-            if let Ok(json) = serde_json::to_string(&SystemCommand::QueryCurrentVolume) {
+            if let Ok(json) = serde_json::to_string(&UserCommand::System(SystemRequest::QueryCurrentVolume)) {
                 send(&json);
             }
         });

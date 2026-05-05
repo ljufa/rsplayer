@@ -6,8 +6,8 @@ members = [
     "rsplayer_dsp",
     "rsplayer_hardware",
     "rsplayer_metadata",
-    "rsplayer_playback"
-    
+    "rsplayer_playback",
+    "rsplayer_wire"
 ]
 exclude = ["rsplayer_web_ui"]
 resolver = "2"

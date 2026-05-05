@@ -11,6 +11,8 @@ lirc = []
 [dependencies]
 api_models = { path = "../rsplayer_api_models" }
 rsplayer_config = { path = "../rsplayer_config" }
+rsplayer_wire = { path = "../rsplayer_wire" }
+postcard = { version = "1", default-features = false, features = ["use-std"] }
 
 #logging
 log.workspace = true

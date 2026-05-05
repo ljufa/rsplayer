@@ -2,7 +2,6 @@ extern crate env_logger;
 #[macro_use]
 extern crate log;
 
-use std::panic;
 use std::sync::Arc;
 #[cfg(feature = "console-subscriber")]
 use std::time::Duration;
@@ -10,32 +9,23 @@ use std::time::Duration;
 use env_logger::Env;
 use fjall::PersistMode;
 
-use rsplayer_hardware::usb::{self, UsbService};
+use rsplayer_hardware::usb;
 use tokio::signal::unix::{Signal, SignalKind};
-use tokio::sync::broadcast;
 use tokio::{select, spawn};
 
-use album_repository::AlbumRepository;
 use rsplayer_config::Configuration;
-use rsplayer_hardware::audio_device::audio_service::AudioInterfaceService;
-use rsplayer_metadata::album_repository;
-use rsplayer_metadata::loudness_repository::LoudnessRepository;
-use rsplayer_metadata::loudness_service::LoudnessService;
-use rsplayer_metadata::metadata_service::MetadataService;
-use rsplayer_metadata::play_statistic_repository::PlayStatisticsRepository;
-use rsplayer_metadata::playlist_service::PlaylistService;
-use rsplayer_metadata::queue_service::QueueService;
-use rsplayer_metadata::song_repository::SongRepository;
-use rsplayer_playback::rsp::player_service::PlayerService;
+
+use crate::composition_root::{build, AppContainer, BuildOutcome};
 
 mod command_context;
 mod command_handler;
+mod composition_root;
 mod metadata_commands;
 mod mount_service;
 mod player_commands;
 mod playlist_commands;
 mod queue_commands;
-mod server_warp;
+mod server;
 mod storage_commands;
 mod system_commands;
 
@@ -67,7 +57,7 @@ async fn main() {
     "
     );
 
-    let shared_db = std::sync::Arc::new(
+    let shared_db = Arc::new(
         fjall::Database::builder("rsplayer.db")
             .open()
             .expect("Failed to open fjall database"),
@@ -77,87 +67,49 @@ async fn main() {
     let config = Arc::new(Configuration::new(&shared_db));
     info!("Configuration successfully loaded.");
 
-    // Auto-mount configured network storage shares
     mount_service::MountService::mount_all(&config.get_settings().network_storage_settings);
 
     let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate()).expect("failed to create signal future");
 
-    let album_repository = Arc::new(AlbumRepository::new(&shared_db));
-    let song_repository = Arc::new(SongRepository::new(&shared_db));
-    let statistics_repository = Arc::new(PlayStatisticsRepository::new(&shared_db));
-    let metadata_service = Arc::new(
-        MetadataService::new(
-            shared_db.clone(),
-            &config.get_settings().metadata_settings,
-            song_repository.clone(),
-            album_repository.clone(),
-            statistics_repository.clone(),
-        )
-        .expect("Failed to start metadata service"),
-    );
-    info!("Metadata service successfully created.");
-
-    let playlist_service = Arc::new(PlaylistService::new(&shared_db));
-    info!("Playlist service successfully created.");
-    let queue_service = Arc::new(QueueService::new(
-        &shared_db,
-        song_repository.clone(),
-        statistics_repository.clone(),
-    ));
-    info!("Queue service successfully created.");
-
-    let usb_settings = config.get_settings().usb_settings;
-    let usb_service = if usb_settings.enabled {
-        let service = Arc::new(UsbService::new(usb_settings.baud_rate));
-        let _ = service.try_reconnect();
-        Some(service)
-    } else {
-        None
-    };
-
-    let ai_service = match AudioInterfaceService::new(&config, usb_service.clone()) {
-        Ok(s) => Arc::new(s),
-        Err(e) => {
-            error!("Audio service interface can't be created. error: {e}");
+    let container = match build(config.clone(), shared_db.clone()) {
+        BuildOutcome::Ready(c) => c,
+        BuildOutcome::Degraded(e) => {
             start_degraded(&mut term_signal, &e, &config).await;
             return;
         }
     };
-    info!("Audio interface service successfully created.");
 
-    let (player_commands_tx, player_commands_rx) = tokio::sync::mpsc::channel(5);
+    run(container, term_signal).await;
 
-    let (system_commands_tx, system_commands_rx) = tokio::sync::mpsc::channel(5);
+    info!("RSPlayer shutdown completed.");
+}
 
-    let (state_changes_tx, _) = broadcast::channel(64);
+#[allow(clippy::redundant_pub_crate)]
+async fn run(container: Box<AppContainer>, mut term_signal: Signal) {
+    let AppContainer {
+        config,
+        shared_db,
+        album_repository,
+        song_repository,
+        loudness_repository,
+        metadata_service,
+        playlist_service,
+        queue_service,
+        player_service,
+        audio_service,
+        usb_service,
+        state_changes_tx,
+        user_commands,
+        system_commands,
+        ..
+    } = *container;
 
-    let loudness_repository = Arc::new(LoudnessRepository::new(&shared_db));
-    let loudness_service = LoudnessService::new(
-        loudness_repository.clone(),
-        song_repository.clone(),
-        config.get_settings().metadata_settings.effective_directories(),
-    );
-    if config.get_settings().rs_player_settings.loudness_normalization_enabled {
-        loudness_service.start();
-        info!("Loudness scan service started.");
-    } else {
-        info!("Loudness scan service disabled (loudness normalization is off).");
-    }
+    let (player_commands_tx, player_commands_rx) = user_commands.split();
+    let (system_commands_tx, system_commands_rx) = system_commands.split();
 
-    let player_service = Arc::new(PlayerService::new(
-        &shared_db,
-        &config.get_settings(),
-        metadata_service.clone(),
-        queue_service.clone(),
-        state_changes_tx.clone(),
-        loudness_service,
-    ));
-    info!("Player service successfully created.");
-
-    let (http_server_future, https_server_future, websocket_future) = server_warp::start(
+    let (http_server_future, https_server_future, websocket_future) = server::start(
         state_changes_tx.subscribe(),
         player_commands_tx.clone(),
-        system_commands_tx.clone(),
         &config,
     );
     info!("HTTP servers started.");
@@ -210,13 +162,14 @@ async fn main() {
                     loudness_repository.clone(),
                     config.clone(),
                     player_commands_rx,
+                    system_commands_tx.clone(),
                     state_changes_tx.clone()))
             => {
                 error!("Exit from command handler thread.");
             }
 
         _ = spawn(command_handler::handle_system_commands(
-                ai_service,
+                audio_service,
                 usb_service.clone(),
                 config.clone(),
                 system_commands_rx,
@@ -241,8 +194,6 @@ async fn main() {
             persist_db_on_shutdown(&shared_db);
         }
     };
-
-    info!("RSPlayer shutdown completed.");
 }
 
 fn persist_db_on_shutdown(db: &fjall::Database) {
@@ -253,7 +204,7 @@ fn persist_db_on_shutdown(db: &fjall::Database) {
 #[allow(clippy::redundant_pub_crate)]
 async fn start_degraded(term_signal: &mut Signal, error: &anyhow::Error, config: &Arc<Configuration>) {
     warn!("Starting server in degraded mode.");
-    let http_server_future = server_warp::start_degraded(config, error);
+    let http_server_future = server::start_degraded(config, error);
     select! {
         () = http_server_future => {}
 

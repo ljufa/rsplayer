@@ -14,12 +14,11 @@ use std::sync::atomic::AtomicU32;
 use std::thread::available_parallelism;
 
 use crate::loudness_analyzer::LoudnessAnalyzer;
-use crate::loudness_repository::LoudnessRepository;
-use crate::song_repository::SongRepository;
+use crate::ports::{loudness_repository::ArcLoudnessRepository, song_repository::ArcSongRepository};
 
 pub struct LoudnessService {
-    repository: Arc<LoudnessRepository>,
-    song_repository: Arc<SongRepository>,
+    repository: ArcLoudnessRepository,
+    song_repository: ArcSongRepository,
     music_dirs: Vec<String>,
     pub is_playing: Arc<AtomicBool>,
     stop: Arc<AtomicBool>,
@@ -27,8 +26,8 @@ pub struct LoudnessService {
 
 impl LoudnessService {
     pub fn new(
-        repository: Arc<LoudnessRepository>,
-        song_repository: Arc<SongRepository>,
+        repository: ArcLoudnessRepository,
+        song_repository: ArcSongRepository,
         music_dirs: Vec<String>,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -77,7 +76,8 @@ impl LoudnessService {
 
             let pending: Vec<String> = self
                 .song_repository
-                .get_all_iterator()
+                .find_all()
+                .into_iter()
                 .filter(|s| !self.repository.contains(&s.file))
                 .map(|s| s.file)
                 .collect();
@@ -126,10 +126,14 @@ impl LoudnessService {
                         #[allow(clippy::cast_possible_truncation)]
                         let stored = (lufs * 100.0).round() as i32;
                         debug!("Loudness scan: {file_key} => {lufs:.2} LUFS");
-                        self.repository.save_loudness(file_key, stored);
+                        if let Err(e) = self.repository.save_loudness(file_key, stored) {
+                            warn!("Failed to persist loudness for '{file_key}': {e}");
+                        }
                     } else {
                         warn!("Loudness scan: no loudness for {file_key} (DSD or unsupported)");
-                        self.repository.save_unavailable(file_key);
+                        if let Err(e) = self.repository.save_unavailable(file_key) {
+                            warn!("Failed to persist loudness sentinel for '{file_key}': {e}");
+                        }
                     }
 
                     let c = scanned.fetch_add(1, Ordering::Relaxed) + 1;

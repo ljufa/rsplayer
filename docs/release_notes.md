@@ -1,5 +1,79 @@
 # Release Notes
 
+## v3.0.0 — 2026-05-05
+
+### Breaking Changes
+
+#### Firmware Protocol — Binary Wire Format (postcard + COBS)
+
+The USB serial protocol between RSPlayer and the hardware firmware has changed from a human-readable text format (e.g. `SetTrack(title|artist|album)\n`) to a typed binary format using [postcard](https://docs.rs/postcard) serialization with COBS framing.
+
+The new protocol is defined in the shared `rsplayer_wire` crate (a `no_std` library used by both the host and the firmware). All messages are now strongly-typed (`HostToFw` / `FwToHost` enums), length-bounded with `heapless::String`, and framed at up to 256 bytes per packet.
+
+> ⚠️ **Action required:** Firmware must be updated to the matching version that speaks the new binary protocol. Running v3.0.0 against old firmware will result in garbled communication.
+
+#### Full Library Rescan Required
+
+The album database key format changed in v2.9.6 (included in this release via merge from `main_public`). If upgrading from a version older than v2.9.6, a full rescan is required: **Settings → Rescan — Full**.
+
+---
+
+### New Features
+
+#### Browser Audio Playback
+
+RSPlayer can now stream audio directly to the browser over HTTP, without requiring an ALSA output device on the server. This makes it practical to run RSPlayer on a headless server or NAS and listen through any browser tab.
+
+- Select **Browser** in the audio output dropdown (Settings → Audio Output) to switch to browser playback mode.
+- The browser creates a hidden `<audio>` element that fetches tracks via `/music/<path>` and plays them locally.
+- The player state (current song, play/pause, progress) continues to be driven by the backend over WebSocket; the browser element follows it.
+- RSPlayer engine settings (input buffer, ring buffer, thread priority, ALSA buffer size) are hidden when browser playback is selected, as they are irrelevant in that mode.
+
+#### Typed System Commands Over WebSocket
+
+Volume and power commands from the frontend are now sent as a typed `SystemRequest` enum (`VolUp`, `VolDown`, `SetVol`, `ToggleMute`, `PowerOff`, `RestartSystem`, `RestartRSPlayer`, `SetFirmwarePower`) rather than ad-hoc strings. This closes a class of silent failures where an unrecognised command string would be dropped without feedback.
+
+#### Settings — Exposed RSPlayer Engine Knobs
+
+The Settings page now exposes low-level engine parameters that were previously only configurable via the config file:
+
+- Input stream buffer size (MB)
+- Ring buffer size (ms)
+- Playback thread priority (1–99)
+- ALSA buffer size (frames; 0 = driver default)
+
+Changes to these fields save automatically and restart the player engine.
+
+#### Settings — Restart / Power Controls
+
+The Settings page now has direct buttons for **Restart RSPlayer**, **Restart System**, and **Power Off**, removing the need to SSH in for routine maintenance.
+
+---
+
+### Internal / Architecture
+
+#### Web Server — warp → axum
+
+The HTTP and WebSocket server has been rewritten from [warp](https://docs.rs/warp) to [axum](https://docs.rs/axum). The external API surface (REST endpoints, WebSocket protocol, static file serving) is unchanged. The new server adds:
+
+- `tower-http` middleware for response compression and CORS.
+- Byte-range support for the `/music/<path>` endpoint, enabling browser `<audio>` seeking.
+- Cleaner WebSocket connection lifecycle with per-connection IDs and an active-user counter.
+
+#### Composition Root
+
+All service wiring that previously lived inline in `main.rs` has been extracted to `composition_root.rs`. The `AppContainer` struct owns every service and channel; `BuildOutcome::Degraded` captures audio-interface startup failures gracefully instead of panicking.
+
+#### Repository Ports (Trait Abstractions)
+
+`rsplayer_metadata` now exposes its repositories as traits (`AlbumRepository`, `SongRepository`, `LoudnessRepository`, `PlayStatisticsRepository`) behind `Arc<dyn …>` type aliases. Concrete fjall-backed implementations live alongside in-memory fakes (`InMemorySongRepository`, etc.) that can be used in unit tests without a real database on disk.
+
+#### `PlaybackMode` Moved to `rsplayer_wire`
+
+`PlaybackMode` is now defined once in `rsplayer_wire` (the shared `no_std` crate) and re-exported from `api_models`. This eliminates the duplicate definition that previously existed between the host API models and the firmware protocol.
+
+---
+
 ## v2.9.6 — 2026-04-27
 
 ### Bug Fixes

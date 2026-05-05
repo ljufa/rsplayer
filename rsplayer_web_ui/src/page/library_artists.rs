@@ -29,6 +29,16 @@ impl Tree {
         }
     }
 
+    fn collapse_siblings(&mut self, node: NodeId) {
+        let Some(parent) = self.arena.get(node).and_then(indextree::Node::parent) else {
+            return;
+        };
+        let siblings: Vec<NodeId> = parent.children(&self.arena).filter(|&id| id != node).collect();
+        for s in siblings {
+            self.clear_children(s);
+        }
+    }
+
     fn append_items(&mut self, parent: NodeId, items: Vec<MetadataLibraryItem>) {
         for item in items {
             let node = self.arena.new_node(item);
@@ -55,6 +65,11 @@ pub fn LibraryArtistsPage() -> Element {
                     p.strip_prefix("search=").map(|v| v.to_string())
                 })
             })
+            .map(|raw| {
+                js_sys::decode_uri_component(&raw)
+                    .map(String::from)
+                    .unwrap_or(raw)
+            })
             .unwrap_or_default()
     });
 
@@ -73,14 +88,14 @@ pub fn LibraryArtistsPage() -> Element {
     let metadata_items = state.metadata_local_items;
     use_effect(move || {
         let items = metadata_items.read().clone();
+        let mut t = tree.write();
+        let current = t.current;
+        t.clear_children(current);
         if !items.is_empty() {
-            let mut t = tree.write();
-            let current = t.current;
-            t.clear_children(current);
             t.append_items(current, items);
-            drop(t);
-            *loading.write() = false;
         }
+        drop(t);
+        *loading.write() = false;
     });
 
     let mut do_search = move || {
@@ -130,25 +145,39 @@ pub fn LibraryArtistsPage() -> Element {
                     })}
                 }
             } else {
-                div { class: "overflow-y-auto",
-                    {
-                        let top_nodes: Vec<(NodeId, MetadataLibraryItem)> = {
-                            let t = tree.read();
-                            t.root.children(&t.arena)
-                                .map(|id| (id, t.arena.get(id).unwrap().get().clone()))
-                                .collect()
-                        };
-                        top_nodes.into_iter().map(|(node_id, item)| {
-                            rsx! {
-                                ArtistNode {
-                                    key: "{node_id:?}",
-                                    item,
-                                    node_id,
-                                    ws,
-                                    tree,
+                {
+                    let top_nodes: Vec<(NodeId, MetadataLibraryItem)> = {
+                        let t = tree.read();
+                        t.root.children(&t.arena)
+                            .map(|id| (id, t.arena.get(id).unwrap().get().clone()))
+                            .collect()
+                    };
+                    if !search().is_empty() && top_nodes.is_empty() {
+                        rsx! {
+                            div { class: "flex flex-col items-center justify-center gap-2 p-8 text-base-content/60",
+                                i { class: "material-icons text-4xl", "search_off" }
+                                span { "No artists match your search." }
+                                span { class: "text-sm", "Try a different search term." }
+                            }
+                        }
+                    } else {
+                        rsx! {
+                            div { class: "overflow-y-auto",
+                                {
+                                    top_nodes.into_iter().map(|(node_id, item)| {
+                                        rsx! {
+                                            ArtistNode {
+                                                key: "{node_id:?}",
+                                                item,
+                                                node_id,
+                                                ws,
+                                                tree,
+                                            }
+                                        }
+                                    })
                                 }
                             }
-                        })
+                        }
                     }
                 }
             }
@@ -187,7 +216,11 @@ fn ArtistNode(
                             if has_children {
                                 tree.write().clear_children(node_id);
                             } else {
-                                tree.write().current = node_id;
+                                {
+                                    let mut tw = tree.write();
+                                    tw.collapse_siblings(node_id);
+                                    tw.current = node_id;
+                                }
                                 match &item {
                                     MetadataLibraryItem::Artist { name } => {
                                         ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryAlbumsByArtist(name.clone())));
@@ -214,7 +247,11 @@ fn ArtistNode(
                                 if has_children {
                                     tree.write().clear_children(node_id);
                                 } else {
-                                    tree.write().current = node_id;
+                                    {
+                                        let mut tw = tree.write();
+                                        tw.collapse_siblings(node_id);
+                                        tw.current = node_id;
+                                    }
                                     match &item {
                                         MetadataLibraryItem::Artist { name } => {
                                             ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryAlbumsByArtist(name.clone())));

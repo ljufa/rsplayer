@@ -4,8 +4,8 @@ mod queue {
 
     use api_models::common::PlaybackMode;
 
-    use crate::play_statistic_repository::PlayStatisticsRepository;
-    use crate::song_repository::SongRepository;
+    use crate::play_statistic_repository::FjallPlayStatisticsRepository;
+    use crate::song_repository::FjallSongRepository;
     use crate::{
         queue_service::QueueService,
         test::test_shared::{create_song, create_song_with_title, Context},
@@ -325,8 +325,8 @@ mod queue {
         let db = fjall::Database::builder(&ctx.db_dir)
             .open()
             .expect("Failed to open test db");
-        let song_repo = Arc::new(SongRepository::new(&db));
-        let stat_repo = Arc::new(PlayStatisticsRepository::new(&db));
+        let song_repo = Arc::new(FjallSongRepository::new(&db));
+        let stat_repo = Arc::new(FjallPlayStatisticsRepository::new(&db));
         QueueService::new(&db, song_repo, stat_repo)
     }
 }
@@ -343,7 +343,7 @@ mod metadata {
     fn should_scan_music_dir_first_time() {
         let ctx = TestContext::new();
         ctx.metadata_service.scan_music_dir(true, &ctx.sender);
-        assert_eq!(ctx.song_repository.get_all_iterator().count(), 6);
+        assert_eq!(ctx.song_repository.find_all().len(), 6);
         let result = ctx.song_repository.find_by_id("aa/aaa/music.flac");
         if let Some(saved_song) = result {
             assert_eq!(saved_song.artist, Some("Artist 1".to_owned()));
@@ -378,7 +378,7 @@ mod metadata {
             .wait()
             .expect("failed to wait");
         context.metadata_service.scan_music_dir(true, &context.sender);
-        assert_eq!(context.song_repository.get_all_iterator().count(), 6);
+        assert_eq!(context.song_repository.find_all().len(), 6);
 
         fs::copy(
             format!("{}/assets/music.wav", &context.music_dir),
@@ -392,7 +392,7 @@ mod metadata {
         .expect("Failed to copy file");
         fs::remove_file(format!("{}/assets/aa/aaa/music.flac", &context.music_dir)).expect("Failed to delete file");
         context.metadata_service.scan_music_dir(false, &context.sender);
-        assert_eq!(context.song_repository.get_all_iterator().count(), 7);
+        assert_eq!(context.song_repository.find_all().len(), 7);
 
         let mut events = vec![];
         while let Ok(ev) = context.receiver.try_recv() {
@@ -617,8 +617,10 @@ pub mod test_shared {
     use tokio::sync::broadcast::{Receiver, Sender};
 
     use crate::{
-        album_repository::AlbumRepository, metadata_service::MetadataService,
-        play_statistic_repository::PlayStatisticsRepository, song_repository::SongRepository,
+        album_repository::{AlbumRepository, FjallAlbumRepository},
+        metadata_service::MetadataService,
+        play_statistic_repository::{FjallPlayStatisticsRepository, PlayStatisticsRepository},
+        song_repository::{FjallSongRepository, SongRepository},
     };
 
     pub fn create_song(ext: &str) -> Song {
@@ -665,9 +667,9 @@ pub mod test_shared {
         pub metadata_service: MetadataService,
         pub sender: Sender<StateChangeEvent>,
         pub receiver: Receiver<StateChangeEvent>,
-        pub song_repository: Arc<SongRepository>,
-        pub _album_repository: Arc<AlbumRepository>,
-        pub stat_repository: Arc<PlayStatisticsRepository>,
+        pub song_repository: Arc<dyn SongRepository>,
+        pub _album_repository: Arc<dyn AlbumRepository>,
+        pub stat_repository: Arc<dyn PlayStatisticsRepository>,
         pub music_dir: String,
         pub db_dir: String,
     }
@@ -689,9 +691,9 @@ pub mod test_shared {
             let db = fjall::Database::builder(format!("{db_dir}_shared"))
                 .open()
                 .expect("Failed to open test db");
-            let album_repository = Arc::new(AlbumRepository::new(&db));
-            let song_repository = Arc::new(SongRepository::new(&db));
-            let stat_repository = Arc::new(PlayStatisticsRepository::new(&db));
+            let album_repository: Arc<dyn AlbumRepository> = Arc::new(FjallAlbumRepository::new(&db));
+            let song_repository: Arc<dyn SongRepository> = Arc::new(FjallSongRepository::new(&db));
+            let stat_repository: Arc<dyn PlayStatisticsRepository> = Arc::new(FjallPlayStatisticsRepository::new(&db));
             let sender = tokio::sync::broadcast::channel(20).0;
             let receiver = sender.subscribe();
 

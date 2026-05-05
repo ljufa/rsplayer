@@ -4,9 +4,12 @@ use api_models::{
     state::StateChangeEvent,
 };
 use log::{debug, error, info, trace};
+use rsplayer_wire::{
+    self as wire, FwPlayerCmd, FwToHost, HostToFw, MAX_FRAME, ALBUM_LEN, ARTIST_LEN, TIME_LEN,
+    TITLE_LEN,
+};
 use serialport::SerialPort;
 use std::result::Result::Ok;
-use std::str::FromStr;
 use std::time::Duration;
 use std::{
     sync::{Arc, Mutex},
@@ -21,7 +24,19 @@ pub struct UsbService {
     port: Mutex<Option<Box<dyn SerialPort>>>,
     baud_rate: u32,
     last_song_cache: Mutex<Option<(String, String, String)>>,
-    last_playback_mode_cache: Mutex<Option<String>>,
+    last_playback_mode_cache: Mutex<Option<wire::PlaybackMode>>,
+}
+
+/// Truncate `s` so the result fits in `heapless::String<N>` without splitting
+/// a multi-byte UTF-8 sequence.
+fn clamp<const N: usize>(s: &str) -> wire::heapless::String<N> {
+    let mut end = s.len().min(N);
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    let mut out = wire::heapless::String::<N>::new();
+    let _ = out.push_str(&s[..end]);
+    out
 }
 
 impl UsbService {
@@ -34,13 +49,16 @@ impl UsbService {
         }
     }
 
-    pub fn send_command(&self, command: &str) -> Result<()> {
-        let message = format!("{command}\n");
+    /// Encode `msg` with postcard + COBS framing and write it to the port.
+    pub fn send(&self, msg: &HostToFw) -> Result<()> {
+        let mut buf = [0u8; MAX_FRAME];
+        let frame = postcard::to_slice_cobs(msg, &mut buf)
+            .map_err(|e| anyhow::anyhow!("postcard encode failed: {e}"))?;
 
         let mut port_guard = self.port.lock().expect("lock poisoned");
         if let Some(port) = port_guard.as_mut() {
-            port.write_all(message.as_bytes()).and_then(|()| port.flush())?;
-            trace!("Written command: {command}");
+            port.write_all(frame).and_then(|()| port.flush())?;
+            trace!("Sent {msg:?} ({} bytes)", frame.len());
             Ok(())
         } else {
             Err(anyhow::anyhow!("USB port not connected"))
@@ -66,12 +84,12 @@ impl UsbService {
                     let cached_song = self.last_song_cache.lock().expect("lock poisoned").clone();
                     if let Some((t, a, al)) = cached_song {
                         debug!("Resending cached track info: {t} - {a}");
-                        let _ = self.send_command(&format!("SetTrack({t}|{a}|{al})"));
+                        let _ = self.send_track_info(&t, &a, &al);
                     }
-                    let cached_mode = self.last_playback_mode_cache.lock().expect("lock poisoned").clone();
+                    let cached_mode = *self.last_playback_mode_cache.lock().expect("lock poisoned");
                     if let Some(mode) = cached_mode {
-                        debug!("Resending cached playback mode: {mode}");
-                        let _ = self.send_command(&format!("SetPlaybackMode({mode})"));
+                        debug!("Resending cached playback mode: {mode:?}");
+                        let _ = self.send(&HostToFw::PlaybackMode(mode));
                     }
                     Ok(())
                 }
@@ -86,20 +104,27 @@ impl UsbService {
     pub fn send_track_info(&self, title: &str, artist: &str, album: &str) -> Result<()> {
         *self.last_song_cache.lock().expect("lock poisoned") =
             Some((title.to_string(), artist.to_string(), album.to_string()));
-        self.send_command(&format!("SetTrack({title}|{artist}|{album})"))
+        self.send(&HostToFw::Track {
+            title: clamp::<TITLE_LEN>(title),
+            artist: clamp::<ARTIST_LEN>(artist),
+            album: clamp::<ALBUM_LEN>(album),
+        })
     }
 
     pub fn send_progress(&self, current: &str, total: &str, percent: u8) -> Result<()> {
-        self.send_command(&format!("SetProgress({current}|{total}|{percent})"))
+        self.send(&HostToFw::Progress {
+            current: clamp::<TIME_LEN>(current),
+            total: clamp::<TIME_LEN>(total),
+            percent,
+        })
     }
 
     pub fn send_vu_level(&self, left: u8, right: u8) -> Result<()> {
-        self.send_command(&format!("SetVU({left}|{right})"))
+        self.send(&HostToFw::Vu { left, right })
     }
 
     pub fn send_power_command(&self, on: bool) -> Result<()> {
-        let cmd = if on { "PowerOn" } else { "PowerOff" };
-        self.send_command(cmd)
+        self.send(if on { &HostToFw::PowerOn } else { &HostToFw::PowerOff })
     }
 }
 
@@ -150,54 +175,41 @@ pub fn start_listening(
             match port_result {
                 Ok(port) => {
                     let mut reader = BufReader::new(port);
-                    let mut line_buffer = String::new();
+                    let mut frame: Vec<u8> = Vec::with_capacity(MAX_FRAME);
                     info!("USB Listener loop started successfully");
 
                     loop {
-                        match reader.read_line(&mut line_buffer) {
+                        frame.clear();
+                        match reader.read_until(0x00, &mut frame) {
                             Ok(0) => {
-                                // EOF
                                 error!("USB EOF, connection lost.");
                                 break;
                             }
                             Ok(_) => {
-                                let msg = line_buffer.trim();
-                                if msg.is_empty() {
+                                // Strip trailing COBS sentinel; postcard decodes the body in place.
+                                if frame.last() == Some(&0x00) {
+                                    frame.pop();
+                                }
+                                if frame.is_empty() {
                                     continue;
                                 }
-                                debug!("Got usb message: {msg}");
-                                if msg == "PowerOff" {
-                                    _ = system_commands_tx.blocking_send(SystemCommand::PowerOff);
-                                } else {
-                                    if msg.starts_with("CurVolume=") {
-                                        if let Some((_, vol_str)) = msg.split_once('=') {
-                                            if let Ok(vol) = vol_str.parse::<u8>() {
-                                                _ = system_commands_tx.blocking_send(SystemCommand::ReportVolume(vol));
-                                            }
-                                        }
+                                match postcard::from_bytes_cobs::<FwToHost>(&mut frame) {
+                                    Ok(msg) => {
+                                        debug!("Got fw message: {msg:?}");
+                                        dispatch_fw_message(
+                                            msg,
+                                            &player_commands_tx,
+                                            &system_commands_tx,
+                                            &state_changes_tx,
+                                        );
                                     }
-                                    if msg.starts_with("PowerState=") {
-                                        if let Some((_, state_str)) = msg.split_once('=') {
-                                            let is_on = state_str == "1";
-                                            info!("Firmware power state changed: {is_on}");
-                                            _ = state_changes_tx
-                                                .send(StateChangeEvent::RSPlayerFirmwarePowerEvent(is_on));
-                                        }
-                                    }
-                                    if msg == "CyclePlaybackMode" {
-                                        _ = player_commands_tx
-                                            .blocking_send(UserCommand::Player(PlayerCommand::CyclePlaybackMode));
-                                    } else if msg == "SeekForward" {
-                                        _ = player_commands_tx
-                                            .blocking_send(UserCommand::Player(PlayerCommand::SeekForward));
-                                    } else if msg == "SeekBackward" {
-                                        _ = player_commands_tx
-                                            .blocking_send(UserCommand::Player(PlayerCommand::SeekBackward));
-                                    } else if let Ok(pc) = PlayerCommand::from_str(msg) {
-                                        _ = player_commands_tx.blocking_send(UserCommand::Player(pc));
+                                    Err(e) => {
+                                        error!(
+                                            "Failed to decode fw message ({} bytes): {e}",
+                                            frame.len()
+                                        );
                                     }
                                 }
-                                line_buffer.clear();
                             }
                             Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {}
                             Err(e) => {
@@ -206,8 +218,6 @@ pub fn start_listening(
                             }
                         }
                     }
-                    // If we broke out of the inner loop, it means the connection is likely dead.
-                    // Clear the port so try_reconnect can start fresh.
                     info!("USB connection broken, clearing port handle.");
                     let mut port_guard = service.port.lock().expect("lock poisoned");
                     *port_guard = None;
@@ -217,7 +227,6 @@ pub fn start_listening(
                 }
             }
 
-            // Connection lost or failed to start, try to reconnect
             debug!("Waiting 2 seconds before next reconnection attempt...");
             sleep(Duration::from_secs(2));
 
@@ -226,6 +235,35 @@ pub fn start_listening(
             }
         }
     });
+}
+
+fn dispatch_fw_message(
+    msg: FwToHost,
+    player_commands_tx: &Sender<UserCommand>,
+    system_commands_tx: &Sender<SystemCommand>,
+    state_changes_tx: &tokio::sync::broadcast::Sender<StateChangeEvent>,
+) {
+    match msg {
+        FwToHost::Volume(vol) => {
+            let _ = system_commands_tx.blocking_send(SystemCommand::ReportVolume(vol));
+        }
+        FwToHost::Power(is_on) => {
+            info!("Firmware power state changed: {is_on}");
+            let _ = state_changes_tx.send(StateChangeEvent::RSPlayerFirmwarePowerEvent(is_on));
+        }
+        FwToHost::Player(cmd) => {
+            let pc = match cmd {
+                FwPlayerCmd::Next => PlayerCommand::Next,
+                FwPlayerCmd::Prev => PlayerCommand::Prev,
+                FwPlayerCmd::TogglePlay => PlayerCommand::TogglePlay,
+                FwPlayerCmd::Stop => PlayerCommand::Stop,
+                FwPlayerCmd::SeekForward => PlayerCommand::SeekForward,
+                FwPlayerCmd::SeekBackward => PlayerCommand::SeekBackward,
+                FwPlayerCmd::CyclePlaybackMode => PlayerCommand::CyclePlaybackMode,
+            };
+            let _ = player_commands_tx.blocking_send(UserCommand::Player(pc));
+        }
+    }
 }
 
 pub fn start_state_sync(service: Arc<UsbService>, state_changes_tx: &tokio::sync::broadcast::Sender<StateChangeEvent>) {
@@ -304,10 +342,9 @@ fn process_event(service: &UsbService, event: StateChangeEvent) {
             let _ = service.send_progress(&current, &total, percent);
         }
         StateChangeEvent::PlaybackModeChangedEvent(mode) => {
-            let mode_str: &str = mode.into();
-            debug!("PlaybackModeChangedEvent received: {mode_str}");
-            *service.last_playback_mode_cache.lock().expect("lock poisoned") = Some(mode_str.to_string());
-            let _ = service.send_command(&format!("SetPlaybackMode({mode_str})"));
+            debug!("PlaybackModeChangedEvent received: {mode:?}");
+            *service.last_playback_mode_cache.lock().expect("lock poisoned") = Some(mode);
+            let _ = service.send(&HostToFw::PlaybackMode(mode));
         }
         _ => {}
     }
