@@ -20,7 +20,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: Swatinem/rust-cache@v2
 
       - name: Install npm dependencies
@@ -32,7 +32,7 @@ jobs:
         run: dx build --release --platform web --debug-symbols false
 
       - name: Upload web public dir
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web_ui
           path: rsplayer_web_ui/target/dx/rsplayer_web_ui/release/web/public
@@ -63,7 +63,7 @@ jobs:
           - "x86_64-unknown-linux-gnu"
           - "riscv64gc-unknown-linux-gnu"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           clean: true
 
@@ -72,7 +72,7 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Download web_ui
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: web_ui
           path: rsplayer_web_ui/target/dx/rsplayer_web_ui/release/web/public
@@ -86,14 +86,14 @@ jobs:
           cargo make --env RELEASE_VERSION=$RELEASE_VERSION --env TARGET=$TARGET package_deb_release
 
       - name: Upload deb package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deb-${{ matrix.target }}
           path: target/${{ matrix.target }}/debian/*.deb
           if-no-files-found: error
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rsplayer-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/rsplayer
@@ -116,7 +116,7 @@ jobs:
           mv target/$TARGET/rpm/rsplayer_*.rpm rsplayer_${{ github.ref_name }}_${rpm_suffix}.rpm 2>/dev/null || true
 
       - name: Upload RPM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rpm-${{ matrix.target }}
           path: rsplayer_${{ github.ref_name }}_*.rpm
@@ -139,7 +139,7 @@ jobs:
           mv target/$TARGET/arch/rsplayer_*.tgz rsplayer_${{ github.ref_name }}_${arch_suffix}.tgz 2>/dev/null || true
 
       - name: Upload Arch tarball artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: arch-${{ matrix.target }}
           path: rsplayer_${{ github.ref_name }}_*.tgz
@@ -151,7 +151,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
 
       - name: Prepare release assets
         run: |
