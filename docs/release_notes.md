@@ -1,5 +1,52 @@
 # Release Notes
 
+## v3.1.0 — 2026-05-15
+
+### Bug Fixes
+
+#### Metadata Scanning on 32-bit Architectures
+
+Fixed a crash when scanning large audio files (> 2 GB) on 32-bit ARM targets (`arm-unknown-linux-gnueabihf`, `armv7-unknown-linux-gnueabihf`). The file-size check used `u32` arithmetic that wrapped around, causing the scanner to misclassify valid files as corrupt and abort the scan. The affected field in `metadata_service.rs` is now widened to `u64`.
+
+---
+
+### Internal / Architecture
+
+#### Symphonia Upgraded to 0.6.0
+
+The audio decoding engine has been updated from the project's custom Symphonia fork (based on 0.5.x) to the official [Symphonia 0.6.0](https://github.com/pdeljanov/Symphonia) release, rebased on top of it.
+
+- The custom patches retained from the fork are:
+  - **FLAC channel-count validation** — guards the FLAC decoder against a subframe decode panic when a stream advertises more channels than are present (upstream regression not yet ported to the 0.6.x line).
+  - **MP3 demuxer infinite-loop guard** — breaks out of the strict-frame-sync loop after 10 consecutive failures on corrupted streams.
+- API changes absorbed internally: `AudioDecoder::decode_ref` / `PacketRef`, new required `FormatReader::media_info`, `SeekTo::Timestamp` rename. These affect only the project's custom APE, DSD, and SACD demuxers/decoders and have no visible effect on playback behaviour.
+
+#### cpal Upgraded to 0.17.3
+
+The audio output library has been updated to [cpal 0.17.3](https://github.com/RustAudio/cpal). The fork's custom patches (DSD native output, ALSA buffer-size constraint fix, high-sample-rate support) have been rebased onto the upstream release tag.
+
+#### CamillaDSP Replaced with Self-Contained Filter Implementation
+
+The [CamillaDSP](https://github.com/HEnquist/camilladsp) library dependency has been removed. RSPlayer only used a small subset of CamillaDSP — biquad filters and a gain stage — and the library unconditionally links `alsa-sys 0.3.x` on Linux, which conflicts with the `alsa-sys 0.4.x` required by cpal 0.17.x.
+
+The DSP subsystem (`rsplayer_dsp`) now contains a self-contained implementation of all required filter types:
+
+- Biquad filters: Highpass, Lowpass, Bandpass, Notch, Allpass, Peaking EQ, High/Low shelf (Q and slope variants), first-order High/Lowpass and shelf variants, Linkwitz Transform.
+- Gain filter with linear/dB/mute/invert modes.
+- Direct Form II Transposed biquad with subnormal flushing.
+
+Formulas are taken directly from the Audio EQ Cookbook (R. Bristow-Johnson). The public API of `rsplayer_dsp` is unchanged.
+
+This change removes approximately 560 lines from `Cargo.lock` and eliminates the `alsa-sys` version conflict entirely.
+
+#### Cross-Compilation Fix — `libLLVM` in Docker Containers
+
+Fixed a build failure when cross-compiling for ARM targets using the project's custom `ghcr.io/ljufa/rsplayer-cross-*` Docker images. The `libc` build script spawns `rustc` as a subprocess; inside the container `$RUSTC` resolves to the real compiler binary rather than the rustup wrapper, so `LD_LIBRARY_PATH` was never set and the Rust toolchain's `libLLVM.so` could not be found.
+
+`Makefile.toml` now evaluates the active toolchain's sysroot at build time and passes the lib directory into the container via `CROSS_CONTAINER_OPTS`, mounting it at the same host path and setting `LD_LIBRARY_PATH`. No Docker image rebuilds are required.
+
+---
+
 ## v3.0.0 — 2026-05-05
 
 ### Breaking Changes
