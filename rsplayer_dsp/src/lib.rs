@@ -1,10 +1,12 @@
 use anyhow::Result;
-pub use camilladsp::config::{self, BiquadParameters};
-use camilladsp::filters::basicfilters::Gain;
-use camilladsp::filters::biquad::Biquad;
-use camilladsp::filters::biquad::BiquadCoefficients;
-use camilladsp::filters::Filter as CamillaDspFilter;
 use log::error;
+
+mod filters;
+pub mod config {
+    pub use crate::filters::config::*;
+}
+pub use filters::BiquadParameters;
+use filters::{Biquad, BiquadCoefficients, Filter as CamillaDspFilter, Gain};
 
 use symphonia::core::audio::conv::{FromSample, IntoSample};
 use symphonia::core::audio::sample::Sample;

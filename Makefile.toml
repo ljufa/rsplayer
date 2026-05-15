@@ -40,6 +40,8 @@ args = [
 
 [tasks.build_release.env]
 CARGO_TARGET_DIR = { value = "target/cross", condition = { env_not_set = ["CI"] } }
+RUST_SYSROOT_LIB = { script = ["echo $(rustc --print sysroot)/lib"] }
+CROSS_CONTAINER_OPTS = "-e LD_LIBRARY_PATH=${RUST_SYSROOT_LIB} -v ${RUST_SYSROOT_LIB}:${RUST_SYSROOT_LIB}"
 
 [tasks.build_dev]
 command = "cargo"
@@ -197,9 +199,17 @@ args = [
     "clippy::similar_names",
 ]
 
+[tasks.clippy_in_cross.env]
+RUST_SYSROOT_LIB = { script = ["echo $(rustc --print sysroot)/lib"] }
+CROSS_CONTAINER_OPTS = "-e LD_LIBRARY_PATH=${RUST_SYSROOT_LIB} -v ${RUST_SYSROOT_LIB}:${RUST_SYSROOT_LIB}"
+
 [tasks.test_in_cross]
 command = "cross"
 args = ["test", "--target", "${TARGET}"]
+
+[tasks.test_in_cross.env]
+RUST_SYSROOT_LIB = { script = ["echo $(rustc --print sysroot)/lib"] }
+CROSS_CONTAINER_OPTS = "-e LD_LIBRARY_PATH=${RUST_SYSROOT_LIB} -v ${RUST_SYSROOT_LIB}:${RUST_SYSROOT_LIB}"
 
 [tasks.format]
 description = "Format with rustfmt"

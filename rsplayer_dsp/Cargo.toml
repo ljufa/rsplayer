@@ -9,4 +9,3 @@ anyhow.workspace = true
 api_models = { path = "../rsplayer_api_models" }
 symphonia.workspace = true
 
-camilladsp = { git = "https://github.com/HEnquist/camilladsp", package = "CamillaDSP", branch = "master", default-features = false, features = ["32bit"] }

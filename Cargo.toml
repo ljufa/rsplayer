@@ -25,9 +25,6 @@ ureq = "3"
 version = "0.4"
 features = ["serde"]
 
-[workspace.dependencies.cpal]
-git = "https://github.com/ljufa/cpal.git"
-branch = "master"
 
 [workspace.dependencies.futures]
 version = "0.3"
@@ -39,6 +36,10 @@ version = "0.4"
 [workspace.dependencies.serde]
 version = "1"
 features = ["derive"]
+
+[workspace.dependencies.cpal]
+git = "https://github.com/ljufa/cpal.git"
+branch = "0.17.3_patched"
 
 [workspace.dependencies.symphonia]
 git = "https://github.com/ljufa/Symphonia.git"
@@ -62,6 +63,7 @@ features = [
     "serde",
     "v4",
 ]
+
 
 [profile.release]
 opt-level = 3
