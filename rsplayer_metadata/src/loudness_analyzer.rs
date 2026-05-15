@@ -69,7 +69,7 @@ impl LoudnessAnalyzer {
                 Ok(None) | Err(_) => break,
             };
 
-            if packet.track_id() != track_id {
+            if packet.track_id != track_id {
                 continue;
             }
 

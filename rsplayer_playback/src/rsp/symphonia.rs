@@ -199,7 +199,7 @@ pub fn play_file(
             Err(err) => break Err(err.into()),
         };
 
-        let current_time = tb.calc_time(packet.pts()).map_or(0, |t| t.as_secs().unsigned_abs());
+        let current_time = tb.calc_time(packet.pts).map_or(0, |t| t.as_secs().unsigned_abs());
         if current_time != last_current_time {
             last_current_time = current_time;
             let _ = context.changes_tx.send(StateChangeEvent::SongTimeEvent(SongProgress {

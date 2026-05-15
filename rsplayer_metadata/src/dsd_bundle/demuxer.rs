@@ -7,7 +7,7 @@ use symphonia::core::codecs::CodecParameters;
 use symphonia::core::common::FourCc;
 use symphonia::core::errors::Result;
 use symphonia::core::formats::probe::{ProbeDataMatchSpec, ProbeFormatData, ProbeableFormat, Score, Scoreable};
-use symphonia::core::formats::{FormatId, FormatInfo, FormatOptions, FormatReader, SeekMode, SeekTo, SeekedTo, Track};
+use symphonia::core::formats::{FormatId, FormatInfo, FormatOptions, FormatReader, MediaInfo, SeekMode, SeekTo, SeekedTo, Track};
 use symphonia::core::io::{MediaSourceStream, ReadBytes, ScopedStream};
 use symphonia::core::meta::{Metadata, MetadataBuilder, MetadataLog, MetadataSideData};
 use symphonia::core::packet::Packet;
@@ -28,6 +28,7 @@ pub struct DsfReader<'s> {
     reader: MediaSourceStream<'s>,
     tracks: Vec<Track>,
     metadata: MetadataLog,
+    media_info: MediaInfo,
     data_start: u64,
     #[allow(dead_code)]
     data_end: u64,
@@ -104,10 +105,12 @@ impl<'s> DsfReader<'s> {
             source.seek(SeekFrom::Start(data_start))?;
         }
 
+        let media_info = MediaInfo::from_track(&track);
         Ok(DsfReader {
             reader: source,
             tracks: vec![track],
             metadata: metadata_log,
+            media_info,
             data_start,
             data_end,
             block_size_per_channel: block_size,
@@ -154,6 +157,10 @@ impl FormatReader for DsfReader<'_> {
         &DSF_FORMAT_INFO
     }
 
+    fn media_info(&self) -> &MediaInfo {
+        &self.media_info
+    }
+
     fn metadata(&mut self) -> Metadata<'_> {
         self.metadata.metadata()
     }
@@ -187,7 +194,7 @@ impl FormatReader for DsfReader<'_> {
             .unwrap_or_else(|| TimeBase::new(NonZero::new(1).unwrap(), NonZero::new(sample_rate).unwrap()));
 
         let required_ts = match to {
-            SeekTo::TimeStamp { ts, .. } => ts,
+            SeekTo::Timestamp { ts, .. } => ts,
             SeekTo::Time { time, .. } => tb.calc_timestamp(time).unwrap_or(Timestamp::ZERO),
         };
 

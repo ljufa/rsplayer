@@ -6,7 +6,7 @@ use symphonia::core::codecs::audio::AudioCodecParameters;
 use symphonia::core::codecs::CodecParameters;
 use symphonia::core::common::FourCc;
 use symphonia::core::errors::{Error, Result};
-use symphonia::core::formats::{FormatId, FormatInfo, FormatReader, SeekMode, SeekTo, SeekedTo, Track, TrackFlags};
+use symphonia::core::formats::{FormatId, FormatInfo, FormatReader, MediaInfo, SeekMode, SeekTo, SeekedTo, Track, TrackFlags};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::{Metadata, MetadataLog};
 use symphonia::core::packet::Packet;
@@ -31,6 +31,7 @@ pub struct SacdIsoReader {
     file: File,
     tracks: Vec<Track>,
     metadata: MetadataLog,
+    media_info: MediaInfo,
     sector_mode: SectorMode,
     channel_count: usize,
     frame_format: u8,
@@ -99,10 +100,12 @@ impl SacdIsoReader {
             .with_num_frames(total_dsd_frames)
             .with_flags(TrackFlags::DEFAULT);
 
+        let media_info = MediaInfo::from_track(&track);
         Ok(SacdIsoReader {
             file,
             tracks: vec![track],
             metadata: MetadataLog::default(),
+            media_info,
             sector_mode: mode,
             channel_count: channel_count_nonzero,
             frame_format: ff,
@@ -118,6 +121,10 @@ impl SacdIsoReader {
 impl FormatReader for SacdIsoReader {
     fn format_info(&self) -> &FormatInfo {
         &SACD_ISO_FORMAT_INFO
+    }
+
+    fn media_info(&self) -> &MediaInfo {
+        &self.media_info
     }
 
     fn metadata(&mut self) -> Metadata<'_> {
@@ -165,7 +172,7 @@ impl FormatReader for SacdIsoReader {
 
         let total_frames = self.tracks[0].num_frames.unwrap_or(0);
         let required_ts = match to {
-            SeekTo::TimeStamp { ts, .. } => ts,
+            SeekTo::Timestamp { ts, .. } => ts,
             SeekTo::Time { time, .. } => tb.calc_timestamp(time).unwrap_or(Timestamp::ZERO),
         };
 

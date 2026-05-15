@@ -636,7 +636,6 @@ impl MetadataService {
         match probe_result {
             Ok(mut probed) => {
                 let (mut song, image_data) = AudioMetadataExtractor::extract(&mut *probed);
-
                 if let Some(image_data) = &image_data {
                     let image_id = uuid::Uuid::new_v4();
                     if let Err(e) = std::fs::write(Path::new(ARTWORK_DIR).join(image_id.to_string()), &image_data.data)

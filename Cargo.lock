@@ -3582,8 +3582,8 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "symphonia"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "lazy_static",
  "symphonia-bundle-flac",
@@ -3604,8 +3604,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-bundle-flac"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "log",
  "symphonia-common",
@@ -3615,8 +3615,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-bundle-mp3"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "lazy_static",
  "log",
@@ -3625,18 +3625,19 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-aac"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "lazy_static",
  "log",
+ "symphonia-common",
  "symphonia-core",
 ]
 
 [[package]]
 name = "symphonia-codec-adpcm"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "log",
  "symphonia-core",
@@ -3644,17 +3645,18 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-alac"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "log",
+ "symphonia-common",
  "symphonia-core",
 ]
 
 [[package]]
 name = "symphonia-codec-pcm"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "log",
  "symphonia-core",
@@ -3662,8 +3664,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-vorbis"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "log",
  "symphonia-common",
@@ -3672,8 +3674,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-common"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "log",
  "symphonia-core",
@@ -3682,8 +3684,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-core"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -3696,8 +3698,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-format-caf"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "log",
  "symphonia-common",
@@ -3706,8 +3708,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-format-isomp4"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "log",
  "symphonia-common",
@@ -3717,8 +3719,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-format-mkv"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "lazy_static",
  "log",
@@ -3728,8 +3730,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-format-ogg"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "log",
  "symphonia-common",
@@ -3739,8 +3741,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-format-riff"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "extended",
  "log",
@@ -3750,8 +3752,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-metadata"
-version = "0.6.0-alpha.1"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#7c943082a2479fd3d8fc75029a90ac45715089dd"
+version = "0.6.0"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
 dependencies = [
  "lazy_static",
  "log",

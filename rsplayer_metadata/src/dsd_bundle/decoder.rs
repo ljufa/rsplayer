@@ -5,7 +5,7 @@ use symphonia::core::codecs::audio::{AudioCodecParameters, AudioDecoder, AudioDe
 use symphonia::core::codecs::registry::{RegisterableAudioDecoder, SupportedAudioCodec};
 use symphonia::core::codecs::{CodecInfo, CodecProfileInfo};
 use symphonia::core::errors::Result;
-use symphonia::core::packet::Packet;
+use symphonia::core::packet::PacketRef;
 
 use super::{CODEC_TYPE_DSD_LSBF, CODEC_TYPE_DSD_MSBF};
 
@@ -36,7 +36,7 @@ impl DsdDecoder {
         })
     }
 
-    fn decode_inner(&mut self, packet: &Packet) {
+    fn decode_inner(&mut self, packet: &PacketRef<'_>) {
         let channels = self.params.channels.as_ref().map_or(0, Channels::count);
         let src = &packet.data;
 
@@ -79,7 +79,7 @@ impl AudioDecoder for DsdDecoder {
         &self.params
     }
 
-    fn decode(&mut self, packet: &Packet) -> Result<GenericAudioBufferRef<'_>> {
+    fn decode_ref(&mut self, packet: &PacketRef<'_>) -> Result<GenericAudioBufferRef<'_>> {
         self.decode_inner(packet);
         Ok(self.buf.as_generic_audio_buffer_ref())
     }

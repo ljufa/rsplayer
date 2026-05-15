@@ -7,7 +7,7 @@ use symphonia::core::codecs::CodecParameters;
 use symphonia::core::common::FourCc;
 use symphonia::core::errors::{Error, Result};
 use symphonia::core::formats::probe::{ProbeDataMatchSpec, ProbeFormatData, ProbeableFormat, Score, Scoreable};
-use symphonia::core::formats::{FormatId, FormatInfo, FormatOptions, FormatReader, SeekMode, SeekTo, SeekedTo, Track};
+use symphonia::core::formats::{FormatId, FormatInfo, FormatOptions, FormatReader, MediaInfo, SeekMode, SeekTo, SeekedTo, Track};
 use symphonia::core::io::{MediaSourceStream, ReadBytes, ScopedStream};
 use symphonia::core::meta::{Metadata, MetadataBuilder, MetadataInfo, MetadataLog, RawTag, RawValue, StandardTag, Tag};
 use symphonia::core::packet::Packet;
@@ -41,6 +41,7 @@ pub struct ApeReader {
     decoder: Mutex<Box<dyn ApeDecoderTrait>>,
     tracks: Vec<Track>,
     metadata: MetadataLog,
+    media_info: MediaInfo,
     total_samples: u64,
     total_frames: u32,
     current_frame: u32,
@@ -133,10 +134,12 @@ impl ApeReader {
             .with_codec_params(CodecParameters::Audio(params))
             .with_num_frames(info.total_samples);
 
+        let media_info = MediaInfo::from_track(&track);
         Ok(ApeReader {
             decoder: Mutex::new(decoder),
             tracks: vec![track],
             metadata: metadata_log,
+            media_info,
             total_samples: info.total_samples,
             total_frames: info.total_frames,
             current_frame: 0,
@@ -287,6 +290,10 @@ impl FormatReader for ApeReader {
         &APE_FORMAT_INFO
     }
 
+    fn media_info(&self) -> &MediaInfo {
+        &self.media_info
+    }
+
     fn metadata(&mut self) -> Metadata<'_> {
         self.metadata.metadata()
     }
@@ -329,7 +336,7 @@ impl FormatReader for ApeReader {
             .unwrap_or_else(|| TimeBase::new(NonZero::new(1).unwrap(), NonZero::new(self.sample_rate).unwrap()));
 
         let required_ts = match to {
-            SeekTo::TimeStamp { ts, .. } => ts,
+            SeekTo::Timestamp { ts, .. } => ts,
             SeekTo::Time { time, .. } => tb.calc_timestamp(time).unwrap_or(Timestamp::ZERO),
         };
 
