@@ -628,7 +628,12 @@ impl MetadataService {
         let file_p = &Self::full_path_to_database_key(settings, path_str);
 
         info!("Scanning file:\t{file_p}");
-        match crate::build_probe().probe(&hint, mss, format_opts, metadata_opts) {
+        let probe_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            crate::build_probe().probe(&hint, mss, format_opts, metadata_opts)
+        }))
+        .map_err(|_| Error::msg(format!("symphonia panicked while probing: {file_p}")))
+        .and_then(|r| r.map_err(|e| Error::msg(format!("Error:{file_p} {e}"))));
+        match probe_result {
             Ok(mut probed) => {
                 let (mut song, image_data) = AudioMetadataExtractor::extract(&mut *probed);
 
@@ -651,8 +656,8 @@ impl MetadataService {
                 Ok(())
             }
             Err(err) => {
-                warn!("Error:{file_p} {err}");
-                Err(Error::msg(format!("Error:{file_p} {err}")))
+                warn!("{err}");
+                Err(err)
             }
         }
     }
