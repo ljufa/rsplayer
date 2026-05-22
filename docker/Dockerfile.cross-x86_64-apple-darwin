@@ -117,7 +117,7 @@ RUN SDK_DIR=$(ls -1d /opt/osxcross/SDK/MacOSX*.sdk | head -1) && \
     echo "CROSS_SYSROOT=$SDK_DIR" && \
     echo "$SDK_DIR" > /opt/osxcross/SDK_PATH
 
-COPY darwin-x86_64-entry.sh /darwin-entry.sh
+COPY docker/darwin-x86_64-entry.sh /darwin-entry.sh
 RUN chmod +x /darwin-entry.sh
 
 ENV PATH=/opt/osxcross/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
