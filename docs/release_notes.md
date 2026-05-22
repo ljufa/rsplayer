@@ -59,17 +59,9 @@ These changes significantly reduce the time spent waiting on unreachable network
 - Rustls provider initialization was made explicit (`ring` default provider install) to match `axum-server` TLS configuration.
 - Database persistence on shutdown was tightened from `SyncData` to `SyncAll`.
 
----
-
-## v3.1.0 — 2026-05-15
-
-### Bug Fixes
-
 #### Metadata Scanning on 32-bit Architectures
 
 Fixed a crash when scanning large audio files (> 2 GB) on 32-bit ARM targets (`arm-unknown-linux-gnueabihf`, `armv7-unknown-linux-gnueabihf`). The file-size check used `u32` arithmetic that wrapped around, causing the scanner to misclassify valid files as corrupt and abort the scan. The affected field in `metadata_service.rs` is now widened to `u64`.
-
----
 
 ### Internal / Architecture
 
