@@ -78,7 +78,16 @@ pub async fn handle_system_command(cmd: SystemCommand, ctx: &SystemCommandContex
                 return;
             }
             info!("Shutting down system");
-            _ = std::process::Command::new("/usr/sbin/poweroff").spawn();
+            #[cfg(target_os = "linux")]
+            {
+                _ = std::process::Command::new("/usr/sbin/poweroff").spawn();
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                ctx.send_event(StateChangeEvent::NotificationError(
+                    "Power control not supported on this platform".to_string(),
+                ));
+            }
         }
         RestartSystem => {
             if std::env::var("DEMO_MODE").is_ok() {
@@ -88,7 +97,16 @@ pub async fn handle_system_command(cmd: SystemCommand, ctx: &SystemCommandContex
                 return;
             }
             info!("Restarting system");
-            _ = std::process::Command::new("/usr/sbin/reboot").spawn();
+            #[cfg(target_os = "linux")]
+            {
+                _ = std::process::Command::new("/usr/sbin/reboot").spawn();
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                ctx.send_event(StateChangeEvent::NotificationError(
+                    "Power control not supported on this platform".to_string(),
+                ));
+            }
         }
         RestartRSPlayer => {
             info!("Restarting RSPlayer");

@@ -115,30 +115,27 @@ pub fn start(
         }
     };
 
-    let https_handle = match (env::var("TLS_CERT_PATH"), env::var("TLS_CERT_KEY_PATH")) {
-        (Ok(cert_path), Ok(key_path)) => {
-            info!("TLS enabled, starting HTTPS on port {https_port}");
-            Some(async move {
-                let tls_config = match RustlsConfig::from_pem_file(cert_path, key_path).await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        error!("Failed to load TLS config: {e}");
-                        return;
-                    }
-                };
-                let addr = std::net::SocketAddr::from(([0, 0, 0, 0], https_port));
-                if let Err(e) = axum_server::bind_rustls(addr, tls_config)
-                    .serve(app.into_make_service())
-                    .await
-                {
-                    error!("HTTPS server exited with error: {e}");
+    let https_handle = if let (Ok(cert_path), Ok(key_path)) = (env::var("TLS_CERT_PATH"), env::var("TLS_CERT_KEY_PATH")) {
+        info!("TLS enabled, starting HTTPS on port {https_port}");
+        Some(async move {
+            let tls_config = match RustlsConfig::from_pem_file(cert_path, key_path).await {
+                Ok(c) => c,
+                Err(e) => {
+                    error!("Failed to load TLS config: {e}");
+                    return;
                 }
-            })
-        }
-        _ => {
-            info!("TLS not configured, HTTPS disabled");
-            None
-        }
+            };
+            let addr = std::net::SocketAddr::from(([0, 0, 0, 0], https_port));
+            if let Err(e) = axum_server::bind_rustls(addr, tls_config)
+                .serve(app.into_make_service())
+                .await
+            {
+                error!("HTTPS server exited with error: {e}");
+            }
+        })
+    } else {
+        info!("TLS not configured, HTTPS disabled");
+        None
     };
 
     (http_handle, https_handle, ws_handle)
@@ -198,7 +195,7 @@ fn build_router(state: AppState) -> Router {
         .nest_service(
             "/artwork",
             tower::ServiceBuilder::new()
-                .layer(cache_3d.clone())
+                .layer(cache_3d)
                 .layer(CompressionLayer::new())
                 .service(artwork),
         )
@@ -235,9 +232,73 @@ async fn get_settings(State(state): State<AppState>) -> Json<Settings> {
             }
         }
         settings.alsa_settings.available_audio_cards = cards;
+        settings.available_volume_control_types = vec![
+            api_models::common::VolumeCrtlType::Off,
+            api_models::common::VolumeCrtlType::Alsa,
+            api_models::common::VolumeCrtlType::Pipewire,
+            api_models::common::VolumeCrtlType::Software,
+        ];
+        settings.network_mounts_available = true;
+    }
+
+    #[cfg(not(feature = "alsa"))]
+    {
+        settings.alsa_settings.available_audio_cards = get_cpal_audio_cards();
+        settings.available_volume_control_types = vec![
+            api_models::common::VolumeCrtlType::Off,
+            api_models::common::VolumeCrtlType::Software,
+        ];
+        settings.network_mounts_available = false;
     }
 
     Json(settings.clone())
+}
+
+#[cfg(not(feature = "alsa"))]
+fn get_cpal_audio_cards() -> Vec<api_models::common::AudioCard> {
+    use api_models::common::{AudioCard, PcmOutputDevice};
+    use cpal::traits::{DeviceTrait, HostTrait};
+
+    let host = cpal::default_host();
+    let mut cards: Vec<AudioCard> = Vec::new();
+
+    // Add an explicit "Default" entry first so the user can always pick the OS default.
+    cards.push(AudioCard {
+        id: "default".to_string(),
+        index: -1,
+        name: "System Default".to_string(),
+        description: "Use the operating system default audio output".to_string(),
+        pcm_devices: vec![PcmOutputDevice {
+            name: "default".to_string(),
+            description: "System Default".to_string(),
+            card_id: "default".to_string(),
+        }],
+        mixers: vec![],
+    });
+
+    #[allow(deprecated)]
+    if let Ok(devices) = host.output_devices() {
+        for (idx, device) in devices.enumerate() {
+            if let Ok(name) = device.name() {
+                let pcm = PcmOutputDevice {
+                    name: name.clone(),
+                    description: name.clone(),
+                    card_id: name.clone(),
+                };
+                #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                cards.push(AudioCard {
+                    id: name.clone(),
+                    index: idx as i32,
+                    name: name.clone(),
+                    description: name.clone(),
+                    pcm_devices: vec![pcm],
+                    mixers: vec![],
+                });
+            }
+        }
+    }
+
+    cards
 }
 
 async fn save_settings(
@@ -269,7 +330,7 @@ async fn serve_music(
     let range_hdr = headers
         .get(header::RANGE)
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_owned());
+        .map(std::borrow::ToOwned::to_owned);
 
     let music_dirs = state.config.get_settings().metadata_settings.effective_directories();
     let file_path = music_dirs
@@ -288,22 +349,19 @@ async fn serve_music(
 
     let mime_type = mime_for_path(&file_path);
 
-    let (start, end, is_range_request) = match range_hdr {
-        Some(ref s) => match parse_range(s, file_size) {
-            Some((a, b)) => {
-                let max_end = a.saturating_add(STREAM_CHUNK.saturating_sub(1));
-                (a, b.min(max_end), true)
-            }
-            None => return range_not_satisfiable(file_size),
-        },
-        None => {
-            let end = if file_size == 0 {
-                0
-            } else {
-                STREAM_CHUNK.min(file_size) - 1
-            };
-            (0u64, end, false)
+    let (start, end, is_range_request) = if let Some(ref s) = range_hdr { match parse_range(s, file_size) {
+        Some((a, b)) => {
+            let max_end = a.saturating_add(STREAM_CHUNK.saturating_sub(1));
+            (a, b.min(max_end), true)
         }
+        None => return range_not_satisfiable(file_size),
+    } } else {
+        let end = if file_size == 0 {
+            0
+        } else {
+            STREAM_CHUNK.min(file_size) - 1
+        };
+        (0u64, end, false)
     };
 
     let chunk_len = (end - start + 1) as usize;

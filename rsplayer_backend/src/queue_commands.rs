@@ -59,7 +59,7 @@ fn get_songs_from_decade(ctx: &CommandContext, decade: &str) -> Vec<Song> {
 fn load_songs_and_play(ctx: &CommandContext, songs: Vec<Song>, notification: &str) {
     let count = songs.len();
     ctx.player_service.stop_current_song();
-    ctx.queue_service.replace_all(songs.into_iter());
+    ctx.queue_service.replace_all(songs);
     ctx.player_service.play_from_beginning();
     ctx.send_notification(&format!("{count} {notification}"));
 }
@@ -163,7 +163,7 @@ pub fn handle_queue_command(cmd: QueueCommand, ctx: &CommandContext) {
         LoadPlaylistInQueue(pl_id) => {
             ctx.player_service.stop_current_song();
             let pl_songs = ctx.playlist_service.get_playlist_page_by_name(&pl_id, 0, 20000).items;
-            ctx.queue_service.replace_all(pl_songs.into_iter());
+            ctx.queue_service.replace_all(pl_songs);
             ctx.player_service.play_from_beginning();
             ctx.send_notification("Playlist loaded into queue");
         }

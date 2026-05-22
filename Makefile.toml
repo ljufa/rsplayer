@@ -7,15 +7,16 @@
 CARGO_TARGET_DIR = "target"
 CROSS_TARGET_DIR = { value = "target/cross", condition = { env_not_set = ["CI"] } }
 
-# RPI_HOST = "192.168.5.3"
+# TARGET_HOST = "127.0.0.1"
+# TARGET_HOST = "192.168.5.3"
+TARGET_HOST = "192.168.5.4"
+
 # TARGET = "arm-unknown-linux-gnueabihf"
-
-RPI_HOST = "192.168.5.4"
 TARGET = "aarch64-unknown-linux-gnu"
-
-# RPI_HOST = "127.0.0.1"
 # TARGET = "x86_64-unknown-linux-gnu"
 # TARGET = "riscv64gc-unknown-linux-gnu"
+# TARGET = "aarch64-apple-darwin"
+# TARGET = "x86_64-apple-darwin"
 
 RELEASE_VERSION = "3.1.0"
 RELEASE_BRANCH = "main_public"
@@ -26,16 +27,13 @@ default_to_workspace = false
 
 # ---- BUILD Backend----
 [tasks.build_release]
-command = "cross"
-args = [
-    "build",
-    "--target",
-    "${TARGET}",
-    "--release",
-    "--package",
-    "rsplayer",
-    "--bin",
-    "rsplayer",
+script = [
+    "set -e",
+    "extra_flags=''",
+    "case ${TARGET} in",
+    "  aarch64-apple-darwin|x86_64-apple-darwin) extra_flags='--no-default-features' ;;",
+    "esac",
+    "cross build --target ${TARGET} --release --package rsplayer --bin rsplayer ${extra_flags}",
 ]
 
 [tasks.build_release.env]
@@ -46,7 +44,6 @@ CROSS_CONTAINER_OPTS = "-e LD_LIBRARY_PATH=${RUST_SYSROOT_LIB} -v ${RUST_SYSROOT
 [tasks.build_dev]
 command = "cargo"
 args = ["build", "--package", "rsplayer", "--bin", "rsplayer"]
-
 
 [tasks.build_ui_release]
 cwd = "rsplayer_web_ui"
@@ -221,35 +218,42 @@ args = ["fmt"]
 script = "sudo pkill -9 rsplayer || true"
 
 [tasks.run_local]
-dependencies = ["kill_local"]
+dependencies = ["kill_local", "build_dev"]
 env = { "RUST_LOG" = "rsplayer=info,rsplayer_playback=debug,rsplayer_metadata=info,symphonia=info,warp=info", "RUST_BACKTRACE" = "full"}
 script = [
     "set -e",
-    "cargo build --package rsplayer --bin rsplayer",
     "sudo /usr/bin/setcap 'cap_net_bind_service,cap_sys_boot,cap_sys_nice,cap_sys_admin,cap_dac_read_search+ep' target/debug/rsplayer",
     "cd .run && exec ../target/debug/rsplayer"
-]
-
-
-[tasks.copy_remote]
-dependencies = ["build_release"]
-script = [
-    "rsync -avvP --rsync-path=\"sudo rsync\" ${CARGO_TARGET_DIR}/${TARGET}/release/rsplayer pi@${RPI_HOST}:/usr/bin",
-    "ssh -x pi@${RPI_HOST} \"sudo systemctl restart rsplayer\"",
 ]
 
 [tasks.copy_remote.env]
 CARGO_TARGET_DIR = { value = "target/cross", condition = { env_not_set = ["CI"] } }
 
+[tasks.copy_remote]
+dependencies = ["build_release"]
+script = [
+    "rsync -avvP --rsync-path=\"sudo rsync\" ${CARGO_TARGET_DIR}/${TARGET}/release/rsplayer pi@${TARGET_HOST}:/usr/bin",
+    "ssh -x pi@${TARGET_HOST} \"sudo systemctl restart rsplayer\"",
+]
+
+[tasks.copy_remote_mac.env]
+CARGO_TARGET_DIR = { value = "target/cross", condition = { env_not_set = ["CI"] } }
+
+[tasks.copy_remote_mac]
+dependencies = ["build_release"]
+script = [
+    "scp -P 22220 ${CARGO_TARGET_DIR}/${TARGET}/release/rsplayer draganlj@${TARGET_HOST}:~"
+]
+
 [tasks.copy_remote_dev]
 dependencies = ["build_dev"]
 script = [
-    "rsync -avvP --rsync-path=\"sudo rsync\" target/${TARGET}/debug/rsplayer pi@${RPI_HOST}:/usr/bin",
+    "rsync -avvP --rsync-path=\"sudo rsync\" target/${TARGET}/debug/rsplayer pi@${TARGET_HOST}:/usr/bin",
 ]
 
 [tasks.package_deb_local]
 dependencies = ["build_ui_release", "build_release", "package_deb_release"]
-script = "rsync -avvP target/${TARGET}/debian/*.deb pi@${RPI_HOST}:~"
+script = "rsync -avvP target/${TARGET}/debian/*.deb pi@${TARGET_HOST}:~"
 
 [tasks.tag]
 script = [

@@ -301,11 +301,27 @@ pub fn SettingsPage() -> Element {
                                         {
                                             let mut s = settings.write();
                                             s.local_browser_playback = false;
-                                            s.alsa_settings.output_device.card_id = val.clone();
+                                            // Auto-select the first PCM device for the chosen card so
+                                            // output_device.name is never empty after a card change.
+                                            let first_pcm = s.alsa_settings.available_audio_cards
+                                                .iter()
+                                                .find(|card| card.id == val)
+                                                .and_then(|card| card.pcm_devices.first())
+                                                .cloned();
+                                            if let Some(pcm) = first_pcm {
+                                                s.alsa_settings.output_device = pcm;
+                                            } else {
+                                                s.alsa_settings.output_device.card_id = val.clone();
+                                            }
                                             if val == "pipewire" {
                                                 s.volume_ctrl_settings.ctrl_device = VolumeCrtlType::Pipewire;
                                             } else {
-                                                s.volume_ctrl_settings.ctrl_device = VolumeCrtlType::Alsa;
+                                                let available = s.available_volume_control_types.clone();
+                                                let default_ctrl = available.iter().find(|t| **t == VolumeCrtlType::Alsa)
+                                                    .or_else(|| available.iter().find(|t| **t == VolumeCrtlType::Software))
+                                                    .copied()
+                                                    .unwrap_or(VolumeCrtlType::Off);
+                                                s.volume_ctrl_settings.ctrl_device = default_ctrl;
                                             }
                                         }
                                     }
@@ -423,20 +439,31 @@ pub fn SettingsPage() -> Element {
                                 }
                             },
                         }
-                        NumberInput {
-                            label: "ALSA buffer size (frames, 0=default)",
-                            value: settings.read().rs_player_settings.alsa_buffer_size.unwrap_or(0).to_string(),
-                            min: "0",
-                            max: "100000",
-                            onchange: move |v: String| {
-                                let n = v.parse::<u32>().unwrap_or(0);
-                                settings.write().rs_player_settings.alsa_buffer_size = if n == 0 {
-                                    None
-                                } else {
-                                    Some(n)
-                                };
-                                auto_save_restart();
-                            },
+                        {
+                            let has_alsa = settings.read().available_volume_control_types
+                                .iter()
+                                .any(|t| *t == VolumeCrtlType::Alsa);
+                            if has_alsa {
+                                rsx! {
+                                    NumberInput {
+                                        label: "ALSA buffer size (frames, 0=default)",
+                                        value: settings.read().rs_player_settings.alsa_buffer_size.unwrap_or(0).to_string(),
+                                        min: "0",
+                                        max: "100000",
+                                        onchange: move |v: String| {
+                                            let n = v.parse::<u32>().unwrap_or(0);
+                                            settings.write().rs_player_settings.alsa_buffer_size = if n == 0 {
+                                                None
+                                            } else {
+                                                Some(n)
+                                            };
+                                            auto_save_restart();
+                                        },
+                                    }
+                                }
+                            } else {
+                                rsx! {}
+                            }
                         }
                         div { class: "form-control mb-2",
                             label { class: "label py-0.5",
@@ -505,7 +532,8 @@ pub fn SettingsPage() -> Element {
                             },
                             {
                                 let current = settings.read().volume_ctrl_settings.ctrl_device;
-                                VolumeCrtlType::iter()
+                                settings.read().available_volume_control_types.clone()
+                                    .into_iter()
                                     .map(move |vt| {
                                         let label: &'static str = vt.into();
                                         rsx! {
@@ -986,11 +1014,12 @@ fn MusicLibraryContent(
 
     rsx! {
         // Existing network mounts with status badge
-        {
-            let mounts = settings.read().network_storage_settings.mounts.clone();
-            mounts
-                .into_iter()
-                .map(|m| {
+        if settings.read().network_mounts_available {
+            {
+                let mounts = settings.read().network_storage_settings.mounts.clone();
+                mounts
+                    .into_iter()
+                    .map(|m| {
                     let name = m.name.clone();
                     let name2 = m.name.clone();
                     let name3 = m.name.clone();
@@ -1057,6 +1086,7 @@ fn MusicLibraryContent(
                         }
                     }
                 })
+            }
         }
 
         // Local directories (excluding network mount points) with status badge
@@ -1139,7 +1169,8 @@ fn MusicLibraryContent(
         }
 
         // Collapsible Network Mounts subsection
-        div { class: "mt-3",
+        if settings.read().network_mounts_available {
+            div { class: "mt-3",
             div {
                 class: "flex items-center justify-between cursor-pointer select-none py-2 border-b border-base-300",
                 onclick: move |_| {
@@ -1285,9 +1316,10 @@ fn MusicLibraryContent(
                 }
             }
         }
+        }
 
         // Detected external network mounts
-        if !external_mounts.is_empty() {
+        if settings.read().network_mounts_available && !external_mounts.is_empty() {
             div { class: "mt-3 p-3 rounded border border-info bg-info/10",
                 p { class: "text-sm font-medium mb-1", "Detected External Network Mounts" }
                 p { class: "text-xs text-base-content/60 mb-3",

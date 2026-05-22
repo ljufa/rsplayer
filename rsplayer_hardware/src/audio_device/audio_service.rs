@@ -1,3 +1,4 @@
+use std::sync::atomic::AtomicU8;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -7,6 +8,7 @@ use rsplayer_config::ArcConfiguration;
 
 #[cfg(feature = "alsa")]
 use super::alsa::AlsaMixer;
+use super::software_gain::SoftwareGainVolumeControlDevice;
 use super::VolumeControlDevice;
 
 pub type ArcAudioInterfaceSvc = Arc<AudioInterfaceService>;
@@ -25,7 +27,11 @@ use api_models::common::VolumeCrtlType;
 use crate::usb::ArcUsbService;
 
 impl AudioInterfaceService {
-    pub fn new(config: &ArcConfiguration, usb_service: Option<ArcUsbService>) -> Result<Self> {
+    pub fn new(
+        config: &ArcConfiguration,
+        usb_service: Option<ArcUsbService>,
+        software_gain_level: Arc<AtomicU8>,
+    ) -> Result<Self> {
         let settings = config.get_settings();
 
         #[cfg(feature = "alsa")]
@@ -67,6 +73,7 @@ impl AudioInterfaceService {
                     Box::new(NoOpVolumeControlDevice)
                 }
                 VolumeCrtlType::Pipewire => Box::new(PipewireVolumeControlDevice::new()),
+                VolumeCrtlType::Software => SoftwareGainVolumeControlDevice::new(software_gain_level),
                 VolumeCrtlType::Off => Box::new(NoOpVolumeControlDevice),
             }
         };

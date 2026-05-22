@@ -46,14 +46,12 @@ impl LoudnessRepository for FjallLoudnessRepository {
         bytes[1..5].copy_from_slice(&loudness.to_le_bytes());
         self.db
             .insert(file_key, bytes.as_ref())
-            .map(|_| ())
             .map_err(|e| RepoError::Storage(format!("save loudness for '{file_key}': {e}")))
     }
 
     fn save_unavailable(&self, file_key: &str) -> RepoResult<()> {
         self.db
             .insert(file_key, &[0x00u8][..])
-            .map(|_| ())
             .map_err(|e| RepoError::Storage(format!("save loudness sentinel for '{file_key}': {e}")))
     }
 

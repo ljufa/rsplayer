@@ -1,16 +1,17 @@
 # Installation
 
 ## Supported hardware and OS
-RSPlayer can be installed on Linux systems with the following CPU architectures:
+RSPlayer installation is fully supported on Linux, with experimental binary-only support for macOS:
 * [x] Linux amd64(x86_64-unknown-linux-gnu) - x86 Intel and AMD CPUs
 * [x] Linux aarch64(aarch64-unknown-linux-gnu) - ARM 64-bit CPUs: RPI 5, RPI 4 and other ARMv8 based boards
 * [x] Linux armv7(armv7-unknown-linux-gnueabihf) - ARM 32-bit CPUs: RPI 4 (32-bit), RPI 3, RPI 2
 * [x] Linux armv6(arm-unknown-linux-gnueabihf) - ARM 32-bit CPUs: RPI Zero, RPI Zero W, RPI 1
 * [x] Linux riscv64(riscv64gc-unknown-linux-gnu) - RISC-V 64-bit CPUs
+* [x] macOS aarch64(aarch64-apple-darwin) - Apple Silicon (experimental, binary only)
+* [x] macOS x86_64(x86_64-apple-darwin) - Intel Macs (experimental, binary only)
 * [ ] Android
 * [ ] Windows x86_64
 * [ ] Windows aarch64
-* [ ] MacOS
 * [ ] FreeBSD
 
 ## Install or upgrade
@@ -20,6 +21,8 @@ RSPlayer can be installed using one of two methods:
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)
 ```
 The installation script detects your Linux distribution (Debian/Ubuntu, Fedora/RHEL/CentOS, Arch/Manjaro) and installs the appropriate package type (.deb, .rpm, or .tgz tarball).
+
+?> macOS is currently binary-only and does not use the Linux package install script.
 
 * Manually download and install package
 The latest packages can be downloaded from [this page](https://github.com/ljufa/rsplayer/releases/latest). Available package types:
@@ -33,6 +36,20 @@ The latest packages can be downloaded from [this page](https://github.com/ljufa/
   - make it executable using `chmod +x rsplayer`
   - run using command `./rsplayer`
   - optionally if you need to run rsplayer automatically as a service use [this systemd service file](../PKGS/debian/etc/systemd/system/rsplayer.service)
+
+### macOS (experimental) quick run
+
+1. Download the binary artifact from the latest release:
+   - `rsplayer_darwin_arm64` for Apple Silicon
+   - `rsplayer_darwin_amd64` for Intel
+2. Rename it to `rsplayer` and make it executable:
+
+```bash
+chmod +x rsplayer
+./rsplayer
+```
+
+?> On macOS, network mount management, Linux power actions, and firmware USB integration are unavailable.
 
 ## Verify installation
 * Run systemd service by `sudo systemctl start rsplayer`

@@ -6,7 +6,7 @@ use rubato::{Fft, FixedSync, Resampler};
 use std::sync::Arc;
 use symphonia::core::audio::{AudioSpec, GenericAudioBufferRef};
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::time::Duration;
 
 /// Number of consecutive error callbacks before the stream is considered
@@ -21,6 +21,13 @@ use crate::rsp::dsd::DsdU32;
 use crate::rsp::vumeter::VUMeter;
 use rsplayer_dsp::DspHandle;
 use rsplayer_dsp::Equalizer;
+
+/// Cubic perceptual volume curve: `gain = (vol/100)^3`. vol=100 → 1.0 (unity).
+#[inline]
+fn cubic_gain(volume: u8) -> f32 {
+    let v = f32::from(volume.min(100)) / 100.0;
+    v * v * v
+}
 
 use symphonia::core::audio::conv::{ConvertibleSample, FromSample, IntoSample};
 use symphonia::core::audio::sample::Sample;
@@ -90,7 +97,7 @@ where
             }
         }
 
-        // VU metering.
+        // VU metering — read pre-volume so the meter reflects source amplitude.
         if let Some(ref mut vu) = vu_meter {
             if needs_channel_map {
                 vu.update_peaks(self.output_channels, &self.channel_buf);
@@ -99,7 +106,9 @@ where
             }
         }
 
-        // Push to ring buffer.
+        // Push to ring buffer. Software gain is applied post-ring-buffer
+        // in the cpal output callback so volume changes take effect within
+        // the cpal buffer latency rather than the ring_buffer_size_ms latency.
         let mut remaining: &[T] = if needs_channel_map {
             &self.channel_buf
         } else {
@@ -202,6 +211,7 @@ where
 
         // Re-interleave and convert to target sample type, mapping
         // channels if the device requires a different count (e.g. mono→stereo).
+        // Software volume gain is applied later in the cpal output callback.
         self.interleaved_out.clear();
         for frame in 0..out_frames {
             for ch in 0..self.output_channels {
@@ -268,6 +278,7 @@ impl AlsaOutput {
         is_dsd: bool,
         dsp_handle: Option<&DspHandle>,
         vu_meter: Option<VUMeter>,
+        software_gain: Option<Arc<AtomicU8>>,
     ) -> Result<AlsaOutput> {
         debug!("Spec: {spec:?}");
 
@@ -396,6 +407,7 @@ impl AlsaOutput {
                 device_rate,
                 device_channels,
                 explicit_buf,
+                software_gain.clone(),
             )
         } else {
             let mut r = Err(Error::msg("no buffer size tried"));
@@ -411,6 +423,7 @@ impl AlsaOutput {
                     device_rate,
                     device_channels,
                     *buf,
+                    software_gain.clone(),
                 );
                 if r.is_ok() {
                     break;
@@ -452,6 +465,7 @@ impl AlsaOutput {
                         Some(fallback_rate),
                         device_channels,
                         explicit_buf,
+                        software_gain.clone(),
                     );
                     if retry.is_ok() {
                         result = retry;
@@ -470,6 +484,7 @@ impl AlsaOutput {
                             Some(fallback_rate),
                             device_channels,
                             *buf,
+                            software_gain.clone(),
                         );
                         if retry.is_ok() {
                             result = retry;
@@ -495,6 +510,7 @@ impl AlsaOutput {
         device_rate: Option<u32>,
         device_channels: Option<u16>,
         buffer_size: cpal::BufferSize,
+        software_gain: Option<Arc<AtomicU8>>,
     ) -> Result<AlsaOutput> {
         let source_channels = spec.channels().count();
         let output_channels = device_channels.map_or(source_channels, |ch| ch as usize);
@@ -518,6 +534,7 @@ impl AlsaOutput {
                 let ring_buf = SpscRb::<$T>::new(ring_len);
                 let (producer, consumer) = (ring_buf.producer(), ring_buf.consumer());
                 let ec_data = error_count_clone.clone();
+                let gain_level = software_gain.clone();
                 let stream = device
                     .build_output_stream(
                         &config,
@@ -526,6 +543,19 @@ impl AlsaOutput {
                             data[written..]
                                 .iter_mut()
                                 .for_each(|s| *s = <$T as cpal::Sample>::EQUILIBRIUM);
+                            // Apply software volume gain after draining the ring buffer
+                            // so volume changes take effect within the cpal buffer
+                            // latency, not the ring_buffer_size_ms latency.
+                            if let Some(ref level) = gain_level {
+                                let vol = level.load(Ordering::Relaxed);
+                                if vol < 100 {
+                                    let g = cubic_gain(vol);
+                                    for s in &mut data[..written] {
+                                        let f: f32 = (*s).into_sample();
+                                        *s = (f * g).into_sample();
+                                    }
+                                }
+                            }
                             // Successful callback — reset transient error counter.
                             ec_data.store(0, Ordering::Relaxed);
                         },

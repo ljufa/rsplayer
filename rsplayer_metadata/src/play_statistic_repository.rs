@@ -63,7 +63,6 @@ impl PlayStatisticsRepository for FjallPlayStatisticsRepository {
             .map_err(|e| RepoError::Decode(format!("serialize stats for '{play_item_id}': {e}")))?;
         self.db
             .insert(&play_item_id, json.as_bytes())
-            .map(|_| ())
             .map_err(|e| RepoError::Storage(format!("save stats for '{play_item_id}': {e}")))
     }
 }

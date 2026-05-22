@@ -5,7 +5,7 @@
 ![](https://img.shields.io/github/license/ljufa/rsplayer?style=flat-square)
 ![](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=flat-square)
 # RSPlayer
-RSPlayer is an open-source, headless music server for Linux — run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser.
+RSPlayer is an open-source, headless music server primarily for Linux, with experimental macOS binaries — run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser.
 
 It runs as a systemd service and exposes a responsive web UI, making it a great fit for machines without a monitor or keyboard — but equally at home on a dedicated desktop audio PC. Hardware and DIY integrations (GPIO DAC control, custom firmware) are fully optional.
 
@@ -44,7 +44,7 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 - **Adjustable Playback Thread Priority**: Customize the priority of the playback thread up to a real-time rating of 99 via the settings page.
 - **Dedicated CPU Core for Playback**: By default, the playback thread is pinned to a single CPU core for optimized performance.
 - **Web UI Remote Control**: Manage your playback remotely with an intuitive web interface.
-- **Flexible Volume Control**: Control the volume using software (alsa mixer) or hardware control (Dac chip instructions via GPIO).
+- **Flexible Volume Control**: Choose ALSA mixer, PipeWire, or software gain volume control, with hardware control also supported via RSPlayer firmware integration.
 - **Written in Rust**: Enjoy the benefits of minimal dependencies and high performance, thanks to the Rust native implementation.
 - **Comprehensive Music Library Management**: Scan, search, and browse your music library and online radio stations with ease.
 - **Dynamic Playlists**: Automatically create dynamic playlists for personalized listening experiences.
@@ -76,7 +76,6 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 - **Expanded Audio Codec Support**: Compatibility with a wider range of audio codecs.
 - **Intelligent Dynamic Playlists**: Advanced dynamic playlists that adapt based on user likes or playback counts for a personalized listening experience.
 - **Windows Compatibility**: Development of a Windows build to extend platform support.
-- **MacOS Compatibility**: Development of a MacOS build to extend platform support.
 - **Music Recommendations**: Suggest similar tracks or artists based on listening history or current playback.
 - **Generate missing album cover image**: Auto-generate album art using album name.
 - **MPD protocol support**: Compatibility with MPD clients.
@@ -96,7 +95,7 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 
 ## Supported Platforms
 
-RSPlayer runs on Linux. The Deb, RPM, and Arch packages include a systemd service for automatic startup.
+RSPlayer is production-focused on Linux. The Deb, RPM, and Arch packages include a systemd service for automatic startup. Experimental macOS builds are binary-only.
 
 | Architecture | Rust Target | Binary | Deb | RPM | Arch | Docker |
 |---|---|---|---|---|---|---|
@@ -105,6 +104,28 @@ RSPlayer runs on Linux. The Deb, RPM, and Arch packages include a systemd servic
 | ARM64 (Pi 4 64-bit) | `aarch64-unknown-linux-gnu` | Yes | Yes | Yes | Yes | - |
 | x86_64 | `x86_64-unknown-linux-gnu` | Yes | Yes | Yes | Yes | Yes |
 | RISC-V 64 | `riscv64gc-unknown-linux-gnu` | Yes | Yes | Yes | Yes | - |
+| macOS Apple Silicon (experimental) | `aarch64-apple-darwin` | Yes | - | - | - | - |
+| macOS Intel (experimental) | `x86_64-apple-darwin` | Yes | - | - | - | - |
+
+### macOS (Apple Silicon + Intel) — experimental
+
+Core-playback builds for `aarch64-apple-darwin` and `x86_64-apple-darwin` are supported via cross-compilation from Linux. Audio output uses CoreAudio via `cpal`; the web UI works as on Linux.
+
+Current platform limitations on macOS:
+
+- Network share mounting/unmounting from RSPlayer UI is unavailable.
+- ALSA/PipeWire volume backends are unavailable (use software volume mode).
+- IR remote, system poweroff/reboot, and firmware USB integration are unavailable.
+
+To build from Linux:
+
+```bash
+TARGET=aarch64-apple-darwin cargo make build_release
+# or
+TARGET=x86_64-apple-darwin cargo make build_release
+```
+
+The resulting binary is at `target/cross/<target>/release/rsplayer` when local cross target-dir override is active.
 
 ## Installation
 To install RSPlayer, execute the following script (requires curl):

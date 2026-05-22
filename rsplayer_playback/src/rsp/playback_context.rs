@@ -13,6 +13,11 @@ pub struct PlaybackContext {
     pub skip_to_time: Arc<AtomicU16>,
     #[allow(dead_code)]
     pub current_volume: Arc<AtomicU8>,
+    /// Set when the user has selected `VolumeCrtlType::Software`; writers
+    /// apply cubic gain `(vol/100)^3` to PCM samples each chunk. `None` when
+    /// another volume control (ALSA mixer, Pipewire, hardware) is active so
+    /// audio passes through unattenuated.
+    pub software_gain: Option<Arc<AtomicU8>>,
     pub changes_tx: Sender<StateChangeEvent>,
     pub dsp_handle: Option<DspHandle>,
     pub vu_meter: Option<VUMeter>,
@@ -23,6 +28,7 @@ impl PlaybackContext {
         stop_signal: Arc<AtomicBool>,
         skip_to_time: Arc<AtomicU16>,
         current_volume: Arc<AtomicU8>,
+        software_gain: Option<Arc<AtomicU8>>,
         changes_tx: Sender<StateChangeEvent>,
         dsp_handle: Option<DspHandle>,
         vu_meter_enabled: bool,
@@ -37,6 +43,7 @@ impl PlaybackContext {
             stop_signal,
             skip_to_time,
             current_volume,
+            software_gain,
             changes_tx,
             dsp_handle,
             vu_meter,

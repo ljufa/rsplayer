@@ -1,4 +1,6 @@
 use std::fs;
+use std::net::{TcpStream, ToSocketAddrs};
+use std::time::Duration;
 
 use api_models::settings::{MetadataStoreSettings, NetworkMountConfig, NetworkMountType, NetworkStorageSettings};
 use api_models::state::{ExternalMount, MountStatus, MusicDirStatus};
@@ -7,6 +9,10 @@ use nix::mount::{mount, umount, MsFlags};
 use nix::unistd::{Gid, Uid};
 
 const MOUNT_BASE: &str = "/mnt/rsplayer";
+const NFS_IO_TIMEOUT_DECISECONDS: u32 = 50;
+const NFS_RETRIES: u32 = 2;
+const SMB_PORT: u16 = 445;
+const SMB_CONNECT_TIMEOUT_SECS: u64 = 3;
 
 pub struct MountService;
 
@@ -38,8 +44,16 @@ impl MountService {
         let uid = Uid::current();
         let gid = Gid::current();
 
+        Self::ensure_tcp_connectivity(
+            &config.server,
+            SMB_PORT,
+            Duration::from_secs(SMB_CONNECT_TIMEOUT_SECS),
+        )?;
+
         let options = config.username.as_deref().filter(|u| !u.is_empty()).map_or_else(
-            || format!("user=,pass=,sec=none,uid={uid},gid={gid},file_mode=0644,dir_mode=0755"),
+            || format!(
+                "user=,pass=,sec=none,uid={uid},gid={gid},file_mode=0644,dir_mode=0755,soft"
+            ),
             |username| {
                 let password = config.password.as_deref().unwrap_or("");
                 let domain_opt = config
@@ -48,7 +62,7 @@ impl MountService {
                     .filter(|d| !d.is_empty())
                     .map_or(String::new(), |d| format!(",domain={d}"));
                 format!(
-                    "username={username},password={password}{domain_opt},uid={uid},gid={gid},file_mode=0644,dir_mode=0755"
+                    "username={username},password={password}{domain_opt},uid={uid},gid={gid},file_mode=0644,dir_mode=0755,soft"
                 )
             },
         );
@@ -74,9 +88,40 @@ impl MountService {
         }
     }
 
+    fn ensure_tcp_connectivity(server: &str, port: u16, timeout: Duration) -> Result<(), String> {
+        let addrs: Vec<_> = (server, port)
+            .to_socket_addrs()
+            .map_err(|e| format!("Failed to resolve {server}:{port}: {e}"))?
+            .collect();
+
+        if addrs.is_empty() {
+            return Err(format!("No addresses resolved for {server}:{port}"));
+        }
+
+        let mut last_err = String::new();
+        for addr in addrs {
+            match TcpStream::connect_timeout(&addr, timeout) {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    last_err = format!("{addr}: {e}");
+                }
+            }
+        }
+
+        Err(format!(
+            "SMB server {server}:{port} is unreachable (timeout {}s): {last_err}",
+            timeout.as_secs()
+        ))
+    }
+
     fn mount_nfs(config: &NetworkMountConfig, mount_point: &str) -> Result<(), String> {
         let source = format!("{}:{}", config.server, config.share);
-        let options = format!("addr={},nolock", config.server);
+        let options = format!(
+            "addr={},nolock,soft,timeo={},retrans={}",
+            config.server, NFS_IO_TIMEOUT_DECISECONDS, NFS_RETRIES
+        );
+
+        info!("Mount: {source} with options: {options}");
 
         let nfs4_result = mount(
             Some(source.as_str()),

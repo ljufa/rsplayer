@@ -1,8 +1,16 @@
-# Local Linux Cross-Build for Raspberry Pi
+# Local Linux Cross-Build
 
-This document provides instructions on how to perform a local cross-build of the `rsplayer` application for a Raspberry Pi 4 (64-bit) on a Linux host machine.
+This document describes how to cross-build the `rsplayer` backend from a Linux host for Linux and macOS targets.
 
-The primary target for Raspberry Pi 4 is `aarch64-unknown-linux-gnu`.
+Common targets:
+
+- `arm-unknown-linux-gnueabihf` (ARMv6)
+- `armv7-unknown-linux-gnueabihf` (ARMv7)
+- `aarch64-unknown-linux-gnu` (ARM64 Linux)
+- `x86_64-unknown-linux-gnu`
+- `riscv64gc-unknown-linux-gnu`
+- `aarch64-apple-darwin` (macOS Apple Silicon, experimental)
+- `x86_64-apple-darwin` (macOS Intel, experimental)
 
 ## Prerequisites
 
@@ -28,7 +36,7 @@ The `cross` tool uses a container engine to manage the cross-compilation environ
 
 ### 3. Cargo Build Tools
 
-Install the necessary cargo tools for building the application and Debian package:
+Install the necessary cargo tools for building the application and Linux packages:
 ```bash
 cargo install cross
 cargo install cargo-deb
@@ -90,7 +98,7 @@ npx tailwindcss -i input.css -o public/tw.css --minify
 
 The build is orchestrated using `cargo-make`. Build the frontend release first, then the backend.
 
-1. **Set the target architecture** in `Makefile.toml`. Possible values are listed in `.cargo/config.toml`. For a 64-bit Raspberry Pi 4:
+1. **Set the target architecture** in `Makefile.toml` (or pass it via env). For example, a 64-bit Raspberry Pi 4 target:
     ```
     TARGET="aarch64-unknown-linux-gnu"
     ```
@@ -103,19 +111,35 @@ The build is orchestrated using `cargo-make`. Build the frontend release first, 
     # Build the backend application using cross-compilation
     cargo make build_release
 
-    # Copy binary to target device (Optional)
-    # Adjust RPI_HOST=xxx.xxx.xxx.xx (local ip)
+    # Copy binary to target device (Optional, Linux targets)
+    # Adjust TARGET_HOST=xxx.xxx.xxx.xx in Makefile.toml
     cargo make copy_remote
 
     # Create the .deb package (Optional)
     cargo make package_deb_release
     ```
 
+### macOS targets
+
+For macOS builds from Linux, use one of the darwin targets:
+
+```bash
+TARGET=aarch64-apple-darwin cargo make build_release
+# or
+TARGET=x86_64-apple-darwin cargo make build_release
+```
+
+Darwin release output is binary-only (no `.deb`, `.rpm`, `.tgz` packaging).
+
 ## Output
 
-After a successful build, the Debian package will be located in the following directory:
+After a successful build, Linux packages and binaries are located under the target output directories:
 
 `target/${TARGET}/debian/`
 `target/${TARGET}/release/`
+
+When local `cargo-make` cross target-dir override is active, artifacts are under:
+
+`target/cross/${TARGET}/release/`
 
 For example: `target/aarch64-unknown-linux-gnu/debian/rsplayer_1.0.3_arm64.deb`

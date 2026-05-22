@@ -1,5 +1,66 @@
 # Release Notes
 
+## v3.5.0 — 2026-05-22
+
+### New Features
+
+#### macOS Build Target Support (Apple Silicon + Intel)
+
+RSPlayer now has cross-compilation targets for macOS:
+
+- `aarch64-apple-darwin`
+- `x86_64-apple-darwin`
+
+Build and release pipeline support was added across `Cross.toml`, custom cross Docker images, and GitHub Actions. Tag releases now produce darwin binary artifacts alongside Linux outputs.
+
+### Improvements
+
+#### Software Volume Control Path
+
+A new software volume backend (`VolumeCrtlType::Software`) was added and integrated end-to-end:
+
+- New software gain volume device with `0..100` range and 5-step increments.
+- Software volume level is shared via atomic state and initialized from saved settings at startup.
+- PCM attenuation is applied in the output callback using a perceptual cubic curve `(vol/100)^3`, so volume changes take effect with output-buffer latency instead of ring-buffer latency.
+- Volume-control options are now platform-aware in settings. Linux keeps ALSA/Pipewire/software/off options (based on build features); non-ALSA builds expose software/off.
+
+#### Non-Linux Audio Device and Settings UX
+
+- Backend now enumerates output devices via `cpal` when ALSA is not enabled and exposes a stable `System Default` output entry.
+- Settings UI now consumes backend-provided available volume control types instead of hardcoded enum iteration.
+- ALSA-only controls (for example, ALSA buffer size) are hidden when ALSA is unavailable.
+- Changing audio card now auto-selects the first PCM device to avoid empty output-device names.
+
+#### CI/CD and Tooling for Darwin Targets
+
+- Added darwin targets to release workflow matrix.
+- Linux packaging remains unchanged (`.deb`, `.rpm`, `.tgz`), while darwin targets publish binary artifacts only.
+- Added two new builder-image jobs in `build-images.yml`:
+  - `rsplayer-cross-aarch64-apple-darwin`
+  - `rsplayer-cross-x86_64-apple-darwin`
+- `build_release` now applies `--no-default-features` only for darwin targets.
+
+### Bug Fixes
+
+#### Network Mount Responsiveness on Unavailable Shares
+
+Network-mount behavior was hardened to avoid long blocking stalls when remote storage is unavailable:
+
+- NFS mounts now use bounded retry/timeout options (`soft,timeo=50,retrans=2`).
+- SMB mounts now preflight TCP connectivity to port 445 with a short timeout and mount with `soft` behavior.
+
+These changes significantly reduce the time spent waiting on unreachable network shares and improve overall player responsiveness.
+
+#### Platform Compatibility and Runtime Safety
+
+- Mount service is now Linux-specific, with a non-Linux stub implementation to keep non-Linux builds functional.
+- Network mount management UI is hidden when mounts are not supported by the running platform.
+- Poweroff/reboot commands now return a user-facing error notification on non-Linux platforms instead of attempting unsupported system commands.
+- Rustls provider initialization was made explicit (`ring` default provider install) to match `axum-server` TLS configuration.
+- Database persistence on shutdown was tightened from `SyncData` to `SyncAll`.
+
+---
+
 ## v3.1.0 — 2026-05-15
 
 ### Bug Fixes

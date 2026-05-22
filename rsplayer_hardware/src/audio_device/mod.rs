@@ -5,6 +5,7 @@ pub mod alsa;
 pub mod audio_service;
 pub mod pipewire;
 pub mod rsp_firmware;
+pub mod software_gain;
 
 pub trait VolumeControlDevice {
     fn vol_up(&mut self) -> Volume;

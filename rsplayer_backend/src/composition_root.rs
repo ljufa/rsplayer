@@ -1,3 +1,4 @@
+use std::sync::atomic::AtomicU8;
 use std::sync::Arc;
 
 use log::{error, info};
@@ -102,7 +103,19 @@ pub fn build(config: ArcConfiguration, shared_db: Arc<fjall::Database>) -> Build
         None
     };
 
-    let audio_service: ArcAudioInterfaceSvc = match AudioInterfaceService::new(&config, usb_service.clone()) {
+    // Shared volume state. Initialized from the saved volume so software-gain
+    // playback starts at the user's last setting rather than zero. Updated by
+    // VolumeChangeEvent in `PlayerService` and read by the playback writers
+    // when `VolumeCrtlType::Software` is active.
+    let initial_volume = config
+        .get_settings()
+        .volume_ctrl_settings
+        .saved_volume
+        .unwrap_or(0);
+    let current_volume = Arc::new(AtomicU8::new(initial_volume));
+
+    let audio_service: ArcAudioInterfaceSvc =
+        match AudioInterfaceService::new(&config, usb_service.clone(), current_volume.clone()) {
         Ok(s) => Arc::new(s),
         Err(e) => {
             error!("Audio service interface can't be created. error: {e}");
@@ -130,6 +143,7 @@ pub fn build(config: ArcConfiguration, shared_db: Arc<fjall::Database>) -> Build
     let player_service = Arc::new(PlayerService::new(
         &shared_db,
         &config.get_settings(),
+        current_volume,
         metadata_service.clone(),
         queue_service.clone(),
         state_changes_tx.clone(),

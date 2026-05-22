@@ -225,7 +225,6 @@ impl AlbumRepository for FjallAlbumRepository {
                     return self
                         .albums_db
                         .insert(key.as_bytes(), album.to_json_string_bytes())
-                        .map(|_| ())
                         .map_err(|e| RepoError::Storage(format!("write album '{}': {e}", album.title)));
                 }
                 return Ok(());
@@ -291,7 +290,6 @@ impl AlbumRepository for FjallAlbumRepository {
         album.added = song.file_date;
         self.albums_db
             .insert(key.as_bytes(), album.to_json_string_bytes())
-            .map(|_| ())
             .map_err(|e| RepoError::Storage(format!("write album '{}': {e}", album.title)))
     }
 }

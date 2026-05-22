@@ -21,6 +21,8 @@ mod command_context;
 mod command_handler;
 mod composition_root;
 mod metadata_commands;
+#[cfg_attr(target_os = "linux", path = "mount_service_linux.rs")]
+#[cfg_attr(not(target_os = "linux"), path = "mount_service_stub.rs")]
 mod mount_service;
 mod player_commands;
 mod playlist_commands;
@@ -32,6 +34,9 @@ mod system_commands;
 #[allow(clippy::redundant_pub_crate, clippy::too_many_lines)]
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("failed to install rustls crypto provider");
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     #[cfg(feature = "console-subscriber")]
     console_subscriber::ConsoleLayer::builder()
@@ -198,7 +203,7 @@ async fn run(container: Box<AppContainer>, mut term_signal: Signal) {
 
 fn persist_db_on_shutdown(db: &fjall::Database) {
     info!("Persisting database to WAL...");
-    let _ = db.persist(PersistMode::SyncData);
+    let _ = db.persist(PersistMode::SyncAll);
 }
 
 #[allow(clippy::redundant_pub_crate)]

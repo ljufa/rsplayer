@@ -31,6 +31,7 @@ pub struct PlayerService {
     skip_to_time: Arc<AtomicU16>,
     last_known_time: Arc<AtomicU32>,
     current_volume: Arc<AtomicU8>,
+    software_gain_active: bool,
     audio_device: String,
     rsp_settings: RsPlayerSettings,
     local_browser_playback: bool,
@@ -48,6 +49,7 @@ impl PlayerService {
     pub fn new(
         db: &Database,
         settings: &Settings,
+        current_volume: Arc<AtomicU8>,
         metadata_service: Arc<MetadataService>,
         queue_service: Arc<QueueService>,
         state_changes_tx: Sender<StateChangeEvent>,
@@ -69,8 +71,9 @@ impl PlayerService {
         };
         let last_known_time = Arc::new(AtomicU32::new(initial_time));
         let last_known_time_clone = last_known_time.clone();
-        let current_volume = Arc::new(AtomicU8::new(0));
         let current_volume_clone = current_volume.clone();
+        let software_gain_active =
+            settings.volume_ctrl_settings.ctrl_device == api_models::common::VolumeCrtlType::Software;
         let dsp_processor = Arc::new(Mutex::new({
             let rsp = &settings.rs_player_settings;
             if rsp.dsp_settings.enabled || rsp.loudness_normalization_enabled {
@@ -160,6 +163,7 @@ impl PlayerService {
             skip_to_time: Arc::new(AtomicU16::new(0)),
             last_known_time,
             current_volume,
+            software_gain_active,
             audio_device: settings.alsa_settings.output_device.name.clone(),
             rsp_settings: settings.rs_player_settings.clone(),
             local_browser_playback: settings.local_browser_playback,
@@ -263,6 +267,11 @@ impl PlayerService {
             .ok()
             .and_then(|g| g.as_ref().map(DspProcessor::handle));
         let current_volume = self.current_volume.clone();
+        let software_gain = if self.software_gain_active {
+            Some(current_volume.clone())
+        } else {
+            None
+        };
         let vu_meter_enabled = self.rsp_settings.vu_meter_enabled;
         let loudness_service = self.loudness_service.clone();
         let is_multi_core_platform = core_affinity::get_core_ids().is_some_and(|ids| ids.len() > 1);
@@ -388,6 +397,7 @@ impl PlayerService {
                         stop_signal.clone(),
                         skip_to_time.clone(),
                         current_volume.clone(),
+                        software_gain.clone(),
                         changes_tx.clone(),
                         dsp_handle.clone(),
                         vu_meter_enabled,

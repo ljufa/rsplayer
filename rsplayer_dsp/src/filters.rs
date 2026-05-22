@@ -60,7 +60,7 @@ impl BiquadCoefficients {
     }
 
     /// Compute biquad coefficients from filter parameters.
-    /// Formulas from the Audio EQ Cookbook (R. Bristow-Johnson) and CamillaDSP.
+    /// Formulas from the Audio EQ Cookbook (R. Bristow-Johnson) and `CamillaDSP`.
     pub fn from_config(fs: usize, params: BiquadParameters) -> Self {
         let fs = fs as f32;
         match params {
@@ -70,7 +70,7 @@ impl BiquadCoefficients {
                 let alpha = w.sin() / (2.0 * q);
                 Self::normalize(
                     1.0 + alpha, -2.0 * cs, 1.0 - alpha,
-                    (1.0 + cs) / 2.0, -(1.0 + cs), (1.0 + cs) / 2.0,
+                    f32::midpoint(1.0, cs), -(1.0 + cs), f32::midpoint(1.0, cs),
                 )
             }
             BiquadParameters::Lowpass { freq, q } => {
@@ -128,12 +128,12 @@ impl BiquadCoefficients {
                 let a = 10.0_f32.powf(gain / 40.0);
                 let beta = sn * a.sqrt() / q;
                 Self::normalize(
-                    (a + 1.0) - (a - 1.0) * cs + beta,
-                    2.0 * ((a - 1.0) - (a + 1.0) * cs),
-                    (a + 1.0) - (a - 1.0) * cs - beta,
-                    a * ((a + 1.0) + (a - 1.0) * cs + beta),
-                    -2.0 * a * ((a - 1.0) + (a + 1.0) * cs),
-                    a * ((a + 1.0) + (a - 1.0) * cs - beta),
+                    (a - 1.0).mul_add(-cs, a + 1.0) + beta,
+                    2.0 * (a + 1.0).mul_add(-cs, a - 1.0),
+                    (a - 1.0).mul_add(-cs, a + 1.0) - beta,
+                    a * ((a - 1.0).mul_add(cs, a + 1.0) + beta),
+                    -2.0 * a * (a + 1.0).mul_add(cs, a - 1.0),
+                    a * ((a - 1.0).mul_add(cs, a + 1.0) - beta),
                 )
             }
             BiquadParameters::Highshelf(config::ShelfSteepness::Slope { freq, slope, gain }) => {
@@ -141,15 +141,15 @@ impl BiquadCoefficients {
                 let sn = w.sin();
                 let cs = w.cos();
                 let a = 10.0_f32.powf(gain / 40.0);
-                let alpha = sn / 2.0 * ((a + 1.0 / a) * (1.0 / (slope / 12.0) - 1.0) + 2.0).sqrt();
+                let alpha = sn / 2.0 * (a + 1.0 / a).mul_add(1.0 / (slope / 12.0) - 1.0, 2.0).sqrt();
                 let beta = 2.0 * a.sqrt() * alpha;
                 Self::normalize(
-                    (a + 1.0) - (a - 1.0) * cs + beta,
-                    2.0 * ((a - 1.0) - (a + 1.0) * cs),
-                    (a + 1.0) - (a - 1.0) * cs - beta,
-                    a * ((a + 1.0) + (a - 1.0) * cs + beta),
-                    -2.0 * a * ((a - 1.0) + (a + 1.0) * cs),
-                    a * ((a + 1.0) + (a - 1.0) * cs - beta),
+                    (a - 1.0).mul_add(-cs, a + 1.0) + beta,
+                    2.0 * (a + 1.0).mul_add(-cs, a - 1.0),
+                    (a - 1.0).mul_add(-cs, a + 1.0) - beta,
+                    a * ((a - 1.0).mul_add(cs, a + 1.0) + beta),
+                    -2.0 * a * (a + 1.0).mul_add(cs, a - 1.0),
+                    a * ((a - 1.0).mul_add(cs, a + 1.0) - beta),
                 )
             }
             BiquadParameters::Lowshelf(config::ShelfSteepness::Q { freq, q, gain }) => {
@@ -159,12 +159,12 @@ impl BiquadCoefficients {
                 let a = 10.0_f32.powf(gain / 40.0);
                 let beta = sn * a.sqrt() / q;
                 Self::normalize(
-                    (a + 1.0) + (a - 1.0) * cs + beta,
-                    -2.0 * ((a - 1.0) + (a + 1.0) * cs),
-                    (a + 1.0) + (a - 1.0) * cs - beta,
-                    a * ((a + 1.0) - (a - 1.0) * cs + beta),
-                    2.0 * a * ((a - 1.0) - (a + 1.0) * cs),
-                    a * ((a + 1.0) - (a - 1.0) * cs - beta),
+                    (a - 1.0).mul_add(cs, a + 1.0) + beta,
+                    -2.0 * (a + 1.0).mul_add(cs, a - 1.0),
+                    (a - 1.0).mul_add(cs, a + 1.0) - beta,
+                    a * ((a - 1.0).mul_add(-cs, a + 1.0) + beta),
+                    2.0 * a * (a + 1.0).mul_add(-cs, a - 1.0),
+                    a * ((a - 1.0).mul_add(-cs, a + 1.0) - beta),
                 )
             }
             BiquadParameters::Lowshelf(config::ShelfSteepness::Slope { freq, slope, gain }) => {
@@ -172,15 +172,15 @@ impl BiquadCoefficients {
                 let sn = w.sin();
                 let cs = w.cos();
                 let a = 10.0_f32.powf(gain / 40.0);
-                let alpha = sn / 2.0 * ((a + 1.0 / a) * (1.0 / (slope / 12.0) - 1.0) + 2.0).sqrt();
+                let alpha = sn / 2.0 * (a + 1.0 / a).mul_add(1.0 / (slope / 12.0) - 1.0, 2.0).sqrt();
                 let beta = 2.0 * a.sqrt() * alpha;
                 Self::normalize(
-                    (a + 1.0) + (a - 1.0) * cs + beta,
-                    -2.0 * ((a - 1.0) + (a + 1.0) * cs),
-                    (a + 1.0) + (a - 1.0) * cs - beta,
-                    a * ((a + 1.0) - (a - 1.0) * cs + beta),
-                    2.0 * a * ((a - 1.0) - (a + 1.0) * cs),
-                    a * ((a + 1.0) - (a - 1.0) * cs - beta),
+                    (a - 1.0).mul_add(cs, a + 1.0) + beta,
+                    -2.0 * (a + 1.0).mul_add(cs, a - 1.0),
+                    (a - 1.0).mul_add(cs, a + 1.0) - beta,
+                    a * ((a - 1.0).mul_add(-cs, a + 1.0) + beta),
+                    2.0 * a * (a + 1.0).mul_add(-cs, a - 1.0),
+                    a * ((a - 1.0).mul_add(-cs, a + 1.0) - beta),
                 )
             }
             BiquadParameters::LowpassFO { freq } => {
@@ -199,7 +199,7 @@ impl BiquadCoefficients {
                 let w = 2.0 * PI * freq / fs;
                 let tn = (w / 2.0).tan();
                 let a = 10.0_f32.powf(gain / 40.0);
-                Self::normalize(tn + a, tn - a, 0.0, a * a * tn + a, a * a * tn - a, 0.0)
+                Self::normalize(tn + a, tn - a, 0.0, (a * a).mul_add(tn, a), (a * a).mul_add(tn, -a), 0.0)
             }
             BiquadParameters::HighshelfFO { freq, gain } => {
                 let w = 2.0 * PI * freq / fs;
@@ -212,7 +212,7 @@ impl BiquadCoefficients {
                 let d1i = (2.0 * PI * freq_act) / q_act;
                 let c0i = (2.0 * PI * freq_target).powi(2);
                 let c1i = (2.0 * PI * freq_target) / q_target;
-                let fc = (freq_target + freq_act) / 2.0;
+                let fc = f32::midpoint(freq_target, freq_act);
                 let gn = 2.0 * PI * fc / (PI * fc / fs).tan();
                 let gn2 = gn.powi(2);
                 let cci = c0i + gn * c1i + gn2;
@@ -236,16 +236,16 @@ pub struct Biquad {
 }
 
 impl Biquad {
-    pub fn new(_name: &str, samplerate: usize, coefficients: BiquadCoefficients) -> Self {
+    pub const fn new(_name: &str, samplerate: usize, coefficients: BiquadCoefficients) -> Self {
         let _ = samplerate;
         Self { s1: 0.0, s2: 0.0, coeffs: coefficients }
     }
 
     #[inline]
     fn process_single(&mut self, x: f32) -> f32 {
-        let y = self.s1 + self.coeffs.b0 * x;
-        self.s1 = self.s2 + self.coeffs.b1 * x - self.coeffs.a1 * y;
-        self.s2 = self.coeffs.b2 * x - self.coeffs.a2 * y;
+        let y = self.coeffs.b0.mul_add(x, self.s1);
+        self.s1 = self.coeffs.a1.mul_add(-y, self.coeffs.b1.mul_add(x, self.s2));
+        self.s2 = self.coeffs.b2.mul_add(x, -(self.coeffs.a2 * y));
         y
     }
 }
@@ -269,7 +269,7 @@ pub struct Gain {
 }
 
 impl Gain {
-    /// `gain_db` in dB; `inverted`, `mute`, `linear` match CamillaDSP's Gain::new signature.
+    /// `gain_db` in dB; `inverted`, `mute`, `linear` match `CamillaDSP`'s `Gain::new` signature.
     pub fn new(_name: &str, gain_db: f32, inverted: bool, mute: bool, linear: bool) -> Self {
         let mut g = if linear { gain_db } else { 10.0_f32.powf(gain_db / 20.0) };
         if inverted { g = -g; }

@@ -10,6 +10,10 @@ pub struct Settings {
     #[validate(nested)]
     pub alsa_settings: AlsaSettings,
     #[serde(default)]
+    pub available_volume_control_types: Vec<VolumeCrtlType>,
+    #[serde(default)]
+    pub network_mounts_available: bool,
+    #[serde(default)]
     pub auto_resume_playback: bool,
     pub metadata_settings: MetadataStoreSettings,
     pub playback_queue_settings: PlaybackQueueSetting,
@@ -393,6 +397,8 @@ impl Default for Settings {
                 output_device: PcmOutputDevice::default(),
                 available_audio_cards: vec![],
             },
+            available_volume_control_types: Vec::new(),
+            network_mounts_available: false,
             playlist_settings: PlaylistSetting::default(),
             rs_player_settings: RsPlayerSettings::default(),
             usb_settings: UsbCmdChannelSettings::default(),

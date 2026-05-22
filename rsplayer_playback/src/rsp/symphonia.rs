@@ -218,7 +218,7 @@ pub fn play_file(
                     let spec_channels = spec.channels().count();
 
                     let host = cpal::default_host();
-                    let device = if config.audio_device == "default" {
+                    let device = if config.audio_device.is_empty() || config.audio_device == "default" {
                         host.default_output_device()
                             .ok_or_else(|| format_err!("Default audio device not found!"))?
                     } else {
@@ -239,6 +239,7 @@ pub fn play_file(
                         is_dsd,
                         context.dsp_handle.as_ref(),
                         vu_meter.take(),
+                        context.software_gain.clone(),
                     ) else {
                         if caps.rate.is_none() {
                             let fallback_rates = DeviceCapabilities::fallback_rates(&caps, &device, spec_rate);
@@ -257,6 +258,7 @@ pub fn play_file(
                                     is_dsd,
                                     context.dsp_handle.as_ref(),
                                     vu_meter.take(),
+                                    context.software_gain.clone(),
                                 ) {
                                     debug!("Audio opened with fallback rate");
                                     audio_output.replace(audio_out);

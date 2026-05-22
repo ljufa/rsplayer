@@ -71,6 +71,8 @@ The top section displays information about the currently playing track:
 - Slider for precise volume adjustment
 - Percentage display
 
+?> Depending on platform/settings, volume control may use ALSA mixer, PipeWire, or RSPlayer software gain mode.
+
 ### Keyboard Shortcuts
 
 | Key | Action |

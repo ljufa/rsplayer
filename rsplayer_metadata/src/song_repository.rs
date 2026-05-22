@@ -43,7 +43,6 @@ impl SongRepository for FjallSongRepository {
     fn delete(&self, id: &str) -> RepoResult<()> {
         self.songs_db
             .remove(id)
-            .map(|_| ())
             .map_err(|e| RepoError::Storage(format!("delete song '{id}': {e}")))
     }
 

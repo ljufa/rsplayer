@@ -87,9 +87,11 @@ pub struct AudioCard {
 )]
 pub enum VolumeCrtlType {
     Off,
-    #[default]
+    #[cfg_attr(target_os = "linux", default)]
     Alsa,
     Pipewire,
+    #[cfg_attr(not(target_os = "linux"), default)]
+    Software,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

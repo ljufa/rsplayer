@@ -16,6 +16,9 @@ To configure `rsplayer`, navigate to the settings page in the web UI. Settings a
 
 - **Audio interface:** Selects the primary audio device for playback. Options include your available ALSA hardware cards, a `Pipewire` virtual card (if `wpctl` is installed on the host), or `Local Browser Playback` for streaming audio directly to your device's web browser.
 - **PCM Device:** Choose the specific PCM device for the selected audio interface (hidden if Local Browser Playback is selected).
+- **Volume control type:** Select the volume backend used by RSPlayer. Available options are platform-dependent:
+  - Linux with ALSA support: `Off`, `Alsa`, `Pipewire`, `Software`
+  - Non-ALSA/non-Linux builds: `Off`, `Software`
 - **Alsa mixer:** When using an ALSA audio interface, selects the specific mixer control used for volume adjustment. Shown on the same row as Volume step.
 - **Volume step:** The amount to increase or decrease the volume with each step.
 - **Auto resume playback on start:** If enabled, `rsplayer` will automatically resume playback of the last track when it starts.
@@ -29,6 +32,8 @@ These settings are hidden under the **Advanced** collapsible inside the Playback
 - **Player thread priority:** The real-time priority of the player thread, from 1 to 99. Higher values reduce the risk of audio dropouts on loaded systems. (Hidden if Local Browser Playback is selected).
 - **Fixed output sample rate:** When set, RSPlayer resamples all audio to this rate regardless of the source or device capabilities. Leave at "Auto (recommended)" unless your DAC requires a fixed clock rate.
 - **Set alsa buffer frame size (Experimental!):** Manually override the ALSA hardware buffer frame size. (Hidden if Local Browser Playback is selected).
+
+?> **Software volume mode:** In `Software` volume mode, RSPlayer applies a perceptual gain curve in the output path, so volume changes are immediate and independent of hardware mixer support.
 
 ## Audio Processing
 
@@ -90,6 +95,8 @@ The Network Mounts section (collapsible) lets you mount remote SMB/CIFS or NFS s
 - **Remove:** Unmounts (if rsplayer-managed) and removes the share from the saved list.
 - **Detected Network Mounts:** Network filesystems already mounted on the system (e.g., via `/etc/fstab` or manually) are automatically detected and listed. Click "Save" to add them as music sources without re-mounting.
 
+?> Network mount management is available only on Linux builds. On non-Linux builds the Network Mounts UI is hidden.
+
 ## Hardware
 
 ![Hardware Settings](/_assets/settings_hardware.png)
@@ -99,7 +106,7 @@ The Network Mounts section (collapsible) lets you mount remote SMB/CIFS or NFS s
 - **Enable link with rsplayer firmware:** Enables communication over a USB serial connection with custom rsplayer firmware control boards.
 - **(When enabled):** Provides quick action buttons to **Power Off** or **Power On** the connected firmware hardware.
 
-?>**Note:** The Alsa mixer and Volume step fields are hidden when the USB firmware link is enabled — volume is managed by the firmware in that case. The control method (ALSA or Pipewire) is set automatically based on the selected audio interface.
+?>**Note:** The Alsa mixer and Volume step fields are hidden when the USB firmware link is enabled — volume is managed by the firmware in that case. On Linux, the control method is set automatically based on the selected audio interface; on non-Linux builds firmware integration is not available.
 
 ### Hardware Integration
 
@@ -121,3 +128,5 @@ Please refer to the documentation within these repositories for detailed guides 
 | Shutdown system | Power off the device |
 
 > **Note:** When DSP or other settings that require restart are changed, RSPlayer will prompt you to restart. If you navigate away from Settings with unapplied changes, a confirmation dialog will warn you.
+
+?> On non-Linux builds, system restart and shutdown actions are not supported and return a UI error notification.
