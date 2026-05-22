@@ -1,4 +1,6 @@
 *
 .*
+!docker/
+!docker/**
 !PKGS/debian/opt/rsplayer/self.*
 !rsplayer_amd64
