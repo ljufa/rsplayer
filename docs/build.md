@@ -60,10 +60,10 @@ sudo apt install nodejs npm
 
 ## Frontend Setup (one-time after clone)
 
-The frontend lives in `rsplayer_web_ui/`. Run once after cloning to install npm packages and copy font assets to `public/`:
+The frontend lives in `web-ui/`. Run once after cloning to install npm packages and copy font assets to `public/`:
 
 ```bash
-cd rsplayer_web_ui
+cd web-ui
 npm install
 ```
 
@@ -75,22 +75,22 @@ npm install
 
 The frontend is a Rust/WASM app built with the Dioxus framework.
 
-**Development** — served with hot-reload, proxies `/api` and `/artwork` to the backend on `localhost:8000`:
-```bash
-cd rsplayer_web_ui
-dx serve
-```
+All UI build commands run via `cargo make` from the repo root:
 
-**Release** — produces a self-contained output under `target/dx/rsplayer_web_ui/release/web/public/`, which is embedded into the backend binary at compile time:
+**Development** — served with hot-reload, proxies `/api` and `/artwork` to backend on `localhost:8000`:
 ```bash
-cd rsplayer_web_ui
-dx build --release --platform web
+cargo make serve_dev
+```
+Or manually: `cd web-ui && dx serve`
+
+**Release** — produces a self-contained output under `target/dx/rsplayer_web_ui/release/web/public/`, embedded into the backend binary at compile time:
+```bash
+cargo make build_ui_release
 ```
 
 **Updating CSS** — only needed when `input.css` is changed (Tailwind source):
 ```bash
-cd rsplayer_web_ui
-npx tailwindcss -i input.css -o public/tw.css --minify
+cargo make build_css
 # commit public/tw.css after regenerating
 ```
 
@@ -106,7 +106,7 @@ The build is orchestrated using `cargo-make`. Build the frontend release first, 
 2. **Run the build:**
     ```bash
     # Build the frontend (must be done before backend)
-    cd rsplayer_web_ui && dx build --release --platform web && cd ..
+    cargo make build_ui_release
 
     # Build the backend application using cross-compilation
     cargo make build_release

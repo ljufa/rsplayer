@@ -24,18 +24,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Install npm dependencies
-        working-directory: rsplayer_web_ui
+        working-directory: web-ui
         run: npm install
 
       - name: Build release
-        working-directory: rsplayer_web_ui
+        working-directory: web-ui
         run: dx build --release --platform web --debug-symbols false
 
       - name: Upload web public dir
         uses: actions/upload-artifact@v7
         with:
           name: web_ui
-          path: rsplayer_web_ui/target/dx/rsplayer_web_ui/release/web/public
+          path: web-ui/target/dx/rsplayer_web_ui/release/web/public
 
   build_backend:
     needs: build_ui
@@ -77,12 +77,13 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: web_ui
-          path: rsplayer_web_ui/target/dx/rsplayer_web_ui/release/web/public
+          path: web-ui/target/dx/rsplayer_web_ui/release/web/public
 
       - name: Build release binary
         env:
           TARGET: ${{ matrix.target }}
-        run: cargo make --env TARGET=$TARGET build_release
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: cargo make --env TARGET=$TARGET --env RELEASE_VERSION=$RELEASE_VERSION build_release
 
       - name: Upload binary
         uses: actions/upload-artifact@v7

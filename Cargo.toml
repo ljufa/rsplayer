@@ -1,15 +1,25 @@
 [workspace]
 members = [
-    "rsplayer_api_models",
-    "rsplayer_backend",
-    "rsplayer_config",
-    "rsplayer_dsp",
-    "rsplayer_hardware",
-    "rsplayer_metadata",
-    "rsplayer_playback",
-    "rsplayer_wire"
+    "crates/api_models",
+    "crates/server",
+    "crates/config",
+    "crates/dsp",
+    "crates/hardware",
+    "crates/metadata",
+    "crates/playback",
+    "crates/wire",
+    "web-ui",
 ]
-exclude = ["rsplayer_web_ui"]
+default-members = [
+    "crates/api_models",
+    "crates/server",
+    "crates/config",
+    "crates/dsp",
+    "crates/hardware",
+    "crates/metadata",
+    "crates/playback",
+    "crates/wire",
+]
 resolver = "2"
 
 [workspace.dependencies]
@@ -71,3 +81,8 @@ codegen-units = 1
 debug = 0
 debug-assertions = false
 strip = true
+lto = true
+
+[profile.release.package.rsplayer_web_ui]
+opt-level = "s"
+debug = false

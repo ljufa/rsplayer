@@ -1,0 +1,33 @@
+[package]
+name = "playback"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# local
+api_models = { path = "../api_models" }
+metadata = { path = "../metadata" }
+config = { path = "../config" }
+dsp = { path = "../dsp" }
+# general
+log.workspace = true
+env_logger.workspace = true
+anyhow.workspace = true
+symphonia.workspace = true
+cpal.workspace = true
+tokio.workspace = true
+thread-priority = "3"
+core_affinity = "0.8"
+fjall.workspace = true
+ureq.workspace = true
+serde_json.workspace = true
+rb = "0.4"
+rubato = "2"
+
+mockall_double = "0.3"
+
+[dev-dependencies]
+mockall = "0.14"
+random-string = "1"

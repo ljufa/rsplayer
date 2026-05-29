@@ -1,0 +1,11 @@
+[package]
+name = "dsp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log.workspace = true
+anyhow.workspace = true
+api_models = { path = "../api_models" }
+symphonia.workspace = true
+

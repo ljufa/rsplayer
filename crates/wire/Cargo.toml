@@ -1,0 +1,15 @@
+[package]
+name = "wire"
+version = "0.1.0"
+edition = "2021"
+description = "Shared wire protocol between rsplayer host and rsplayer_firmware (no_std)"
+
+[features]
+defmt = ["dep:defmt"]
+
+[dependencies]
+serde = { version = "1", default-features = false, features = ["derive"] }
+postcard = { version = "1", default-features = false }
+heapless = { version = "0.9", default-features = false, features = ["serde"] }
+strum = { version = "0.28", default-features = false, features = ["derive"] }
+defmt = { version = "1", optional = true }
