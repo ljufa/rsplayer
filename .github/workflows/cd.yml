@@ -29,7 +29,7 @@ jobs:
 
       - name: Build release
         working-directory: web-ui
-        run: dx build --release --platform web --debug-symbols false
+        run: dx build --release --platform web --debug-symbols false --package rsplayer_web_ui
 
       - name: Upload web public dir
         uses: actions/upload-artifact@v7
