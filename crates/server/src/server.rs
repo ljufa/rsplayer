@@ -43,7 +43,7 @@ type Config = Arc<Configuration>;
 type UserCommandSender = mpsc::Sender<UserCommand>;
 
 #[derive(RustEmbed)]
-#[folder = "../../web-ui/target/dx/rsplayer_web_ui/release/web/public"]
+#[folder = "../../target/dx/rsplayer_web_ui/release/web/public"]
 #[exclude = "index.html"]
 struct StaticContentDir;
 
