@@ -35,7 +35,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: web_ui
-          path: web-ui/target/dx/rsplayer_web_ui/release/web/public
+          path: target/dx/rsplayer_web_ui/release/web/public
 
   build_backend:
     needs: build_ui
@@ -77,7 +77,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: web_ui
-          path: web-ui/target/dx/rsplayer_web_ui/release/web/public
+          path: target/dx/rsplayer_web_ui/release/web/public
 
       - name: Build release binary
         env:

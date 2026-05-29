@@ -20,7 +20,7 @@ fn main() {
 
     let out_dir = env::var("OUT_DIR").unwrap();
 
-    let public_dir = Path::new("../../web-ui/target/dx/rsplayer_web_ui/release/web/public");
+    let public_dir = Path::new("../../target/dx/rsplayer_web_ui/release/web/public");
     let dx_index = public_dir.join("index.html");
 
     let index_html = if env::var("PROFILE").as_deref() == Ok("release") {
@@ -37,6 +37,6 @@ fn main() {
 
     println!("cargo:rerun-if-env-changed=RELEASE_VERSION");
     println!("cargo:rerun-if-changed={}", dx_index.display());
-    println!("cargo:rerun-if-changed=../../web-ui/target/dx/rsplayer_web_ui/release/web/public/tw.css");
+    println!("cargo:rerun-if-changed=../../target/dx/rsplayer_web_ui/release/web/public/tw.css");
     println!("cargo:rerun-if-changed=../../Makefile.toml");
 }
