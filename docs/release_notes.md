@@ -1,5 +1,25 @@
 # Release Notes
 
+## v3.5.5 — 2026-05-30
+
+### Bug Fixes
+
+#### Library/Artists — Orphaned Album Entries Left After File Deletion
+
+Removing music files from disk and running "Update Library" (incremental scan) left empty album entries in the artist view. The tracks were correctly removed from the database, but the album record was never cleaned up — albums with zero songs remained visible in the Library/Artists tree with no playable content.
+
+**Root cause:** When the scanner detected a file was deleted, it only removed the entry from the `songs` keyspace. The corresponding `albums` keyspace was never updated: the album's `song_keys` list retained the deleted track's file path, and albums that became empty were never deleted.
+
+**Fix (two parts):**
+
+1. **Per-track album cleanup during scan** — Before deleting a song from the database, the scanner now reads its metadata, removes the file path from the owning album's `song_keys`, and deletes the album entry if `song_keys` becomes empty. This handles all future incremental scans.
+
+2. **One-shot migration for existing databases** — On first startup after upgrading to 3.5.5, `MetadataService::new()` runs a migration that iterates every album in the database, strips any `song_keys` entries referencing songs that no longer exist, and removes albums that become empty. A persistent marker is stored in the `_migrations` keyspace so this runs exactly once.
+
+> ⚠️ **Action required:** The migration runs automatically on first startup. No manual rescan is needed — existing orphaned albums will be cleaned up immediately. Users who prefer to trigger a full rescan (Settings → Rescan — Full) will also see the same result.
+
+---
+
 ## v3.5.4 — 2026-05-29
 
 ### Internal / Architecture
