@@ -8,34 +8,40 @@ To configure `rsplayer`, navigate to the settings page in the web UI. Settings a
 
 ![Appearance Settings](/_assets/settings_appearance.png)
 
-- **Theme:** Select a visual theme for the web UI. Available themes: Dark, Light, Solarized, Dracula, Nord, Rose Pine, Ocean, Gruvbox, Catppuccin, and Hi-Contrast.
+- **Theme:** Select a visual theme for the web UI. Available themes: Dark, Light, Synthwave, Dracula, Nord, Dim, Aqua, Coffee, Caramel, and Black.
+- **Album art background:** Toggle whether the album artwork is used as the page background.
 
 ## Playback
 
 ![Playback Settings](/_assets/settings_playback.png)
 
 - **Audio interface:** Selects the primary audio device for playback. Options include your available ALSA hardware cards, a `Pipewire` virtual card (if `wpctl` is installed on the host), or `Local Browser Playback` for streaming audio directly to your device's web browser.
-- **PCM Device:** Choose the specific PCM device for the selected audio interface (hidden if Local Browser Playback is selected).
-- **Volume control type:** Select the volume backend used by RSPlayer. Available options are platform-dependent:
-  - Linux with ALSA support: `Off`, `Alsa`, `Pipewire`, `Software`
-  - Non-ALSA/non-Linux builds: `Off`, `Software`
-- **Alsa mixer:** When using an ALSA audio interface, selects the specific mixer control used for volume adjustment. Shown on the same row as Volume step.
-- **Volume step:** The amount to increase or decrease the volume with each step.
-- **Auto resume playback on start:** If enabled, `rsplayer` will automatically resume playback of the last track when it starts.
+- **PCM output device:** Choose the specific PCM device for the selected audio interface (hidden if Local Browser Playback is selected).
+- **Auto-resume playback on startup:** If enabled, `rsplayer` will automatically resume playback of the last track when it starts.
 
 ### Advanced
 
 These settings are hidden under the **Advanced** collapsible inside the Playback section. Defaults work well for most setups.
 
-- **Input buffer size (MB):** The size of the buffer for audio data read from disk or network, in megabytes (1-200). (Hidden if Local Browser Playback is selected).
-- **Ring buffer size (ms):** The size of the ring buffer between the decoder and the ALSA output stream, in milliseconds (1-10000). (Hidden if Local Browser Playback is selected).
-- **Player thread priority:** The real-time priority of the player thread, from 1 to 99. Higher values reduce the risk of audio dropouts on loaded systems. (Hidden if Local Browser Playback is selected).
+- **Input buffer (MB):** The size of the buffer for audio data read from disk or network, in megabytes (1-200). (Hidden if Local Browser Playback is selected).
+- **Ring buffer (ms):** The size of the ring buffer between the decoder and the ALSA output stream, in milliseconds (1-10000). (Hidden if Local Browser Playback is selected).
+- **Thread priority (1-99):** The real-time priority of the player thread, from 1 to 99. Higher values reduce the risk of audio dropouts on loaded systems. (Hidden if Local Browser Playback is selected).
 - **Fixed output sample rate:** When set, RSPlayer resamples all audio to this rate regardless of the source or device capabilities. Leave at "Auto (recommended)" unless your DAC requires a fixed clock rate.
-- **Set alsa buffer frame size (Experimental!):** Manually override the ALSA hardware buffer frame size. (Hidden if Local Browser Playback is selected).
+- **ALSA buffer size (frames, 0=default):** Manually override the ALSA hardware buffer frame size. (Hidden if Local Browser Playback is selected).
+
+## Volume Control
+
+![Volume Control Settings](/_assets/settings_volume_control.png)
+
+- **Volume control type:** Select the volume backend used by RSPlayer. Available options are platform-dependent:
+  - Linux with ALSA support: `Off`, `Alsa`, `Pipewire`, `Software`
+  - Non-ALSA/non-Linux builds: `Off`, `Software`
+- **ALSA mixer:** When using an ALSA audio interface, selects the specific mixer control used for volume adjustment.
+- **Volume step:** The amount to increase or decrease the volume with each step.
 
 ?> **Software volume mode:** In `Software` volume mode, RSPlayer applies a perceptual gain curve in the output path, so volume changes are immediate and independent of hardware mixer support.
 
-## Audio Processing
+## Visualization & Normalization
 
 ![Audio Processing Settings](/_assets/settings_audio_processing.png)
 
@@ -99,33 +105,29 @@ The Network Mounts section (collapsible) lets you mount remote SMB/CIFS or NFS s
 
 ## Hardware
 
-![Hardware Settings](/_assets/settings_hardware.png)
+![RSPlayer Firmware (Control Board) USB Link](/_assets/settings_hardware.png)
 
-### RSPlayer Firmware (Control Board) USB Link
-
-- **Enable link with rsplayer firmware:** Enables communication over a USB serial connection with custom rsplayer firmware control boards.
+- **Enable USB command channel:** Enables communication over a USB serial connection with custom rsplayer firmware control boards.
 - **(When enabled):** Provides quick action buttons to **Power Off** or **Power On** the connected firmware hardware.
 
 ?>**Note:** The Alsa mixer and Volume step fields are hidden when the USB firmware link is enabled — volume is managed by the firmware in that case. On Linux, the control method is set automatically based on the selected audio interface; on non-Linux builds firmware integration is not available.
 
-### Hardware Integration
+For DIY enthusiasts looking to integrate `rsplayer` with custom hardware, hardware designs and firmware are available in separate repositories:
 
-For DIY enthusiasts looking to integrate `rsplayer` with custom hardware, all related resources have been moved to dedicated repositories to streamline development and maintenance.
+- **Hardware Designs & KiCad Files:** [rsplayer_hardware](https://github.com/ljufa/rsplayer_hardware)
+- **Firmware:** [rsplayer_firmware](https://github.com/ljufa/rsplayer_firmware)
 
-- **Hardware Designs & KiCad Files:** All hardware schematics, PCB layouts (KiCad), and documentation are available in the [rsplayer_hardware](https://github.com/ljufa/rsplayer_hardware) repository.
-- **Firmware:** The firmware for microcontrollers and other hardware components is located in the [rsplayer_firmware](https://github.com/ljufa/rsplayer_firmware) repository.
+## System
 
-Please refer to the documentation within these repositories for detailed guides on hardware setup, configuration, and development.
-
-## System Actions
+![System Settings](/_assets/settings_system.png)
 
 | Button | Action |
 |--------|--------|
-| Save (without restart) | Apply settings that don't require restart |
-| Save & restart player | Apply settings and restart |
-| Restart player | Restart without saving |
+| Restart RSPlayer | Restart the player process without rebooting |
 | Restart system | Reboot the device |
 | Shutdown system | Power off the device |
+
+The current RSPlayer version is displayed at the bottom of this section.
 
 > **Note:** When DSP or other settings that require restart are changed, RSPlayer will prompt you to restart. If you navigate away from Settings with unapplied changes, a confirmation dialog will warn you.
 

@@ -4,15 +4,15 @@ This guide covers the main features and navigation of RSPlayer's web interface.
 
 ## Navigation
 
-RSPlayer uses a single-page application with hash-based routing. The main sections are accessible via the navigation bar:
+RSPlayer uses a single-page application with path-based routing. The main sections are accessible via the navigation bar:
 
 | Section | URL | Description |
 |---------|-----|-------------|
-| Player | `#/player` | Main playback controls and current track info |
-| Queue | `#/queue` | Current playback queue |
-| Playlists | `#/library/playlists` | Saved playlists |
-| Library | `#/library/files` | Music library browser |
-| Settings | `#/settings` | Configuration options |
+| Player | `/` | Main playback controls and current track info |
+| Queue | `/queue` | Current playback queue |
+| Playlists | `/library/playlists` | Saved playlists |
+| Library | `/library/files` | Music library browser |
+| Settings | `/settings` | Configuration options |
 
 ### Keyboard Navigation
 
@@ -190,9 +190,12 @@ View library statistics and loudness analysis progress.
 
 ![Library Stats](/_assets/library_stats.png)
 
-- Total tracks, albums, artists
+- Total songs, albums, artists
+- Total plays and liked songs
 - Loudness analysis progress
-- Storage usage
+- Total duration
+- Top genres chart
+- Albums by decade
 
 ### Adding to Queue
 
@@ -213,17 +216,20 @@ Configure RSPlayer settings. For detailed configuration options, see the [Config
 
 | Section | Description |
 |---------|-------------|
-| Appearance | Theme selection |
-| Playback | Audio interface, volume control, auto-resume |
-| Audio Processing | Visualization, loudness normalization, DSP |
+| Appearance | Theme selection, album art background |
+| Playback | Audio interface, auto-resume |
+| Volume Control | Volume backend, mixer, step |
+| Visualization & Normalization | Visualization, loudness normalization |
+| DSP Equalizer | Parametric EQ, presets, CamillaDSP import |
 | Music Library | Music directories, network storage |
-| Hardware | USB firmware link, power control |
+| Hardware | USB command channel, power control |
+| System | Restart, shutdown |
 
 ## Loudness Normalization
 
 When enabled, RSPlayer automatically normalizes volume across tracks:
 
-1. Enable in Settings → Audio Processing
+1. Enable in Settings → Visualization & Normalization
 2. Set target loudness (default: -18 LUFS)
 3. Tracks are analyzed in background during idle
 4. Progress visible on Library Stats page
