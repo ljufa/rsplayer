@@ -88,11 +88,6 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 - **Problem(bug) report with diagnostic**: Report problem by user
 - **Scheduled music library scans**: Enable user to define automatic library scan interval (or cron)
 
-### Planned code improvements
-- Replace Bulma CSS with a modern, maintained alternative.
-- Replace seed-rs with a newer, maintained framework.
-- Replace `warp` with `axum` or `actix`.
-
 ## Supported Platforms
 
 RSPlayer is production-focused on Linux. The Deb, RPM, and Arch packages include a systemd service for automatic startup. Experimental macOS builds are binary-only.
