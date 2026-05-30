@@ -1,5 +1,50 @@
 # Release Notes
 
+## v3.5.4 — 2026-05-29
+
+### Internal / Architecture
+
+#### Project Structure Restructured — Flat to `crates/` Layout
+
+The source tree has been reorganized from a flat list of crate directories to a standard `crates/` workspace layout:
+
+| Before | After |
+|--------|-------|
+| `rsplayer_backend/` | `crates/server/` |
+| `rsplayer_playback/` | `crates/playback/` |
+| `rsplayer_metadata/` | `crates/metadata/` |
+| `rsplayer_hardware/` | `crates/hardware/` |
+| `rsplayer_config/` | `crates/config/` |
+| `rsplayer_dsp/` | `crates/dsp/` |
+| `rsplayer_wire/` | `crates/wire/` |
+| `rsplayer_api_models/` | `crates/api_models/` |
+| `rsplayer_web_ui/` | `web-ui/` (workspace member) |
+
+Every crate's internal module structure and public API are unchanged — this is purely a file-system reorganization. All `Cargo.toml` workspace paths, `Cross.toml` volume mounts, and CI workflow paths have been updated to match.
+
+#### `build.rs` for Version Propagation
+
+Version is now centralized in `Makefile.toml` (`RELEASE_VERSION`) and propagated into the server binary at compile time via a `build.rs` in `crates/server/`. The old `rsplayer_backend/build.rs` has been removed. The build script also embeds `index.html` from the UI release build directly into the server binary.
+
+#### Makefile and CI Consolidation
+
+- `Makefile.toml` streamlined — build tasks reorganized, redundant targets removed.
+- `web-ui/Makefile.toml` removed; web UI tasks merged into the root `Makefile.toml`.
+- CI/CD workflow updated for the new directory layout (`crates/server/`, `web-ui/`).
+- Docker images and `Cross.toml` updated with corrected paths.
+
+#### `filters.rs` Refactored
+
+The biquad filter implementation in `crates/dsp/src/filters.rs` received a structural cleanup — coefficient computation was factored into reusable methods, and shared math was deduplicated across filter types.
+
+### Improvements
+
+#### Frontend Cross-Arch Build Support
+
+Player page now supports a `cross_arch_build` feature toggle that allows disabling platform-specific widget rendering, making the frontend buildable for broader WASM targets.
+
+---
+
 ## v3.5.0 — 2026-05-22
 
 ### New Features

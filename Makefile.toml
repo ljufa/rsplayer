@@ -4,7 +4,7 @@ CROSS_TARGET_DIR = { value = "target/cross", condition = { env_not_set = ["CI"] 
 
 TARGET_HOST = "192.168.5.4"
 TARGET = "aarch64-unknown-linux-gnu"
-RELEASE_VERSION = "3.5.1"
+RELEASE_VERSION = "3.5.4"
 RELEASE_BRANCH = "main_public"
 
 [config]    

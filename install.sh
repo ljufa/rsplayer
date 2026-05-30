@@ -1,5 +1,26 @@
 #!/usr/bin/env bash
-set -ex
+set -e
+
+usage() {
+    cat <<EOF
+Usage: $0 [OPTIONS]
+
+Options:
+  -p, --pre-release  Download latest pre-release instead of stable
+  -h, --help         Show this help message
+EOF
+    exit 0
+}
+
+PRE_RELEASE=false
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -p|--pre-release) PRE_RELEASE=true ;;
+        -h|--help) usage ;;
+        *) echo "Unknown option: $1"; usage ;;
+    esac
+    shift
+done
 
 echo "========================================"
 echo "RSPlayer Installer"
@@ -88,8 +109,13 @@ try_download() {
     local ext=$3
     local file="rsplayer_${suffix}.${ext}"
 
-    echo "[INFO] Querying GitHub API for latest release..."
-    URL=$(curl -s https://api.github.com/repos/ljufa/rsplayer/releases/latest | grep browser_download_url | cut -d '"' -f 4 | grep "_${suffix}.${ext}" | head -n 1)
+    if [ "$PRE_RELEASE" = true ]; then
+        echo "[INFO] Querying GitHub API for latest pre-release..."
+        URL=$(curl -s "https://api.github.com/repos/ljufa/rsplayer/releases?per_page=1" | grep browser_download_url | cut -d '"' -f 4 | grep "_${suffix}.${ext}" | head -n 1)
+    else
+        echo "[INFO] Querying GitHub API for latest stable release..."
+        URL=$(curl -s "https://api.github.com/repos/ljufa/rsplayer/releases/latest" | grep browser_download_url | cut -d '"' -f 4 | grep "_${suffix}.${ext}" | head -n 1)
+    fi
     if [ -z "$URL" ]; then
         echo "[WARN] No $type package found for suffix=$suffix ext=$ext"
         return 1
