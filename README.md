@@ -146,7 +146,7 @@ sudo systemctl start rsplayer
 ```bash
 docker run -p 8000:80 -v ${MUSIC_DIR}:/music -v rsplayer_data:/opt/rsplayer --device /dev/snd -it --rm ljufa/rsplayer:latest
 ```
-or [docker compose](docker-compose.yaml)
+or [docker compose](docker/docker-compose.yaml)
 ```yaml
 services:
   rsplayer:

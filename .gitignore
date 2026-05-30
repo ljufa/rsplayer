@@ -5,14 +5,8 @@
 .history
 .vscode
 .run
-.spotify_token_cache.json
-notes
-PKGS/devrpi/etc/fstab
-PKGS/devrpi/etc/wpa_supplicant/wpa_supplicant.conf
 .env
-crates/metadata/artwork
 .zed
-GEMINI.md
 .claude
 .playwright*
 *TODOS.md
