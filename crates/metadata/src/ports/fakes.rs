@@ -166,6 +166,32 @@ impl AlbumRepository for InMemoryAlbumRepository {
         }
         Ok(())
     }
+
+    fn remove_from_song(&self, song: &Song) -> RepoResult<()> {
+        let title = song.album.clone().unwrap_or_default();
+        let artist = song.album_artist.clone().or_else(|| song.artist.clone());
+        let key = format!("{}|{}", artist.unwrap_or_default(), title);
+        let mut g = self.albums.lock().unwrap();
+        if let Some(pos) = g.iter().position(|a| a.id == key) {
+            let mut album = g[pos].clone();
+            album.song_keys.retain(|k| k != &song.file);
+            if album.song_keys.is_empty() {
+                g.remove(pos);
+            } else {
+                g[pos] = album;
+            }
+        }
+        Ok(())
+    }
+
+    fn cleanup_orphaned_albums(&self, valid_song_keys: &std::collections::HashSet<String>) -> RepoResult<()> {
+        let mut g = self.albums.lock().unwrap();
+        g.iter_mut().for_each(|album| {
+            album.song_keys.retain(|k| valid_song_keys.contains(k));
+        });
+        g.retain(|a| !a.song_keys.is_empty());
+        Ok(())
+    }
 }
 
 #[derive(Default)]

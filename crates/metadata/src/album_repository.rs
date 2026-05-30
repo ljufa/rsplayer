@@ -286,6 +286,102 @@ impl AlbumRepository for FjallAlbumRepository {
             .insert(key.as_bytes(), album.to_json_string_bytes())
             .map_err(|e| RepoError::Storage(format!("write album '{}': {e}", album.title)))
     }
+
+    fn remove_from_song(&self, song: &Song) -> RepoResult<()> {
+        let raw_album = match song.album.as_ref() {
+            Some(a) if !a.trim().is_empty() => a.trim().to_owned(),
+            _ => {
+                let effective_artist = song
+                    .album_artist
+                    .as_deref()
+                    .or(song.artist.as_deref())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty());
+                if let Some(artist) = effective_artist {
+                    let key = normalize_name(&format!("__singletons__{artist}"));
+                    if key.is_empty() {
+                        return Ok(());
+                    }
+                    let existing = self
+                        .albums_db
+                        .get(key.as_bytes())
+                        .map_err(|e| RepoError::Storage(format!("read singleton '{artist}': {e}")))?;
+                    if let Some(bytes) = existing {
+                        let mut album = Album::from_bytes(&bytes).unwrap_or_default();
+                        album.song_keys.retain(|k| k != &song.file);
+                        if album.song_keys.is_empty() {
+                            self.albums_db
+                                .remove(key.as_bytes())
+                                .map_err(|e| RepoError::Storage(format!("delete empty album '{key}': {e}")))?;
+                        } else {
+                            self.albums_db
+                                .insert(key.as_bytes(), album.to_json_string_bytes())
+                                .map_err(|e| RepoError::Storage(format!("write album '{}': {e}", album.title)))?;
+                        }
+                    }
+                }
+                return Ok(());
+            }
+        };
+
+        let artist_for_key = song.album_artist.as_deref().or(song.artist.as_deref()).unwrap_or("");
+        let key = Self::album_db_key(artist_for_key, &raw_album);
+        if key.is_empty() {
+            return Ok(());
+        }
+
+        let existing = self
+            .albums_db
+            .get(key.as_bytes())
+            .map_err(|e| RepoError::Storage(format!("read album '{raw_album}': {e}")))?;
+
+        if let Some(bytes) = existing {
+            let mut album = Album::from_bytes(&bytes).unwrap_or_default();
+            album.song_keys.retain(|k| k != &song.file);
+            if album.song_keys.is_empty() {
+                self.albums_db
+                    .remove(key.as_bytes())
+                    .map_err(|e| RepoError::Storage(format!("delete empty album '{key}': {e}")))?;
+            } else {
+                self.albums_db
+                    .insert(key.as_bytes(), album.to_json_string_bytes())
+                    .map_err(|e| RepoError::Storage(format!("write album '{}': {e}", album.title)))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn cleanup_orphaned_albums(&self, valid_song_keys: &std::collections::HashSet<String>) -> RepoResult<()> {
+        let to_update: Vec<(Vec<u8>, Album)> = self
+            .albums_db
+            .iter()
+            .filter_map(|guard| {
+                let (key, value) = guard.into_inner().ok()?;
+                let mut album = Album::from_bytes(&value)?;
+                let original_len = album.song_keys.len();
+                album.song_keys.retain(|k| valid_song_keys.contains(k));
+                if album.song_keys.len() < original_len {
+                    Some((key.to_vec(), album))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for (key, album) in to_update {
+            if album.song_keys.is_empty() {
+                self.albums_db
+                    .remove(&key)
+                    .map_err(|e| RepoError::Storage(format!("delete orphaned album: {e}")))?;
+            } else {
+                self.albums_db
+                    .insert(&key, album.to_json_string_bytes())
+                    .map_err(|e| RepoError::Storage(format!("update album: {e}")))?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -644,6 +740,172 @@ mod test {
         assert_eq!(result[0].0, "Jazz");
     }
 
+    #[test]
+    fn remove_from_song_removes_key_from_album() {
+        use api_models::player::Song;
+        use chrono::Utc;
+        let repo = create_album_repo();
+        let f1 = "artist/album/track1.flac";
+        let f2 = "artist/album/track2.flac";
+        repo.update_from_song(Song {
+            file: f1.to_string(),
+            album: Some("Test Album".to_string()),
+            artist: Some("Test Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+        repo.update_from_song(Song {
+            file: f2.to_string(),
+            album: Some("Test Album".to_string()),
+            artist: Some("Test Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+
+        let key = FjallAlbumRepository::album_db_key("Test Artist", "Test Album");
+        let album = repo.find_by_id(&key).expect("album should exist");
+        assert_eq!(album.song_keys.len(), 2);
+
+        repo.remove_from_song(&Song {
+            file: f1.to_string(),
+            album: Some("Test Album".to_string()),
+            artist: Some("Test Artist".to_string()),
+            ..Default::default()
+        })
+        .expect("remove_from_song failed");
+
+        let album = repo.find_by_id(&key).expect("album should still exist");
+        assert_eq!(album.song_keys.len(), 1);
+        assert_eq!(album.song_keys[0], f2);
+    }
+
+    #[test]
+    fn remove_from_song_deletes_empty_album() {
+        use api_models::player::Song;
+        use chrono::Utc;
+        let repo = create_album_repo();
+        repo.update_from_song(Song {
+            file: "artist/album/track.flac".to_string(),
+            album: Some("Lone Album".to_string()),
+            artist: Some("Test Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+
+        let key = FjallAlbumRepository::album_db_key("Test Artist", "Lone Album");
+        assert!(repo.find_by_id(&key).is_some());
+
+        repo.remove_from_song(&Song {
+            file: "artist/album/track.flac".to_string(),
+            album: Some("Lone Album".to_string()),
+            artist: Some("Test Artist".to_string()),
+            ..Default::default()
+        })
+        .expect("remove_from_song failed");
+
+        assert!(repo.find_by_id(&key).is_none(), "empty album should be deleted");
+    }
+
+    #[test]
+    fn remove_from_song_nonexistent_key_is_noop() {
+        use api_models::player::Song;
+        use chrono::Utc;
+        let repo = create_album_repo();
+        repo.update_from_song(Song {
+            file: "artist/album/track1.flac".to_string(),
+            album: Some("Album".to_string()),
+            artist: Some("Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+
+        let key = FjallAlbumRepository::album_db_key("Artist", "Album");
+        let album = repo.find_by_id(&key).expect("album should exist");
+        assert_eq!(album.song_keys.len(), 1);
+
+        repo.remove_from_song(&Song {
+            file: "nonexistent.flac".to_string(),
+            album: Some("Album".to_string()),
+            artist: Some("Artist".to_string()),
+            ..Default::default()
+        })
+        .expect("remove_from_song failed");
+
+        let album = repo.find_by_id(&key).expect("album should still exist");
+        assert_eq!(album.song_keys.len(), 1);
+    }
+
+    #[test]
+    fn remove_from_song_singleton_album() {
+        use api_models::player::Song;
+        use chrono::Utc;
+        let repo = create_album_repo();
+        repo.update_from_song(Song {
+            file: "singles/track1.flac".to_string(),
+            album: None,
+            artist: Some("Solo Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+
+        let artists = repo.find_all_album_artists();
+        assert!(artists.iter().any(|a| a == "Solo Artist"));
+
+        repo.remove_from_song(&Song {
+            file: "singles/track1.flac".to_string(),
+            album: None,
+            artist: Some("Solo Artist".to_string()),
+            ..Default::default()
+        })
+        .expect("remove_from_song failed");
+
+        assert!(
+            repo.find_by_artist("Solo Artist").is_empty(),
+            "singleton album should be deleted when empty"
+        );
+    }
+
+    #[test]
+    fn remove_from_song_singleton_with_multiple_tracks_partial() {
+        use api_models::player::Song;
+        use chrono::Utc;
+        let repo = create_album_repo();
+        repo.update_from_song(Song {
+            file: "singles/track1.flac".to_string(),
+            album: None,
+            artist: Some("Solo Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+        repo.update_from_song(Song {
+            file: "singles/track2.flac".to_string(),
+            album: None,
+            artist: Some("Solo Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+
+        repo.remove_from_song(&Song {
+            file: "singles/track1.flac".to_string(),
+            album: None,
+            artist: Some("Solo Artist".to_string()),
+            ..Default::default()
+        })
+        .expect("remove_from_song failed");
+
+        let albums = repo.find_by_artist("Solo Artist");
+        assert_eq!(albums.len(), 1);
+        assert_eq!(albums[0].song_keys.len(), 1);
+        assert_eq!(albums[0].song_keys[0], "singles/track2.flac");
+    }
+
     fn create_album(
         title: &str,
         artist: &str,
@@ -781,5 +1043,89 @@ mod test {
         let albums = repo.find_by_artist("Solo Artist");
         assert_eq!(albums.len(), 1);
         assert_eq!(albums[0].song_keys.len(), 2);
+    }
+
+    #[test]
+    fn cleanup_orphaned_albums_removes_stale_keys() {
+        use api_models::player::Song;
+        use chrono::Utc;
+        use std::collections::HashSet;
+        let repo = create_album_repo();
+        repo.update_from_song(Song {
+            file: "valid1.flac".to_string(),
+            album: Some("Album".to_string()),
+            artist: Some("Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+        repo.update_from_song(Song {
+            file: "stale1.flac".to_string(),
+            album: Some("Album".to_string()),
+            artist: Some("Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+
+        let key = FjallAlbumRepository::album_db_key("Artist", "Album");
+        let album = repo.find_by_id(&key).expect("album should exist");
+        assert_eq!(album.song_keys.len(), 2);
+
+        let valid = HashSet::from_iter(["valid1.flac".to_string()]);
+        repo.cleanup_orphaned_albums(&valid).expect("cleanup failed");
+
+        let album = repo.find_by_id(&key).expect("album should still exist");
+        assert_eq!(album.song_keys.len(), 1);
+        assert_eq!(album.song_keys[0], "valid1.flac");
+    }
+
+    #[test]
+    fn cleanup_orphaned_albums_deletes_fully_stale_album() {
+        use api_models::player::Song;
+        use chrono::Utc;
+        use std::collections::HashSet;
+        let repo = create_album_repo();
+        repo.update_from_song(Song {
+            file: "stale1.flac".to_string(),
+            album: Some("Ghost".to_string()),
+            artist: Some("Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+
+        let key = FjallAlbumRepository::album_db_key("Artist", "Ghost");
+        assert!(repo.find_by_id(&key).is_some());
+
+        let valid = HashSet::<String>::new();
+        repo.cleanup_orphaned_albums(&valid).expect("cleanup failed");
+
+        assert!(repo.find_by_id(&key).is_none(), "fully stale album should be deleted");
+    }
+
+    #[test]
+    fn cleanup_orphaned_albums_leaves_valid_albums_untouched() {
+        use api_models::player::Song;
+        use chrono::Utc;
+        use std::collections::HashSet;
+        let repo = create_album_repo();
+        repo.update_from_song(Song {
+            file: "track1.flac".to_string(),
+            album: Some("Valid Album".to_string()),
+            artist: Some("Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        })
+        .expect("update_from_song failed");
+
+        let key = FjallAlbumRepository::album_db_key("Artist", "Valid Album");
+        assert!(repo.find_by_id(&key).is_some());
+
+        let valid = HashSet::from_iter(["track1.flac".to_string()]);
+        repo.cleanup_orphaned_albums(&valid).expect("cleanup failed");
+
+        let album = repo.find_by_id(&key).expect("album should still exist");
+        assert_eq!(album.song_keys.len(), 1);
     }
 }

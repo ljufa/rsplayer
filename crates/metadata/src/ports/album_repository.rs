@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use api_models::{player::Song, playlist::Album};
@@ -15,6 +16,8 @@ pub trait AlbumRepository: Send + Sync {
     fn find_all_by_decade(&self, limit_per_decade: usize) -> Vec<(String, Vec<Album>)>;
     fn find_by_artist(&self, artist: &str) -> Vec<Album>;
     fn update_from_song(&self, song: Song) -> RepoResult<()>;
+    fn remove_from_song(&self, song: &Song) -> RepoResult<()>;
+    fn cleanup_orphaned_albums(&self, valid_song_keys: &HashSet<String>) -> RepoResult<()>;
 }
 
 pub type ArcAlbumRepository = Arc<dyn AlbumRepository>;

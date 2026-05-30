@@ -1,16 +1,12 @@
 use std::{
-    fs::File,
-    path::Path,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
-    },
-    time,
+    collections::HashSet, fs::File, path::Path, sync::{
+        Arc, RwLock, atomic::{AtomicBool, Ordering}
+    }, time
 };
 
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
-use fjall::{Database, PersistMode};
+use fjall::{Database, KeyspaceCreateOptions, PersistMode};
 use log::{debug, info, warn};
 use symphonia::core::{formats::probe::Hint, formats::FormatOptions, io::MediaSourceStream, meta::MetadataOptions};
 use tokio::sync::broadcast::Sender;
@@ -43,6 +39,8 @@ pub struct MetadataService {
 }
 
 impl MetadataService {
+    const MIGRATION_MARKER: &'static [u8] = b"cleanup_orphaned_albums_v3_5_5";
+
     pub fn new(
         db: Arc<Database>,
         settings: &MetadataStoreSettings,
@@ -52,6 +50,8 @@ impl MetadataService {
     ) -> Result<Self> {
         let settings = settings.clone();
 
+        Self::run_migration_if_needed(&db, &song_repository, &album_repository);
+
         Ok(Self {
             settings: RwLock::new(settings),
             scan_running: AtomicBool::new(false),
@@ -60,6 +60,36 @@ impl MetadataService {
             statistic_repository,
             db,
         })
+    }
+
+    fn run_migration_if_needed(
+        db: &Database,
+        song_repository: &ArcSongRepository,
+        album_repository: &ArcAlbumRepository,
+    ) {
+        let migrations = db
+            .keyspace("_migrations", KeyspaceCreateOptions::default)
+            .expect("Failed to open _migrations keyspace");
+
+        if migrations.get(Self::MIGRATION_MARKER).ok().flatten().is_some() {
+            return;
+        }
+
+        info!("Running one-shot migration: cleanup orphaned albums (pre-3.5.5)");
+        let valid_keys: HashSet<String> =
+            song_repository.find_all().into_iter().map(|s| s.file).collect();
+        if let Err(e) = album_repository.cleanup_orphaned_albums(&valid_keys) {
+            warn!("Migration: failed to cleanup orphaned albums: {e}");
+            return;
+        }
+
+        if let Err(e) = migrations.insert(Self::MIGRATION_MARKER, b"1") {
+            warn!("Migration: failed to store migration marker: {e}");
+        } else if let Err(e) = db.persist(PersistMode::SyncData) {
+            warn!("Migration: failed to persist after migration: {e}");
+        } else {
+            info!("Migration: cleanup orphaned albums completed");
+        }
     }
 
     pub fn update_settings(&self, settings: MetadataStoreSettings) {
@@ -276,6 +306,11 @@ impl MetadataService {
         if !full_scan {
             info!("Deleting {} files from database", deleted_db_keys.len());
             for db_key in &deleted_db_keys {
+                if let Some(song) = self.song_repository.find_by_id(db_key) {
+                    if let Err(e) = self.album_repository.remove_from_song(&song) {
+                        warn!("Failed to remove song '{db_key}' from album: {e}");
+                    }
+                }
                 if let Err(e) = self.song_repository.delete(db_key) {
                     warn!("Failed to delete song '{db_key}' from db: {e}");
                 }
