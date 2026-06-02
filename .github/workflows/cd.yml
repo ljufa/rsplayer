@@ -99,6 +99,34 @@ jobs:
           RELEASE_VERSION: ${{ github.ref_name }}
         run: cargo make --env RELEASE_VERSION=$RELEASE_VERSION --env TARGET=$TARGET package_deb_release
 
+      - name: Build Desktop (AppImage)
+        if: matrix.target == 'x86_64-unknown-linux-gnu' || matrix.target == 'aarch64-unknown-linux-gnu'
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [ "$TARGET" = "aarch64-unknown-linux-gnu" ]; then
+            dpkg --add-architecture arm64
+            apt-get update
+            apt-get install -y libwebkit2gtk-4.1-dev:arm64 libsoup-3.0-dev:arm64 libjavascriptcoregtk-4.1-dev:arm64 libasound2-dev:arm64 libappindicator3-dev:arm64 librsvg2-dev:arm64 gcc-aarch64-linux-gnu
+            export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+            export PKG_CONFIG_ALLOW_CROSS=1
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+            cd crates/desktop && cargo tauri build --target aarch64-unknown-linux-gnu --bundles appimage
+          else
+            cd crates/desktop && cargo tauri build --bundles appimage
+          fi
+
+      - name: Upload AppImage
+        if: matrix.target == 'x86_64-unknown-linux-gnu' || matrix.target == 'aarch64-unknown-linux-gnu'
+        uses: actions/upload-artifact@v7
+        with:
+          name: AppImage-${{ matrix.target }}
+          path: |
+            target/release/bundle/appimage/*.AppImage
+            target/aarch64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
       - name: Upload deb package
         if: ${{ !contains(matrix.target, 'apple-darwin') }}
         uses: actions/upload-artifact@v7
@@ -157,8 +185,43 @@ jobs:
           path: rsplayer_${{ github.ref_name }}_*.tgz
           if-no-files-found: error
 
+  build_desktop_macos:
+    needs: build_ui
+    name: Build Desktop MacOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      
+      - name: Download web_ui
+        uses: actions/download-artifact@v8
+        with:
+          name: web_ui
+          path: target/dx/rsplayer_web_ui/release/web/public
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version 2.1.0
+
+      - name: Build DMG (Universal)
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          cd crates/desktop
+          cargo tauri build --target universal-apple-darwin --bundles dmg
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v7
+        with:
+          name: DMG-macos
+          path: target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
   publish:
-    needs: build_backend
+    needs: [build_backend, build_desktop_macos]
     name: Create release
     runs-on: [self-hosted, linux, x64]
     steps:
@@ -168,6 +231,9 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release_assets
+          [ -d "AppImage-x86_64-unknown-linux-gnu" ] && mv AppImage-x86_64-unknown-linux-gnu/*.AppImage release_assets/ || true
+          [ -d "AppImage-aarch64-unknown-linux-gnu" ] && mv AppImage-aarch64-unknown-linux-gnu/*.AppImage release_assets/ || true
+          [ -d "DMG-macos" ] && mv DMG-macos/*.dmg release_assets/ || true
 
           [ -d "rsplayer-aarch64-unknown-linux-gnu" ]     && mv rsplayer-aarch64-unknown-linux-gnu/rsplayer      release_assets/rsplayer_arm64    || true
           [ -d "rsplayer-armv7-unknown-linux-gnueabihf" ] && mv rsplayer-armv7-unknown-linux-gnueabihf/rsplayer  release_assets/rsplayer_armhfv7  || true

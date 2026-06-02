@@ -1,0 +1,21 @@
+{
+  "productName": "RSPlayer",
+  "version": "0.1.0",
+  "identifier": "com.rsplayer.desktop",
+  "bundle": {
+    "active": true
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "RSPlayer",
+        "width": 1200,
+        "height": 800,
+        "label": "main"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

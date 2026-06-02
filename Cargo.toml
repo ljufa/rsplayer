@@ -8,7 +8,7 @@ members = [
     "crates/metadata",
     "crates/playback",
     "crates/wire",
-    "web-ui",
+    "web-ui", "crates/desktop",
 ]
 default-members = [
     "crates/api_models",
