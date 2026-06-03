@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "identifier": "com.rsplayer.desktop",
   "build": {
-    "frontendDist": "../../../target/dx/rsplayer_web_ui/release/web/public"
+    "frontendDist": "../../target/dx/rsplayer_web_ui/release/web/public"
   },
   "bundle": {
     "active": true,
