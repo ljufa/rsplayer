@@ -2,6 +2,21 @@ name: Release from tag
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Target to build"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - arm-unknown-linux-gnueabihf
+          - armv7-unknown-linux-gnueabihf
+          - aarch64-unknown-linux-gnu
+          - x86_64-unknown-linux-gnu
+          - riscv64gc-unknown-linux-gnu
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
   push:
     tags:
       - "*.*.*"
@@ -56,14 +71,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - "arm-unknown-linux-gnueabihf"
-          - "armv7-unknown-linux-gnueabihf"
-          - "aarch64-unknown-linux-gnu"
-          - "x86_64-unknown-linux-gnu"
-          - "riscv64gc-unknown-linux-gnu"
-          - "aarch64-apple-darwin"
-          - "x86_64-apple-darwin"
+        target: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.target != 'all' && format('["{0}"]', inputs.target)) || '["arm-unknown-linux-gnueabihf","armv7-unknown-linux-gnueabihf","aarch64-unknown-linux-gnu","x86_64-unknown-linux-gnu","riscv64gc-unknown-linux-gnu","aarch64-apple-darwin","x86_64-apple-darwin"]') }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -100,28 +108,20 @@ jobs:
         run: cargo make --env RELEASE_VERSION=$RELEASE_VERSION --env TARGET=$TARGET package_deb_release
 
       - name: Build Desktop (AppImage)
-        if: matrix.target == 'x86_64-unknown-linux-gnu' || matrix.target == 'aarch64-unknown-linux-gnu'
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
         env:
           RELEASE_VERSION: ${{ github.ref_name }}
-          TARGET: ${{ matrix.target }}
+          NO_STRIP: "1"
         run: |
-          if [ "$TARGET" = "aarch64-unknown-linux-gnu" ]; then
-            export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
-            export PKG_CONFIG_ALLOW_CROSS=1
-            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-            cd crates/desktop && cargo tauri build --target aarch64-unknown-linux-gnu --bundles appimage
-          else
-            cd crates/desktop && cargo tauri build --bundles appimage
-          fi
+          CONFIG_VER=$(printf '{"version":"%s"}' "$RELEASE_VERSION")
+          cd crates/desktop && cargo tauri build --bundles appimage --config "$CONFIG_VER"
 
       - name: Upload AppImage
-        if: matrix.target == 'x86_64-unknown-linux-gnu' || matrix.target == 'aarch64-unknown-linux-gnu'
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
         uses: actions/upload-artifact@v7
         with:
-          name: AppImage-${{ matrix.target }}
-          path: |
-            target/release/bundle/appimage/*.AppImage
-            target/aarch64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+          name: AppImage-x86_64
+          path: target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
 
       - name: Upload deb package
@@ -185,6 +185,7 @@ jobs:
   build_desktop_macos:
     needs: build_ui
     name: Build Desktop MacOS
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || endsWith(inputs.target, 'apple-darwin') }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
@@ -208,7 +209,8 @@ jobs:
           RELEASE_VERSION: ${{ github.ref_name }}
         run: |
           cd crates/desktop
-          cargo tauri build --target universal-apple-darwin --bundles dmg
+          CONFIG_VER=$(printf '{"version":"%s"}' "$RELEASE_VERSION")
+          cargo tauri build --target universal-apple-darwin --bundles dmg --config "$CONFIG_VER"
 
       - name: Upload DMG
         uses: actions/upload-artifact@v7
@@ -218,6 +220,7 @@ jobs:
           if-no-files-found: error
 
   publish:
+    if: ${{ always() }}
     needs: [build_backend, build_desktop_macos]
     name: Create release
     runs-on: [self-hosted, linux, x64]
@@ -228,8 +231,7 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release_assets
-          [ -d "AppImage-x86_64-unknown-linux-gnu" ] && mv AppImage-x86_64-unknown-linux-gnu/*.AppImage release_assets/ || true
-          [ -d "AppImage-aarch64-unknown-linux-gnu" ] && mv AppImage-aarch64-unknown-linux-gnu/*.AppImage release_assets/ || true
+          [ -d "AppImage-x86_64" ] && mv AppImage-x86_64/*.AppImage release_assets/ || true
           [ -d "DMG-macos" ] && mv DMG-macos/*.dmg release_assets/ || true
 
           [ -d "rsplayer-aarch64-unknown-linux-gnu" ]     && mv rsplayer-aarch64-unknown-linux-gnu/rsplayer      release_assets/rsplayer_arm64    || true

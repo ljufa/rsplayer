@@ -1,23 +1,13 @@
-FROM rust:1-slim-bullseye
+FROM rust:1-slim-bookworm
 
-RUN dpkg --add-architecture arm64 && \
-    apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git pkg-config ca-certificates curl \
-    gcc-aarch64-linux-gnu \
-    # Native libraries
     libwebkit2gtk-4.1-dev \
     libsoup-3.0-dev \
     libjavascriptcoregtk-4.1-dev \
     libasound2-dev \
     libappindicator3-dev \
     librsvg2-dev \
-    # ARM64 libraries for cross-compiling desktop app
-    libwebkit2gtk-4.1-dev:arm64 \
-    libsoup-3.0-dev:arm64 \
-    libjavascriptcoregtk-4.1-dev:arm64 \
-    libasound2-dev:arm64 \
-    libappindicator3-dev:arm64 \
-    librsvg2-dev:arm64 \
     libfuse2 \
     rpm \
     docker.io \
