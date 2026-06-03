@@ -38,5 +38,5 @@ async fn main() {
     "
     );
 
-    rsplayer::run_backend().await;
+    rsplayer::run_backend::<std::path::PathBuf>(None).await;
 }

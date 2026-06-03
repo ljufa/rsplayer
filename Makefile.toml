@@ -3,7 +3,7 @@ CARGO_TARGET_DIR = "target"
 CROSS_TARGET_DIR = { value = "target/cross", condition = { env_not_set = ["CI"] } }
 
 TARGET_HOST = "192.168.5.4"
-TARGET = "aarch64-unknown-linux-gnu"
+TARGET = "x86_64-unknown-linux-gnu"
 RELEASE_VERSION = "3.5.5"
 RELEASE_BRANCH = "main_public"
 
@@ -30,6 +30,37 @@ command = "dx"
 args = ["build", "--platform", "web", "--release", "--debug-symbols", "false", "--package", "rsplayer_web_ui"]
 
 # ── BE (Backend) ──────────────────────────
+
+[tasks.build_desktop_release]
+description = "Build desktop release AppImage or DMG using cross-compilation"
+dependencies = ["build_ui_release"]
+script = [
+    "set -e",
+    "case ${TARGET} in",
+    "  aarch64-apple-darwin|x86_64-apple-darwin)",
+    "    echo \"Building DMG for ${TARGET} is not supported via cross-compilation on Linux due to tauri-bundler requirements.\"",
+    "    echo \"Please use a native macOS machine or the CI/CD pipeline.\"",
+    "    exit 1",
+    "    ;;",
+    "  x86_64-unknown-linux-gnu)",
+    "    export NO_STRIP=1",
+    "    cd crates/desktop && cargo tauri build -v --bundles appimage",
+    "    ;;",
+    "  aarch64-unknown-linux-gnu)",
+    "    export NO_STRIP=1",
+    "    export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig",
+
+    "    export PKG_CONFIG_ALLOW_CROSS=1",
+    "    export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc",
+    "    cd crates/desktop && cargo tauri build -v --target aarch64-unknown-linux-gnu --bundles appimage",
+    "    ;;",
+
+    "  *)",
+    "    echo \"Desktop build not supported for ${TARGET}\"",
+    "    exit 1",
+    "    ;;",
+    "esac"
+]
 
 [tasks.build_release]
 script = [

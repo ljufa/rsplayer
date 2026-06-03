@@ -22,9 +22,16 @@ use log::{info, error, warn};
 use config::Configuration;
 use crate::composition_root::{build, AppContainer, BuildOutcome};
 
-pub async fn run_backend() {
+use std::path::Path;
+
+pub async fn run_backend<P: AsRef<Path>>(db_path: Option<P>) {
+    let db_dir = db_path
+        .as_ref()
+        .map(|p| p.as_ref().to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("rsplayer.db"));
+
     let shared_db = Arc::new(
-        fjall::Database::builder("rsplayer.db")
+        fjall::Database::builder(db_dir)
             .open()
             .expect("Failed to open fjall database"),
     );

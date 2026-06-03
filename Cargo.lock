@@ -5420,6 +5420,7 @@ dependencies = [
 name = "rsplayer-desktop"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "env_logger",
  "log",
  "rsplayer",
