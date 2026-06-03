@@ -22,7 +22,7 @@
 # Minimum macOS deployment target (cpal requires macOS 14+ for AudioHardwareDestroyProcessTap)
 # SDK must be >= this version.
 
-FROM ubuntu:22.04
+FROM ubuntu:26.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
