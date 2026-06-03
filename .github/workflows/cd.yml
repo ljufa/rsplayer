@@ -112,23 +112,6 @@ jobs:
           RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
         run: cargo make --env RELEASE_VERSION=$RELEASE_VERSION --env TARGET=$TARGET package_deb_release
 
-      - name: Build Desktop (AppImage)
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
-        env:
-          RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
-          NO_STRIP: "1"
-        run: |
-          CONFIG_VER=$(printf '{"version":"%s"}' "$RELEASE_VERSION")
-          cd crates/desktop && cargo tauri build --bundles appimage --config "$CONFIG_VER"
-
-      - name: Upload AppImage
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
-        uses: actions/upload-artifact@v7
-        with:
-          name: AppImage-x86_64
-          path: target/release/bundle/appimage/*.AppImage
-          if-no-files-found: error
-
       - name: Upload deb package
         if: ${{ !contains(matrix.target, 'apple-darwin') }}
         uses: actions/upload-artifact@v7
@@ -187,6 +170,46 @@ jobs:
           path: rsplayer_${{ env.RELEASE_VERSION }}_*.tgz
           if-no-files-found: error
 
+  build_desktop_linux:
+    needs: build_ui
+    name: Build Desktop (AppImage)
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'x86_64-unknown-linux-gnu' }}
+    runs-on: [self-hosted, linux, x64]
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/rsplayer-backend-builder:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          clean: true
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: desktop-linux-x86_64
+
+      - name: Download web_ui
+        uses: actions/download-artifact@v8
+        with:
+          name: web_ui
+          path: target/dx/rsplayer_web_ui/release/web/public
+
+      - name: Build Desktop (AppImage)
+        env:
+          RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+          NO_STRIP: "1"
+        run: |
+          CONFIG_VER=$(printf '{"version":"%s"}' "$RELEASE_VERSION")
+          cd crates/desktop && cargo tauri build --bundles appimage --config "$CONFIG_VER"
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v7
+        with:
+          name: AppImage-x86_64
+          path: target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
   build_desktop_macos:
     needs: build_ui
     name: Build Desktop MacOS
@@ -226,7 +249,7 @@ jobs:
 
   publish:
     if: ${{ always() }}
-    needs: [build_backend, build_desktop_macos]
+    needs: [build_backend, build_desktop_macos, build_desktop_linux]
     name: Create release
     runs-on: [self-hosted, linux, x64]
     steps:
