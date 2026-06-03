@@ -199,9 +199,25 @@ jobs:
         env:
           RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
           NO_STRIP: "1"
+          RUST_LOG: "tauri=debug,tauri_bundler=trace"
+          RUST_BACKTRACE: "full"
         run: |
+          set -e
           CONFIG_VER=$(printf '{"version":"%s"}' "$RELEASE_VERSION")
-          cd crates/desktop && cargo tauri build --bundles appimage --config "$CONFIG_VER"
+          cd crates/desktop
+          cargo tauri build -v --bundles appimage --config "$CONFIG_VER" > /tmp/tauri.log 2>&1
+          status=$?
+          echo "===== tauri build exit status: $status ====="
+          if [ $status -ne 0 ]; then
+            SCRIPT=../../target/release/bundle/appimage/build_appimage.sh
+            if [ -f "$SCRIPT" ]; then
+              echo "===== re-running build_appimage.sh with bash -x ====="
+              bash -x "$SCRIPT" 2>&1 | head -200 || true
+            fi
+            echo "===== last 400 lines of /tmp/tauri.log: ====="
+            tail -400 /tmp/tauri.log
+          fi
+          exit $status
 
       - name: Upload AppImage
         uses: actions/upload-artifact@v7
