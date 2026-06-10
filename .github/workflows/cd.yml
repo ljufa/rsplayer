@@ -241,7 +241,7 @@ jobs:
           path: target/dx/rsplayer_web_ui/release/web/public
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --version 2.1.0
+        run: cargo install tauri-cli --version 2.1.0 --locked
 
       - name: Build DMG (Universal)
         env:
