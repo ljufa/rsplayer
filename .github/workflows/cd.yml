@@ -240,8 +240,13 @@ jobs:
           name: web_ui
           path: target/dx/rsplayer_web_ui/release/web/public
 
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version 2.1.0 --locked
+      - name: Install Tauri CLI (pre-built binary)
+        run: |
+          ARCH=$(uname -m)
+          [[ "$ARCH" == "arm64" ]] && ARCH="aarch64"
+          curl -fsSL "https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-${ARCH}-apple-darwin.tgz" -o /tmp/bin.tgz
+          sudo tar -xzf /tmp/bin.tgz -C /usr/local/bin
+          cargo binstall tauri-cli --version 2.1.0 -y
 
       - name: Build DMG (Universal)
         env:
