@@ -50,23 +50,13 @@ dependencies = ["build_ui_release"]
 run_task = "bundle_desktop_release"
 
 [tasks.bundle_desktop_release]
-description = "Build desktop release bundle (deb+rpm on Linux via Tauri, DMG on macOS via cargo-packager). Web UI build output must already exist."
+description = "Build desktop release bundle (deb+rpm on Linux via Tauri)."
 script = [
-    "set -e",
-    "case ${TARGET} in",
-    "  x86_64-unknown-linux-gnu)",
-    "    # Tauri compiles, bundles, and auto-declares shared-library dependencies",
-    "    cd crates/desktop && cargo tauri build --bundles deb,rpm --ci",
-    "    # Move bundles to pkg dir alongside server packages to avoid duplication",
-    "    PKG_DIR=../../target/cross/x86_64-unknown-linux-gnu/pkg",
-    "    mkdir -p ${PKG_DIR}",
-    "    mv target/release/bundle/deb/rsplayer-desktop_*.deb ${PKG_DIR}/",
-    "    mv target/release/bundle/rpm/rsplayer-desktop-*.rpm ${PKG_DIR}/",
-    "    ;;",
-    "    echo \"Desktop build not supported for ${TARGET}\"",
-    "    exit 1",
-    "    ;;",
-    "esac",
+    "cd crates/desktop && cargo tauri build --bundles deb,rpm --ci",
+    "PKG_DIR=../../target/cross/x86_64-unknown-linux-gnu/pkg",
+    "mkdir -p ${PKG_DIR}",
+    "mv target/release/bundle/deb/rsplayer-desktop_*.deb ${PKG_DIR}/",
+    "mv target/release/bundle/rpm/rsplayer-desktop-*.rpm ${PKG_DIR}/",
 ]
 
 [tasks.build_release]
@@ -323,5 +313,10 @@ args = ["test", "--target", "${TARGET}"]
 
 [tasks.test_in_cross.env]
 RUST_SYSROOT_LIB = { script = ["echo $(rustc --print sysroot)/lib"] }
-
 CROSS_CONTAINER_OPTS = "-e LD_LIBRARY_PATH=${RUST_SYSROOT_LIB} -v ${RUST_SYSROOT_LIB}:${RUST_SYSROOT_LIB}"
+
+[tasks.tag]
+script = [
+    "git tag ${RELEASE_VERSION} ${RELEASE_BRANCH}",
+    "git push originpublic ${RELEASE_VERSION}",
+]
