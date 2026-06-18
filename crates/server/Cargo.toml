@@ -153,7 +153,7 @@ axum = { version = "0.8", features = ["ws", "macros"] }
 axum-server = { version = "0.8", features = ["tls-rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["compression-gzip", "cors", "fs", "set-header"] }
+tower-http = { version = "0.7", features = ["compression-gzip", "cors", "fs", "set-header"] }
 rust-embed = { version = "8", features = ["mime-guess", "compression", "include-exclude"] }
 mime_guess = "2"
 serde = { workspace = true, features = ["derive"] }
