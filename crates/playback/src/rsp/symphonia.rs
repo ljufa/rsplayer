@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use anyhow::{format_err, Result};
+use anyhow::{Result, format_err};
 
 use api_models::player::Song;
 use api_models::state::{PlayerInfo, SongProgress, StateChangeEvent};
@@ -12,8 +12,8 @@ use metadata::{build_codec_registry, build_probe};
 use metadata::radio_meta::RadioMeta;
 use symphonia::core::audio::Channels;
 use symphonia::core::codecs::{
-    audio::{AudioDecoderOptions, CODEC_ID_NULL_AUDIO},
     CodecParameters,
+    audio::{AudioDecoderOptions, CODEC_ID_NULL_AUDIO},
 };
 use symphonia::core::errors::Error;
 use symphonia::core::formats::probe::Hint;
@@ -23,9 +23,7 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::{Time, TimeBase, Timestamp};
 
 use crate::rsp::alsa_output::AlsaOutput;
-use crate::rsp::audio_source::{
-    is_http_stream, probe_http_source, probe_local_file, resolve_ape_path, resolve_sacd_iso_path,
-};
+use crate::rsp::audio_source::{is_http_stream, probe_http_source, probe_local_file, resolve_ape_path, resolve_sacd_iso_path};
 use crate::rsp::device_capabilities::DeviceCapabilities;
 use crate::rsp::playback_config::PlaybackConfig;
 use crate::rsp::playback_context::PlaybackContext;
@@ -76,8 +74,7 @@ pub fn play_file(
 
     let mut reader: Box<dyn FormatReader + '_> = if let Some((iso_path, track_idx)) = sacd_path {
         debug!("SACD ISO: {} track {}", iso_path.display(), track_idx);
-        let file = std::fs::File::open(&iso_path)
-            .map_err(|e| format_err!("Failed to open SACD ISO {}: {e}", iso_path.display()))?;
+        let file = std::fs::File::open(&iso_path).map_err(|e| format_err!("Failed to open SACD ISO {}: {e}", iso_path.display()))?;
         Box::new(
             metadata::sacd_bundle::SacdIsoReader::try_new_for_track(file, track_idx)
                 .map_err(|e| format_err!("Failed to open SACD track: {e}"))?,
@@ -275,11 +272,11 @@ pub fn play_file(
                 // Write the decoded audio samples to the audio output if the presentation timestamp
 
                 let mut write_failed = false;
-                if let Some(output) = audio_output.as_mut() {
-                    if let Err(e) = output.write(decoded_buff) {
-                        warn!("Audio output write error: {e}");
-                        write_failed = true;
-                    }
+                if let Some(output) = audio_output.as_mut()
+                    && let Err(e) = output.write(decoded_buff)
+                {
+                    warn!("Audio output write error: {e}");
+                    write_failed = true;
                 }
                 if write_failed {
                     audio_output = None;

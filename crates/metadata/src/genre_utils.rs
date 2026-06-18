@@ -197,10 +197,7 @@ pub const ID3V1_GENRES: &[&str] = &[
 
 pub fn resolve_id3v1_genre(raw: &str) -> Option<&'static str> {
     let trimmed = raw.trim();
-    let num_str = trimmed
-        .strip_prefix('(')
-        .and_then(|s| s.strip_suffix(')'))
-        .unwrap_or(trimmed);
+    let num_str = trimmed.strip_prefix('(').and_then(|s| s.strip_suffix(')')).unwrap_or(trimmed);
     let idx: usize = num_str.parse().ok()?;
     ID3V1_GENRES.get(idx).copied()
 }

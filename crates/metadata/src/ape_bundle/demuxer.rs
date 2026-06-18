@@ -2,14 +2,12 @@ use std::io::{Read, Seek};
 use std::sync::{Arc, Mutex};
 
 use symphonia::core::audio::{Channels, Position};
-use symphonia::core::codecs::audio::AudioCodecParameters;
 use symphonia::core::codecs::CodecParameters;
+use symphonia::core::codecs::audio::AudioCodecParameters;
 use symphonia::core::common::FourCc;
 use symphonia::core::errors::{Error, Result};
 use symphonia::core::formats::probe::{ProbeDataMatchSpec, ProbeFormatData, ProbeableFormat, Score, Scoreable};
-use symphonia::core::formats::{
-    FormatId, FormatInfo, FormatOptions, FormatReader, MediaInfo, SeekMode, SeekTo, SeekedTo, Track,
-};
+use symphonia::core::formats::{FormatId, FormatInfo, FormatOptions, FormatReader, MediaInfo, SeekMode, SeekTo, SeekedTo, Track};
 use symphonia::core::io::{MediaSourceStream, ReadBytes, ScopedStream};
 use symphonia::core::meta::{Metadata, MetadataBuilder, MetadataInfo, MetadataLog, RawTag, RawValue, StandardTag, Tag};
 use symphonia::core::packet::Packet;
@@ -88,19 +86,15 @@ impl ApeReader {
         log::debug!("APE fallback: read {} bytes into memory", data.len());
 
         let cursor = std::io::Cursor::new(data);
-        let mut decoder = ApeDecoder::new(cursor)
-            .map_err(|e| Error::IoError(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())))?;
+        let mut decoder =
+            ApeDecoder::new(cursor).map_err(|e| Error::IoError(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())))?;
 
         let info = decoder.info().clone();
         let metadata_log = Self::read_metadata(&mut decoder);
         Self::build(Box::new(decoder), &info, metadata_log)
     }
 
-    fn build(
-        decoder: Box<dyn ApeDecoderTrait>,
-        info: &ape_decoder::ApeInfo,
-        metadata_log: MetadataLog,
-    ) -> Result<Self> {
+    fn build(decoder: Box<dyn ApeDecoderTrait>, info: &ape_decoder::ApeInfo, metadata_log: MetadataLog) -> Result<Self> {
         let version = info.version;
         let channels = u32::from(info.channels);
         let bits_per_sample = u32::from(info.bits_per_sample);
@@ -203,11 +197,7 @@ impl ApeReader {
             _ => return None,
         };
         let text = text.trim_end_matches('\0');
-        if text.is_empty() {
-            None
-        } else {
-            Some(text.to_string())
-        }
+        if text.is_empty() { None } else { Some(text.to_string()) }
     }
 
     fn map_ape_tag(name: &str, value: &str) -> Option<StandardTag> {
@@ -237,16 +227,8 @@ impl ApeReader {
             "TALB" => Some(StandardTag::Album(v())),
             "TPE2" => Some(StandardTag::AlbumArtist(v())),
             "TDRC" | "TYER" | "TDAT" => Some(StandardTag::RecordingDate(v())),
-            "TRCK" => value
-                .split('/')
-                .next()
-                .and_then(|n| n.parse().ok())
-                .map(StandardTag::TrackNumber),
-            "TPOS" => value
-                .split('/')
-                .next()
-                .and_then(|n| n.parse().ok())
-                .map(StandardTag::DiscNumber),
+            "TRCK" => value.split('/').next().and_then(|n| n.parse().ok()).map(StandardTag::TrackNumber),
+            "TPOS" => value.split('/').next().and_then(|n| n.parse().ok()).map(StandardTag::DiscNumber),
             "TCON" => Some(StandardTag::Genre(v())),
             "COMM" => Some(StandardTag::Comment(v())),
             "TCOM" => Some(StandardTag::Composer(v())),

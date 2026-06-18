@@ -1,8 +1,6 @@
 use std::process::exit;
 
-use api_models::common::SystemCommand::{
-    self, PowerOff, RestartRSPlayer, RestartSystem, SetVol, ToggleMute, VolDown, VolUp,
-};
+use api_models::common::SystemCommand::{self, PowerOff, RestartRSPlayer, RestartSystem, SetVol, ToggleMute, VolDown, VolUp};
 use api_models::state::StateChangeEvent;
 use log::info;
 
@@ -28,10 +26,7 @@ pub async fn handle_system_command(cmd: SystemCommand, ctx: &SystemCommandContex
             let current = ctx.audio_service.get_volume();
             let mut settings = ctx.config.get_settings();
             let nv = if current.current == 0 {
-                let restore = settings
-                    .volume_ctrl_settings
-                    .volume_before_mute
-                    .unwrap_or(current.max / 2);
+                let restore = settings.volume_ctrl_settings.volume_before_mute.unwrap_or(current.max / 2);
                 settings.volume_ctrl_settings.volume_before_mute = None;
                 settings.volume_ctrl_settings.saved_volume = Some(restore);
                 ctx.audio_service.set_volume(restore)
@@ -72,9 +67,7 @@ pub async fn handle_system_command(cmd: SystemCommand, ctx: &SystemCommandContex
 
         PowerOff => {
             if std::env::var("DEMO_MODE").is_ok() {
-                ctx.send_event(StateChangeEvent::NotificationError(
-                    "Not available in demo mode".to_string(),
-                ));
+                ctx.send_event(StateChangeEvent::NotificationError("Not available in demo mode".to_string()));
                 return;
             }
             info!("Shutting down system");
@@ -91,9 +84,7 @@ pub async fn handle_system_command(cmd: SystemCommand, ctx: &SystemCommandContex
         }
         RestartSystem => {
             if std::env::var("DEMO_MODE").is_ok() {
-                ctx.send_event(StateChangeEvent::NotificationError(
-                    "Not available in demo mode".to_string(),
-                ));
+                ctx.send_event(StateChangeEvent::NotificationError("Not available in demo mode".to_string()));
                 return;
             }
             info!("Restarting system");

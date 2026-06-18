@@ -15,17 +15,13 @@ on:
         type: choice
         options:
           - all
-          - backend
-          - ui
+          - builder
           - cross-linux
-          - cross-darwin
           - cross-armv6
           - cross-armv7
           - cross-aarch64
           - cross-x86_64
           - cross-riscv64
-          - cross-aarch64-apple-darwin
-          - cross-x86_64-apple-darwin
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -35,10 +31,10 @@ permissions:
   packages: write
 
 jobs:
-  backend:
-    name: Backend builder image
+  builder:
+    name: Build builder image
     runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.image == 'all' || github.event.inputs.image == 'backend' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.image == 'all' || github.event.inputs.image == 'builder' }}
     steps:
       - uses: actions/checkout@v6
 
@@ -53,36 +49,13 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: .
-          file: docker/Dockerfile.backend
+          file: docker/Dockerfile.builder
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/rsplayer-backend-builder:latest
-          cache-from: type=gha,scope=backend-builder
-          cache-to: type=gha,mode=max,scope=backend-builder
+          tags: ghcr.io/${{ github.repository_owner }}/rsplayer-builder:latest
+          cache-from: type=gha,scope=rsplayer-builder
+          cache-to: type=gha,mode=max,scope=rsplayer-builder
 
-  ui:
-    name: UI builder image
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.image == 'all' || github.event.inputs.image == 'ui' }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: docker/setup-buildx-action@v4
-
-      - uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: docker/Dockerfile.ui
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/rsplayer-ui-builder:latest
-          cache-from: type=gha,scope=ui-builder
-          cache-to: type=gha,mode=max,scope=ui-builder
-
+  
   cross-armv6:
     name: Cross image armv6
     runs-on: ubuntu-latest
@@ -202,51 +175,3 @@ jobs:
           tags: ghcr.io/${{ github.repository_owner }}/rsplayer-cross-riscv64:latest
           cache-from: type=gha,scope=cross-riscv64
           cache-to: type=gha,mode=max,scope=cross-riscv64
-
-  cross-aarch64-apple-darwin:
-    name: Cross image aarch64-apple-darwin
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.image == 'all' || github.event.inputs.image == 'cross-darwin' || github.event.inputs.image == 'cross-aarch64-apple-darwin' }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: docker/setup-buildx-action@v4
-
-      - uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: docker/Dockerfile.cross-aarch64-apple-darwin
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/rsplayer-cross-aarch64-apple-darwin:latest
-          cache-from: type=gha,scope=cross-aarch64-apple-darwin
-          cache-to: type=gha,mode=max,scope=cross-aarch64-apple-darwin
-
-  cross-x86_64-apple-darwin:
-    name: Cross image x86_64-apple-darwin
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.image == 'all' || github.event.inputs.image == 'cross-darwin' || github.event.inputs.image == 'cross-x86_64-apple-darwin' }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: docker/setup-buildx-action@v4
-
-      - uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: docker/Dockerfile.cross-x86_64-apple-darwin
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/rsplayer-cross-x86_64-apple-darwin:latest
-          cache-from: type=gha,scope=cross-x86_64-apple-darwin
-          cache-to: type=gha,mode=max,scope=cross-x86_64-apple-darwin

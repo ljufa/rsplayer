@@ -1,19 +1,24 @@
 use std::{
-    collections::HashSet, fs::File, path::Path, sync::{
-        Arc, RwLock, atomic::{AtomicBool, Ordering}
-    }, time
+    collections::HashSet,
+    fs::File,
+    path::Path,
+    sync::{
+        Arc, RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
+    time,
 };
 
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
 use fjall::{Database, KeyspaceCreateOptions, PersistMode};
 use log::{debug, info, warn};
-use symphonia::core::{formats::probe::Hint, formats::FormatOptions, io::MediaSourceStream, meta::MetadataOptions};
+use symphonia::core::{formats::FormatOptions, formats::probe::Hint, io::MediaSourceStream, meta::MetadataOptions};
 use tokio::sync::broadcast::Sender;
 use walkdir::WalkDir;
 
 use api_models::{
-    common::{to_database_key, MetadataLibraryItem},
+    common::{MetadataLibraryItem, to_database_key},
     player::Song,
     settings::MetadataStoreSettings,
     stat::{LibraryStats, PlayItemStatistics},
@@ -22,10 +27,9 @@ use api_models::{
 
 use crate::audio_metadata_extractor::AudioMetadataExtractor;
 use crate::ports::{
-    album_repository::ArcAlbumRepository, play_statistics_repository::ArcPlayStatisticsRepository,
-    song_repository::ArcSongRepository,
+    album_repository::ArcAlbumRepository, play_statistics_repository::ArcPlayStatisticsRepository, song_repository::ArcSongRepository,
 };
-use crate::sacd_bundle::{detect_sector_mode, read_areas, read_tracks, SACD_TRACK_MARKER};
+use crate::sacd_bundle::{SACD_TRACK_MARKER, detect_sector_mode, read_areas, read_tracks};
 
 const ARTWORK_DIR: &str = "artwork";
 
@@ -62,11 +66,7 @@ impl MetadataService {
         })
     }
 
-    fn run_migration_if_needed(
-        db: &Database,
-        song_repository: &ArcSongRepository,
-        album_repository: &ArcAlbumRepository,
-    ) {
+    fn run_migration_if_needed(db: &Database, song_repository: &ArcSongRepository, album_repository: &ArcAlbumRepository) {
         let migrations = db
             .keyspace("_migrations", KeyspaceCreateOptions::default)
             .expect("Failed to open _migrations keyspace");
@@ -76,8 +76,7 @@ impl MetadataService {
         }
 
         info!("Running one-shot migration: cleanup orphaned albums (pre-3.5.5)");
-        let valid_keys: HashSet<String> =
-            song_repository.find_all().into_iter().map(|s| s.file).collect();
+        let valid_keys: HashSet<String> = song_repository.find_all().into_iter().map(|s| s.file).collect();
         if let Err(e) = album_repository.cleanup_orphaned_albums(&valid_keys) {
             warn!("Migration: failed to cleanup orphaned albums: {e}");
             return;
@@ -97,10 +96,7 @@ impl MetadataService {
     }
 
     pub fn effective_directories(&self) -> Vec<String> {
-        self.settings
-            .read()
-            .expect("settings lock poisoned")
-            .effective_directories()
+        self.settings.read().expect("settings lock poisoned").effective_directories()
     }
 
     pub fn get_favorite_radio_stations(&self) -> Vec<String> {
@@ -108,12 +104,7 @@ impl MetadataService {
             .find_by_key_prefix("radio_uuid_")
             .iter()
             .filter(|stat| stat.liked_count > 0)
-            .map(|stat| {
-                stat.play_item_id
-                    .strip_prefix("radio_uuid_")
-                    .unwrap_or_default()
-                    .to_string()
-            })
+            .map(|stat| stat.play_item_id.strip_prefix("radio_uuid_").unwrap_or_default().to_string())
             .collect()
     }
 
@@ -225,23 +216,19 @@ impl MetadataService {
 
     pub fn search_local_files_by_dir(&self, dir: &str) -> Vec<MetadataLibraryItem> {
         let start_time = std::time::Instant::now();
-        let result = self
-            .song_repository
-            .find_by_key_prefix(dir)
-            .into_iter()
-            .filter_map(|(key, value)| {
-                let key = String::from_utf8(key).ok()?;
-                let (_, right) = key.split_once(dir)?;
-                if right.contains('/') {
-                    let (left, _) = right.split_once('/')?;
-                    Some(MetadataLibraryItem::Directory { name: left.to_owned() })
-                } else if let Some(song) = Song::bytes_to_song(&value) {
-                    Some(MetadataLibraryItem::SongItem(song))
-                } else {
-                    warn!("Failed to deserialize song for key: {key}");
-                    None
-                }
-            });
+        let result = self.song_repository.find_by_key_prefix(dir).into_iter().filter_map(|(key, value)| {
+            let key = String::from_utf8(key).ok()?;
+            let (_, right) = key.split_once(dir)?;
+            if right.contains('/') {
+                let (left, _) = right.split_once('/')?;
+                Some(MetadataLibraryItem::Directory { name: left.to_owned() })
+            } else if let Some(song) = Song::bytes_to_song(&value) {
+                Some(MetadataLibraryItem::SongItem(song))
+            } else {
+                warn!("Failed to deserialize song for key: {key}");
+                None
+            }
+        });
         let mut unique: Vec<MetadataLibraryItem> = result.collect();
         unique.dedup();
         log::info!("search_local_files_by_dir took {:?}", start_time.elapsed());
@@ -306,17 +293,17 @@ impl MetadataService {
         if !full_scan {
             info!("Deleting {} files from database", deleted_db_keys.len());
             for db_key in &deleted_db_keys {
-                if let Some(song) = self.song_repository.find_by_id(db_key) {
-                    if let Err(e) = self.album_repository.remove_from_song(&song) {
-                        warn!("Failed to remove song '{db_key}' from album: {e}");
-                    }
+                if let Some(song) = self.song_repository.find_by_id(db_key)
+                    && let Err(e) = self.album_repository.remove_from_song(&song)
+                {
+                    warn!("Failed to remove song '{db_key}' from album: {e}");
                 }
                 if let Err(e) = self.song_repository.delete(db_key) {
                     warn!("Failed to delete song '{db_key}' from db: {e}");
                 }
-                if let Err(e) = state_changes_sender.send(StateChangeEvent::MetadataSongScanned(format!(
-                    "Key {db_key} deleted from database"
-                ))) {
+                if let Err(e) =
+                    state_changes_sender.send(StateChangeEvent::MetadataSongScanned(format!("Key {db_key} deleted from database")))
+                {
                     warn!("Failed to send scan status event: {e}");
                 }
             }
@@ -327,11 +314,7 @@ impl MetadataService {
         ))) {
             warn!("Failed to send scan finished event: {e}");
         }
-        info!(
-            "Scanning of {} files finished in {}s",
-            count,
-            start_time.elapsed().as_secs()
-        );
+        info!("Scanning of {} files finished in {}s", count, start_time.elapsed().as_secs());
         self.scan_running.store(false, Ordering::Relaxed);
         if let Err(e) = self.db.persist(PersistMode::SyncData) {
             warn!("Failed to persist database after scan: {e}");
@@ -391,10 +374,10 @@ impl MetadataService {
                     de.file_type().is_file()
                 })
                 .filter(|de| {
-                    let ext = de.path().extension().map_or_else(
-                        || "no_ext".to_string(),
-                        |ex| ex.to_str().unwrap_or("no_ext").to_lowercase(),
-                    );
+                    let ext = de
+                        .path()
+                        .extension()
+                        .map_or_else(|| "no_ext".to_string(), |ex| ex.to_str().unwrap_or("no_ext").to_lowercase());
                     let is_supported = MetadataStoreSettings::default().supported_extensions.contains(&ext);
                     if !is_supported {
                         debug!("File {} has unsupported extension: {}", de.path().display(), ext);
@@ -403,10 +386,7 @@ impl MetadataService {
                 })
                 .filter_map(|de| {
                     let path_str = de.path().to_str()?;
-                    Some((
-                        path_str.to_owned(),
-                        Self::full_path_to_database_key_for_dir(music_dir, path_str),
-                    ))
+                    Some((path_str.to_owned(), Self::full_path_to_database_key_for_dir(music_dir, path_str)))
                 })
             {
                 debug!("Processing file: {} -> key: {}", entry.0, entry.1);
@@ -445,12 +425,7 @@ impl MetadataService {
         (added_files, deleted_keys)
     }
 
-    fn add_songs_to_db(
-        &self,
-        files: &[String],
-        state_changes_sender: &Sender<StateChangeEvent>,
-        settings: &MetadataStoreSettings,
-    ) -> u32 {
+    fn add_songs_to_db(&self, files: &[String], state_changes_sender: &Sender<StateChangeEvent>, settings: &MetadataStoreSettings) -> u32 {
         let mut count = 0u32;
         for file in files {
             if let Err(e) = self.scan_single_file(Path::new(file), settings) {
@@ -460,9 +435,7 @@ impl MetadataService {
             if count.is_multiple_of(100) {
                 self.song_repository.flush();
                 state_changes_sender
-                    .send(StateChangeEvent::MetadataSongScanned(format!(
-                        "Scanning: {count} files processed"
-                    )))
+                    .send(StateChangeEvent::MetadataSongScanned(format!("Scanning: {count} files processed")))
                     .ok();
             }
         }
@@ -472,21 +445,13 @@ impl MetadataService {
 
     /// Fast metadata extraction for APE files using the `ape_decoder` crate directly.
     /// Reads only header + seek table + tags from disk, avoiding loading the entire file.
-    fn scan_ape_file_fast(
-        &self,
-        file_path: &Path,
-        settings: &MetadataStoreSettings,
-        file_modification_date: DateTime<Utc>,
-    ) -> Result<()> {
-        let path_str = file_path
-            .to_str()
-            .ok_or_else(|| Error::msg("APE file path is not valid UTF-8"))?;
+    fn scan_ape_file_fast(&self, file_path: &Path, settings: &MetadataStoreSettings, file_modification_date: DateTime<Utc>) -> Result<()> {
+        let path_str = file_path.to_str().ok_or_else(|| Error::msg("APE file path is not valid UTF-8"))?;
         let file_p = Self::full_path_to_database_key(settings, path_str);
         info!("Scanning APE file (fast path):\t{file_p}");
 
         let file = File::open(file_path)?;
-        let mut decoder =
-            ape_decoder::ApeDecoder::new(file).map_err(|e| Error::msg(format!("APE decode error: {e}")))?;
+        let mut decoder = ape_decoder::ApeDecoder::new(file).map_err(|e| Error::msg(format!("APE decode error: {e}")))?;
 
         let info = decoder.info();
         let duration_ms = info.duration_ms;
@@ -574,23 +539,12 @@ impl MetadataService {
             _ => return None,
         };
         let text = text.trim_end_matches('\0').trim().to_string();
-        if text.is_empty() {
-            None
-        } else {
-            Some(text)
-        }
+        if text.is_empty() { None } else { Some(text) }
     }
 
     /// Scan an SACD ISO file and create one `Song` entry per audio track using virtual paths.
-    fn scan_sacd_iso_file(
-        &self,
-        file_path: &Path,
-        settings: &MetadataStoreSettings,
-        file_modification_date: DateTime<Utc>,
-    ) -> Result<()> {
-        let path_str = file_path
-            .to_str()
-            .ok_or_else(|| Error::msg("SACD ISO path is not valid UTF-8"))?;
+    fn scan_sacd_iso_file(&self, file_path: &Path, settings: &MetadataStoreSettings, file_modification_date: DateTime<Utc>) -> Result<()> {
+        let path_str = file_path.to_str().ok_or_else(|| Error::msg("SACD ISO path is not valid UTF-8"))?;
         let iso_key = Self::full_path_to_database_key(settings, path_str);
         info!("Scanning SACD ISO:\t{iso_key}");
 
@@ -606,8 +560,7 @@ impl MetadataService {
             .or_else(|| areas.first())
             .ok_or_else(|| Error::msg("No playable SACD area found"))?;
 
-        let tracks = read_tracks(&mut file, mode, area)
-            .map_err(|e| Error::msg(format!("Failed to read SACD track list: {e}")))?;
+        let tracks = read_tracks(&mut file, mode, area).map_err(|e| Error::msg(format!("Failed to read SACD track list: {e}")))?;
 
         if tracks.is_empty() {
             return Err(Error::msg("SACD ISO contains no tracks"));
@@ -655,16 +608,14 @@ impl MetadataService {
         let mss = MediaSourceStream::new(file, symphonia::core::io::MediaSourceStreamOptions::default());
 
         let mut hint = Hint::new();
-        if let Some(ext) = file_path.extension() {
-            if let Some(ext_str) = ext.to_str() {
-                hint.with_extension(&ext_str.to_lowercase());
-            }
+        if let Some(ext) = file_path.extension()
+            && let Some(ext_str) = ext.to_str()
+        {
+            hint.with_extension(&ext_str.to_lowercase());
         }
         let format_opts = FormatOptions::default();
         let metadata_opts = MetadataOptions::default();
-        let path_str = file_path
-            .to_str()
-            .ok_or_else(|| Error::msg("File path is not valid UTF-8"))?;
+        let path_str = file_path.to_str().ok_or_else(|| Error::msg("File path is not valid UTF-8"))?;
         let file_p = &Self::full_path_to_database_key(settings, path_str);
 
         info!("Scanning file:\t{file_p}");
@@ -678,8 +629,7 @@ impl MetadataService {
                 let (mut song, image_data) = AudioMetadataExtractor::extract(&mut *probed);
                 if let Some(image_data) = &image_data {
                     let image_id = uuid::Uuid::new_v4();
-                    if let Err(e) = std::fs::write(Path::new(ARTWORK_DIR).join(image_id.to_string()), &image_data.data)
-                    {
+                    if let Err(e) = std::fs::write(Path::new(ARTWORK_DIR).join(image_id.to_string()), &image_data.data) {
                         warn!("Error writing image file: {e}");
                     } else {
                         song.image_id = Some(image_id.to_string());

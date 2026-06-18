@@ -43,11 +43,9 @@ type Config = Arc<Configuration>;
 type UserCommandSender = mpsc::Sender<UserCommand>;
 
 #[derive(RustEmbed)]
-#[folder = "../../target/dx/rsplayer_web_ui/release/web/public"]
-#[exclude = "index.html"]
-struct StaticContentDir;
+#[folder = "../../dist/web-ui/public"]
 
-static INDEX_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
+struct StaticContentDir;
 
 #[derive(Clone)]
 struct AppState {
@@ -60,11 +58,7 @@ pub fn start(
     mut state_changes_rx: broadcast::Receiver<StateChangeEvent>,
     user_commands_tx: UserCommandSender,
     config: &Config,
-) -> (
-    impl Future<Output = ()>,
-    Option<impl Future<Output = ()>>,
-    impl Future<Output = ()>,
-) {
+) -> (impl Future<Output = ()>, Option<impl Future<Output = ()>>, impl Future<Output = ()>) {
     let (ws_broadcast, _) = broadcast::channel::<Arc<String>>(32);
 
     let state = AppState {
@@ -112,8 +106,7 @@ pub fn start(
         }
     };
 
-    let https_handle = if let (Ok(cert_path), Ok(key_path)) = (env::var("TLS_CERT_PATH"), env::var("TLS_CERT_KEY_PATH"))
-    {
+    let https_handle = if let (Ok(cert_path), Ok(key_path)) = (env::var("TLS_CERT_PATH"), env::var("TLS_CERT_KEY_PATH")) {
         info!("TLS enabled, starting HTTPS on port {https_port}");
         Some(async move {
             let tls_config = match RustlsConfig::from_pem_file(cert_path, key_path).await {
@@ -124,10 +117,7 @@ pub fn start(
                 }
             };
             let addr = std::net::SocketAddr::from(([0, 0, 0, 0], https_port));
-            if let Err(e) = axum_server::bind_rustls(addr, tls_config)
-                .serve(app.into_make_service())
-                .await
-            {
+            if let Err(e) = axum_server::bind_rustls(addr, tls_config).serve(app.into_make_service()).await {
                 error!("HTTPS server exited with error: {e}");
             }
         })
@@ -179,8 +169,7 @@ fn build_router(state: AppState) -> Router {
         .allow_methods([Method::GET, Method::POST, Method::DELETE])
         .allow_origin(Any);
 
-    let cache_3d =
-        SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static("max-age=259200"));
+    let cache_3d = SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static("max-age=259200"));
 
     let artwork = ServeDir::new("artwork");
 
@@ -207,7 +196,7 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Resp
 
 async fn get_settings(State(state): State<AppState>) -> Json<Settings> {
     let mut settings = state.config.get_settings_mut();
-    settings.version = env!("APP_VERSION").to_string();
+    settings.version = env!("CARGO_PKG_VERSION").to_string();
     settings.demo_mode = env::var("DEMO_MODE").is_ok();
 
     #[cfg(feature = "alsa")]
@@ -344,11 +333,7 @@ async fn serve_music(State(state): State<AppState>, AxumPath(path): AxumPath<Str
             None => return range_not_satisfiable(file_size),
         }
     } else {
-        let end = if file_size == 0 {
-            0
-        } else {
-            STREAM_CHUNK.min(file_size) - 1
-        };
+        let end = if file_size == 0 { 0 } else { STREAM_CHUNK.min(file_size) - 1 };
         (0u64, end, false)
     };
 
@@ -462,21 +447,23 @@ async fn spa_or_static_fallback(uri: Uri, _req: Request) -> Response {
         }
     }
 
-    // SPA fallback: serve index.html with no-cache
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-        .header(header::CACHE_CONTROL, "no-cache, must-revalidate")
-        .header("ETag", concat!("\"", env!("APP_VERSION"), "\""))
-        .body(Body::from(INDEX_HTML))
-        .unwrap()
+    // SPA fallback: serve index.html from embedded dist with no-cache
+    match StaticContentDir::get("index.html") {
+        Some(file) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+            .header(header::CACHE_CONTROL, "no-cache, must-revalidate")
+            .header("ETag", concat!("\"", env!("CARGO_PKG_VERSION"), "\""))
+            .body(Body::from(file.data.into_owned()))
+            .unwrap(),
+        None => Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::from("index.html not embedded — run `cargo make build_ui_release` first"))
+            .unwrap(),
+    }
 }
 
-async fn user_connected(
-    ws: WebSocket,
-    mut ws_rx: broadcast::Receiver<Arc<String>>,
-    user_commands_tx: UserCommandSender,
-) {
+async fn user_connected(ws: WebSocket, mut ws_rx: broadcast::Receiver<Arc<String>>, user_commands_tx: UserCommandSender) {
     let user_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
 
     debug!("new websocket client: {user_id}");

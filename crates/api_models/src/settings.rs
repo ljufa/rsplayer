@@ -319,11 +319,7 @@ impl AlsaSettings {
     }
 
     pub fn set_output_device(&mut self, card_id: &str, pcm_name: &str) {
-        if let Some(pcm) = self
-            .find_pcms_by_card_id(card_id)
-            .iter()
-            .find(|pcm| pcm.name == pcm_name)
-        {
+        if let Some(pcm) = self.find_pcms_by_card_id(card_id).iter().find(|pcm| pcm.name == pcm_name) {
             self.output_device = pcm.clone();
         }
     }

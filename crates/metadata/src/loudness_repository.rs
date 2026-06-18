@@ -64,11 +64,7 @@ impl LoudnessRepository for FjallLoudnessRepository {
     }
 
     fn delete_all(&self) {
-        let keys: Vec<Vec<u8>> = self
-            .db
-            .iter()
-            .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
-            .collect();
+        let keys: Vec<Vec<u8>> = self.db.iter().filter_map(|guard| guard.key().ok().map(|k| k.to_vec())).collect();
         for key in keys {
             _ = self.db.remove(key);
         }

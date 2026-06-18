@@ -274,20 +274,19 @@ fn TrackInfo(song: Option<Song>, player_info: Option<PlayerInfo>) -> Element {
                     )
                 },
             );
-            let loudness =
-                player_info
-                    .as_ref()
-                    .and_then(|pi| match (pi.track_loudness_lufs, pi.normalization_gain_db) {
-                        (Some(l), Some(g)) => Some(format!(
-                            "{:.1} LUFS  →  {:+.1} dB  →  {:.1} LUFS",
-                            l as f64 / 100.0,
-                            g as f64 / 100.0,
-                            (l + g) as f64 / 100.0
-                        )),
-                        (Some(l), None) => Some(format!("{:.1} LUFS", l as f64 / 100.0)),
-                        (None, Some(g)) => Some(format!("{:+.1} dB (file tag)", g as f64 / 100.0)),
-                        _ => None,
-                    });
+            let loudness = player_info
+                .as_ref()
+                .and_then(|pi| match (pi.track_loudness_lufs, pi.normalization_gain_db) {
+                    (Some(l), Some(g)) => Some(format!(
+                        "{:.1} LUFS  →  {:+.1} dB  →  {:.1} LUFS",
+                        l as f64 / 100.0,
+                        g as f64 / 100.0,
+                        (l + g) as f64 / 100.0
+                    )),
+                    (Some(l), None) => Some(format!("{:.1} LUFS", l as f64 / 100.0)),
+                    (None, Some(g)) => Some(format!("{:+.1} dB (file tag)", g as f64 / 100.0)),
+                    _ => None,
+                });
             let artist = ps.artist.clone();
             let album = ps.album.clone();
             rsx! {

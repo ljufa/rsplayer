@@ -33,9 +33,7 @@ impl FjallSongRepository {
 impl SongRepository for FjallSongRepository {
     fn save(&self, song: &Song) -> RepoResult<()> {
         if song.file.is_empty() {
-            return Err(RepoError::Invalid(
-                "refusing to save song with empty file key".to_owned(),
-            ));
+            return Err(RepoError::Invalid("refusing to save song with empty file key".to_owned()));
         }
         self.songs_db
             .insert(&song.file, song.to_json_string_bytes())

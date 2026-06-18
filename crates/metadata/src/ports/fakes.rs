@@ -8,8 +8,8 @@ use api_models::{player::Song, playlist::Album, stat::PlayItemStatistics};
 
 use crate::error::{RepoError, RepoResult};
 use crate::ports::{
-    album_repository::AlbumRepository, loudness_repository::LoudnessRepository,
-    play_statistics_repository::PlayStatisticsRepository, song_repository::SongRepository,
+    album_repository::AlbumRepository, loudness_repository::LoudnessRepository, play_statistics_repository::PlayStatisticsRepository,
+    song_repository::SongRepository,
 };
 
 #[derive(Default)]
@@ -98,13 +98,7 @@ impl AlbumRepository for InMemoryAlbumRepository {
     }
 
     fn find_all_album_artists(&self) -> Vec<String> {
-        let mut out: Vec<String> = self
-            .albums
-            .lock()
-            .unwrap()
-            .iter()
-            .filter_map(|a| a.artist.clone())
-            .collect();
+        let mut out: Vec<String> = self.albums.lock().unwrap().iter().filter_map(|a| a.artist.clone()).collect();
         out.sort();
         out.dedup();
         out
@@ -201,12 +195,7 @@ pub struct InMemoryPlayStatisticsRepository {
 
 impl PlayStatisticsRepository for InMemoryPlayStatisticsRepository {
     fn find_by_id(&self, play_item_id: &str) -> Option<PlayItemStatistics> {
-        self.stats
-            .lock()
-            .unwrap()
-            .iter()
-            .find(|s| s.play_item_id == play_item_id)
-            .cloned()
+        self.stats.lock().unwrap().iter().find(|s| s.play_item_id == play_item_id).cloned()
     }
 
     fn find_by_key_prefix(&self, prefix: &str) -> Vec<PlayItemStatistics> {
@@ -225,10 +214,7 @@ impl PlayStatisticsRepository for InMemoryPlayStatisticsRepository {
 
     fn save(&self, play_item_statistics: &PlayItemStatistics) -> RepoResult<()> {
         let mut g = self.stats.lock().unwrap();
-        if let Some(existing) = g
-            .iter_mut()
-            .find(|s| s.play_item_id == play_item_statistics.play_item_id)
-        {
+        if let Some(existing) = g.iter_mut().find(|s| s.play_item_id == play_item_statistics.play_item_id) {
             *existing = play_item_statistics.clone();
         } else {
             g.push(play_item_statistics.clone());

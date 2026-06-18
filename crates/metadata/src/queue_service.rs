@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::ops::Bound;
 use std::str::FromStr;
 use std::sync::{
-    atomic::{AtomicU16, AtomicU64, Ordering},
     RwLock,
+    atomic::{AtomicU16, AtomicU64, Ordering},
 };
 
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
@@ -30,11 +30,7 @@ const NEXT_ID_KEY: &str = "_next_queue_id";
 
 impl QueueService {
     #[must_use]
-    pub fn new(
-        db: &Database,
-        song_repository: ArcSongRepository,
-        statistics_repository: ArcPlayStatisticsRepository,
-    ) -> Self {
+    pub fn new(db: &Database, song_repository: ArcSongRepository, statistics_repository: ArcPlayStatisticsRepository) -> Self {
         let queue_db = db
             .keyspace("queue", KeyspaceCreateOptions::default)
             .expect("Failed to open queue keyspace");
@@ -184,10 +180,7 @@ impl QueueService {
                     if let Some(ref ck) = current_key {
                         played.insert(ck.clone());
                     }
-                    all_keys
-                        .iter()
-                        .filter(|k| current_key.as_ref() != Some(*k))
-                        .collect::<Vec<_>>()
+                    all_keys.iter().filter(|k| current_key.as_ref() != Some(*k)).collect::<Vec<_>>()
                 } else {
                     unplayed
                 };
@@ -257,12 +250,12 @@ impl QueueService {
             let key = guard.key().expect("Failed to get key").to_vec();
             _ = self.status_db.insert(CURRENT_SONG_KEY, &key);
             return true;
-        } else if mode == PlaybackMode::LoopQueue {
-            if let Some(guard) = self.queue_db.last_key_value() {
-                let key = guard.key().expect("Failed to get key").to_vec();
-                _ = self.status_db.insert(CURRENT_SONG_KEY, &key);
-                return true;
-            }
+        } else if mode == PlaybackMode::LoopQueue
+            && let Some(guard) = self.queue_db.last_key_value()
+        {
+            let key = guard.key().expect("Failed to get key").to_vec();
+            _ = self.status_db.insert(CURRENT_SONG_KEY, &key);
+            return true;
         }
         false
     }
@@ -376,18 +369,16 @@ impl QueueService {
     }
 
     pub fn get_queue_page_starting_from_current_song(&self, limit: usize) -> Vec<Song> {
-        self.get_current_or_first_song_key()
-            .as_ref()
-            .map_or_else(Vec::new, |from| {
-                self.queue_db
-                    .range(from.as_slice()..)
-                    .filter_map(|guard| {
-                        let value = guard.value().ok()?;
-                        Song::bytes_to_song(&value)
-                    })
-                    .take(limit)
-                    .collect()
-            })
+        self.get_current_or_first_song_key().as_ref().map_or_else(Vec::new, |from| {
+            self.queue_db
+                .range(from.as_slice()..)
+                .filter_map(|guard| {
+                    let value = guard.value().ok()?;
+                    Song::bytes_to_song(&value)
+                })
+                .take(limit)
+                .collect()
+        })
     }
 
     pub fn get_all_songs(&self) -> Vec<Song> {
@@ -446,10 +437,10 @@ impl QueueService {
     }
 
     pub fn set_current_to_last(&self) {
-        if let Some(guard) = self.queue_db.last_key_value() {
-            if let Ok(key) = guard.key() {
-                _ = self.status_db.insert(CURRENT_SONG_KEY, key.as_ref());
-            }
+        if let Some(guard) = self.queue_db.last_key_value()
+            && let Ok(key) = guard.key()
+        {
+            _ = self.status_db.insert(CURRENT_SONG_KEY, key.as_ref());
         }
     }
 
@@ -508,9 +499,7 @@ impl QueueService {
             return;
         }
         let current_key_opt = self.get_current_or_first_song_key();
-        let current_index = current_key_opt
-            .and_then(|ck| keys.iter().position(|k| k == &ck))
-            .unwrap_or(0);
+        let current_index = current_key_opt.and_then(|ck| keys.iter().position(|k| k == &ck)).unwrap_or(0);
         if from_index == current_index || from_index == current_index + 1 {
             return;
         }

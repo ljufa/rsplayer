@@ -68,8 +68,7 @@ pub enum BuildOutcome {
 pub fn build(config: ArcConfiguration, shared_db: Arc<fjall::Database>) -> BuildOutcome {
     let song_repository: ArcSongRepository = Arc::new(FjallSongRepository::new(&shared_db));
     let album_repository: ArcAlbumRepository = Arc::new(FjallAlbumRepository::new(&shared_db));
-    let play_statistics_repository: ArcPlayStatisticsRepository =
-        Arc::new(FjallPlayStatisticsRepository::new(&shared_db));
+    let play_statistics_repository: ArcPlayStatisticsRepository = Arc::new(FjallPlayStatisticsRepository::new(&shared_db));
     let loudness_repository: ArcLoudnessRepository = Arc::new(FjallLoudnessRepository::new(&shared_db));
 
     let metadata_service = Arc::new(
@@ -110,14 +109,13 @@ pub fn build(config: ArcConfiguration, shared_db: Arc<fjall::Database>) -> Build
     let initial_volume = config.get_settings().volume_ctrl_settings.saved_volume.unwrap_or(0);
     let current_volume = Arc::new(AtomicU8::new(initial_volume));
 
-    let audio_service: ArcAudioInterfaceSvc =
-        match AudioInterfaceService::new(&config, usb_service.clone(), current_volume.clone()) {
-            Ok(s) => Arc::new(s),
-            Err(e) => {
-                error!("Audio service interface can't be created. error: {e}");
-                return BuildOutcome::Degraded(e);
-            }
-        };
+    let audio_service: ArcAudioInterfaceSvc = match AudioInterfaceService::new(&config, usb_service.clone(), current_volume.clone()) {
+        Ok(s) => Arc::new(s),
+        Err(e) => {
+            error!("Audio service interface can't be created. error: {e}");
+            return BuildOutcome::Degraded(e);
+        }
+    };
     info!("Audio interface service successfully created.");
 
     let user_commands = ChannelPair::<UserCommand>::new(5);
@@ -175,11 +173,7 @@ mod tests {
     #[tokio::test]
     async fn build_wires_services_and_channels() {
         let tmp = TempDir::new().expect("temp dir");
-        let db = Arc::new(
-            fjall::Database::builder(tmp.path().join("test.db"))
-                .open()
-                .expect("open temp db"),
-        );
+        let db = Arc::new(fjall::Database::builder(tmp.path().join("test.db")).open().expect("open temp db"));
         let config = Arc::new(Configuration::new(&db));
 
         let mut container = match build(config, db) {
@@ -187,18 +181,10 @@ mod tests {
             BuildOutcome::Degraded(e) => panic!("expected Ready, got Degraded: {e}"),
         };
 
-        assert!(
-            container.usb_service.is_none(),
-            "default settings should not enable USB"
-        );
+        assert!(container.usb_service.is_none(), "default settings should not enable USB");
 
         let cmd = UserCommand::Player(PlayerCommand::Pause);
-        container
-            .user_commands
-            .tx
-            .send(cmd.clone())
-            .await
-            .expect("send user command");
+        container.user_commands.tx.send(cmd.clone()).await.expect("send user command");
         let received = container.user_commands.rx.recv().await.expect("rx closed");
         assert_eq!(received, cmd);
 

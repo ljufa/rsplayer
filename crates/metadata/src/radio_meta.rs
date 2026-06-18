@@ -16,12 +16,7 @@ pub fn get_external_radio_meta(agent: &ureq::Agent, resp: &ureq::http::Response<
     use ureq::ResponseExt;
 
     let final_url = resp.get_uri().to_string();
-    let header_str = |name: &str| -> Option<String> {
-        resp.headers()
-            .get(name)
-            .and_then(|v| v.to_str().ok())
-            .map(ToString::to_string)
-    };
+    let header_str = |name: &str| -> Option<String> { resp.headers().get(name).and_then(|v| v.to_str().ok()).map(ToString::to_string) };
 
     let mut radio_meta = RadioMeta {
         name: header_str("icy-name"),
@@ -38,21 +33,13 @@ pub fn get_external_radio_meta(agent: &ureq::Agent, resp: &ureq::http::Response<
         parse_audio_info(&audio_info, &mut radio_meta);
     }
 
-    let server = resp
-        .headers()
-        .get("Server")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or_default();
+    let server = resp.headers().get("Server").and_then(|v| v.to_str().ok()).unwrap_or_default();
     if server == "radiosphere" {
         radio_providers::process_radiosphere_meta(agent, &final_url, &mut radio_meta);
-    } else if server.starts_with("QuantumCast Streamer") {
-        if let Some(channel_key) = resp
-            .headers()
-            .get("x-quantumcast-channelkey")
-            .and_then(|v| v.to_str().ok())
-        {
-            radio_providers::process_quantumcast_meta(agent, channel_key, &mut radio_meta);
-        }
+    } else if server.starts_with("QuantumCast Streamer")
+        && let Some(channel_key) = resp.headers().get("x-quantumcast-channelkey").and_then(|v| v.to_str().ok())
+    {
+        radio_providers::process_quantumcast_meta(agent, channel_key, &mut radio_meta);
     }
     Some(radio_meta)
 }
@@ -104,9 +91,6 @@ mod tests {
         }"#;
         let song = radio_providers::parse_song_metadata(json_body).unwrap();
         assert_eq!(song.artist, Some("Manik (NYC)".to_string()));
-        assert_eq!(
-            song.title,
-            Some("SH-101 Dalmatians (Audio Soul Project Version)".to_string())
-        );
+        assert_eq!(song.title, Some("SH-101 Dalmatians (Audio Soul Project Version)".to_string()));
     }
 }

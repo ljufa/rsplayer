@@ -1,6 +1,4 @@
-use symphonia::core::audio::{
-    AsGenericAudioBufferRef, Audio, AudioBuffer, AudioMut, AudioSpec, Channels, GenericAudioBufferRef, Position,
-};
+use symphonia::core::audio::{AsGenericAudioBufferRef, Audio, AudioBuffer, AudioMut, AudioSpec, Channels, GenericAudioBufferRef, Position};
 use symphonia::core::codecs::audio::{AudioCodecParameters, AudioDecoder, AudioDecoderOptions, FinalizeResult};
 use symphonia::core::codecs::registry::{RegisterableAudioDecoder, SupportedAudioCodec};
 use symphonia::core::codecs::{CodecInfo, CodecProfileInfo};
@@ -60,9 +58,7 @@ impl ApeDecoder {
         let total_bytes = packet.data.len();
         let samples = total_bytes / frame_size;
 
-        log::debug!(
-            "APE decode: total_bytes={total_bytes}, channels={channels}, bits={bits}, frame_size={frame_size}, samples={samples}"
-        );
+        log::debug!("APE decode: total_bytes={total_bytes}, channels={channels}, bits={bits}, frame_size={frame_size}, samples={samples}");
 
         self.ensure_capacity(samples);
         self.buf.clear();
@@ -82,8 +78,7 @@ impl ApeDecoder {
                     for (i, sample_idx) in (0..total_bytes).step_by(frame_size).enumerate().take(samples) {
                         let offset = sample_idx + c * bytes_per_sample;
                         if offset + 1 < total_bytes {
-                            plane[i] =
-                                i32::from(i16::from_le_bytes([packet.data[offset], packet.data[offset + 1]])) << 16;
+                            plane[i] = i32::from(i16::from_le_bytes([packet.data[offset], packet.data[offset + 1]])) << 16;
                         }
                     }
                 }

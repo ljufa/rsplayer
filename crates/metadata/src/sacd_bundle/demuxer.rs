@@ -2,21 +2,18 @@ use std::fs::File;
 use std::num::NonZero;
 
 use symphonia::core::audio::{Channels, Position};
-use symphonia::core::codecs::audio::AudioCodecParameters;
 use symphonia::core::codecs::CodecParameters;
+use symphonia::core::codecs::audio::AudioCodecParameters;
 use symphonia::core::common::FourCc;
 use symphonia::core::errors::{Error, Result};
-use symphonia::core::formats::{
-    FormatId, FormatInfo, FormatReader, MediaInfo, SeekMode, SeekTo, SeekedTo, Track, TrackFlags,
-};
+use symphonia::core::formats::{FormatId, FormatInfo, FormatReader, MediaInfo, SeekMode, SeekTo, SeekedTo, Track, TrackFlags};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::{Metadata, MetadataLog};
 use symphonia::core::packet::Packet;
 use symphonia::core::units::{Duration, TimeBase, Timestamp};
 
 use super::scarletbook::{
-    audio_bytes_per_sector, detect_sector_mode, read_areas, read_audio_sectors, read_tracks, SectorMode,
-    SACD_SAMPLING_FREQUENCY,
+    SACD_SAMPLING_FREQUENCY, SectorMode, audio_bytes_per_sector, detect_sector_mode, read_areas, read_audio_sectors, read_tracks,
 };
 use crate::dsd_bundle::CODEC_TYPE_DSD_MSBF;
 

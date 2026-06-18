@@ -125,8 +125,7 @@ pub fn LibraryRadioPage() -> Element {
             }
             FilterType::Tag => {
                 spawn(async move {
-                    let url =
-                        format!("{RADIO_BROWSER_URL}tags?limit=500&order=stationcount&reverse=true&hidebroken=true");
+                    let url = format!("{RADIO_BROWSER_URL}tags?limit=500&order=stationcount&reverse=true&hidebroken=true");
                     if let Ok(resp) = Request::get(&url).send().await {
                         if let Ok(list) = resp.json::<Vec<Tag>>().await {
                             *browse_items.write() = list.into_iter().map(BrowseItem::Tag).collect();
@@ -411,10 +410,7 @@ async fn fetch_stations(by: &str, value: &str) -> Vec<Station> {
 }
 
 async fn search_stations_by_name(name: &str) -> Vec<Station> {
-    let url = format!(
-        "{RADIO_BROWSER_URL}stations/search?name={}&limit=300&hidebroken=true",
-        name
-    );
+    let url = format!("{RADIO_BROWSER_URL}stations/search?name={}&limit=300&hidebroken=true", name);
     let Ok(resp) = Request::get(&url).send().await else {
         return vec![];
     };

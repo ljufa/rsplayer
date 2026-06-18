@@ -6,7 +6,7 @@ use rubato::{Fft, FixedSync, Resampler};
 use std::sync::Arc;
 use symphonia::core::audio::{AudioSpec, GenericAudioBufferRef};
 
-use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 use std::time::Duration;
 
 /// Number of consecutive error callbacks before the stream is considered
@@ -33,7 +33,7 @@ use symphonia::core::audio::conv::{ConvertibleSample, FromSample, IntoSample};
 use symphonia::core::audio::sample::Sample;
 
 use cpal::traits::{DeviceTrait, StreamTrait};
-use rb::{RbConsumer, RbProducer, SpscRb, RB};
+use rb::{RB, RbConsumer, RbProducer, SpscRb};
 
 use log::{debug, error, warn};
 
@@ -87,18 +87,18 @@ where
         }
 
         // Equalizer — skipped entirely when no filters are configured.
-        if let Some(ref mut dsp) = dsp {
-            if dsp.handle.has_filters.load(Ordering::Acquire) {
-                if needs_channel_map {
-                    dsp.equalizer.process_samples(&mut self.channel_buf);
-                } else {
-                    dsp.equalizer.process_samples(&mut self.samples);
-                }
+        if let Some(dsp) = dsp
+            && dsp.handle.has_filters.load(Ordering::Acquire)
+        {
+            if needs_channel_map {
+                dsp.equalizer.process_samples(&mut self.channel_buf);
+            } else {
+                dsp.equalizer.process_samples(&mut self.samples);
             }
         }
 
         // VU metering — read pre-volume so the meter reflects source amplitude.
-        if let Some(ref mut vu) = vu_meter {
+        if let Some(vu) = vu_meter {
             if needs_channel_map {
                 vu.update_peaks(self.output_channels, &self.channel_buf);
             } else {
@@ -109,11 +109,7 @@ where
         // Push to ring buffer. Software gain is applied post-ring-buffer
         // in the cpal output callback so volume changes take effect within
         // the cpal buffer latency rather than the ring_buffer_size_ms latency.
-        let mut remaining: &[T] = if needs_channel_map {
-            &self.channel_buf
-        } else {
-            &self.samples
-        };
+        let mut remaining: &[T] = if needs_channel_map { &self.channel_buf } else { &self.samples };
         while let Ok(Some(written)) = self.producer.write_blocking_timeout(remaining, Duration::from_secs(1)) {
             remaining = &remaining[written..];
             if error_count.load(Ordering::Relaxed) >= ERROR_THRESHOLD {
@@ -217,20 +213,19 @@ where
             for ch in 0..self.output_channels {
                 let src_ch = ch.min(self.channels - 1);
                 let sample_f32 = self.channel_out[src_ch][frame];
-                self.interleaved_out
-                    .push(<T as FromSample<f32>>::from_sample(sample_f32));
+                self.interleaved_out.push(<T as FromSample<f32>>::from_sample(sample_f32));
             }
         }
 
         // Equalizer at device rate.
-        if let Some(ref mut dsp) = dsp {
-            if dsp.handle.has_filters.load(Ordering::Acquire) {
-                dsp.equalizer.process_samples(&mut self.interleaved_out);
-            }
+        if let Some(dsp) = dsp
+            && dsp.handle.has_filters.load(Ordering::Acquire)
+        {
+            dsp.equalizer.process_samples(&mut self.interleaved_out);
         }
 
         // VU metering.
-        if let Some(ref mut vu) = vu_meter {
+        if let Some(vu) = vu_meter {
             vu.update_peaks(self.output_channels, &self.interleaved_out);
         }
 
@@ -296,15 +291,13 @@ impl AlsaOutput {
             .map_err(|e| Error::msg(format!("failed to get supported configs: {e}")))?;
 
         let (_config, sample_format) = if is_dsd {
-            let dsd_config = supported_configs_range
-                .into_iter()
-                .find(|c: &cpal::SupportedStreamConfigRange| {
-                    let is_dsd_fmt = matches!(
-                        c.sample_format(),
-                        cpal::SampleFormat::DsdU32 | cpal::SampleFormat::DsdU16 | cpal::SampleFormat::DsdU8
-                    );
-                    is_dsd_fmt && c.min_sample_rate() <= spec.rate() && c.max_sample_rate() >= spec.rate()
-                });
+            let dsd_config = supported_configs_range.into_iter().find(|c: &cpal::SupportedStreamConfigRange| {
+                let is_dsd_fmt = matches!(
+                    c.sample_format(),
+                    cpal::SampleFormat::DsdU32 | cpal::SampleFormat::DsdU16 | cpal::SampleFormat::DsdU8
+                );
+                is_dsd_fmt && c.min_sample_rate() <= spec.rate() && c.max_sample_rate() >= spec.rate()
+            });
 
             if let Some(dsd_c) = dsd_config {
                 info!("Using DSD format: {}", dsd_c.sample_format());
@@ -336,11 +329,7 @@ impl AlsaOutput {
             find_device_rate(device, spec.rate())
         };
         if let Some(rate) = device_rate {
-            info!(
-                "Device does not support {}Hz natively, will resample to {}Hz",
-                spec.rate(),
-                rate
-            );
+            info!("Device does not support {}Hz natively, will resample to {}Hz", spec.rate(), rate);
         }
 
         let device_channels = if is_dsd {
@@ -703,20 +692,18 @@ impl AlsaOutput {
 
         // Swap in a pending equalizer if one is available.  try_lock avoids
         // blocking; if the writer is mid-update we pick it up next write().
-        if let Some(ref mut dsp) = self.dsp {
-            if let Ok(mut slot) = dsp.handle.pending.try_lock() {
-                if let Some(new_eq) = slot.take() {
-                    info!("Swapped in new equalizer with filters: {}", new_eq.has_filters());
-                    dsp.equalizer = new_eq;
-                }
-            }
+        if let Some(dsp) = &mut self.dsp
+            && let Ok(mut slot) = dsp.handle.pending.try_lock()
+            && let Some(new_eq) = slot.take()
+        {
+            info!("Swapped in new equalizer with filters: {}", new_eq.has_filters());
+            dsp.equalizer = new_eq;
         }
 
         // Delegate writing to the format-specific writer.
-        self.writer
-            .write(decoded, &mut self.dsp, &mut self.vu_meter, &self.error_count)?;
+        self.writer.write(decoded, &mut self.dsp, &mut self.vu_meter, &self.error_count)?;
 
-        if let Some(ref mut vu) = self.vu_meter {
+        if let Some(vu) = &mut self.vu_meter {
             vu.maybe_send_event();
         }
 
@@ -828,11 +815,7 @@ fn fallback_rate_candidates(device: &cpal::Device, source_rate: u32) -> Vec<u32>
 
     // 2. Range boundary rates sorted by distance from source_rate.
     #[allow(clippy::tuple_array_conversions)]
-    let mut boundaries: Vec<u32> = ranges
-        .iter()
-        .flat_map(|&(lo, hi)| [lo, hi])
-        .filter(|&r| r != source_rate)
-        .collect();
+    let mut boundaries: Vec<u32> = ranges.iter().flat_map(|&(lo, hi)| [lo, hi]).filter(|&r| r != source_rate).collect();
     boundaries.sort_by_key(|&r| source_rate.abs_diff(r));
     boundaries.dedup();
     candidates.extend(boundaries);
@@ -884,9 +867,5 @@ fn find_device_channels(device: &cpal::Device, source_channels: u16) -> Option<u
         }
     }
 
-    if supported {
-        None
-    } else {
-        closest
-    }
+    if supported { None } else { closest }
 }

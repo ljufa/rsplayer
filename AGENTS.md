@@ -24,7 +24,14 @@
 - Release notes are here `docs/release_notes.md`
 
 ### Versioning
-- version is centralized in Makefile.toml and it is used by `crates/server/build.rs`
+- version is centralized in root `Cargo.toml` under `[workspace.package]`; crates inherit it via `version.workspace = true` and code reads it via `env!("CARGO_PKG_VERSION")`
+- `Makefile.toml` derives `RELEASE_VERSION` from `Cargo.toml` at runtime
+- release tags must equal the workspace version (CI verifies this)
+
+### Packaging / Release
+- server packages: `cargo-deb` (deb, config in `crates/server/Cargo.toml` `[package.metadata.deb]`), `cargo-generate-rpm` (rpm, `[package.metadata.generate-rpm]`), plain rootfs tgz for Arch — all produced by `cargo make package_linux_release` into `target[/cross]/<target>/pkg/` with final release asset names
+- desktop bundles: `cargo-packager` (config in `crates/desktop/Cargo.toml` `[package.metadata.packager]`) — AppImage on Linux, per-arch DMG on macOS; task `cargo make build_desktop_release` (or `bundle_desktop_release` when the web UI is already built)
+- macOS (server binaries + DMGs) is built natively on GitHub `macos-latest` runners; there is no darwin cross-compilation anymore
 
 ### Deploy to local test env (RPI)
 - there are two test devices rpi zero and rpi4 (rpi_host and rpi_target env variables in Makefile.toml) it requires switch remove/add comment...

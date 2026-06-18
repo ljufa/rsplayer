@@ -47,9 +47,7 @@ impl MountService {
         Self::ensure_tcp_connectivity(&config.server, SMB_PORT, Duration::from_secs(SMB_CONNECT_TIMEOUT_SECS))?;
 
         let options = config.username.as_deref().filter(|u| !u.is_empty()).map_or_else(
-            || format!(
-                "user=,pass=,sec=none,uid={uid},gid={gid},file_mode=0644,dir_mode=0755,soft"
-            ),
+            || format!("user=,pass=,sec=none,uid={uid},gid={gid},file_mode=0644,dir_mode=0755,soft"),
             |username| {
                 let password = config.password.as_deref().unwrap_or("");
                 let domain_opt = config
@@ -57,9 +55,7 @@ impl MountService {
                     .as_deref()
                     .filter(|d| !d.is_empty())
                     .map_or(String::new(), |d| format!(",domain={d}"));
-                format!(
-                    "username={username},password={password}{domain_opt},uid={uid},gid={gid},file_mode=0644,dir_mode=0755,soft"
-                )
+                format!("username={username},password={password}{domain_opt},uid={uid},gid={gid},file_mode=0644,dir_mode=0755,soft")
             },
         );
 
@@ -172,10 +168,7 @@ impl MountService {
             .mounts
             .iter()
             .map(|m| {
-                let mount_point = m
-                    .mount_point
-                    .clone()
-                    .unwrap_or_else(|| format!("{MOUNT_BASE}/{}", m.name));
+                let mount_point = m.mount_point.clone().unwrap_or_else(|| format!("{MOUNT_BASE}/{}", m.name));
                 let mounted = Self::is_mounted(&mount_point);
                 let path = std::path::Path::new(&mount_point);
                 let readable = mounted && path.is_dir();
@@ -259,10 +252,7 @@ impl MountService {
                 }
             }
             if !mounted {
-                warn!(
-                    "Failed to auto-mount {} after 3 attempts: {last_err}",
-                    mount_config.name
-                );
+                warn!("Failed to auto-mount {} after 3 attempts: {last_err}", mount_config.name);
             }
         }
     }
@@ -271,11 +261,7 @@ impl MountService {
         let saved_mount_points: Vec<String> = settings
             .mounts
             .iter()
-            .map(|m| {
-                m.mount_point
-                    .clone()
-                    .unwrap_or_else(|| format!("{MOUNT_BASE}/{}", m.name))
-            })
+            .map(|m| m.mount_point.clone().unwrap_or_else(|| format!("{MOUNT_BASE}/{}", m.name)))
             .collect();
 
         let mut result = Vec::new();
@@ -374,10 +360,9 @@ impl MountService {
             (NetworkMountType::Nfs, server, share)
         };
 
-        let name = std::path::Path::new(&ext.mount_point).file_name().map_or_else(
-            || ext.mount_point.replace('/', "_"),
-            |n| n.to_string_lossy().to_string(),
-        );
+        let name = std::path::Path::new(&ext.mount_point)
+            .file_name()
+            .map_or_else(|| ext.mount_point.replace('/', "_"), |n| n.to_string_lossy().to_string());
 
         Some(NetworkMountConfig {
             name,
@@ -392,11 +377,8 @@ impl MountService {
     }
 
     fn is_mounted(mount_point: &str) -> bool {
-        fs::read_to_string("/proc/mounts").is_ok_and(|content| {
-            content
-                .lines()
-                .any(|line| line.split_whitespace().nth(1) == Some(mount_point))
-        })
+        fs::read_to_string("/proc/mounts")
+            .is_ok_and(|content| content.lines().any(|line| line.split_whitespace().nth(1) == Some(mount_point)))
     }
 }
 
@@ -427,9 +409,7 @@ mod tests {
                 .as_deref()
                 .filter(|d| !d.is_empty())
                 .map_or(String::new(), |d| format!(",domain={d}"));
-            format!(
-                "username={username},password={password}{domain_opt},uid={uid},gid={gid},file_mode=0644,dir_mode=0755"
-            )
+            format!("username={username},password={password}{domain_opt},uid={uid},gid={gid},file_mode=0644,dir_mode=0755")
         } else {
             format!("user=,pass=,sec=none,uid={uid},gid={gid},file_mode=0644,dir_mode=0755")
         }

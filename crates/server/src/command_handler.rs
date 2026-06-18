@@ -1,4 +1,13 @@
+use std::sync::Arc;
+
 use log::{debug, error};
+use metadata::metadata_service::MetadataService;
+use metadata::playlist_service::PlaylistService;
+use metadata::ports::album_repository::ArcAlbumRepository;
+use metadata::ports::loudness_repository::ArcLoudnessRepository;
+use metadata::ports::song_repository::ArcSongRepository;
+use metadata::queue_service::QueueService;
+use playback::rsp::player_service::PlayerService;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::mpsc::{self, Receiver};
 
@@ -16,13 +25,13 @@ use crate::system_commands::handle_system_command;
 
 #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 pub async fn handle_user_commands(
-    player_service: std::sync::Arc<playback::rsp::player_service::PlayerService>,
-    metadata_service: std::sync::Arc<metadata::metadata_service::MetadataService>,
-    playlist_service: std::sync::Arc<metadata::playlist_service::PlaylistService>,
-    queue_service: std::sync::Arc<metadata::queue_service::QueueService>,
-    album_repository: metadata::ports::album_repository::ArcAlbumRepository,
-    song_repository: metadata::ports::song_repository::ArcSongRepository,
-    loudness_repository: metadata::ports::loudness_repository::ArcLoudnessRepository,
+    player_service: Arc<PlayerService>,
+    metadata_service: Arc<MetadataService>,
+    playlist_service: Arc<PlaylistService>,
+    queue_service: Arc<QueueService>,
+    album_repository: ArcAlbumRepository,
+    song_repository: ArcSongRepository,
+    loudness_repository: ArcLoudnessRepository,
     config_store: config::ArcConfiguration,
     mut input_commands_rx: Receiver<UserCommand>,
     system_commands_tx: mpsc::Sender<SystemCommand>,
@@ -42,11 +51,9 @@ pub async fn handle_user_commands(
 
     loop {
         let Some(cmd) = input_commands_rx.recv().await else {
-            debug!("Wait in loop");
             continue;
         };
         debug!("Received command {cmd:?}");
-
         match cmd {
             Player(player_cmd) => {
                 handle_player_command(player_cmd, &ctx);
@@ -90,7 +97,7 @@ pub async fn handle_system_commands(
 
     loop {
         if let Some(cmd) = input_commands_rx.recv().await {
-            debug!("Received command {cmd:?}");
+            debug!("Received system command {cmd:?}");
             handle_system_command(cmd, &ctx).await;
         }
     }

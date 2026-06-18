@@ -1,8 +1,6 @@
 use api_models::{
     common::{MetadataCommand, StorageCommand, SystemRequest, UserCommand, VolumeCrtlType},
-    settings::{
-        DspFilter, DspSettings, FilterConfig, NetworkMountConfig, NetworkMountType, NormalizationSource, Settings,
-    },
+    settings::{DspFilter, DspSettings, FilterConfig, NetworkMountConfig, NetworkMountType, NormalizationSource, Settings},
 };
 use dioxus::prelude::*;
 use gloo_net::http::Request;
@@ -83,10 +81,7 @@ impl DspFilterType {
                 q: Some(0.707),
                 slope: None,
             },
-            DspFilterType::LowPass => DspFilter::LowPass {
-                freq: 20000.0,
-                q: 0.707,
-            },
+            DspFilterType::LowPass => DspFilter::LowPass { freq: 20000.0, q: 0.707 },
             DspFilterType::HighPass => DspFilter::HighPass { freq: 20.0, q: 0.707 },
             DspFilterType::BandPass => DspFilter::BandPass { freq: 1000.0, q: 0.707 },
             DspFilterType::Notch => DspFilter::Notch { freq: 1000.0, q: 0.707 },
@@ -94,10 +89,7 @@ impl DspFilterType {
             DspFilterType::LowPassFO => DspFilter::LowPassFO { freq: 20000.0 },
             DspFilterType::HighPassFO => DspFilter::HighPassFO { freq: 20.0 },
             DspFilterType::LowShelfFO => DspFilter::LowShelfFO { freq: 80.0, gain: 0.0 },
-            DspFilterType::HighShelfFO => DspFilter::HighShelfFO {
-                freq: 12000.0,
-                gain: 0.0,
-            },
+            DspFilterType::HighShelfFO => DspFilter::HighShelfFO { freq: 12000.0, gain: 0.0 },
             DspFilterType::Gain => DspFilter::Gain { gain: 0.0 },
         }
     }
@@ -176,11 +168,7 @@ pub fn SettingsPage() -> Element {
         *saving.write() = true;
         let s = settings.read().clone();
         spawn(async move {
-            let _ = Request::post(API_SETTINGS_PATH)
-                .json(&s)
-                .expect("serialize settings")
-                .send()
-                .await;
+            let _ = Request::post(API_SETTINGS_PATH).json(&s).expect("serialize settings").send().await;
             *saving.write() = false;
         });
     };
@@ -198,10 +186,7 @@ pub fn SettingsPage() -> Element {
                 spawn(async move {
                     let _ = Request::post(API_SETTINGS_PATH).json(&s).expect("s").send().await;
                 });
-                ws_send(
-                    &ws,
-                    &UserCommand::Metadata(MetadataCommand::RescanMetadata(String::new(), true)),
-                );
+                ws_send(&ws, &UserCommand::Metadata(MetadataCommand::RescanMetadata(String::new(), true)));
             }
             Some(ConfirmAction::RestartPlayer) => {
                 *pending_restart.write() = false;
@@ -226,11 +211,7 @@ pub fn SettingsPage() -> Element {
                     .mounts
                     .iter()
                     .find(|m| &m.name == name)
-                    .map(|m| {
-                        m.mount_point
-                            .clone()
-                            .unwrap_or_else(|| format!("/mnt/rsplayer/{}", m.name))
-                    })
+                    .map(|m| m.mount_point.clone().unwrap_or_else(|| format!("/mnt/rsplayer/{}", m.name)))
                     .unwrap_or_default();
                 {
                     let mut s = settings.write();
@@ -1003,11 +984,7 @@ fn MusicLibraryContent(
         *saving.write() = true;
         let s = settings.read().clone();
         spawn(async move {
-            let _ = Request::post(API_SETTINGS_PATH)
-                .json(&s)
-                .expect("serialize settings")
-                .send()
-                .await;
+            let _ = Request::post(API_SETTINGS_PATH).json(&s).expect("serialize settings").send().await;
             *saving.write() = false;
         });
     };
@@ -1438,13 +1415,7 @@ fn ToggleRow(label: &'static str, checked: bool, onchange: EventHandler<MouseEve
 }
 
 #[component]
-fn NumberInput(
-    label: &'static str,
-    value: String,
-    min: &'static str,
-    max: &'static str,
-    onchange: EventHandler<String>,
-) -> Element {
+fn NumberInput(label: &'static str, value: String, min: &'static str, max: &'static str, onchange: EventHandler<String>) -> Element {
     rsx! {
         div { class: "form-control mb-2",
             label { class: "label py-0.5",
@@ -1463,12 +1434,7 @@ fn NumberInput(
 }
 
 #[component]
-fn DspFilterFields(
-    filter: DspFilter,
-    index: usize,
-    mut settings: Signal<Settings>,
-    mut dsp_dirty: Signal<bool>,
-) -> Element {
+fn DspFilterFields(filter: DspFilter, index: usize, mut settings: Signal<Settings>, mut dsp_dirty: Signal<bool>) -> Element {
     let mut update = move |field: &'static str, val: String| {
         if let Ok(v) = val.parse::<f64>() {
             if let Some(fc) = settings.write().rs_player_settings.dsp_settings.filters.get_mut(index) {
@@ -1507,11 +1473,7 @@ fn DspFilterFields(
     };
 
     let fields: Vec<(&'static str, String)> = match &filter {
-        DspFilter::Peaking { freq, gain, q } => vec![
-            ("freq", format!("{freq}")),
-            ("gain", format!("{gain}")),
-            ("q", format!("{q}")),
-        ],
+        DspFilter::Peaking { freq, gain, q } => vec![("freq", format!("{freq}")), ("gain", format!("{gain}")), ("q", format!("{q}"))],
         DspFilter::LowShelf { freq, gain, q, .. } | DspFilter::HighShelf { freq, gain, q, .. } => vec![
             ("freq", format!("{freq}")),
             ("gain", format!("{gain}")),

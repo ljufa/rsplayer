@@ -30,11 +30,7 @@ pub fn parse_lrc(lrc: &str) -> Vec<LyricLine> {
             }
         }
     }
-    lines.sort_by(|a, b| {
-        a.time_secs
-            .partial_cmp(&b.time_secs)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    lines.sort_by(|a, b| a.time_secs.partial_cmp(&b.time_secs).unwrap_or(std::cmp::Ordering::Equal));
     lines
 }
 

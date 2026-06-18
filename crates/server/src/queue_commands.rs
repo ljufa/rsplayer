@@ -1,6 +1,6 @@
 use api_models::common::QueueCommand::{
-    self, AddLocalLibDirectory, AddSongToQueue, ClearQueue, LoadAlbumInQueue, LoadArtistInQueue, LoadPlaylistInQueue,
-    LoadSongToQueue, QueryCurrentQueue, QueryCurrentSong, RemoveItem,
+    self, AddLocalLibDirectory, AddSongToQueue, ClearQueue, LoadAlbumInQueue, LoadArtistInQueue, LoadPlaylistInQueue, LoadSongToQueue,
+    QueryCurrentQueue, QueryCurrentSong, RemoveItem,
 };
 use api_models::player::Song;
 use api_models::state::StateChangeEvent;
@@ -10,12 +10,7 @@ use crate::command_context::CommandContext;
 fn get_songs_from_album(ctx: &CommandContext, album_id: &str) -> Vec<Song> {
     ctx.album_repository
         .find_by_id(album_id)
-        .map(|alb| {
-            alb.song_keys
-                .iter()
-                .filter_map(|sk| ctx.song_repository.find_by_id(sk))
-                .collect()
-        })
+        .map(|alb| alb.song_keys.iter().filter_map(|sk| ctx.song_repository.find_by_id(sk)).collect())
         .unwrap_or_default()
 }
 
@@ -175,10 +170,7 @@ pub fn handle_queue_command(cmd: QueueCommand, ctx: &CommandContext) {
         LoadAlbumInQueue(album_id) => {
             if let Some(album) = ctx.album_repository.find_by_id(&album_id) {
                 ctx.player_service.stop_current_song();
-                let songs = album
-                    .song_keys
-                    .iter()
-                    .filter_map(|sk| ctx.song_repository.find_by_id(sk));
+                let songs = album.song_keys.iter().filter_map(|sk| ctx.song_repository.find_by_id(sk));
                 ctx.queue_service.replace_all(songs);
                 ctx.player_service.play_from_beginning();
                 ctx.send_notification("Album loaded into queue");

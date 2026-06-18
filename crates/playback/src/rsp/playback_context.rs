@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, Ordering};
 
 use api_models::state::StateChangeEvent;
 use dsp::DspHandle;

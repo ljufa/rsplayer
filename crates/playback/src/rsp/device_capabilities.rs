@@ -1,5 +1,5 @@
-use cpal::traits::DeviceTrait;
 use cpal::Device;
+use cpal::traits::DeviceTrait;
 
 const STANDARD_RATES: &[u32] = &[192_000, 176_400, 96_000, 88_200, 48_000, 44_100, 32_000, 22_050, 16_000];
 
@@ -94,11 +94,7 @@ fn find_device_channels(device: &Device, source_channels: u16) -> Option<u16> {
         }
     }
 
-    if supported {
-        None
-    } else {
-        closest
-    }
+    if supported { None } else { closest }
 }
 
 fn fallback_rate_candidates(device: &Device, source_rate: u32) -> Vec<u32> {
@@ -128,11 +124,7 @@ fn fallback_rate_candidates(device: &Device, source_rate: u32) -> Vec<u32> {
     }
 
     #[allow(clippy::tuple_array_conversions)]
-    let mut boundaries: Vec<u32> = ranges
-        .iter()
-        .flat_map(|&(lo, hi)| [lo, hi])
-        .filter(|&r| r != source_rate)
-        .collect();
+    let mut boundaries: Vec<u32> = ranges.iter().flat_map(|&(lo, hi)| [lo, hi]).filter(|&r| r != source_rate).collect();
     boundaries.sort_by_key(|&r| source_rate.abs_diff(r));
     boundaries.dedup();
     candidates.extend(boundaries);

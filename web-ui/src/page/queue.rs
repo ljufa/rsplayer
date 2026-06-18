@@ -24,10 +24,7 @@ pub fn QueuePage() -> Element {
     use_effect(move || {
         ws_send(
             &ws,
-            &UserCommand::Queue(QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
-                String::new(),
-                0,
-            ))),
+            &UserCommand::Queue(QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(String::new(), 0))),
         );
     });
 
@@ -42,20 +39,14 @@ pub fn QueuePage() -> Element {
         *loading.write() = true;
         ws_send(
             &ws,
-            &UserCommand::Queue(QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
-                search(),
-                0,
-            ))),
+            &UserCommand::Queue(QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(search(), 0))),
         );
     };
 
     let load_more = move |offset: usize| {
         ws_send(
             &ws,
-            &UserCommand::Queue(QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(
-                search(),
-                offset,
-            ))),
+            &UserCommand::Queue(QueueCommand::QueryCurrentQueue(CurrentQueueQuery::WithSearchTerm(search(), offset))),
         );
     };
 
@@ -222,11 +213,7 @@ fn QueueItem(
     let title = song.get_title();
     let artist = song.artist.clone().unwrap_or_default();
     let date = song.date.clone().map(|d| format!(" • {d}")).unwrap_or_default();
-    let duration = song
-        .time
-        .as_ref()
-        .map(|t| format!(" • {}", dur_to_string(t)))
-        .unwrap_or_default();
+    let duration = song.time.as_ref().map(|t| format!(" • {}", dur_to_string(t))).unwrap_or_default();
     let row_class = if is_current {
         "flex items-center gap-1 px-2 py-1.5 bg-primary/10 border-l-2 border-primary"
     } else {

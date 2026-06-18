@@ -1,7 +1,7 @@
 use std::{fs::File, path::Path};
 
 use symphonia::core::{
-    codecs::{audio::AudioDecoderOptions, CodecParameters},
+    codecs::{CodecParameters, audio::AudioDecoderOptions},
     errors::Error as SymphoniaError,
     formats::probe::Hint,
     formats::{FormatOptions, FormatReader, TrackType},
@@ -25,9 +25,7 @@ impl LoudnessAnalyzer {
         }
 
         let probe = build_probe();
-        let mut format = probe
-            .probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())
-            .ok()?;
+        let mut format = probe.probe(&hint, mss, FormatOptions::default(), MetadataOptions::default()).ok()?;
 
         Self::measure_from_format(&mut *format)
     }
@@ -41,10 +39,7 @@ impl LoudnessAnalyzer {
         };
 
         let codec = audio_params.codec;
-        if codec == symphonia::core::codecs::audio::CODEC_ID_NULL_AUDIO
-            || codec == CODEC_TYPE_DSD_LSBF
-            || codec == CODEC_TYPE_DSD_MSBF
-        {
+        if codec == symphonia::core::codecs::audio::CODEC_ID_NULL_AUDIO || codec == CODEC_TYPE_DSD_LSBF || codec == CODEC_TYPE_DSD_MSBF {
             return None;
         }
 

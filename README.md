@@ -5,7 +5,7 @@
 ![](https://img.shields.io/github/license/ljufa/rsplayer?style=flat-square)
 ![](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=flat-square)
 # RSPlayer
-RSPlayer is an open-source, headless music server primarily for Linux, with experimental macOS binaries — run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser.
+RSPlayer is an open-source, headless music server primarily for Linux, with experimental macOS builds — run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser. A native desktop app (Linux x86_64, macOS) is also available.
 
 It runs as a systemd service and exposes a responsive web UI, making it a great fit for machines without a monitor or keyboard — but equally at home on a dedicated desktop audio PC. Hardware and DIY integrations (GPIO DAC control, custom firmware) are fully optional.
 
@@ -90,21 +90,36 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 
 ## Supported Platforms
 
-RSPlayer is production-focused on Linux. The Deb, RPM, and Arch packages include a systemd service for automatic startup. Experimental macOS builds are binary-only.
+RSPlayer offers two build variants:
 
-| Architecture | Rust Target | Binary | Deb | RPM | Arch | Docker |
-|---|---|---|---|---|---|---|
-| ARMv6 (Pi Zero/1) | `arm-unknown-linux-gnueabihf` | Yes | Yes | Yes | Yes | - |
-| ARMv7 (Pi 2-4) | `armv7-unknown-linux-gnueabihf` | Yes | Yes | Yes | Yes | - |
-| ARM64 (Pi 4 64-bit) | `aarch64-unknown-linux-gnu` | Yes | Yes | Yes | Yes | - |
-| x86_64 | `x86_64-unknown-linux-gnu` | Yes | Yes | Yes | Yes | Yes |
-| RISC-V 64 | `riscv64gc-unknown-linux-gnu` | Yes | Yes | Yes | Yes | - |
-| macOS Apple Silicon (experimental) | `aarch64-apple-darwin` | Yes | - | - | - | - |
-| macOS Intel (experimental) | `x86_64-apple-darwin` | Yes | - | - | - | - |
+- **Server** — The headless music server daemon (systemd service). Available for all supported architectures.
+- **Desktop** — A standalone native GUI app (built with Tauri). Available for **x86_64 Linux** and **macOS** only.
+
+### Linux
+
+| Architecture | Typical Devices | Deb | RPM | Arch | Docker | Nix | Desktop |
+|---|---|---|---|---|---|---|---|
+| **x86_64** | Intel/AMD PCs, servers, NAS | ✓ | ✓ | ✓ | ✓ | ✓ | deb, rpm |
+| **ARM64** (aarch64) | RPi 4, RPi 5, ARMv8 boards | ✓ | ✓ | ✓ | — | ✓ | — |
+| **ARMv7** | RPi 2, RPi 3, 32-bit RPi 4 | ✓ | ✓ | ✓ | — | ✓ | — |
+| **ARMv6** | RPi Zero, RPi Zero W, RPi 1 | ✓ | ✓ | ✓ | — | ✓ | — |
+| **RISC-V 64** | RISC-V 64-bit boards | ✓ | ✓ | ✓ | — | ✓ | — |
+
+All Linux packages include a systemd service for automatic startup. See the [releases page](https://github.com/ljufa/rsplayer/releases/latest) for per-architecture filename suffixes.
+
+### macOS (experimental)
+
+| Architecture | Server | Desktop |
+|---|---|---|
+| Apple Silicon (`aarch64-apple-darwin`) | raw binary | DMG |
+| Intel (`x86_64-apple-darwin`) | raw binary | DMG |
 
 ### macOS (Apple Silicon + Intel) — experimental
 
-Core-playback builds for `aarch64-apple-darwin` and `x86_64-apple-darwin` are supported via cross-compilation from Linux. Audio output uses CoreAudio via `cpal`; the web UI works as on Linux.
+Server and desktop builds for `aarch64-apple-darwin` and `x86_64-apple-darwin` are supported via cross-compilation from Linux. Audio output uses CoreAudio via `cpal`; the web UI works as on Linux.
+
+- **Server binary**: Download `rsplayer_darwin_arm64` or `rsplayer_darwin_amd64` from the [releases page](https://github.com/ljufa/rsplayer/releases/latest).
+- **Desktop app**: Download the `.dmg` from the releases page for a native windowed experience.
 
 Current platform limitations on macOS:
 

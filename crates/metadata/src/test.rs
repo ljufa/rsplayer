@@ -8,7 +8,7 @@ mod queue {
     use crate::song_repository::FjallSongRepository;
     use crate::{
         queue_service::QueueService,
-        test::test_shared::{create_song, create_song_with_title, Context},
+        test::test_shared::{Context, create_song, create_song_with_title},
     };
     #[test]
     fn should_replace_queue_with_new_songs() {
@@ -322,9 +322,7 @@ mod queue {
     }
 
     fn create_queue_with_ctx(ctx: &Context) -> QueueService {
-        let db = fjall::Database::builder(&ctx.db_dir)
-            .open()
-            .expect("Failed to open test db");
+        let db = fjall::Database::builder(&ctx.db_dir).open().expect("Failed to open test db");
         let song_repo = Arc::new(FjallSongRepository::new(&db));
         let stat_repo = Arc::new(FjallPlayStatisticsRepository::new(&db));
         QueueService::new(&db, song_repo, stat_repo)
@@ -455,8 +453,7 @@ mod metadata {
     #[test]
     fn test_favorite_radio_station() {
         let ctx = TestContext::new();
-        ctx.metadata_service
-            .like_media_item("radio_uuid_http://radioaparat.com");
+        ctx.metadata_service.like_media_item("radio_uuid_http://radioaparat.com");
         let favs = ctx.metadata_service.get_favorite_radio_stations();
         assert_eq!(favs.len(), 1);
         assert_eq!(favs.first().unwrap(), "http://radioaparat.com");
@@ -468,14 +465,8 @@ mod metadata {
         let ctx = TestContext::new();
         ctx.metadata_service.scan_music_dir(true, &ctx.sender);
         let song = ctx.song_repository.find_by_id("aa/music.flac").expect("song not found");
-        assert_eq!(
-            song.tags.get("REPLAYGAIN_TRACK_GAIN").map(String::as_str),
-            Some("+3.14 dB")
-        );
-        assert_eq!(
-            song.tags.get("REPLAYGAIN_ALBUM_GAIN").map(String::as_str),
-            Some("-1.50 dB")
-        );
+        assert_eq!(song.tags.get("REPLAYGAIN_TRACK_GAIN").map(String::as_str), Some("+3.14 dB"));
+        assert_eq!(song.tags.get("REPLAYGAIN_ALBUM_GAIN").map(String::as_str), Some("-1.50 dB"));
     }
 
     /// aa/aaa/music.flac has R128_TRACK_GAIN=512 (+2.0 dB), R128_ALBUM_GAIN=-256 (-1.0 dB)
@@ -483,10 +474,7 @@ mod metadata {
     fn test_flac_r128_tags_stored_in_song() {
         let ctx = TestContext::new();
         ctx.metadata_service.scan_music_dir(true, &ctx.sender);
-        let song = ctx
-            .song_repository
-            .find_by_id("aa/aaa/music.flac")
-            .expect("song not found");
+        let song = ctx.song_repository.find_by_id("aa/aaa/music.flac").expect("song not found");
         assert_eq!(song.tags.get("R128_TRACK_GAIN").map(String::as_str), Some("512"));
         assert_eq!(song.tags.get("R128_ALBUM_GAIN").map(String::as_str), Some("-256"));
     }
@@ -513,10 +501,7 @@ mod metadata {
     fn test_file_tag_track_gain_r128() {
         let ctx = TestContext::new();
         ctx.metadata_service.scan_music_dir(true, &ctx.sender);
-        let song = ctx
-            .song_repository
-            .find_by_id("aa/aaa/music.flac")
-            .expect("song not found");
+        let song = ctx.song_repository.find_by_id("aa/aaa/music.flac").expect("song not found");
         // R128_TRACK_GAIN=512 → 512/256 = +2.0 dB
         let gain = song.file_tag_track_gain().expect("track gain should be present");
         assert!((gain - 2.0).abs() < 0.001, "expected +2.0 dB, got {gain}");
@@ -526,10 +511,7 @@ mod metadata {
     fn test_file_tag_album_gain_r128() {
         let ctx = TestContext::new();
         ctx.metadata_service.scan_music_dir(true, &ctx.sender);
-        let song = ctx
-            .song_repository
-            .find_by_id("aa/aaa/music.flac")
-            .expect("song not found");
+        let song = ctx.song_repository.find_by_id("aa/aaa/music.flac").expect("song not found");
         // R128_ALBUM_GAIN=-256 → -256/256 = -1.0 dB
         let gain = song.file_tag_album_gain().expect("album gain should be present");
         assert!((gain - (-1.0)).abs() < 0.001, "expected -1.0 dB, got {gain}");
@@ -563,7 +545,7 @@ mod playlist {
 
     use crate::playlist_service::PlaylistService;
 
-    use super::test_shared::{create_song, Context};
+    use super::test_shared::{Context, create_song};
 
     #[test]
     fn should_save_new_playlist() {
@@ -603,9 +585,7 @@ mod playlist {
 
     fn create_pl_service() -> PlaylistService {
         let ctx = Context::default();
-        let db = fjall::Database::builder(&ctx.db_dir)
-            .open()
-            .expect("Failed to open test db");
+        let db = fjall::Database::builder(&ctx.db_dir).open().expect("Failed to open test db");
         PlaylistService::new(&db)
     }
 }

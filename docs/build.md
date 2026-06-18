@@ -83,7 +83,7 @@ cargo make serve_dev
 ```
 Or manually: `cd web-ui && dx serve`
 
-**Release** — produces a self-contained output under `target/dx/rsplayer_web_ui/release/web/public/`, embedded into the backend binary at compile time:
+**Release** — produces a self-contained output under `dist/web-ui/`, embedded into the backend binary at compile time:
 ```bash
 cargo make build_ui_release
 ```

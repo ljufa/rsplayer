@@ -12,3 +12,6 @@
 *TODOS.md
 rsplayer.db
 artwork
+crates/desktop/target
+.codex
+dist

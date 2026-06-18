@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 
 use api_models::settings::RsPlayerSettings;
 

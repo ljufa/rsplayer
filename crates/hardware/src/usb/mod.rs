@@ -15,7 +15,7 @@ use tokio::sync::{
     broadcast::error::{RecvError, TryRecvError},
     mpsc::Sender,
 };
-use wire::{FwPlayerCmd, FwToHost, HostToFw, ALBUM_LEN, ARTIST_LEN, MAX_FRAME, TIME_LEN, TITLE_LEN};
+use wire::{ALBUM_LEN, ARTIST_LEN, FwPlayerCmd, FwToHost, HostToFw, MAX_FRAME, TIME_LEN, TITLE_LEN};
 
 pub struct UsbService {
     port: Mutex<Option<Box<dyn SerialPort>>>,
@@ -49,8 +49,7 @@ impl UsbService {
     /// Encode `msg` with postcard + COBS framing and write it to the port.
     pub fn send(&self, msg: &HostToFw) -> Result<()> {
         let mut buf = [0u8; MAX_FRAME];
-        let frame =
-            postcard::to_slice_cobs(msg, &mut buf).map_err(|e| anyhow::anyhow!("postcard encode failed: {e}"))?;
+        let frame = postcard::to_slice_cobs(msg, &mut buf).map_err(|e| anyhow::anyhow!("postcard encode failed: {e}"))?;
 
         let mut port_guard = self.port.lock().expect("lock poisoned");
         if let Some(port) = port_guard.as_mut() {
@@ -68,10 +67,7 @@ impl UsbService {
                 debug!("No USB device found for reconnection.");
                 Err(anyhow::anyhow!("Device not found"))
             },
-            |new_path| match serialport::new(&new_path, self.baud_rate)
-                .timeout(Duration::from_secs(1))
-                .open()
-            {
+            |new_path| match serialport::new(&new_path, self.baud_rate).timeout(Duration::from_secs(1)).open() {
                 Ok(new_port) => {
                     info!("Reconnected to USB device at {new_path}");
                     {
@@ -99,8 +95,7 @@ impl UsbService {
     }
 
     pub fn send_track_info(&self, title: &str, artist: &str, album: &str) -> Result<()> {
-        *self.last_song_cache.lock().expect("lock poisoned") =
-            Some((title.to_string(), artist.to_string(), album.to_string()));
+        *self.last_song_cache.lock().expect("lock poisoned") = Some((title.to_string(), artist.to_string(), album.to_string()));
         self.send(&HostToFw::Track {
             title: clamp::<TITLE_LEN>(title),
             artist: clamp::<ARTIST_LEN>(artist),
@@ -156,12 +151,7 @@ pub fn start_listening(
             let port_result = {
                 let mut port_guard = service.port.lock().expect("lock poisoned");
                 port_guard.as_mut().map_or_else(
-                    || {
-                        Err(serialport::Error::new(
-                            serialport::ErrorKind::NoDevice,
-                            "No port available",
-                        ))
-                    },
+                    || Err(serialport::Error::new(serialport::ErrorKind::NoDevice, "No port available")),
                     |p| {
                         debug!("Port available, attempting to clone...");
                         p.try_clone()
@@ -193,12 +183,7 @@ pub fn start_listening(
                                 match postcard::from_bytes_cobs::<FwToHost>(&mut frame) {
                                     Ok(msg) => {
                                         debug!("Got fw message: {msg:?}");
-                                        dispatch_fw_message(
-                                            msg,
-                                            &player_commands_tx,
-                                            &system_commands_tx,
-                                            &state_changes_tx,
-                                        );
+                                        dispatch_fw_message(msg, &player_commands_tx, &system_commands_tx, &state_changes_tx);
                                     }
                                     Err(e) => {
                                         error!("Failed to decode fw message ({} bytes): {e}", frame.len());

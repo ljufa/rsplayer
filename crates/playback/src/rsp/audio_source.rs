@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{format_err, Result};
+use anyhow::{Result, format_err};
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::io::{MediaSource, ReadOnlySource};
 use tokio::sync::broadcast::Sender;
@@ -82,11 +82,7 @@ pub fn probe_http_source(
     Ok((media_source, radio_meta))
 }
 
-pub fn probe_local_file(
-    path_str: &str,
-    music_dirs: &[String],
-    hint: &mut Hint,
-) -> Result<(Box<dyn MediaSource>, Option<RadioMeta>)> {
+pub fn probe_local_file(path_str: &str, music_dirs: &[String], hint: &mut Hint) -> Result<(Box<dyn MediaSource>, Option<RadioMeta>)> {
     for dir in music_dirs {
         let path = Path::new(dir).join(path_str);
         if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
@@ -104,10 +100,11 @@ pub fn probe_local_file(
 pub fn resolve_ape_path(path_str: &str, music_dirs: &[String]) -> Option<PathBuf> {
     for dir in music_dirs {
         let path = Path::new(dir).join(path_str);
-        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            if ext.eq_ignore_ascii_case("ape") && path.exists() {
-                return Some(path);
-            }
+        if let Some(ext) = path.extension().and_then(|e| e.to_str())
+            && ext.eq_ignore_ascii_case("ape")
+            && path.exists()
+        {
+            return Some(path);
         }
     }
     None

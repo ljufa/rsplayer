@@ -85,21 +85,7 @@ pub struct AudioCard {
     pub mixers: Vec<CardMixer>,
 }
 
-#[derive(
-    Debug,
-    Hash,
-    Serialize,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    ToPrimitive,
-    Deserialize,
-    EnumString,
-    EnumIter,
-    IntoStaticStr,
-    Default,
-)]
+#[derive(Debug, Hash, Serialize, Clone, Copy, PartialEq, Eq, ToPrimitive, Deserialize, EnumString, EnumIter, IntoStaticStr, Default)]
 pub enum VolumeCrtlType {
     Off,
     #[cfg_attr(target_os = "linux", default)]

@@ -1,4 +1,4 @@
-use symphonia::core::errors::{decode_error, unsupported_error, Result};
+use symphonia::core::errors::{Result, decode_error, unsupported_error};
 use symphonia::core::io::{MediaSourceStream, ReadBytes};
 
 const DSD_CHUNK_HEADER: [u8; 4] = *b"DSD ";

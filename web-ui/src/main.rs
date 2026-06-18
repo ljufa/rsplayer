@@ -6,9 +6,7 @@ mod state;
 pub mod vumeter;
 
 use api_models::{
-    common::{
-        dur_to_string, MetadataCommand, PlayerCommand, PlaylistCommand, QueueCommand, SystemRequest, UserCommand,
-    },
+    common::{dur_to_string, MetadataCommand, PlayerCommand, PlaylistCommand, QueueCommand, SystemRequest, UserCommand},
     settings::Settings,
     state::{CurrentQueueQuery, PlayerState, StateChangeEvent},
 };
@@ -23,10 +21,9 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::WebSocket;
 
 use page::{
-    home::HomePage, library_artists::LibraryArtistsPage, library_files::LibraryFilesPage,
-    library_playlists::LibraryPlaylistsPage, library_radio::LibraryRadioPage, library_stats::LibraryStatsPage,
-    not_found::NotFoundPage, player::BrowserAudioPlayback, player::PlayerPage, queue::QueuePage,
-    settings::SettingsPage,
+    home::HomePage, library_artists::LibraryArtistsPage, library_files::LibraryFilesPage, library_playlists::LibraryPlaylistsPage,
+    library_radio::LibraryRadioPage, library_stats::LibraryStatsPage, not_found::NotFoundPage, player::BrowserAudioPlayback,
+    player::PlayerPage, queue::QueuePage, settings::SettingsPage,
 };
 
 fn main() {
@@ -145,10 +142,7 @@ fn current_pathname() -> String {
 /// Push a new path via the History API and update the path signal (SPA navigation).
 pub fn navigate(mut path_sig: Signal<String>, to: &str) {
     if let Some(window) = web_sys::window() {
-        let _ = window
-            .history()
-            .unwrap()
-            .push_state_with_url(&JsValue::NULL, "", Some(to));
+        let _ = window.history().unwrap().push_state_with_url(&JsValue::NULL, "", Some(to));
     }
     let pathname = to.split('?').next().unwrap_or(to).to_string();
     *path_sig.write() = pathname;
@@ -261,8 +255,22 @@ fn App() -> Element {
         _ => String::new(),
     };
 
+    let connected = app_state_ctx.connected;
+
     rsx! {
         document::Stylesheet { href: asset!("/public/tw.css") }
+        // Show a full-screen "Connecting" overlay while the WebSocket is not connected.
+        // On desktop builds the backend starts asynchronously — this gives the user
+        // visible feedback instead of a dead-looking UI.
+        if !connected() {
+            div { class: "fixed inset-0 z-[100] flex flex-col items-center justify-center bg-base-300",
+                div { class: "text-center",
+                    h1 { class: "text-4xl font-bold mb-6", "RSPlayer" }
+                    span { class: "loading loading-spinner loading-lg text-primary mb-4" }
+                    p { class: "text-base-content/70", "Connecting to server…" }
+                }
+            }
+        }
         if (ui_state.welcome_open)() {
             WelcomeModal {}
         }
@@ -326,12 +334,7 @@ fn is_typing_in_input(e: &web_sys::KeyboardEvent) -> bool {
 }
 
 /// Custom hook — must be called directly inside a component body.
-fn setup_keyboard_shortcuts(
-    path: Signal<String>,
-    ws: Signal<Option<WebSocket>>,
-    mut app_state: AppState,
-    mut ui: UiState,
-) {
+fn setup_keyboard_shortcuts(path: Signal<String>, ws: Signal<Option<WebSocket>>, mut app_state: AppState, mut ui: UiState) {
     use_hook(|| {
         let handler = Closure::wrap(Box::new(move |e: web_sys::KeyboardEvent| {
             if is_typing_in_input(&e) {
@@ -376,20 +379,12 @@ fn setup_keyboard_shortcuts(
                 }
                 "ArrowLeft" if on_player => {
                     e.prevent_default();
-                    let cmd = if shift {
-                        PlayerCommand::SeekBackward
-                    } else {
-                        PlayerCommand::Prev
-                    };
+                    let cmd = if shift { PlayerCommand::SeekBackward } else { PlayerCommand::Prev };
                     ws_send(&ws, &UserCommand::Player(cmd));
                 }
                 "ArrowRight" if on_player => {
                     e.prevent_default();
-                    let cmd = if shift {
-                        PlayerCommand::SeekForward
-                    } else {
-                        PlayerCommand::Next
-                    };
+                    let cmd = if shift { PlayerCommand::SeekForward } else { PlayerCommand::Next };
                     ws_send(&ws, &UserCommand::Player(cmd));
                 }
                 "ArrowUp" if on_player => {
@@ -936,11 +931,7 @@ fn FooterPlayer() -> Element {
     let album = song.as_ref().and_then(|s| s.album.clone()).unwrap_or_default();
     let cur = progress.current_time.as_secs();
     let tot = progress.total_time.as_secs();
-    let pct = if tot > 0 {
-        (cur as f64 / tot as f64 * 100.0) as u8
-    } else {
-        0
-    };
+    let pct = if tot > 0 { (cur as f64 / tot as f64 * 100.0) as u8 } else { 0 };
 
     rsx! {
         div { class: "player-footer",

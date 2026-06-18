@@ -34,11 +34,7 @@ impl FjallAlbumRepository {
     pub fn album_db_key(artist: &str, album: &str) -> String {
         let na = normalize_name(artist);
         let nb = normalize_name(album);
-        if na.is_empty() {
-            nb
-        } else {
-            format!("{na}|{nb}")
-        }
+        if na.is_empty() { nb } else { format!("{na}|{nb}") }
     }
 }
 
@@ -129,9 +125,7 @@ impl AlbumRepository for FjallAlbumRepository {
                 if is_junk_genre(&key) {
                     continue;
                 }
-                let entry = genre_map
-                    .entry(key)
-                    .or_insert_with(|| (title_case_genre(&genre_str), Vec::new()));
+                let entry = genre_map.entry(key).or_insert_with(|| (title_case_genre(&genre_str), Vec::new()));
                 entry.1.push(album);
             }
         }
@@ -154,11 +148,11 @@ impl AlbumRepository for FjallAlbumRepository {
         for album in albums {
             if let Some(released) = album.released {
                 let year_str = released.format("%Y").to_string();
-                if let Ok(year) = year_str.parse::<u32>() {
-                    if year >= 1950 {
-                        let decade = format!("{}0s", &year_str[..3]);
-                        decade_map.entry(decade).or_default().push(album);
-                    }
+                if let Ok(year) = year_str.parse::<u32>()
+                    && year >= 1950
+                {
+                    let decade = format!("{}0s", &year_str[..3]);
+                    decade_map.entry(decade).or_default().push(album);
                 }
             }
         }
@@ -208,9 +202,7 @@ impl AlbumRepository for FjallAlbumRepository {
                         .albums_db
                         .get(key.as_bytes())
                         .map_err(|e| RepoError::Storage(format!("read singleton '{artist}': {e}")))?;
-                    let mut album = existing_album
-                        .and_then(|bytes| Album::from_bytes(&bytes))
-                        .unwrap_or_default();
+                    let mut album = existing_album.and_then(|bytes| Album::from_bytes(&bytes)).unwrap_or_default();
                     if !album.song_keys.contains(&song.file) {
                         album.song_keys.push(song.file);
                     }
@@ -239,9 +231,7 @@ impl AlbumRepository for FjallAlbumRepository {
             .albums_db
             .get(key.as_bytes())
             .map_err(|e| RepoError::Storage(format!("read album '{raw_album}': {e}")))?;
-        let mut album = existing_album
-            .and_then(|bytes| Album::from_bytes(&bytes))
-            .unwrap_or_default();
+        let mut album = existing_album.and_then(|bytes| Album::from_bytes(&bytes)).unwrap_or_default();
 
         if !album.song_keys.contains(&song.file) {
             album.song_keys.push(song.file);
@@ -259,18 +249,18 @@ impl AlbumRepository for FjallAlbumRepository {
             album.artist = Some(artist.to_owned());
         }
         if let Some(date) = song.date {
-            if date.len() == 4 {
-                if let Ok(dt) = DateTime::parse_from_rfc3339(&format!("{}-01-01T00:00:00Z", &date)) {
-                    album.released = Some(dt.naive_utc().and_utc());
-                }
+            if date.len() == 4
+                && let Ok(dt) = DateTime::parse_from_rfc3339(&format!("{}-01-01T00:00:00Z", &date))
+            {
+                album.released = Some(dt.naive_utc().and_utc());
             }
             if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&date) {
                 album.released = Some(dt.naive_utc().and_utc());
             }
-        } else if let Some(year) = song.tags.get("year") {
-            if let Ok(dt) = DateTime::parse_from_rfc3339(&format!("{year}-01-01T00:00:00Z")) {
-                album.released = Some(dt.naive_utc().and_utc());
-            }
+        } else if let Some(year) = song.tags.get("year")
+            && let Ok(dt) = DateTime::parse_from_rfc3339(&format!("{year}-01-01T00:00:00Z"))
+        {
+            album.released = Some(dt.naive_utc().and_utc());
         }
         if let Some(genre) = song.genre {
             album.genre = Some(genre);
@@ -525,13 +515,9 @@ mod test {
         use api_models::player::Song;
         use chrono::Utc;
         let repo = create_album_repo();
-        for (i, album_name) in [
-            "Dark Side of the Moon",
-            "dark side of the moon",
-            "Dark Side Of The Moon",
-        ]
-        .iter()
-        .enumerate()
+        for (i, album_name) in ["Dark Side of the Moon", "dark side of the moon", "Dark Side Of The Moon"]
+            .iter()
+            .enumerate()
         {
             repo.update_from_song(Song {
                 file: format!("artist/album/track{i}.flac"),
@@ -906,33 +892,19 @@ mod test {
         assert_eq!(albums[0].song_keys[0], "singles/track2.flac");
     }
 
-    fn create_album(
-        title: &str,
-        artist: &str,
-        genre: Option<&str>,
-        added: Option<i32>,
-        published: Option<i32>,
-    ) -> Vec<u8> {
+    fn create_album(title: &str, artist: &str, genre: Option<&str>, added: Option<i32>, published: Option<i32>) -> Vec<u8> {
         let added_date = added.map_or_else(Utc::now, |add| {
             if add < 0 {
-                chrono::Utc::now()
-                    .checked_sub_months(Months::new(add.unsigned_abs()))
-                    .unwrap()
+                chrono::Utc::now().checked_sub_months(Months::new(add.unsigned_abs())).unwrap()
             } else {
-                chrono::Utc::now()
-                    .checked_add_months(Months::new(add.unsigned_abs()))
-                    .unwrap()
+                chrono::Utc::now().checked_add_months(Months::new(add.unsigned_abs())).unwrap()
             }
         });
         let published_date = published.map(|add| {
             if add < 0 {
-                chrono::Utc::now()
-                    .checked_sub_months(Months::new(add.unsigned_abs()))
-                    .unwrap()
+                chrono::Utc::now().checked_sub_months(Months::new(add.unsigned_abs())).unwrap()
             } else {
-                chrono::Utc::now()
-                    .checked_add_months(Months::new(add.unsigned_abs()))
-                    .unwrap()
+                chrono::Utc::now().checked_add_months(Months::new(add.unsigned_abs())).unwrap()
             }
         });
         Album {

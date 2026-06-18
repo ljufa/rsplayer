@@ -13,5 +13,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
 
 RUN rustup target add wasm32-unknown-unknown
 
-# dioxus-cli — compiled once and cached in the image layer
+RUN npm install -g tailwindcss @tailwindcss/cli
 RUN cargo install dioxus-cli --locked
+RUN cargo install cargo-make --locked

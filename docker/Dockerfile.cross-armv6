@@ -1,10 +1,20 @@
-FROM ghcr.io/cross-rs/arm-unknown-linux-gnueabihf:0.2.5
+FROM ubuntu:22.04
 
-RUN dpkg --add-architecture armhf && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-        libasound-dev:armhf && \
-    rm -rf /var/lib/apt/lists/*
+# Configure multi-arch apt sources
+RUN sed -i 's/^deb /deb [arch=amd64] /g' /etc/apt/sources.list && \
+    sed -i 's/^deb /deb [arch=amd64] /g' /etc/apt/sources.list.d/*.list 2>/dev/null || true && \
+    dpkg --add-architecture armhf && \
+    echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-backports main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse" >> /etc/apt/sources.list && \
+    apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    build-essential \
+    crossbuild-essential-armhf \
+    pkg-config \
+    libasound2-dev:armhf \
+    && rm -rf /var/lib/apt/lists/*
 
+ENV CARGO_TARGET_ARM_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
 ENV PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
 ENV PKG_CONFIG_ALLOW_CROSS=1

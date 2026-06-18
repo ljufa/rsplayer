@@ -8,7 +8,7 @@ members = [
     "crates/metadata",
     "crates/playback",
     "crates/wire",
-    "web-ui",
+    "web-ui", "crates/desktop",
 ]
 default-members = [
     "crates/api_models",
@@ -21,6 +21,12 @@ default-members = [
     "crates/wire",
 ]
 resolver = "2"
+
+[workspace.package]
+# Single source of truth for the release version.
+# Read by: build scripts (CARGO_PKG_VERSION), cargo-deb, cargo-generate-rpm,
+# cargo-packager and Makefile.toml (RELEASE_VERSION env derives from it).
+version = "4.0.0"
 
 [workspace.dependencies]
 anyhow = "1"

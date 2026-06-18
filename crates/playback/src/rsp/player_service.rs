@@ -1,8 +1,8 @@
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 use log::{debug, error, info, trace, warn};
 use std::sync::{
-    atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, Ordering},
     Arc, Mutex,
+    atomic::{AtomicBool, AtomicU8, AtomicU16, AtomicU32, Ordering},
 };
 use std::thread::JoinHandle;
 use thread_priority::{ThreadBuilder, ThreadPriority};
@@ -72,8 +72,7 @@ impl PlayerService {
         let last_known_time = Arc::new(AtomicU32::new(initial_time));
         let last_known_time_clone = last_known_time.clone();
         let current_volume_clone = current_volume.clone();
-        let software_gain_active =
-            settings.volume_ctrl_settings.ctrl_device == api_models::common::VolumeCrtlType::Software;
+        let software_gain_active = settings.volume_ctrl_settings.ctrl_device == api_models::common::VolumeCrtlType::Software;
         let dsp_processor = Arc::new(Mutex::new({
             let rsp = &settings.rs_player_settings;
             if rsp.dsp_settings.enabled || rsp.loudness_normalization_enabled {
@@ -112,9 +111,7 @@ impl PlayerService {
                         match ps {
                             PlayerState::PLAYING => {
                                 _ = state_db_async.remove(LAST_SONG_PAUSED_KEY);
-                                state_tx
-                                    .send(StateChangeEvent::NotificationSuccess("Playing".to_string()))
-                                    .ok();
+                                state_tx.send(StateChangeEvent::NotificationSuccess("Playing".to_string())).ok();
                             }
                             PlayerState::PAUSED | PlayerState::STOPPED => {
                                 _ = state_db_async.insert(LAST_SONG_PAUSED_KEY, "true");
@@ -133,19 +130,16 @@ impl PlayerService {
                         current_volume_clone.store(vol.current, Ordering::Relaxed);
                     }
                     Ok(StateChangeEvent::PlayerInfoEvent(info)) => {
-                        if let Ok(mut guard) = dsp_processor_clone.lock() {
-                            if let Some(proc) = guard.as_mut() {
-                                if let Some(rate) = info.audio_format_rate {
-                                    proc.rate = rate as usize;
-                                }
-                                if let Some(channels) = info.audio_format_channels {
-                                    proc.channels = channels;
-                                }
-                                info!(
-                                    "DSP processor updated with rate: {}, channels: {}",
-                                    proc.rate, proc.channels
-                                );
+                        if let Ok(mut guard) = dsp_processor_clone.lock()
+                            && let Some(proc) = guard.as_mut()
+                        {
+                            if let Some(rate) = info.audio_format_rate {
+                                proc.rate = rate as usize;
                             }
+                            if let Some(channels) = info.audio_format_channels {
+                                proc.channels = channels;
+                            }
+                            info!("DSP processor updated with rate: {}, channels: {}", proc.rate, proc.channels);
                         }
                     }
                     _ => (),
@@ -241,7 +235,7 @@ impl PlayerService {
 
     pub fn update_dsp_settings(&self, dsp_settings: &DspSettings) {
         if let Ok(mut guard) = self.dsp_processor.lock() {
-            if let Some(ref mut dsp) = *guard {
+            if let Some(dsp) = &mut *guard {
                 dsp.update_settings(dsp_settings);
             } else {
                 debug!("DSP update requested but DSP is disabled");
@@ -261,11 +255,7 @@ impl PlayerService {
         let changes_tx = self.changes_tx.clone();
         let rsp_settings = self.rsp_settings.clone();
         let metadata_service = self.metadata_service.clone();
-        let dsp_handle = self
-            .dsp_processor
-            .lock()
-            .ok()
-            .and_then(|g| g.as_ref().map(DspProcessor::handle));
+        let dsp_handle = self.dsp_processor.lock().ok().and_then(|g| g.as_ref().map(DspProcessor::handle));
         let current_volume = self.current_volume.clone();
         let software_gain = if self.software_gain_active {
             Some(current_volume.clone())
@@ -292,21 +282,17 @@ impl PlayerService {
                 } else {
                     warn!("Failed to set playback thread priority");
                 }
-                if is_multi_core_platform {
-                    if let Some(Some(last_core)) = core_affinity::get_core_ids().map(|ids| ids.last().copied()) {
-                        if core_affinity::set_for_current(last_core) {
-                            info!("Playback thread set to last core {last_core:?}");
-                        } else {
-                            warn!("Failed to set playback thread to last core {last_core:?}");
-                        }
+                if is_multi_core_platform && let Some(Some(last_core)) = core_affinity::get_core_ids().map(|ids| ids.last().copied()) {
+                    if core_affinity::set_for_current(last_core) {
+                        info!("Playback thread set to last core {last_core:?}");
+                    } else {
+                        warn!("Failed to set playback thread to last core {last_core:?}");
                     }
                 }
                 let mut retry_count = 0;
                 let result = loop {
                     let Some(song) = queue.get_current_song() else {
-                        changes_tx
-                            .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
-                            .ok();
+                        changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
                         break PlaybackResult::QueueFinished;
                     };
 
@@ -360,27 +346,22 @@ impl PlayerService {
                                 if tag_track.is_some() {
                                     debug!("Normalization [Auto]: using file tag track gain={g:?} dB");
                                 } else {
-                                    debug!(
-                                        "Normalization [Auto]: no track tag, falling back to calculated gain={g:?} dB"
-                                    );
+                                    debug!("Normalization [Auto]: no track tag, falling back to calculated gain={g:?} dB");
                                 }
                                 g
                             }
                         };
                         if gain.is_none() {
-                            debug!(
-                                "Normalization: no gain available for '{}', skipping normalization",
-                                song.file
-                            );
+                            debug!("Normalization: no gain available for '{}', skipping normalization", song.file);
                         }
                         gain
                     } else {
                         None
                     };
-                    if let Some(ref dsp) = dsp_handle {
-                        if let Ok(mut g) = dsp.normalization_gain_db.lock() {
-                            *g = normalization_gain_db;
-                        }
+                    if let Some(ref dsp) = dsp_handle
+                        && let Ok(mut g) = dsp.normalization_gain_db.lock()
+                    {
+                        *g = normalization_gain_db;
                     }
                     #[allow(clippy::cast_possible_truncation)]
                     let normalization_gain_hundredths = normalization_gain_db.map(|g| (g * 100.0) as i32);
@@ -411,27 +392,17 @@ impl PlayerService {
                             std::thread::sleep(std::time::Duration::from_millis(250));
                         }
                     } else {
-                        super::symphonia::play_file(
-                            &song.file,
-                            &config,
-                            &mut context,
-                            track_loudness,
-                            normalization_gain_hundredths,
-                        )
+                        super::symphonia::play_file(&song.file, &config, &mut context, track_loudness, normalization_gain_hundredths)
                     };
                     match play_result {
                         Ok(PlaybackResult::PlaybackStopped) => {
-                            changes_tx
-                                .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
-                                .ok();
+                            changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
                             break PlaybackResult::PlaybackStopped;
                         }
                         Err(err) => {
                             if retry_count < MAX_RETRIES && !stop_signal.load(Ordering::Relaxed) {
                                 retry_count += 1;
-                                warn!(
-                                    "Playback failed, retrying ({retry_count}/{MAX_RETRIES}) in 1s... Error: {err:?}"
-                                );
+                                warn!("Playback failed, retrying ({retry_count}/{MAX_RETRIES}) in 1s... Error: {err:?}");
                                 changes_tx
                                     .send(StateChangeEvent::NotificationError(format!(
                                         "Retrying ({retry_count}/{MAX_RETRIES})..."
@@ -445,9 +416,7 @@ impl PlayerService {
                                     std::thread::sleep(std::time::Duration::from_millis(100));
                                 }
                                 if stop_signal.load(Ordering::Relaxed) {
-                                    changes_tx
-                                        .send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED))
-                                        .ok();
+                                    changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
                                     break PlaybackResult::PlaybackStopped;
                                 }
                                 continue;

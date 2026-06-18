@@ -1,0 +1,48 @@
+[package]
+name = "rsplayer-desktop"
+version.workspace = true
+authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
+edition = "2024"
+description = "RSPlayer Desktop"
+
+# cargo-packager configuration (DMG on macOS; Linux uses Tauri bundler for deb+rpm).
+# Build the binary with `--features custom-protocol`, then run e.g.:
+#   cargo packager -p rsplayer-desktop --release --target <triple> --formats dmg
+# product name, version, identifier and binaries are derived from this manifest.
+[package.metadata.packager]
+product-name = "RSPlayer"
+identifier = "com.rsplayer.desktop"
+category = "Music"
+icons = [
+    "icons/icon.icns",
+    "icons/icon.ico",
+    "icons/icon.png",
+    "icons/32x32.png",
+    "icons/128x128.png",
+    "icons/128x128@2x.png"
+]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+dirs = "6"
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+
+# ALSA only exists on Linux; on macOS the server is built without default features
+# (mirrors the headless server release builds for apple-darwin targets).
+[target.'cfg(target_os = "linux")'.dependencies]
+rsplayer = { path = "../server" }
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+rsplayer = { path = "../server", default-features = false }
+
+[features]
+# this feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]

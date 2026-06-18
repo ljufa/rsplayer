@@ -2,22 +2,20 @@ use std::io::{Seek, SeekFrom};
 use std::num::NonZero;
 
 use symphonia::core::audio::{Channels, Position};
-use symphonia::core::codecs::audio::AudioCodecParameters;
 use symphonia::core::codecs::CodecParameters;
+use symphonia::core::codecs::audio::AudioCodecParameters;
 use symphonia::core::common::FourCc;
 use symphonia::core::errors::Result;
 use symphonia::core::formats::probe::{ProbeDataMatchSpec, ProbeFormatData, ProbeableFormat, Score, Scoreable};
-use symphonia::core::formats::{
-    FormatId, FormatInfo, FormatOptions, FormatReader, MediaInfo, SeekMode, SeekTo, SeekedTo, Track,
-};
+use symphonia::core::formats::{FormatId, FormatInfo, FormatOptions, FormatReader, MediaInfo, SeekMode, SeekTo, SeekedTo, Track};
 use symphonia::core::io::{MediaSourceStream, ReadBytes, ScopedStream};
 use symphonia::core::meta::{Metadata, MetadataBuilder, MetadataLog, MetadataSideData};
 use symphonia::core::packet::Packet;
 use symphonia::core::units::{Duration, TimeBase, Timestamp};
 
-use symphonia_metadata::id3v2::{read_id3v2, ID3V2_METADATA_INFO};
+use symphonia_metadata::id3v2::{ID3V2_METADATA_INFO, read_id3v2};
 
-use super::{dsf::DSFMetadata, CODEC_TYPE_DSD_LSBF};
+use super::{CODEC_TYPE_DSD_LSBF, dsf::DSFMetadata};
 
 const DSF_FORMAT_ID: FormatId = FormatId::new(FourCc::new(*b"DSF "));
 const DSF_FORMAT_INFO: FormatInfo = FormatInfo {
@@ -93,15 +91,15 @@ impl<'s> DsfReader<'s> {
         let mut metadata_log = MetadataLog::default();
         let metadata_offset = dsf_metadata.dsd_chunk.metadata_offset;
         if metadata_offset > 0 {
-            if let Ok(pos) = source.seek(SeekFrom::Start(metadata_offset)) {
-                if pos == metadata_offset {
-                    let mut metadata_builder = MetadataBuilder::new(ID3V2_METADATA_INFO);
-                    let mut side_data: Vec<MetadataSideData> = Vec::new();
-                    if let Err(e) = read_id3v2(&mut source, &mut metadata_builder, &mut side_data) {
-                        log::warn!("Failed to read ID3v2 metadata from DSF: {e}");
-                    } else {
-                        metadata_log.push(metadata_builder.build());
-                    }
+            if let Ok(pos) = source.seek(SeekFrom::Start(metadata_offset))
+                && pos == metadata_offset
+            {
+                let mut metadata_builder = MetadataBuilder::new(ID3V2_METADATA_INFO);
+                let mut side_data: Vec<MetadataSideData> = Vec::new();
+                if let Err(e) = read_id3v2(&mut source, &mut metadata_builder, &mut side_data) {
+                    log::warn!("Failed to read ID3v2 metadata from DSF: {e}");
+                } else {
+                    metadata_log.push(metadata_builder.build());
                 }
             }
             source.seek(SeekFrom::Start(data_start))?;

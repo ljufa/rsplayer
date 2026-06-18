@@ -1,6 +1,6 @@
 use std::io::{Read, Seek, SeekFrom};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 pub const MASTER_TOC_LBA: u64 = 510;
 pub const SACD_LSN_SIZE: u64 = 2048;
@@ -89,11 +89,7 @@ fn read_u32_be(data: &[u8], offset: usize) -> u32 {
     u32::from_be_bytes([data[offset], data[offset + 1], data[offset + 2], data[offset + 3]])
 }
 
-fn read_sector<F: Read + Seek>(
-    file: &mut F,
-    mode: SectorMode,
-    lba: u64,
-) -> std::io::Result<[u8; SACD_LSN_SIZE as usize]> {
+fn read_sector<F: Read + Seek>(file: &mut F, mode: SectorMode, lba: u64) -> std::io::Result<[u8; SACD_LSN_SIZE as usize]> {
     file.seek(SeekFrom::Start(mode.data_offset(lba)))?;
     let mut buf = [0u8; SACD_LSN_SIZE as usize];
     file.read_exact(&mut buf)?;
@@ -106,19 +102,13 @@ pub fn detect_sector_mode<F: Read + Seek>(file: &mut F) -> Result<SectorMode> {
 
     // Try physical 2064-byte sectors first.
     let phys_offset = MASTER_TOC_LBA * SACD_PSN_SIZE + SACD_PSN_HEADER;
-    if file.seek(SeekFrom::Start(phys_offset)).is_ok()
-        && file.read_exact(&mut marker).is_ok()
-        && &marker == MASTER_TOC_MARKER
-    {
+    if file.seek(SeekFrom::Start(phys_offset)).is_ok() && file.read_exact(&mut marker).is_ok() && &marker == MASTER_TOC_MARKER {
         return Ok(SectorMode::Physical);
     }
 
     // Fall back to data-only 2048-byte sectors.
     let data_offset = MASTER_TOC_LBA * SACD_LSN_SIZE;
-    if file.seek(SeekFrom::Start(data_offset)).is_ok()
-        && file.read_exact(&mut marker).is_ok()
-        && &marker == MASTER_TOC_MARKER
-    {
+    if file.seek(SeekFrom::Start(data_offset)).is_ok() && file.read_exact(&mut marker).is_ok() && &marker == MASTER_TOC_MARKER {
         return Ok(SectorMode::DataOnly);
     }
 
@@ -162,14 +152,8 @@ pub fn read_areas<F: Read + Seek>(file: &mut F, mode: SectorMode) -> Result<Vec<
     Ok(areas)
 }
 
-fn read_area_toc<F: Read + Seek>(
-    file: &mut F,
-    mode: SectorMode,
-    toc_start_lba: u32,
-    toc_size: u16,
-) -> Result<SacdArea> {
-    let toc =
-        read_sector(file, mode, u64::from(toc_start_lba)).map_err(|e| anyhow!("IO error reading area TOC: {e}"))?;
+fn read_area_toc<F: Read + Seek>(file: &mut F, mode: SectorMode, toc_start_lba: u32, toc_size: u16) -> Result<SacdArea> {
+    let toc = read_sector(file, mode, u64::from(toc_start_lba)).map_err(|e| anyhow!("IO error reading area TOC: {e}"))?;
 
     let id = &toc[0..8];
     let is_stereo = id == TWOCH_TOC_MARKER;
@@ -215,9 +199,7 @@ pub fn read_tracks<F: Read + Seek>(file: &mut F, mode: SectorMode, area: &SacdAr
     let trl1 = (0..scan_limit)
         .find_map(|offset| {
             let lba = u64::from(area.toc_start_lba) + offset;
-            read_sector(file, mode, lba)
-                .ok()
-                .filter(|s| &s[0..8] == SACDTRL1_MARKER)
+            read_sector(file, mode, lba).ok().filter(|s| &s[0..8] == SACDTRL1_MARKER)
         })
         .ok_or_else(|| {
             anyhow!(

@@ -13,14 +13,12 @@ impl AudioMetadataExtractor {
         let mut song = Song::default();
         let mut image_data: Option<symphonia::core::meta::Visual> = None;
 
-        if let Some(track) = format.default_track(TrackType::Audio) {
-            if let Some(num_frames) = track.num_frames {
-                if let Some(tb) = track.time_base {
-                    if let Some(time) = tb.calc_time(symphonia::core::units::Timestamp::new(num_frames.cast_signed())) {
-                        song.time = Some(Duration::from_secs(time.as_secs().unsigned_abs()));
-                    }
-                }
-            }
+        if let Some(track) = format.default_track(TrackType::Audio)
+            && let Some(num_frames) = track.num_frames
+            && let Some(tb) = track.time_base
+            && let Some(time) = tb.calc_time(symphonia::core::units::Timestamp::new(num_frames.cast_signed()))
+        {
+            song.time = Some(Duration::from_secs(time.as_secs().unsigned_abs()));
         }
 
         if let Some(metadata_rev) = format.metadata().skip_to_latest() {
@@ -98,10 +96,10 @@ impl AudioMetadataExtractor {
                 .or_insert_with(|| Self::tag_value_to_option(tag));
         }
 
-        if image_data.is_none() {
-            if let Some(v) = metadata_rev.media.visuals.first() {
-                *image_data = Some(v.clone());
-            }
+        if image_data.is_none()
+            && let Some(v) = metadata_rev.media.visuals.first()
+        {
+            *image_data = Some(v.clone());
         }
     }
 

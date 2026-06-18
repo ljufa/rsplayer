@@ -4,8 +4,7 @@ use crate::command_context::CommandContext;
 
 pub fn handle_player_command(cmd: api_models::common::PlayerCommand, ctx: &CommandContext) {
     use api_models::common::PlayerCommand::{
-        CyclePlaybackMode, Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, Seek, SeekBackward, SeekForward,
-        Stop, TogglePlay,
+        CyclePlaybackMode, Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, Seek, SeekBackward, SeekForward, Stop, TogglePlay,
     };
 
     match cmd {
@@ -38,17 +37,13 @@ pub fn handle_player_command(cmd: api_models::common::PlayerCommand, ctx: &Comma
             ctx.player_service.seek_relative(-10);
         }
         CyclePlaybackMode => {
-            ctx.send_event(StateChangeEvent::PlaybackModeChangedEvent(
-                ctx.queue_service.cycle_playback_mode(),
-            ));
+            ctx.send_event(StateChangeEvent::PlaybackModeChangedEvent(ctx.queue_service.cycle_playback_mode()));
         }
         QueryCurrentPlayerInfo => {
             let mode = ctx.queue_service.get_playback_mode();
             ctx.send_event(StateChangeEvent::PlaybackModeChangedEvent(mode));
             let settings = ctx.config_store.get_settings();
-            ctx.send_event(StateChangeEvent::VuMeterEnabledEvent(
-                settings.rs_player_settings.vu_meter_enabled,
-            ));
+            ctx.send_event(StateChangeEvent::VuMeterEnabledEvent(settings.rs_player_settings.vu_meter_enabled));
         }
     }
 }

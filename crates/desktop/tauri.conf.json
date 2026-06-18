@@ -1,0 +1,19 @@
+{
+  "productName": "rsplayer-desktop",
+  "identifier": "com.rsplayer.desktop",
+  "build": {
+    "frontendDist": "../../dist/web-ui"
+  },
+  "bundle": {
+     "macOS": {
+      "minimumSystemVersion": "12.0"
+    },
+    "active": true
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  }
+}

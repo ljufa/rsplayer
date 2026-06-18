@@ -87,10 +87,7 @@ pub fn LibraryFilesPage() -> Element {
                 &UserCommand::Metadata(MetadataCommand::SearchLocalFiles(route_search.clone(), 100)),
             );
         } else {
-            ws_send(
-                &ws,
-                &UserCommand::Metadata(MetadataCommand::QueryLocalFiles(String::new(), 0)),
-            );
+            ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryLocalFiles(String::new(), 0)));
         }
     });
 
@@ -121,15 +118,9 @@ pub fn LibraryFilesPage() -> Element {
         let term = search();
         if term.is_empty() {
             *tree.write() = Tree::new();
-            ws_send(
-                &ws,
-                &UserCommand::Metadata(MetadataCommand::QueryLocalFiles(String::new(), 0)),
-            );
+            ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryLocalFiles(String::new(), 0)));
         } else {
-            ws_send(
-                &ws,
-                &UserCommand::Metadata(MetadataCommand::SearchLocalFiles(term, 100)),
-            );
+            ws_send(&ws, &UserCommand::Metadata(MetadataCommand::SearchLocalFiles(term, 100)));
         }
     };
 

@@ -1,6 +1,6 @@
 use std::ffi::CString;
 
-use alsa::{card, Mixer};
+use alsa::{Mixer, card};
 
 use alsa::device_name::HintIter;
 use alsa::mixer::{Selem, SelemChannelId, SelemId};
@@ -110,11 +110,7 @@ impl AlsaPcmCard {
         while elapsed_time < WAIT_TIME_MS {
             if let Ok(dev) = alsa::PCM::new(self.device_name.as_str(), alsa::Direction::Playback, false) {
                 let status = dev.status().unwrap();
-                debug!(
-                    "Device status {:?} after elapsed time {}",
-                    &status.get_state(),
-                    &elapsed_time
-                );
+                debug!("Device status {:?} after elapsed time {}", &status.get_state(), &elapsed_time);
                 if status.get_state() != State::Running {
                     return Ok(());
                 }
@@ -150,65 +146,63 @@ impl AlsaMixer {
 impl VolumeControlDevice for AlsaMixer {
     fn vol_up(&mut self) -> Volume {
         let ev = self.get_vol();
-        if let Some(nv) = ev.current.checked_add(ev.step) {
-            if nv <= ev.max {
-                self.set_vol(nv);
-            }
+        if let Some(nv) = ev.current.checked_add(ev.step)
+            && nv <= ev.max
+        {
+            self.set_vol(nv);
         }
         ev
     }
 
     fn vol_down(&mut self) -> Volume {
         let ev = self.get_vol();
-        if let Some(nv) = ev.current.checked_sub(ev.step) {
-            if nv >= ev.min {
-                self.set_vol(nv);
-            }
+        if let Some(nv) = ev.current.checked_sub(ev.step)
+            && nv >= ev.min
+        {
+            self.set_vol(nv);
         }
         ev
     }
 
     fn get_vol(&mut self) -> Volume {
-        if let Ok(mixer) = Mixer::new(self.card_name.as_str(), false) {
-            if let Some(selem) = mixer.find_selem(&SelemId::new(&self.mixer_name, self.mixer_idx)) {
-                let (rmin, rmax) = selem.get_playback_volume_range();
-                let mut channel = SelemChannelId::mono();
-                for c in SelemChannelId::all() {
-                    if selem.has_playback_channel(*c) {
-                        channel = *c;
-                        break;
-                    }
+        if let Ok(mixer) = Mixer::new(self.card_name.as_str(), false)
+            && let Some(selem) = mixer.find_selem(&SelemId::new(&self.mixer_name, self.mixer_idx))
+        {
+            let (rmin, rmax) = selem.get_playback_volume_range();
+            let mut channel = SelemChannelId::mono();
+            for c in SelemChannelId::all() {
+                if selem.has_playback_channel(*c) {
+                    channel = *c;
+                    break;
                 }
-                let old: i64 = selem.get_playback_volume(channel).unwrap();
-                return Volume {
-                    step: ALSA_MIXER_STEP,
-                    min: rmin.to_u8().unwrap_or(0),
-                    max: rmax.to_u8().unwrap_or(0),
-                    current: old.to_u8().unwrap_or(0),
-                };
             }
+            let old: i64 = selem.get_playback_volume(channel).unwrap();
+            return Volume {
+                step: ALSA_MIXER_STEP,
+                min: rmin.to_u8().unwrap_or(0),
+                max: rmax.to_u8().unwrap_or(0),
+                current: old.to_u8().unwrap_or(0),
+            };
         }
         Volume::default()
     }
 
     fn set_vol(&mut self, level: u8) -> Volume {
-        if let Ok(mixer) = Mixer::new(self.card_name.as_str(), false) {
-            if let Some(selem) = mixer.find_selem(&SelemId::new(&self.mixer_name, self.mixer_idx)) {
-                let (rmin, rmax) = selem.get_playback_volume_range();
-                for c in SelemChannelId::all() {
-                    if selem.has_playback_channel(*c) {
-                        selem
-                            .set_playback_volume(*c, level.to_i64().unwrap_or_default())
-                            .unwrap();
-                    }
+        if let Ok(mixer) = Mixer::new(self.card_name.as_str(), false)
+            && let Some(selem) = mixer.find_selem(&SelemId::new(&self.mixer_name, self.mixer_idx))
+        {
+            let (rmin, rmax) = selem.get_playback_volume_range();
+            for c in SelemChannelId::all() {
+                if selem.has_playback_channel(*c) {
+                    selem.set_playback_volume(*c, level.to_i64().unwrap_or_default()).unwrap();
                 }
-                return Volume {
-                    step: ALSA_MIXER_STEP,
-                    min: rmin.to_u8().unwrap_or_default(),
-                    max: rmax.to_u8().unwrap_or_default(),
-                    current: level,
-                };
             }
+            return Volume {
+                step: ALSA_MIXER_STEP,
+                min: rmin.to_u8().unwrap_or_default(),
+                max: rmax.to_u8().unwrap_or_default(),
+                current: level,
+            };
         }
         Volume::default()
     }

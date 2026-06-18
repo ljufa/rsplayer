@@ -1,15 +1,15 @@
-use std::sync::atomic::AtomicU8;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU8;
 
 use anyhow::Result;
 use api_models::common::Volume;
 
 use config::ArcConfiguration;
 
+use super::VolumeControlDevice;
 #[cfg(feature = "alsa")]
 use super::alsa::AlsaMixer;
 use super::software_gain::SoftwareGainVolumeControlDevice;
-use super::VolumeControlDevice;
 
 pub type ArcAudioInterfaceSvc = Arc<AudioInterfaceService>;
 
@@ -19,19 +19,15 @@ pub struct AudioInterfaceService {
     volume_ctrl_device: Mutex<Box<dyn VolumeControlDevice + Sync + Send>>,
 }
 
+use super::NoOpVolumeControlDevice;
 use super::pipewire::PipewireVolumeControlDevice;
 use super::rsp_firmware::RSPlayerFirmwareVolumeControlDevice;
-use super::NoOpVolumeControlDevice;
 use api_models::common::VolumeCrtlType;
 
 use crate::usb::ArcUsbService;
 
 impl AudioInterfaceService {
-    pub fn new(
-        config: &ArcConfiguration,
-        usb_service: Option<ArcUsbService>,
-        software_gain_level: Arc<AtomicU8>,
-    ) -> Result<Self> {
+    pub fn new(config: &ArcConfiguration, usb_service: Option<ArcUsbService>, software_gain_level: Arc<AtomicU8>) -> Result<Self> {
         let settings = config.get_settings();
 
         #[cfg(feature = "alsa")]
@@ -56,9 +52,7 @@ impl AudioInterfaceService {
 
         let mut volume_ctrl_device: Box<dyn VolumeControlDevice + Send + Sync> = if settings.usb_settings.enabled {
             if usb_service.is_none() {
-                return Err(anyhow::anyhow!(
-                    "USB service is required for RSPlayerFirmware volume control."
-                ));
+                return Err(anyhow::anyhow!("USB service is required for RSPlayerFirmware volume control."));
             }
             Box::new(RSPlayerFirmwareVolumeControlDevice::new(
                 usb_service.expect("usb_service checked above"),

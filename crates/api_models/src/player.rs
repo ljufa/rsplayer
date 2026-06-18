@@ -90,11 +90,7 @@ impl Song {
             result.push_str(self.file.as_str());
         }
 
-        if result.is_empty() {
-            None
-        } else {
-            Some(result)
-        }
+        if result.is_empty() { None } else { Some(result) }
     }
     #[must_use]
     pub fn get_title(&self) -> String {
@@ -301,10 +297,7 @@ mod tests {
 
     #[test]
     fn track_and_album_gains_are_independent() {
-        let song = song_with_tags(&[
-            ("REPLAYGAIN_TRACK_GAIN", "+3.14 dB"),
-            ("REPLAYGAIN_ALBUM_GAIN", "-1.50 dB"),
-        ]);
+        let song = song_with_tags(&[("REPLAYGAIN_TRACK_GAIN", "+3.14 dB"), ("REPLAYGAIN_ALBUM_GAIN", "-1.50 dB")]);
         let track = song.file_tag_track_gain().unwrap();
         let album = song.file_tag_album_gain().unwrap();
         assert!((track - 3.14).abs() < 1e-9);

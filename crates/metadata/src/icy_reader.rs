@@ -39,35 +39,35 @@ impl<R: Read> IcyMetadataReader<R> {
 
             if let Ok(metadata_str) = std::str::from_utf8(&metadata_buf) {
                 info!("metadata:{metadata_str}");
-                if let Some(title_part) = metadata_str.split("StreamTitle='").nth(1) {
-                    if let Some(title) = title_part.split("';").next() {
-                        if !title.is_empty() && title != self.last_title {
-                            self.last_title = title.to_string();
-                            let parts: Vec<&str> = title.splitn(2, " - ").collect();
-                            let (artist, song_title) = if parts.len() == 2 {
-                                (Some(parts[0].to_string()), Some(parts[1].to_string()))
-                            } else {
-                                (None, Some(title.to_string()))
-                            };
-                            let mut album = self.radio_meta.description.clone().unwrap_or_default();
-                            if album.is_empty() {
-                                album = self.radio_meta.name.clone().unwrap_or_default();
-                            }
-                            if album.is_empty() {
-                                album.clone_from(&self.radio_meta.url);
-                            }
-                            let song = Song {
-                                title: song_title,
-                                artist,
-                                album: Some(album),
-                                genre: self.radio_meta.genre.clone(),
-                                file: self.radio_meta.url.clone(),
-                                image_url: self.radio_meta.image_url.clone(),
-                                ..Default::default()
-                            };
-                            self.changes_tx.send(StateChangeEvent::CurrentSongEvent(song)).ok();
-                        }
+                if let Some(title_part) = metadata_str.split("StreamTitle='").nth(1)
+                    && let Some(title) = title_part.split("';").next()
+                    && !title.is_empty()
+                    && title != self.last_title
+                {
+                    self.last_title = title.to_string();
+                    let parts: Vec<&str> = title.splitn(2, " - ").collect();
+                    let (artist, song_title) = if parts.len() == 2 {
+                        (Some(parts[0].to_string()), Some(parts[1].to_string()))
+                    } else {
+                        (None, Some(title.to_string()))
+                    };
+                    let mut album = self.radio_meta.description.clone().unwrap_or_default();
+                    if album.is_empty() {
+                        album = self.radio_meta.name.clone().unwrap_or_default();
                     }
+                    if album.is_empty() {
+                        album.clone_from(&self.radio_meta.url);
+                    }
+                    let song = Song {
+                        title: song_title,
+                        artist,
+                        album: Some(album),
+                        genre: self.radio_meta.genre.clone(),
+                        file: self.radio_meta.url.clone(),
+                        image_url: self.radio_meta.image_url.clone(),
+                        ..Default::default()
+                    };
+                    self.changes_tx.send(StateChangeEvent::CurrentSongEvent(song)).ok();
                 }
             }
         }
@@ -78,13 +78,13 @@ impl<R: Read> IcyMetadataReader<R> {
 
 impl<R: Read> Read for IcyMetadataReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
-        if self.remaining == 0 {
-            if let Err(e) = self.parse_metadata() {
-                if e.kind() == std::io::ErrorKind::UnexpectedEof {
-                    return Ok(0);
-                }
-                return Err(e);
+        if self.remaining == 0
+            && let Err(e) = self.parse_metadata()
+        {
+            if e.kind() == std::io::ErrorKind::UnexpectedEof {
+                return Ok(0);
             }
+            return Err(e);
         }
 
         let read_len = std::cmp::min(buf.len(), self.remaining);

@@ -108,14 +108,7 @@ impl BiquadCoefficients {
                 let w = 2.0 * PI * freq / fs;
                 let cs = w.cos();
                 let alpha = w.sin() / (2.0 * q);
-                Self::normalize(
-                    1.0 + alpha,
-                    -2.0 * cs,
-                    1.0 - alpha,
-                    (1.0 - cs) / 2.0,
-                    1.0 - cs,
-                    (1.0 - cs) / 2.0,
-                )
+                Self::normalize(1.0 + alpha, -2.0 * cs, 1.0 - alpha, (1.0 - cs) / 2.0, 1.0 - cs, (1.0 - cs) / 2.0)
             }
             BiquadParameters::Bandpass(config::NotchWidth::Q { freq, q }) => {
                 let w = 2.0 * PI * freq / fs;
@@ -229,14 +222,7 @@ impl BiquadCoefficients {
                 let w = 2.0 * PI * freq / fs;
                 let tn = (w / 2.0).tan();
                 let a = 10.0_f32.powf(gain / 40.0);
-                Self::normalize(
-                    tn + a,
-                    tn - a,
-                    0.0,
-                    (a * a).mul_add(tn, a),
-                    (a * a).mul_add(tn, -a),
-                    0.0,
-                )
+                Self::normalize(tn + a, tn - a, 0.0, (a * a).mul_add(tn, a), (a * a).mul_add(tn, -a), 0.0)
             }
             BiquadParameters::HighshelfFO { freq, gain } => {
                 let w = 2.0 * PI * freq / fs;

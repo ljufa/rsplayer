@@ -53,10 +53,7 @@ impl VolumeControlDevice for PipewireVolumeControlDevice {
     }
 
     fn get_vol(&mut self) -> Volume {
-        let output = Command::new("wpctl")
-            .arg("get-volume")
-            .arg("@DEFAULT_AUDIO_SINK@")
-            .output();
+        let output = Command::new("wpctl").arg("get-volume").arg("@DEFAULT_AUDIO_SINK@").output();
 
         match output {
             Ok(output) if output.status.success() => {
@@ -93,10 +90,10 @@ impl VolumeControlDevice for PipewireVolumeControlDevice {
 
         if let Err(e) = output {
             error!("Failed to set volume via wpctl: {e}");
-        } else if let Ok(o) = output {
-            if !o.status.success() {
-                error!("wpctl returned error: {}", String::from_utf8_lossy(&o.stderr));
-            }
+        } else if let Ok(o) = output
+            && !o.status.success()
+        {
+            error!("wpctl returned error: {}", String::from_utf8_lossy(&o.stderr));
         }
 
         self.get_vol()

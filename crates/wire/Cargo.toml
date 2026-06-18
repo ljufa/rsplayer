@@ -1,7 +1,7 @@
 [package]
 name = "wire"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Shared wire protocol between rsplayer host and rsplayer_firmware (no_std)"
 
 [features]

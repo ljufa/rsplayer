@@ -72,10 +72,7 @@ pub fn LibraryArtistsPage() -> Element {
     use_effect(move || {
         if !route_search.is_empty() {
             search.set(route_search.clone());
-            ws_send(
-                &ws,
-                &UserCommand::Metadata(MetadataCommand::SearchArtists(route_search.clone())),
-            );
+            ws_send(&ws, &UserCommand::Metadata(MetadataCommand::SearchArtists(route_search.clone())));
         } else {
             ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryArtists));
         }
@@ -182,12 +179,7 @@ pub fn LibraryArtistsPage() -> Element {
 }
 
 #[component]
-fn ArtistNode(
-    item: MetadataLibraryItem,
-    node_id: NodeId,
-    ws: Signal<Option<WebSocket>>,
-    tree: Signal<Tree>,
-) -> Element {
+fn ArtistNode(item: MetadataLibraryItem, node_id: NodeId, ws: Signal<Option<WebSocket>>, tree: Signal<Tree>) -> Element {
     let label = item.get_title();
     let is_song = matches!(item, MetadataLibraryItem::SongItem(_));
     let has_children = node_id.children(&tree.read().arena).count() > 0;

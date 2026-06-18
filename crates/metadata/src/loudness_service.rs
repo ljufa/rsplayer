@@ -1,8 +1,8 @@
 use std::{
     path::Path,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     thread,
     time::Duration,
@@ -25,11 +25,7 @@ pub struct LoudnessService {
 }
 
 impl LoudnessService {
-    pub fn new(
-        repository: ArcLoudnessRepository,
-        song_repository: ArcSongRepository,
-        music_dirs: Vec<String>,
-    ) -> Arc<Self> {
+    pub fn new(repository: ArcLoudnessRepository, song_repository: ArcSongRepository, music_dirs: Vec<String>) -> Arc<Self> {
         Arc::new(Self {
             repository,
             song_repository,

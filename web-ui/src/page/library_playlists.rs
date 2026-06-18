@@ -11,13 +11,7 @@ use crate::{hooks::ws_send, state::AppState, UiState};
 
 fn pl_slug(s: &str) -> String {
     s.chars()
-        .map(|c| {
-            if c.is_alphanumeric() {
-                c.to_ascii_lowercase()
-            } else {
-                '-'
-            }
-        })
+        .map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
         .collect()
 }
 

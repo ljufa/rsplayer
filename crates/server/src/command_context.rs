@@ -9,8 +9,7 @@ use hardware::usb::ArcUsbService;
 use metadata::metadata_service::MetadataService;
 use metadata::playlist_service::PlaylistService;
 use metadata::ports::{
-    album_repository::ArcAlbumRepository, loudness_repository::ArcLoudnessRepository,
-    song_repository::ArcSongRepository,
+    album_repository::ArcAlbumRepository, loudness_repository::ArcLoudnessRepository, song_repository::ArcSongRepository,
 };
 use metadata::queue_service::QueueService;
 use playback::rsp::player_service::PlayerService;

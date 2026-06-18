@@ -114,11 +114,7 @@ impl VUMeter {
         let canvas = document.get_element_by_id(canvas_id)?;
         let canvas: HtmlCanvasElement = canvas.dyn_into().ok()?;
 
-        let ctx = canvas
-            .get_context("2d")
-            .ok()??
-            .dyn_into::<CanvasRenderingContext2d>()
-            .ok()?;
+        let ctx = canvas.get_context("2d").ok()??.dyn_into::<CanvasRenderingContext2d>().ok()?;
 
         let bar_count = 24;
         let spectrum_bars_left = vec![0.0; bar_count];
@@ -216,8 +212,7 @@ impl VUMeter {
             let target_right = (base_right * freq_factor * random_factor).min(255.0);
 
             self.spectrum_bars_left[i] = self.spectrum_bars_left[i] * decay_factor + target_left * (1.0 - decay_factor);
-            self.spectrum_bars_right[i] =
-                self.spectrum_bars_right[i] * decay_factor + target_right * (1.0 - decay_factor);
+            self.spectrum_bars_right[i] = self.spectrum_bars_right[i] * decay_factor + target_right * (1.0 - decay_factor);
 
             // Peak hold per bar
             if self.spectrum_bars_left[i] >= self.spectrum_peaks_left[i] {
@@ -611,12 +606,7 @@ impl VUMeter {
         // Left channel — top half, cyan (3 cycles)
         draw_channel(&self.wave_points, half / 2.0, "#00ffcc", "rgba(0,255,200,0.12)");
         // Right channel — bottom half, magenta (5 cycles)
-        draw_channel(
-            &self.wave_points_right,
-            half + half / 2.0,
-            "#ff44cc",
-            "rgba(255,50,180,0.12)",
-        );
+        draw_channel(&self.wave_points_right, half + half / 2.0, "#ff44cc", "rgba(255,50,180,0.12)");
     }
 
     fn draw_circular(&self, width: f64, height: f64) {
@@ -658,9 +648,7 @@ impl VUMeter {
         self.ctx.set_stroke_style_str("rgba(255, 255, 255, 0.1)");
         self.ctx.set_line_width(2.0);
         self.ctx.begin_path();
-        let _ = self
-            .ctx
-            .arc(center_x, center_y, base_radius, 0.0, std::f64::consts::TAU);
+        let _ = self.ctx.arc(center_x, center_y, base_radius, 0.0, std::f64::consts::TAU);
         self.ctx.stroke();
     }
 
@@ -694,8 +682,7 @@ impl VUMeter {
             let _ = fg.add_color_stop(0.92, "hsl(25,  100%, 54%)");
             let _ = fg.add_color_stop(1.0, "hsl(0,   100%, 54%)");
             self.ctx.set_shadow_blur(18.0);
-            self.ctx
-                .set_shadow_color(&format!("hsla({:.0},100%,60%,0.75)", glow_hue));
+            self.ctx.set_shadow_color(&format!("hsla({:.0},100%,60%,0.75)", glow_hue));
             self.ctx.set_fill_style_canvas_gradient(&fg);
             self.ctx.fill_rect(x, y, fill_w, h);
             self.ctx.set_shadow_blur(0.0);
@@ -916,8 +903,7 @@ impl VUMeter {
         for i in 0..=steps {
             let t = i as f64 / steps as f64;
             let x = t * width;
-            let y =
-                mid_y + (t * std::f64::consts::TAU * 2.5 + self.wave_phase + std::f64::consts::PI).sin() * amp * amp_r;
+            let y = mid_y + (t * std::f64::consts::TAU * 2.5 + self.wave_phase + std::f64::consts::PI).sin() * amp * amp_r;
             if i == 0 {
                 self.ctx.move_to(x, y);
             } else {
@@ -1018,8 +1004,7 @@ impl VUMeter {
                 if dist < max_dist {
                     let alpha = (1.0 - dist / max_dist) * 0.45;
                     let hue = (self.bounce_balls[i][4] + self.bounce_balls[j][4]) / 2.0;
-                    self.ctx
-                        .set_stroke_style_str(&format!("hsla({:.0},100%,65%,{:.2})", hue, alpha));
+                    self.ctx.set_stroke_style_str(&format!("hsla({:.0},100%,65%,{:.2})", hue, alpha));
                     self.ctx.set_line_width(1.5);
                     self.ctx.set_shadow_blur(0.0);
                     self.ctx.begin_path();

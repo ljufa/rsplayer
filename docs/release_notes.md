@@ -1,5 +1,83 @@
 # Release Notes
 
+## v4.0.0 — 2026-06-18
+
+### New Features
+
+#### Desktop Application (Tauri)
+
+RSPlayer now ships as a standalone desktop application alongside the headless server:
+
+- **Native window** built with [Tauri 2](https://v2.tauri.app/) — deb and rpm packages for Linux (`rsplayer-desktop_*_amd64.deb`, `rsplayer-desktop-*.x86_64.rpm`), and a DMG for macOS.
+- The desktop app embeds the same RSPlayer backend (from `crates/server/src/lib.rs`) and runs it as a child tokio task inside the Tauri application process.
+- On startup the window shows a loading screen (`loading.html`) while the backend starts up; once the HTTP server is ready it redirects to the web UI.
+- Graceful shutdown: closing the desktop window sends a shutdown signal to the backend, triggering a clean database `SyncAll` persistence.
+- If the configured port (default `8000`) is already in use, the app probes sequential ports up to `9000` before falling back to an OS-assigned port.
+- A new `install_desktop.sh` script detects the platform (Debian/RPM/macOS) and downloads the appropriate desktop package from the latest GitHub release.
+
+The web UI now shows a **"Connecting to server…"** full-screen overlay with a spinner while the WebSocket is not yet connected — essential for the desktop build where the backend starts asynchronously in the same process.
+
+**Desktop is available for:**
+
+| Platform | Architectures | Package Format |
+|----------|--------------|----------------|
+| Linux | x86_64 only | `.deb`, `.rpm` |
+| macOS | Apple Silicon, Intel | `.dmg` |
+
+> The headless server packages (`rsplayer_*` — deb, rpm, Arch tgz, raw binary) continue to be produced for all architectures and are unaffected.
+
+### Internal / Build & Release Pipeline
+
+#### Packaging overhaul — standard tooling instead of hand-rolled scripts
+
+The release pipeline was simplified and made more robust:
+
+- **Version single source of truth** moved from `Makefile.toml` to `[workspace.package]` in the root `Cargo.toml`. `cargo-deb`, `cargo-generate-rpm`, `cargo-packager` and the application itself (`env!("CARGO_PKG_VERSION")`) all read it natively. CI fails fast if a release tag doesn't match the workspace version.
+- **RPM packages** are now built with `cargo-generate-rpm` (declarative config in `crates/server/Cargo.toml`) instead of a hand-rolled `rpmbuild` spec-template pipeline. The old `PKGS/rpm/rsplayer.spec.in` was removed. Install/uninstall scriptlets and file lists are unchanged.
+- **macOS** server builds (`rsplayer_darwin_arm64`/`rsplayer_darwin_amd64`) and desktop DMGs are now built **natively on GitHub macOS runners**. The osxcross-based darwin cross-compilation Docker images and entry-point scripts were removed.
+- **All server packages** and raw binaries keep their previous release asset name patterns; `install.sh` and the Docker publish flow are unaffected.
+
+#### Docker Builder Image Consolidation
+
+- The separate `rsplayer-backend-builder` and `rsplayer-ui-builder` Docker images are merged into a single `rsplayer-builder` image (`docker/Dockerfile.builder`), which includes everything needed for both the web UI and backend/desktop builds (Rust with wasm32 target, Node.js, Tailwind CLI, cross, cargo-deb, cargo-generate-rpm, cargo-packager, tauri-cli, dioxus-cli, cargo-make, and all Linux desktop/WebKit dev libraries).
+- The legacy `docker/Dockerfile.backend` was removed.
+- All darwin cross-compilation images (`cross-aarch64-apple-darwin`, `cross-x86_64-apple-darwin`) were removed from `build-images.yml`.
+
+#### CI/CD Consolidation
+
+- The `cd.yml` workflow was rewritten: it now supports `workflow_dispatch` with per-target selection, verifies the pushed tag matches the workspace version, and produces all release assets (deb, rpm, Arch tgz, binary) via the new `cargo make package_linux_release` task.
+- A new `build_desktop_linux` job produces deb+rpm desktop packages via Tauri.
+- The legacy `copy_remote_mac` Make task was removed (macOS builds are now done natively).
+
+### Improvements
+
+#### Server Refactored for Embedding
+
+The server binary logic was extracted from `main.rs` into a new `lib.rs` (`crates/server/src/lib.rs`) exposing a public `run_backend()` function. This allows the desktop application (and any future embedders) to start the server as a library rather than spawning a subprocess. The `build.rs` that previously parsed the version from `Makefile.toml` and embedded `index.html` via a manual `include_str!` was removed — the version now comes from `env!("CARGO_PKG_VERSION")` and `index.html` is served directly from the `RustEmbed`-based `StaticContentDir`.
+
+#### Rust Edition 2024
+
+The `crates/desktop` crate uses the Rust 2024 edition. The server and other workspace crates were updated to edition 2024 as well.
+
+#### Rustfmt Line Width Extended
+
+The project-wide `max_width` was increased from 120 to 140 characters.
+
+#### Documentation Site Overhaul
+
+- New **logo** (`docs/_assets/logo.svg`) with an engraved "RSP" hexagon design.
+- Docsify theme switched from `buble` to `vue`, with updated styling for logo placement and inline images.
+- **Full-text search** plugin (`docsify-search`) added to the documentation site.
+- **Image zoom** plugin (`docsify-zoom-image`) added.
+- `installation.md` rewritten with a supported-platforms table (Server vs Desktop per architecture), explicit release filename suffixes, and separate macOS server/desktop instructions.
+
+### Removals
+
+- **Darwin cross-compilation infrastructure** — `docker/Dockerfile.cross-aarch64-apple-darwin`, `Dockerfile.cross-x86_64-apple-darwin`, `docker/darwin-entry.sh`, and `docker/darwin-x86_64-entry.sh` removed (macOS is now built natively).
+- **`PKGS/rpm/rsplayer.spec.in`** — replaced by `cargo-generate-rpm` declarative config in `crates/server/Cargo.toml`.
+
+---
+
 ## v3.5.5 — 2026-05-30
 
 ### Bug Fixes

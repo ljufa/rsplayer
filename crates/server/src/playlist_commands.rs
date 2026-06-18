@@ -22,9 +22,7 @@ pub fn handle_playlist_command(cmd: api_models::common::PlaylistCommand, ctx: &C
                 let all = ctx.metadata_service.get_liked_songs(100);
                 all.into_iter().skip(page_no * 20).take(20).collect()
             } else {
-                ctx.playlist_service
-                    .get_playlist_page_by_name(&playlist_id, page_no * 20, 20)
-                    .items
+                ctx.playlist_service.get_playlist_page_by_name(&playlist_id, page_no * 20, 20).items
             };
             ctx.send_event(StateChangeEvent::PlaylistItemsEvent(songs, page_no));
         }
@@ -43,18 +41,12 @@ pub fn handle_playlist_command(cmd: api_models::common::PlaylistCommand, ctx: &C
         }
         QueryPlaylist => {
             let mut pls = ctx.playlist_service.get_playlists();
-            ctx.album_repository
-                .find_all_sort_by_added_desc(30)
-                .into_iter()
-                .for_each(|alb| {
-                    pls.items.push(PlaylistType::RecentlyAdded(alb));
-                });
-            ctx.album_repository
-                .find_all_sort_by_released_desc(30)
-                .into_iter()
-                .for_each(|alb| {
-                    pls.items.push(PlaylistType::LatestRelease(alb));
-                });
+            ctx.album_repository.find_all_sort_by_added_desc(30).into_iter().for_each(|alb| {
+                pls.items.push(PlaylistType::RecentlyAdded(alb));
+            });
+            ctx.album_repository.find_all_sort_by_released_desc(30).into_iter().for_each(|alb| {
+                pls.items.push(PlaylistType::LatestRelease(alb));
+            });
             if let Some(first_most_played) = ctx.metadata_service.get_most_played_songs(1).first() {
                 let pl = api_models::playlist::Playlist {
                     id: "most_played".to_string(),
@@ -77,12 +69,9 @@ pub fn handle_playlist_command(cmd: api_models::common::PlaylistCommand, ctx: &C
                 pls.items.push(PlaylistType::Liked(pl));
             }
 
-            ctx.album_repository
-                .find_all_by_genre(20)
-                .into_iter()
-                .for_each(|(genre, albums)| {
-                    pls.items.push(PlaylistType::GenreHeader(genre, albums.len()));
-                });
+            ctx.album_repository.find_all_by_genre(20).into_iter().for_each(|(genre, albums)| {
+                pls.items.push(PlaylistType::GenreHeader(genre, albums.len()));
+            });
 
             ctx.album_repository
                 .find_all_by_decade(20)

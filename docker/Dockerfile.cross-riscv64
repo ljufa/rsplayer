@@ -1,20 +1,20 @@
-FROM ghcr.io/cross-rs/riscv64gc-unknown-linux-gnu:0.2.5
+FROM ubuntu:22.04
 
-# riscv64 was added to Ubuntu in Focal (20.04). The base image is Bionic, so
-# apt's dependency solver hits libc6:riscv64 conflicts. We bypass this by
-# downloading the .deb files without installing (apt-get download skips dep
-# checks) and extracting only the headers and link stubs we need.
-RUN dpkg --add-architecture riscv64 && \
-    echo "deb [arch=riscv64] http://ports.ubuntu.com/ubuntu-ports focal main universe" > /etc/apt/sources.list.d/focal-riscv64.list && \
-    echo "deb [arch=riscv64] http://ports.ubuntu.com/ubuntu-ports focal-updates main universe" >> /etc/apt/sources.list.d/focal-riscv64.list && \
-    echo "deb [arch=riscv64] http://ports.ubuntu.com/ubuntu-ports focal-security main universe" >> /etc/apt/sources.list.d/focal-riscv64.list && \
-    apt-get update && \
-    cd /tmp && \
-    apt-get download libasound2:riscv64 libasound2-dev:riscv64 && \
-    dpkg-deb -x libasound2_*.deb / && \
-    dpkg-deb -x libasound2-dev_*.deb / && \
-    rm -f /tmp/libasound2*.deb && \
-    rm -rf /var/lib/apt/lists/*
+# Configure multi-arch apt sources
+RUN sed -i 's/^deb /deb [arch=amd64] /g' /etc/apt/sources.list && \
+    sed -i 's/^deb /deb [arch=amd64] /g' /etc/apt/sources.list.d/*.list 2>/dev/null || true && \
+    dpkg --add-architecture riscv64 && \
+    echo "deb [arch=riscv64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "deb [arch=riscv64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "deb [arch=riscv64] http://ports.ubuntu.com/ubuntu-ports jammy-backports main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "deb [arch=riscv64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse" >> /etc/apt/sources.list && \
+    apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    build-essential \
+    crossbuild-essential-riscv64 \
+    pkg-config \
+    libasound2-dev:riscv64 \
+    && rm -rf /var/lib/apt/lists/*
 
+ENV CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER=riscv64-linux-gnu-gcc
 ENV PKG_CONFIG_PATH=/usr/lib/riscv64-linux-gnu/pkgconfig
 ENV PKG_CONFIG_ALLOW_CROSS=1
