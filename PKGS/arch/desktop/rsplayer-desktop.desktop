@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=RSPlayer
+Comment=Music Player
+Exec=rsplayer-desktop
+Icon=rsplayer-desktop
+Terminal=false
+Type=Application
+Categories=Audio;Music;Player;
+StartupNotify=true

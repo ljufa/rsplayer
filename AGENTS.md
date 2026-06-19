@@ -30,7 +30,7 @@
 
 ### Packaging / Release
 - server packages: `cargo-deb` (deb, config in `crates/server/Cargo.toml` `[package.metadata.deb]`), `cargo-generate-rpm` (rpm, `[package.metadata.generate-rpm]`), plain rootfs tgz for Arch — all produced by `cargo make package_linux_release` into `target[/cross]/<target>/pkg/` with final release asset names
-- desktop bundles: `cargo-packager` (config in `crates/desktop/Cargo.toml` `[package.metadata.packager]`) — AppImage on Linux, per-arch DMG on macOS; task `cargo make build_desktop_release` (or `bundle_desktop_release` when the web UI is already built)
+- desktop bundles: `cargo tauri build` (config in `crates/desktop/tauri.conf.json`) — deb + rpm + Arch tgz on Linux; `cargo-packager` — DMG on macOS; task `cargo make build_desktop_release` (or `bundle_desktop_release` when the web UI is already built)
 - macOS (server binaries + DMGs) is built natively on GitHub `macos-latest` runners; there is no darwin cross-compilation anymore
 
 ### Deploy to local test env (RPI)

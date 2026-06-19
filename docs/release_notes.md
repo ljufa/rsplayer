@@ -1,5 +1,50 @@
 # Release Notes
 
+## v4.0.1 — 2026-06-19
+
+### New Features
+
+#### Desktop Arch Linux Package
+
+RSPlayer Desktop is now available as a `.tgz` package for Arch Linux (and derivatives like Manjaro):
+
+- `rsplayer-desktop_<ver>_amd64.tgz` is produced alongside the existing deb and rpm desktop packages.
+- The tarball includes the `rsplayer-desktop` binary, a `.desktop` entry, and icons for 32px, 128px, and 256px.
+- A `PKGBUILD` and install script are placed alongside the tarball for users who prefer to build from source or inspect the dependency list.
+- `install_desktop.sh` detects Arch-based distros, installs runtime dependencies (`webkit2gtk-4.1`, `gtk3`, `libappindicator-gtk3`, `librsvg`, `alsa-lib`), extracts the tarball, and updates the icon cache.
+
+Platform coverage:
+
+| Platform | Architectures | Package Format |
+|----------|--------------|----------------|
+| Linux | x86_64 | `.deb`, `.rpm`, `.tgz` |
+| macOS | Apple Silicon, Intel | `.dmg` |
+
+#### New Desktop Installer Script
+
+A new `install_desktop.sh` script is the recommended way to install the desktop application on any supported platform. It auto-detects the distribution, downloads the correct desktop package from the latest GitHub release, and installs it with the appropriate package manager — separate from `install.sh` (which remains the headless server installer).
+
+### Bug Fixes
+
+#### Desktop Packages Missing Icons (deb/rpm)
+
+The `tauri.conf.json` was missing the `icon` field in the `bundle` section. Without it, Tauri's bundler did not include any icon files in the generated `.deb` and `.rpm` packages, so the application appeared without an icon in the system menu. Fixed by adding `icons/32x32.png`, `icons/128x128.png`, `icons/128x128@2x.png`, and `icons/icon.png` to the bundle configuration.
+
+#### Desktop App — "asset not found: loading.html"
+
+The desktop application referenced `loading.html` (the startup splash screen) from Tauri's `frontendDist`, but the file was never copied into the frontend distribution directory. The `bundle_desktop_release` Makefile task now copies `crates/desktop/loading.html` to `dist/web-ui/` before invoking `cargo tauri build`.
+
+#### Server Installer — Ubuntu Downloading Desktop Package
+
+`install.sh` was downloading the desktop `.deb` (`rsplayer-desktop_*.deb`) instead of the server `.deb` (`rsplayer_*.deb`) on Ubuntu/Debian systems because the grep pattern `_<suffix>.deb` matched both asset names. The asset filter now explicitly excludes paths containing `/rsplayer-desktop_`.
+
+### Internal / Build
+
+- The `bundle_desktop_release` Makefile task now uses absolute paths (`$(pwd)/../../...`) and runs the tarball creation in a subshell, preventing working-directory changes from breaking subsequent commands.
+- CI job name updated to reflect the additional arch tgz output.
+
+---
+
 ## v4.0.0 — 2026-06-18
 
 ### New Features

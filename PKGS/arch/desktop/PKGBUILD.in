@@ -1,0 +1,22 @@
+# Maintainer: Dragan Ljubojevic <dragan.ljubojevic@gmail.com>
+pkgname=rsplayer-desktop
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="RSPlayer Desktop - Music Player"
+arch=('@ARCH@')
+url="https://github.com/ljufa/rsplayer"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3' 'libappindicator-gtk3' 'librsvg' 'alsa-lib')
+makedepends=('cargo' 'npm')
+install=rsplayer-desktop.install
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+    cd "$srcdir/$pkgname-$pkgver"
+    install -Dm755 rsplayer-desktop "$pkgdir/usr/bin/rsplayer-desktop"
+    install -Dm644 rsplayer-desktop.desktop "$pkgdir/usr/share/applications/rsplayer-desktop.desktop"
+    install -Dm644 icon-32x32.png "$pkgdir/usr/share/icons/hicolor/32x32/apps/rsplayer-desktop.png"
+    install -Dm644 icon-128x128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/rsplayer-desktop.png"
+    install -Dm644 icon-128x128@2x.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/rsplayer-desktop.png"
+}

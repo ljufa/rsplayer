@@ -99,7 +99,7 @@ RSPlayer offers two build variants:
 
 | Architecture | Typical Devices | Deb | RPM | Arch | Docker | Nix | Desktop |
 |---|---|---|---|---|---|---|---|
-| **x86_64** | Intel/AMD PCs, servers, NAS | ✓ | ✓ | ✓ | ✓ | ✓ | deb, rpm |
+| **x86_64** | Intel/AMD PCs, servers, NAS | ✓ | ✓ | ✓ | ✓ | ✓ | deb, rpm, tgz |
 | **ARM64** (aarch64) | RPi 4, RPi 5, ARMv8 boards | ✓ | ✓ | ✓ | — | ✓ | — |
 | **ARMv7** | RPi 2, RPi 3, 32-bit RPi 4 | ✓ | ✓ | ✓ | — | ✓ | — |
 | **ARMv6** | RPi Zero, RPi Zero W, RPi 1 | ✓ | ✓ | ✓ | — | ✓ | — |
@@ -140,9 +140,13 @@ The resulting binary is at `target/cross/<target>/release/rsplayer` when local c
 ## Installation
 To install RSPlayer, execute the following script (requires curl):
 ```bash
+# Headless server
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)
+# Desktop app
+bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install_desktop.sh)
 ```
-The installation script detects your Linux distribution (Debian/Ubuntu, Fedora/RHEL/CentOS, Arch/Manjaro) and architecture, then installs the appropriate package. It will install all necessary files, configure and start the systemd service.
+`install.sh` detects your distribution and architecture, then installs the headless server package — it will configure and start the systemd service.  
+`install_desktop.sh` does the same for the desktop (GUI) app.
 
 To stop RSPlayer, run the following command:
 ```bash

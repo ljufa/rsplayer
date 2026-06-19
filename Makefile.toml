@@ -50,13 +50,37 @@ dependencies = ["build_ui_release"]
 run_task = "bundle_desktop_release"
 
 [tasks.bundle_desktop_release]
-description = "Build desktop release bundle (deb+rpm on Linux via Tauri)."
+description = "Build desktop release bundle (deb+rpm+arch tgz on Linux via Tauri)."
 script = [
-    "cd crates/desktop && cargo tauri build --bundles deb,rpm --ci",
-    "PKG_DIR=../../target/cross/x86_64-unknown-linux-gnu/pkg",
+    "set -e",
+    "cd crates/desktop",
+    "# Copy loading.html to frontend dist (Tauri expects it alongside the WASM app)",
+    "cp loading.html ../../dist/web-ui/loading.html",
+    "cargo tauri build --bundles deb,rpm --ci",
+    "PKG_DIR=$(pwd)/../../target/cross/x86_64-unknown-linux-gnu/pkg",
+    "ARCH_DIR=$(pwd)/../../target/cross/x86_64-unknown-linux-gnu/arch-desktop",
     "mkdir -p ${PKG_DIR}",
     "mv target/release/bundle/deb/rsplayer-desktop_*.deb ${PKG_DIR}/",
     "mv target/release/bundle/rpm/rsplayer-desktop-*.rpm ${PKG_DIR}/",
+    "# Build Arch Linux tgz package",
+    "mkdir -p ${ARCH_DIR}/rootfs/usr/bin",
+    "mkdir -p ${ARCH_DIR}/rootfs/usr/share/applications",
+    "mkdir -p ${ARCH_DIR}/rootfs/usr/share/icons/hicolor/32x32/apps",
+    "mkdir -p ${ARCH_DIR}/rootfs/usr/share/icons/hicolor/128x128/apps",
+    "mkdir -p ${ARCH_DIR}/rootfs/usr/share/icons/hicolor/256x256/apps",
+    "cp target/release/rsplayer-desktop ${ARCH_DIR}/rootfs/usr/bin/rsplayer-desktop",
+    "cp ../../PKGS/arch/desktop/rsplayer-desktop.desktop ${ARCH_DIR}/rootfs/usr/share/applications/rsplayer-desktop.desktop",
+    "cp ../../crates/desktop/icons/32x32.png ${ARCH_DIR}/rootfs/usr/share/icons/hicolor/32x32/apps/rsplayer-desktop.png",
+    "cp ../../crates/desktop/icons/128x128.png ${ARCH_DIR}/rootfs/usr/share/icons/hicolor/128x128/apps/rsplayer-desktop.png",
+    "cp ../../crates/desktop/icons/128x128@2x.png ${ARCH_DIR}/rootfs/usr/share/icons/hicolor/256x256/apps/rsplayer-desktop.png",
+    "RELEASE_VERSION=$(grep -m1 '^version' ../../Cargo.toml | cut -d'\"' -f2)",
+    "(cd ${ARCH_DIR}/rootfs && tar -czf ${PKG_DIR}/rsplayer-desktop_${RELEASE_VERSION}_amd64.tgz .)",
+    "rm -rf ${ARCH_DIR}/rootfs",
+    "echo 'Arch desktop package: ${PKG_DIR}/rsplayer-desktop_${RELEASE_VERSION}_amd64.tgz'",
+    "# Also copy PKGBUILD and install script alongside for source-based installs",
+    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" -e \"s/@ARCH@/amd64/g\" ../../PKGS/arch/desktop/PKGBUILD.in > ${ARCH_DIR}/PKGBUILD",
+    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" ../../PKGS/arch/desktop/rsplayer-desktop.install.in > ${ARCH_DIR}/rsplayer-desktop.install",
+    "echo 'Arch desktop PKGBUILD ready at ${ARCH_DIR}/PKGBUILD'",
 ]
 
 [tasks.build_release]

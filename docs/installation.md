@@ -11,14 +11,14 @@ RSPlayer is available in two variants:
 
 | Architecture | Typical Devices | Debian / Ubuntu / Raspbian | Fedora / RHEL / openSUSE | Arch / Manjaro | Docker | Nix |
 |:---|:---|:---|:---|:---|:---:|:---:|
-| **x86_64** | Intel/AMD PCs, servers, NAS | `.deb` **S+D** | `.rpm` **S+D** | `.tgz` S | ✓ | ✓ |
+| **x86_64** | Intel/AMD PCs, servers, NAS | `.deb` **S+D** | `.rpm` **S+D** | `.tgz` **S+D** | ✓ | ✓ |
 | **ARM64** (aarch64) | RPi 4, RPi 5, ARMv8 boards | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
 | **ARMv7** | RPi 2, RPi 3, 32-bit RPi 4 | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
 | **ARMv6** | RPi Zero, RPi Zero W, RPi 1 | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
 | **RISC-V 64** | RISC-V 64-bit boards | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
 
 **S** = Server (headless daemon) — all architectures  
-**D** = Desktop (native GUI app) — x86_64 only
+**D** = Desktop (native GUI app) — x86_64 only; packages prefixed `rsplayer-desktop_` (`.deb`, `.rpm`, `.tgz`)
 
 Release filename suffixes by architecture:
 
@@ -30,7 +30,7 @@ Release filename suffixes by architecture:
 | armv6 | `armhfv6` | `armv6hl` | `armhfv6` |
 | riscv64 | `riscv64` | `riscv64` | `riscv64` |
 
-Example release asset names: `rsplayer_3.5.6_amd64.deb`, `rsplayer-desktop_3.5.6_amd64.deb`.
+Example release asset names: `rsplayer_3.5.6_amd64.deb` (server), `rsplayer-desktop_3.5.6_amd64.deb` (desktop deb), `rsplayer-desktop_3.5.6_amd64.tgz` (desktop Arch tarball).
 
 ### macOS (experimental)
 
@@ -63,7 +63,7 @@ The installation script detects your Linux distribution (Debian/Ubuntu, Fedora/R
 The latest packages can be downloaded from [this page](https://github.com/ljufa/rsplayer/releases/latest). Available package types:
 - **DEB packages**: For Debian, Ubuntu, Raspbian — `rsplayer_*_amd64.deb`, `rsplayer_*_arm64.deb`, `rsplayer_*_armhfv7.deb`, `rsplayer_*_armhfv6.deb`, `rsplayer_*_riscv64.deb`, and `rsplayer-desktop_*_amd64.deb`
 - **RPM packages**: For Fedora, RHEL, CentOS, openSUSE — `rsplayer_*_x86_64.rpm`, `rsplayer_*_aarch64.rpm`, `rsplayer_*_armv7hl.rpm`, `rsplayer_*_armv6hl.rpm`, `rsplayer_*_riscv64.rpm`, and `rsplayer-desktop-*.x86_64.rpm`
-- **Arch tarballs**: For Arch Linux, Manjaro — `rsplayer_*_amd64.tgz`, `rsplayer_*_arm64.tgz`, `rsplayer_*_armhfv7.tgz`, `rsplayer_*_armhfv6.tgz`, `rsplayer_*_riscv64.tgz`
+- **Arch tarballs**: For Arch Linux, Manjaro — `rsplayer_*_amd64.tgz`, `rsplayer_*_arm64.tgz`, `rsplayer_*_armhfv7.tgz`, `rsplayer_*_armhfv6.tgz`, `rsplayer_*_riscv64.tgz` (server), and `rsplayer-desktop_*_amd64.tgz` (desktop)
 
 * Download and manually install binary file
   - Under latest release page find `rsplayer_*` file for your system and download

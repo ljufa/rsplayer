@@ -111,10 +111,10 @@ try_download() {
 
     if [ "$PRE_RELEASE" = true ]; then
         echo "[INFO] Querying GitHub API for latest pre-release..."
-        URL=$(curl -s "https://api.github.com/repos/ljufa/rsplayer/releases?per_page=1" | grep browser_download_url | cut -d '"' -f 4 | grep "_${suffix}.${ext}" | head -n 1)
+        URL=$(curl -s "https://api.github.com/repos/ljufa/rsplayer/releases?per_page=1" | grep browser_download_url | cut -d '"' -f 4 | grep "_${suffix}.${ext}" | grep -v "/rsplayer-desktop_" | head -n 1)
     else
         echo "[INFO] Querying GitHub API for latest stable release..."
-        URL=$(curl -s "https://api.github.com/repos/ljufa/rsplayer/releases/latest" | grep browser_download_url | cut -d '"' -f 4 | grep "_${suffix}.${ext}" | head -n 1)
+        URL=$(curl -s "https://api.github.com/repos/ljufa/rsplayer/releases/latest" | grep browser_download_url | cut -d '"' -f 4 | grep "_${suffix}.${ext}" | grep -v "/rsplayer-desktop_" | head -n 1)
     fi
     if [ -z "$URL" ]; then
         echo "[WARN] No $type package found for suffix=$suffix ext=$ext"
