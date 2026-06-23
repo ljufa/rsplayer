@@ -24,7 +24,7 @@ jobs:
     name: Build and test
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/${{ github.repository_owner }}/rsplayer-backend-builder:latest
+      image: ghcr.io/${{ github.repository_owner }}/rsplayer-builder:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
