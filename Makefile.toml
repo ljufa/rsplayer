@@ -317,6 +317,13 @@ script = [
 # LINT / TEST / MISC
 # ═══════════════════════════════════════════
 
+[tasks.test_ci]
+description = "Run all tests (creates stub dist/web-ui/public so RustEmbed compiles without a UI build)"
+script = [
+    "mkdir -p dist/web-ui/public",
+    "cargo test --all-features",
+]
+
 [tasks.clippy]
 description = "Lint with Clippy (fix + deny warnings)"
 install_crate = { rustup_component_name = "clippy", binary = "cargo-clippy", test_arg = "--help" }
