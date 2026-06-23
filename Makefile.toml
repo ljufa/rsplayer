@@ -321,6 +321,7 @@ script = [
 description = "Run all tests (creates stub dist/web-ui/public so RustEmbed compiles without a UI build)"
 script = [
     "mkdir -p dist/web-ui/public",
+    "touch dist/web-ui/public/index.html",
     "cargo test --all-features",
 ]
 
