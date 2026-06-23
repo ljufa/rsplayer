@@ -244,6 +244,17 @@ dependencies = ["build_css_dev"]
 command = "dx"
 args = ["build", "--platform", "web", "--package", "rsplayer_web_ui"]
 
+# ── Desktop ───────────────────────────────
+
+[tasks.run_desktop_dev]
+description = "Build release UI + run the desktop app locally via cargo tauri dev"
+dependencies = ["build_ui_release"]
+env = { "RUST_LOG" = "rsplayer=info,playback=debug,metadata=info,symphonia=info,warp=info", "RUST_BACKTRACE" = "full" }
+script = [
+    "cp crates/desktop/loading.html dist/web-ui/loading.html",
+    "cd crates/desktop && cargo tauri dev",
+]
+
 # ── BE (Backend) ──────────────────────────
 
 [tasks.build_dev]

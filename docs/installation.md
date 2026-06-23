@@ -98,5 +98,5 @@ chmod +x rsplayer
 * Check service status by `sudo systemctl status rsplayer` and if it shows active go to the next step
 * Open browser at http://you-machine-ip-address i.e. http://raspberrypi.local.
 
-?>TIP: The HTTP and HTTPS ports are configured in the `/opt/rsplayer/env` file. By default, `PORT` is set to 80 and `TLS_PORT` is set to 443. You can edit this file to change the ports used by `rsplayer`.
+?>TIP: The HTTP and HTTPS ports and bind address are configured in the `/opt/rsplayer/env` file. By default, `PORT` is set to 80, `TLS_PORT` is set to 443, and `BIND_ADDR` is set to `0.0.0.0` (all interfaces). You can edit this file to change the ports and bind address used by `rsplayer`.
 * If the page can not load or there is an error message at top of the page please see the [Troubleshooting](troubleshooting.md) section.

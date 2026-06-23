@@ -17,10 +17,10 @@ use fjall::PersistMode;
 use hardware::usb;
 use log::{error, info, warn};
 use std::sync::Arc;
-use tokio::signal::unix::{Signal, SignalKind};
+use tokio::signal::unix::{Signal, SignalKind, signal};
 use tokio::{select, spawn};
 
-use crate::composition_root::{build, AppContainer, BuildOutcome};
+use crate::composition_root::{build_app_container, AppContainer, BuildOutcome};
 use crate::mount_service::MountService;
 use config::Configuration;
 
@@ -61,9 +61,9 @@ pub async fn run_backend(shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>
 
     MountService::mount_all(&config.get_settings().network_storage_settings);
 
-    let mut term_signal = tokio::signal::unix::signal(SignalKind::terminate()).expect("failed to create signal future");
+    let mut term_signal = signal(SignalKind::terminate()).expect("failed to create signal future");
 
-    let container = match build(config.clone(), shared_db.clone()) {
+    let container = match build_app_container(config.clone(), shared_db.clone()) {
         BuildOutcome::Ready(c) => c,
         BuildOutcome::Degraded(e) => {
             start_degraded(&mut term_signal, &e, &config).await;

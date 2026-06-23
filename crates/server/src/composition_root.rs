@@ -65,7 +65,7 @@ pub enum BuildOutcome {
     Degraded(anyhow::Error),
 }
 
-pub fn build(config: ArcConfiguration, shared_db: Arc<fjall::Database>) -> BuildOutcome {
+pub fn build_app_container(config: ArcConfiguration, shared_db: Arc<fjall::Database>) -> BuildOutcome {
     let song_repository: ArcSongRepository = Arc::new(FjallSongRepository::new(&shared_db));
     let album_repository: ArcAlbumRepository = Arc::new(FjallAlbumRepository::new(&shared_db));
     let play_statistics_repository: ArcPlayStatisticsRepository = Arc::new(FjallPlayStatisticsRepository::new(&shared_db));
@@ -176,7 +176,7 @@ mod tests {
         let db = Arc::new(fjall::Database::builder(tmp.path().join("test.db")).open().expect("open temp db"));
         let config = Arc::new(Configuration::new(&db));
 
-        let mut container = match build(config, db) {
+        let mut container = match build_app_container(config, db) {
             BuildOutcome::Ready(c) => c,
             BuildOutcome::Degraded(e) => panic!("expected Ready, got Degraded: {e}"),
         };

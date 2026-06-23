@@ -65,6 +65,11 @@ PORT=8080
 TLS_PORT=8443
 ```
 
+You can also restrict the bind address using `BIND_ADDR` (default `0.0.0.0`). For example, to listen only on loopback:
+```
+BIND_ADDR=127.0.0.1
+```
+
 Then restart the service:
 ```bash
 sudo systemctl restart rsplayer

@@ -6,6 +6,14 @@ use log::info;
 
 use crate::command_context::SystemCommandContext;
 
+fn system_actions_allowed(ctx: &SystemCommandContext) -> bool {
+    if std::env::var("DEMO_MODE").is_ok() || std::env::var("RSPLAYER_DESKTOP").is_ok() {
+        ctx.send_event(StateChangeEvent::NotificationError("Not available in this mode".to_string()));
+        return false;
+    }
+    true
+}
+
 pub async fn handle_system_command(cmd: SystemCommand, ctx: &SystemCommandContext) {
     match cmd {
         SystemCommand::SetFirmwarePower(val) => {
@@ -66,8 +74,7 @@ pub async fn handle_system_command(cmd: SystemCommand, ctx: &SystemCommandContex
         }
 
         PowerOff => {
-            if std::env::var("DEMO_MODE").is_ok() {
-                ctx.send_event(StateChangeEvent::NotificationError("Not available in demo mode".to_string()));
+            if !system_actions_allowed(ctx) {
                 return;
             }
             info!("Shutting down system");
@@ -83,8 +90,7 @@ pub async fn handle_system_command(cmd: SystemCommand, ctx: &SystemCommandContex
             }
         }
         RestartSystem => {
-            if std::env::var("DEMO_MODE").is_ok() {
-                ctx.send_event(StateChangeEvent::NotificationError("Not available in demo mode".to_string()));
+            if !system_actions_allowed(ctx) {
                 return;
             }
             info!("Restarting system");

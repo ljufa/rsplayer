@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::future::Future;
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::process::exit;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -22,6 +23,7 @@ use futures::{SinkExt, StreamExt};
 use log::{debug, error, info, trace, warn};
 use rust_embed::RustEmbed;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
+use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::{broadcast, mpsc};
 use tower_http::{
     compression::CompressionLayer,
@@ -59,8 +61,7 @@ pub fn start(
     user_commands_tx: UserCommandSender,
     config: &Config,
 ) -> (impl Future<Output = ()>, Option<impl Future<Output = ()>>, impl Future<Output = ()>) {
-    let (ws_broadcast, _) = broadcast::channel::<Arc<String>>(32);
-
+    let (ws_broadcast, _) = broadcast::channel::<Arc<String>>(32); 
     let state = AppState {
         config: config.clone(),
         user_commands_tx,
@@ -74,10 +75,10 @@ pub fn start(
         async move {
             loop {
                 match state_changes_rx.recv().await {
-                    Err(broadcast::error::RecvError::Lagged(count)) => {
+                    Err(RecvError::Lagged(count)) => {
                         warn!("Websocket broadcaster lagged, skipped {count} messages.");
                     }
-                    Err(broadcast::error::RecvError::Closed) => {
+                    Err(RecvError::Closed) => {
                         error!("State change event stream closed, exiting websocket handler.");
                         break;
                     }
@@ -96,18 +97,18 @@ pub fn start(
         }
     };
 
-    let (http_port, https_port) = get_ports();
+    let (http_port, https_port, bind_addr) = get_server_config();
 
     let http_app = app.clone();
     let http_handle = async move {
-        let addr = std::net::SocketAddr::from(([0, 0, 0, 0], http_port));
+        let addr = SocketAddr::new(bind_addr, http_port);
+        info!("HTTP is listening on port {http_port}");
         if let Err(e) = axum_server::bind(addr).serve(http_app.into_make_service()).await {
             error!("HTTP server exited with error: {e}");
         }
     };
 
     let https_handle = if let (Ok(cert_path), Ok(key_path)) = (env::var("TLS_CERT_PATH"), env::var("TLS_CERT_KEY_PATH")) {
-        info!("TLS enabled, starting HTTPS on port {https_port}");
         Some(async move {
             let tls_config = match RustlsConfig::from_pem_file(cert_path, key_path).await {
                 Ok(c) => c,
@@ -116,7 +117,8 @@ pub fn start(
                     return;
                 }
             };
-            let addr = std::net::SocketAddr::from(([0, 0, 0, 0], https_port));
+            let addr = SocketAddr::new(bind_addr, https_port);
+            info!("HTTPS listening on port {https_port}");
             if let Err(e) = axum_server::bind_rustls(addr, tls_config).serve(app.into_make_service()).await {
                 error!("HTTPS server exited with error: {e}");
             }
@@ -154,10 +156,10 @@ pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Out
         })
         .layer(cors);
 
-    let (http_port, _) = get_ports();
+    let (http_port, _, bind_addr) = get_server_config();
 
     async move {
-        let addr = std::net::SocketAddr::from(([0, 0, 0, 0], http_port));
+        let addr = SocketAddr::new(bind_addr, http_port);
         if let Err(e) = axum_server::bind(addr).serve(app.into_make_service()).await {
             error!("Degraded HTTP server exited with error: {e}");
         }
@@ -198,6 +200,7 @@ async fn get_settings(State(state): State<AppState>) -> Json<Settings> {
     let mut settings = state.config.get_settings_mut();
     settings.version = env!("CARGO_PKG_VERSION").to_string();
     settings.demo_mode = env::var("DEMO_MODE").is_ok();
+    settings.desktop_mode = env::var("RSPLAYER_DESKTOP").is_ok();
 
     #[cfg(feature = "alsa")]
     {
@@ -535,7 +538,7 @@ fn user_disconnected(my_id: usize) {
     info!("Number of active websockets is: {current_users}");
 }
 
-fn get_ports() -> (u16, u16) {
+fn get_server_config() -> (u16, u16, IpAddr) {
     let http_port = env::var("PORT")
         .unwrap_or_else(|_| "8000".to_string())
         .parse::<u16>()
@@ -545,5 +548,11 @@ fn get_ports() -> (u16, u16) {
         .unwrap_or_else(|_| "8143".to_string())
         .parse::<u16>()
         .expect("TLS_PORT is not a valid port number");
-    (http_port, https_port)
+
+    let bind_addr = env::var("BIND_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0".to_string())
+        .parse::<IpAddr>()
+        .expect("BIND_ADDR is not a valid IP address");
+
+    (http_port, https_port, bind_addr)
 }

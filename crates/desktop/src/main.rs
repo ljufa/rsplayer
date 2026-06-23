@@ -32,7 +32,10 @@ async fn main() {
     // SAFETY: called before any threads are spawned — no concurrent
     // environment access.
     let http_port = find_available_port();
-    unsafe { env::set_var("PORT", http_port.to_string()) };
+    unsafe {
+        env::set_var("PORT", http_port.to_string());
+        env::set_var("RSPLAYER_DESKTOP", "1");
+    };
 
     // Channel to signal the backend to shut down gracefully when the
     // desktop window is closed. Wrapped in a Mutex so it can be shared

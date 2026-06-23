@@ -123,6 +123,7 @@ try_download() {
     echo "[INFO] Downloading: $URL"
     if curl -L -o "$file" "$URL"; then
         echo "[INFO] Download OK: $file ($(du -h "$file" | cut -f1))"
+        chmod 644 "$file"
         pkg_type="$type"
         pkg_suffix="$suffix"
         pkg_ext="$ext"

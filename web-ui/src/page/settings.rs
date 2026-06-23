@@ -249,6 +249,14 @@ pub fn SettingsPage() -> Element {
                 }
             }
 
+            // ── Demo mode banner ─────────────────────────────────────────────
+            if settings.read().demo_mode {
+                div { class: "alert alert-warning shadow-sm",
+                    i { class: "material-icons text-lg", "info" }
+                    span { "Demo mode — some features are not available." }
+                }
+            }
+
             // ── Appearance section ───────────────────────────────────────────
             SettingsSection {
                 title: "Appearance",
@@ -840,6 +848,7 @@ pub fn SettingsPage() -> Element {
             }
 
             // ── USB ───────────────────────────────────────────────────────────
+            if !settings.read().desktop_mode && !settings.read().demo_mode {
             SettingsSection {
                 title: "RSPlayer firmware control channel",
                 icon: "usb",
@@ -871,6 +880,7 @@ pub fn SettingsPage() -> Element {
                     }
                 },
             }
+            } // desktop_mode gate
 
             // ── Restart pending banner ────────────────────────────────────────
             if pending_restart() {
@@ -886,33 +896,36 @@ pub fn SettingsPage() -> Element {
             }
 
             // ── System ────────────────────────────────────────────────────────
-            SettingsSection {
-                title: "System",
-                icon: "settings_power",
-                content: rsx! {
-                    div { class: "flex flex-wrap gap-2",
-                        button {
-                            class: "btn btn-sm btn-warning w-fit",
-                            onclick: move |_| *confirm.write() = Some(ConfirmAction::RestartPlayer),
-                            i { class: "material-icons text-sm mr-1", "restart_alt" }
-                            "Restart RSPlayer"
+            if !settings.read().desktop_mode && !settings.read().demo_mode {
+                SettingsSection {
+                    title: "System",
+                    icon: "settings_power",
+                    content: rsx! {
+                        div { class: "flex flex-wrap gap-2",
+                            button {
+                                class: "btn btn-sm btn-warning w-fit",
+                                onclick: move |_| *confirm.write() = Some(ConfirmAction::RestartPlayer),
+                                i { class: "material-icons text-sm mr-1", "restart_alt" }
+                                "Restart RSPlayer"
+                            }
+                            button {
+                                class: "btn btn-sm btn-warning w-fit",
+                                onclick: move |_| *confirm.write() = Some(ConfirmAction::RestartSystem),
+                                i { class: "material-icons text-sm mr-1", "power_settings_new" }
+                                "Restart system"
+                            }
+                            button {
+                                class: "btn btn-sm btn-error w-fit",
+                                onclick: move |_| *confirm.write() = Some(ConfirmAction::ShutdownSystem),
+                                i { class: "material-icons text-sm mr-1", "power_off" }
+                                "Shutdown"
+                            }
                         }
-                        button {
-                            class: "btn btn-sm btn-warning w-fit",
-                            onclick: move |_| *confirm.write() = Some(ConfirmAction::RestartSystem),
-                            i { class: "material-icons text-sm mr-1", "power_settings_new" }
-                            "Restart system"
-                        }
-                        button {
-                            class: "btn btn-sm btn-error w-fit",
-                            onclick: move |_| *confirm.write() = Some(ConfirmAction::ShutdownSystem),
-                            i { class: "material-icons text-sm mr-1", "power_off" }
-                            "Shutdown"
-                        }
-                    }
-                    p { class: "text-xs text-base-content/40 mt-2", "Version: {settings.read().version}" }
-                },
+                    },
+                }
             }
+
+            p { class: "text-xs text-base-content/40 mt-2 px-1", "Version: {settings.read().version}" }
 
         }
 

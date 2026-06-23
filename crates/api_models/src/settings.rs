@@ -34,6 +34,8 @@ pub struct Settings {
     pub version: String,
     #[serde(default)]
     pub demo_mode: bool,
+    #[serde(default)]
+    pub desktop_mode: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -402,6 +404,7 @@ impl Default for Settings {
             local_browser_playback: false,
             version: String::new(),
             demo_mode: false,
+            desktop_mode: false,
         }
     }
 }

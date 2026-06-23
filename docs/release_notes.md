@@ -1,5 +1,37 @@
 # Release Notes
 
+## v4.1.0 — 2026-06-23
+
+### New Features
+
+#### Configurable Bind Address
+
+The server's listen address is now controlled by the `BIND_ADDR` environment variable (default `0.0.0.0`). Previously the address was hardcoded to bind on all interfaces. Setting `BIND_ADDR=127.0.0.1` restricts the server to loopback only — useful when running behind a reverse proxy or in an environment where external exposure is undesirable.
+
+The variable is present in `/opt/rsplayer/env` with its default value and is applied consistently to the HTTP listener, the HTTPS listener, and the degraded-mode fallback server.
+
+### Improvements
+
+#### Desktop Mode — Settings Page Cleaned Up
+
+Two settings sections are now hidden when the desktop app is running:
+
+- **RSPlayer firmware control channel** (USB section) — irrelevant on a desktop host that has no attached RSPlayer firmware.
+- **System** (power controls — Restart RSPlayer, Restart system, Shutdown) — these system-level commands target the headless server use-case; they have no meaning in the desktop context.
+
+The version string that was previously embedded inside the System section is now shown unconditionally at the bottom of the settings page, so it remains visible in all modes.
+
+The desktop app now sets the `RSPLAYER_DESKTOP` environment variable at startup, which the backend reads and exposes as the `desktop_mode` flag in the `Settings` response. The web UI uses this flag to conditionally render the sections above.
+
+### Internal / Build
+
+- `composition_root::build()` renamed to `build_app_container()` for clarity.
+- New `run_desktop_dev` Makefile task: builds the release UI, copies `loading.html`, and runs `cargo tauri dev` — a single command for local desktop development iteration.
+- `install.sh`: downloaded package files are now `chmod 644` after a successful download, ensuring consistent permissions across package managers.
+- Removed a stale `#[allow(clippy::redundant_pub_crate, clippy::too_many_lines)]` attribute from `main.rs`.
+
+---
+
 ## v4.0.1 — 2026-06-19
 
 ### New Features
