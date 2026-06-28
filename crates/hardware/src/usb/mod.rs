@@ -137,7 +137,7 @@ pub fn get_rsplayer_firmware_usb_link() -> Option<String> {
     None
 }
 
-pub fn start_listening(
+pub fn spawn_receiver_thread(
     service: Arc<UsbService>,
     player_commands_tx: Sender<UserCommand>,
     system_commands_tx: Sender<SystemCommand>,
@@ -183,7 +183,7 @@ pub fn start_listening(
                                 match postcard::from_bytes_cobs::<FwToHost>(&mut frame) {
                                     Ok(msg) => {
                                         debug!("Got fw message: {msg:?}");
-                                        dispatch_fw_message(msg, &player_commands_tx, &system_commands_tx, &state_changes_tx);
+                                        dispatch_fw_to_host_msg(msg, &player_commands_tx, &system_commands_tx, &state_changes_tx);
                                     }
                                     Err(e) => {
                                         error!("Failed to decode fw message ({} bytes): {e}", frame.len());
@@ -216,7 +216,7 @@ pub fn start_listening(
     });
 }
 
-fn dispatch_fw_message(
+fn dispatch_fw_to_host_msg(
     msg: FwToHost,
     player_commands_tx: &Sender<UserCommand>,
     system_commands_tx: &Sender<SystemCommand>,
@@ -245,7 +245,7 @@ fn dispatch_fw_message(
     }
 }
 
-pub fn start_state_sync(service: Arc<UsbService>, state_changes_tx: &tokio::sync::broadcast::Sender<StateChangeEvent>) {
+pub fn spawn_sender_thread(service: Arc<UsbService>, state_changes_tx: &tokio::sync::broadcast::Sender<StateChangeEvent>) {
     let mut rx = state_changes_tx.subscribe();
 
     tokio::spawn(async move {
@@ -288,7 +288,7 @@ pub fn start_state_sync(service: Arc<UsbService>, state_changes_tx: &tokio::sync
                         last_vu = Some((l, r));
                     }
                     _ => {
-                        process_event(&service, event);
+                        dispatch_host_to_fw_msg(&service, event);
                     }
                 }
             }
@@ -300,7 +300,7 @@ pub fn start_state_sync(service: Arc<UsbService>, state_changes_tx: &tokio::sync
     });
 }
 
-fn process_event(service: &UsbService, event: StateChangeEvent) {
+fn dispatch_host_to_fw_msg(service: &UsbService, event: StateChangeEvent) {
     match event {
         StateChangeEvent::CurrentSongEvent(song) => {
             let _ = service.send_track_info(

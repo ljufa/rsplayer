@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::ops::Bound;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::sync::{
     RwLock,
     atomic::{AtomicU16, AtomicU64, Ordering},
@@ -30,7 +31,7 @@ const NEXT_ID_KEY: &str = "_next_queue_id";
 
 impl QueueService {
     #[must_use]
-    pub fn new(db: &Database, song_repository: ArcSongRepository, statistics_repository: ArcPlayStatisticsRepository) -> Self {
+    pub fn new(db: &Database, song_repository: ArcSongRepository, statistics_repository: ArcPlayStatisticsRepository) -> Arc<Self> {
         let queue_db = db
             .keyspace("queue", KeyspaceCreateOptions::default)
             .expect("Failed to open queue keyspace");
@@ -69,7 +70,7 @@ impl QueueService {
             statistics_repository,
         };
         service.reset_random_state();
-        service
+        Arc::new(service)
     }
 
     fn generate_id(&self) -> u64 {

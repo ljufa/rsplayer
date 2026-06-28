@@ -124,9 +124,6 @@ pub enum UserCommand {
     System(SystemRequest),
 }
 
-/// FE-visible subset of `SystemCommand`. This is what the web UI is allowed to
-/// send over the WebSocket. Internal-only system events (e.g. firmware-reported
-/// state) live on `SystemCommand` and never reach the wire.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum SystemRequest {
     VolUp,
@@ -168,7 +165,6 @@ pub enum StorageCommand {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, EnumString, EnumIter, IntoStaticStr)]
 pub enum PlayerCommand {
-    // Player commands
     Next,
     Prev,
     Pause,
@@ -250,12 +246,10 @@ pub enum QueueCommand {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum SystemCommand {
-    // System commands
     VolUp,
     VolDown,
     SetVol(u8),
     ToggleMute,
-    /// Firmware-reported volume: persist and broadcast without sending to hardware.
     ReportVolume(u8),
     PowerOff,
     RestartSystem,

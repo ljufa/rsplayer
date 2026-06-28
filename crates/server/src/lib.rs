@@ -22,7 +22,7 @@ use tokio::{select, spawn};
 
 use crate::composition_root::{build_app_container, AppContainer, BuildOutcome};
 use crate::mount_service::MountService;
-use config::Configuration;
+use config::{ArcConfiguration, Configuration};
 
 use env_logger::Env;
 
@@ -56,14 +56,14 @@ pub async fn run_backend(shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>
     );
     info!("Shared database opened.");
 
-    let config = Arc::new(Configuration::new(&shared_db));
+    let config = Configuration::new(&shared_db);
     info!("Configuration successfully loaded.");
 
     MountService::mount_all(&config.get_settings().network_storage_settings);
 
     let mut term_signal = signal(SignalKind::terminate()).expect("failed to create signal future");
 
-    let container = match build_app_container(config.clone(), shared_db.clone()) {
+    let container = match build_app_container(&config, &shared_db) {
         BuildOutcome::Ready(c) => c,
         BuildOutcome::Degraded(e) => {
             start_degraded(&mut term_signal, &e, &config).await;
@@ -71,16 +71,13 @@ pub async fn run_backend(shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>
         }
     };
 
-    run(container, term_signal, shutdown_rx).await;
+    run(container, term_signal, shutdown_rx, &config, &shared_db).await;
 
     info!("RSPlayer shutdown completed.");
 }
 
-#[allow(clippy::redundant_pub_crate)]
-async fn run(container: Box<AppContainer>, mut term_signal: Signal, shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>) {
+async fn run(container: Box<AppContainer>, mut term_signal: Signal, shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>, config: &ArcConfiguration, shared_db: &Arc<fjall::Database>) {
     let AppContainer {
-        config,
-        shared_db,
         album_repository,
         song_repository,
         loudness_repository,
@@ -100,17 +97,17 @@ async fn run(container: Box<AppContainer>, mut term_signal: Signal, shutdown_rx:
     let (system_commands_tx, system_commands_rx) = system_commands.split();
 
     let (http_server_future, https_server_future, websocket_future) =
-        server::start(state_changes_tx.subscribe(), player_commands_tx.clone(), &config);
+        server::start(state_changes_tx.subscribe(), player_commands_tx.clone(), config);
     info!("HTTP servers started.");
 
     if let Some(service) = usb_service.clone() {
-        usb::start_listening(
+        usb::spawn_receiver_thread(
             service.clone(),
             player_commands_tx.clone(),
             system_commands_tx.clone(),
             state_changes_tx.clone(),
         );
-        usb::start_state_sync(service, &state_changes_tx);
+        usb::spawn_sender_thread(service, &state_changes_tx);
     }
     if config.get_settings().auto_resume_playback {
         player_service.play_from_current_queue_song();
@@ -150,16 +147,16 @@ async fn run(container: Box<AppContainer>, mut term_signal: Signal, shutdown_rx:
 
     select! {
         _ = spawn(command_handler::handle_user_commands(
-                    player_service.clone(),
-                    metadata_service.clone(),
-                    playlist_service.clone(),
-                    queue_service.clone(),
-                    album_repository.clone(),
-                    song_repository.clone(),
-                    loudness_repository.clone(),
+                    player_service,
+                    metadata_service,
+                    playlist_service,
+                    queue_service,
+                    album_repository,
+                    song_repository,
+                    loudness_repository,
                     config.clone(),
                     player_commands_rx,
-                    system_commands_tx.clone(),
+                    system_commands_tx,
                     state_changes_tx.clone()))
             => {
                 error!("Exit from command handler thread.");
@@ -189,17 +186,17 @@ async fn run(container: Box<AppContainer>, mut term_signal: Signal, shutdown_rx:
 
         _ = term_signal.recv() => {
             info!("Terminate signal received.");
-            persist_db_on_shutdown(&shared_db);
+            persist_db_on_shutdown(shared_db);
         }
 
         _ = tokio::signal::ctrl_c() => {
             info!("CTRL-c signal received.");
-            persist_db_on_shutdown(&shared_db);
+            persist_db_on_shutdown(shared_db);
         }
 
         () = shutdown_fut => {
             info!("Shutdown channel triggered.");
-            persist_db_on_shutdown(&shared_db);
+            persist_db_on_shutdown(shared_db);
         }
     };
 }

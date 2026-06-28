@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::env;
 use std::future::Future;
 use std::net::{IpAddr, SocketAddr};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -46,7 +46,6 @@ type UserCommandSender = mpsc::Sender<UserCommand>;
 
 #[derive(RustEmbed)]
 #[folder = "../../dist/web-ui/public"]
-
 struct StaticContentDir;
 
 #[derive(Clone)]
@@ -389,16 +388,16 @@ fn range_not_satisfiable(file_size: u64) -> Response {
         .unwrap()
 }
 
-fn mime_for_path(path: &PathBuf) -> &'static str {
+fn mime_for_path(path: &Path) -> &'static str {
     match path.extension().and_then(|e| e.to_str()).unwrap_or("") {
         "mp3" => "audio/mpeg",
-        "ogg" => "audio/ogg",
+        "ogg" | "opus"=> "audio/ogg",
         "flac" => "audio/flac",
         "wav" => "audio/wav",
         "aac" => "audio/aac",
         "m4a" => "audio/mp4",
         "wma" => "audio/x-ms-wma",
-        "opus" => "audio/ogg",
+        
         _ => "application/octet-stream",
     }
 }

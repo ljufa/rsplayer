@@ -236,7 +236,7 @@ pub fn play_file(
                         is_dsd,
                         context.dsp_handle.as_ref(),
                         vu_meter.take(),
-                        context.software_gain.clone(),
+                        context.software_gain.as_ref(),
                     ) else {
                         if caps.rate.is_none() {
                             let fallback_rates = DeviceCapabilities::fallback_rates(&caps, &device, spec_rate);
@@ -255,7 +255,7 @@ pub fn play_file(
                                     is_dsd,
                                     context.dsp_handle.as_ref(),
                                     vu_meter.take(),
-                                    context.software_gain.clone(),
+                                    context.software_gain.as_ref(),
                                 ) {
                                     debug!("Audio opened with fallback rate");
                                     audio_output.replace(audio_out);

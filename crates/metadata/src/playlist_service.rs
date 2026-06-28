@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 use log::error;
 
@@ -13,14 +15,14 @@ pub struct PlaylistService {
 
 impl PlaylistService {
     #[must_use]
-    pub fn new(db: &Database) -> Self {
+    pub fn new(db: &Database) -> Arc<Self> {
         let main_db = db
             .keyspace("playlist", KeyspaceCreateOptions::default)
             .expect("Failed to open playlist keyspace");
         let pl_tree = db
             .keyspace("playlist_list", KeyspaceCreateOptions::default)
             .expect("Failed to open playlist_list keyspace");
-        Self { main_db, pl_tree }
+        Arc::new(Self { main_db, pl_tree })
     }
 
     pub fn save_new_playlist(&self, playlist_name: &str, songs: &[Song]) {

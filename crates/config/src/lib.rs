@@ -14,7 +14,7 @@ pub struct Configuration {
 
 impl Configuration {
     #[allow(clippy::new_without_default)]
-    pub fn new(db: &Database) -> Self {
+    pub fn new(db: &Database) -> ArcConfiguration {
         let tree = db
             .keyspace("configuration", KeyspaceCreateOptions::default)
             .expect("Failed to open configuration keyspace");
@@ -49,10 +49,10 @@ impl Configuration {
             _ = tree.insert(SETTINGS_KEY, serde_json::to_vec(&s).expect("failed to serialize settings"));
             s
         };
-        Self {
+        Arc::new(Self {
             tree,
             settings: RwLock::new(settings),
-        }
+        })
     }
 
     pub fn get_settings(&self) -> Settings {

@@ -27,7 +27,7 @@ use api_models::common::VolumeCrtlType;
 use crate::usb::ArcUsbService;
 
 impl AudioInterfaceService {
-    pub fn new(config: &ArcConfiguration, usb_service: Option<ArcUsbService>, software_gain_level: Arc<AtomicU8>) -> Result<Self> {
+    pub fn new(config: &ArcConfiguration, usb_service: Option<ArcUsbService>, software_gain_level: Arc<AtomicU8>) -> Result<Arc<Self>> {
         let settings = config.get_settings();
 
         #[cfg(feature = "alsa")]
@@ -75,9 +75,9 @@ impl AudioInterfaceService {
         // Restore saved volume; default to 0 on first use to prevent hardware-max shock
         volume_ctrl_device.set_vol(settings.volume_ctrl_settings.saved_volume.unwrap_or(0));
 
-        Ok(Self {
+        Ok(Arc::new(Self {
             volume_ctrl_device: Mutex::new(volume_ctrl_device),
-        })
+        }))
     }
 
     pub fn get_volume(&self) -> Volume {

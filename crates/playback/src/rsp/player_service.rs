@@ -54,7 +54,7 @@ impl PlayerService {
         queue_service: Arc<QueueService>,
         state_changes_tx: Sender<StateChangeEvent>,
         loudness_service: Arc<LoudnessService>,
-    ) -> Self {
+    ) -> Arc<Self> {
         let state_db = db
             .keyspace("player_state", KeyspaceCreateOptions::default)
             .expect("Failed to open player_state keyspace");
@@ -168,7 +168,7 @@ impl PlayerService {
         if last_played_song_progress > 0 {
             ps.seek_current_song(last_played_song_progress);
         }
-        ps
+        Arc::new(ps)
     }
 
     pub fn play_from_current_queue_song(&self) {

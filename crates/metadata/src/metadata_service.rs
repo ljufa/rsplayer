@@ -1,19 +1,15 @@
 use std::{
-    collections::HashSet,
-    fs::File,
-    path::Path,
-    sync::{
+    cmp::Reverse, collections::HashSet, fs::File, path::Path, sync::{
         Arc, RwLock,
         atomic::{AtomicBool, Ordering},
-    },
-    time,
+    }, time,
 };
 
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
 use fjall::{Database, KeyspaceCreateOptions, PersistMode};
 use log::{debug, info, warn};
-use symphonia::core::{formats::FormatOptions, formats::probe::Hint, io::MediaSourceStream, meta::MetadataOptions};
+use symphonia::core::{formats::{FormatOptions, probe::Hint}, io::{MediaSourceStream}, meta::MetadataOptions};
 use tokio::sync::broadcast::Sender;
 use walkdir::WalkDir;
 
@@ -51,19 +47,19 @@ impl MetadataService {
         song_repository: ArcSongRepository,
         album_repository: ArcAlbumRepository,
         statistic_repository: ArcPlayStatisticsRepository,
-    ) -> Result<Self> {
+    ) -> Result<Arc<Self>> {
         let settings = settings.clone();
 
         Self::run_migration_if_needed(&db, &song_repository, &album_repository);
 
-        Ok(Self {
+        Ok(Arc::new(Self {
             settings: RwLock::new(settings),
             scan_running: AtomicBool::new(false),
             song_repository,
             album_repository,
             statistic_repository,
             db,
-        })
+        }))
     }
 
     fn run_migration_if_needed(db: &Database, song_repository: &ArcSongRepository, album_repository: &ArcAlbumRepository) {
@@ -110,7 +106,7 @@ impl MetadataService {
 
     pub fn get_most_played_songs(&self, limit: usize) -> Vec<Song> {
         let mut stats = self.statistic_repository.get_all();
-        stats.sort_by(|a, b| b.play_count.cmp(&a.play_count));
+        stats.sort_by_key(|b| Reverse(b.play_count));
         stats
             .into_iter()
             .filter(|stat| !stat.play_item_id.starts_with("radio_uuid_"))
@@ -122,7 +118,7 @@ impl MetadataService {
 
     pub fn get_liked_songs(&self, limit: usize) -> Vec<Song> {
         let mut stats = self.statistic_repository.get_all();
-        stats.sort_by(|a, b| b.liked_count.cmp(&a.liked_count));
+        stats.sort_by_key(|b| Reverse(b.liked_count));
         stats
             .into_iter()
             .filter(|stat| !stat.play_item_id.starts_with("radio_uuid_"))
@@ -144,7 +140,7 @@ impl MetadataService {
             }
         }
         let mut top_genres: Vec<(String, usize)> = genre_map.into_iter().collect();
-        top_genres.sort_by(|a, b| b.1.cmp(&a.1));
+        top_genres.sort_by_key(|b| Reverse(b.1));
         top_genres.truncate(10);
 
         let total_albums = self.album_repository.find_all().len();

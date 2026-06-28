@@ -33,7 +33,7 @@ fn apply_filters_with_settings(dsp_settings: &DspSettings, eq: &mut Equalizer, r
                     }
                 } else {
                     for &ch in &filter_config.channels {
-                        if let Err(e) = eq.add_biquad_filter(ch, rate, params.clone()) {
+                        if let Err(e) = eq.add_biquad_filter(ch, rate, &params) {
                             log::warn!("Failed to add equalizer filter for channel {ch}: {e}");
                         }
                     }

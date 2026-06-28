@@ -40,9 +40,6 @@ impl<T> ChannelPair<T> {
 }
 
 pub struct AppContainer {
-    pub config: ArcConfiguration,
-    pub shared_db: Arc<fjall::Database>,
-
     pub song_repository: ArcSongRepository,
     pub album_repository: ArcAlbumRepository,
     pub loudness_repository: ArcLoudnessRepository,
@@ -65,32 +62,31 @@ pub enum BuildOutcome {
     Degraded(anyhow::Error),
 }
 
-pub fn build_app_container(config: ArcConfiguration, shared_db: Arc<fjall::Database>) -> BuildOutcome {
-    let song_repository: ArcSongRepository = Arc::new(FjallSongRepository::new(&shared_db));
-    let album_repository: ArcAlbumRepository = Arc::new(FjallAlbumRepository::new(&shared_db));
-    let play_statistics_repository: ArcPlayStatisticsRepository = Arc::new(FjallPlayStatisticsRepository::new(&shared_db));
-    let loudness_repository: ArcLoudnessRepository = Arc::new(FjallLoudnessRepository::new(&shared_db));
+pub fn build_app_container(config: &ArcConfiguration, shared_db: &Arc<fjall::Database>) -> BuildOutcome {
+    let song_repository: ArcSongRepository = Arc::new(FjallSongRepository::new(shared_db));
+    let album_repository: ArcAlbumRepository = Arc::new(FjallAlbumRepository::new(shared_db));
+    let play_statistics_repository: ArcPlayStatisticsRepository = Arc::new(FjallPlayStatisticsRepository::new(shared_db));
+    let loudness_repository: ArcLoudnessRepository = Arc::new(FjallLoudnessRepository::new(shared_db));
 
-    let metadata_service = Arc::new(
-        MetadataService::new(
-            shared_db.clone(),
-            &config.get_settings().metadata_settings,
-            song_repository.clone(),
-            album_repository.clone(),
-            play_statistics_repository.clone(),
-        )
-        .expect("Failed to start metadata service"),
-    );
+    let metadata_service = MetadataService::new(
+        shared_db.clone(),
+        &config.get_settings().metadata_settings,
+        song_repository.clone(),
+        album_repository.clone(),
+        play_statistics_repository.clone(),
+    )
+    .expect("Failed to start metadata service");
+
     info!("Metadata service successfully created.");
 
-    let playlist_service = Arc::new(PlaylistService::new(&shared_db));
+    let playlist_service = PlaylistService::new(shared_db);
     info!("Playlist service successfully created.");
 
-    let queue_service = Arc::new(QueueService::new(
-        &shared_db,
+    let queue_service = QueueService::new(
+        shared_db,
         song_repository.clone(),
         play_statistics_repository.clone(),
-    ));
+    );
     info!("Queue service successfully created.");
 
     let usb_settings = config.get_settings().usb_settings;
@@ -109,8 +105,8 @@ pub fn build_app_container(config: ArcConfiguration, shared_db: Arc<fjall::Datab
     let initial_volume = config.get_settings().volume_ctrl_settings.saved_volume.unwrap_or(0);
     let current_volume = Arc::new(AtomicU8::new(initial_volume));
 
-    let audio_service: ArcAudioInterfaceSvc = match AudioInterfaceService::new(&config, usb_service.clone(), current_volume.clone()) {
-        Ok(s) => Arc::new(s),
+    let audio_service: ArcAudioInterfaceSvc = match AudioInterfaceService::new(config, usb_service.clone(), current_volume.clone()) {
+        Ok(s) => s,
         Err(e) => {
             error!("Audio service interface can't be created. error: {e}");
             return BuildOutcome::Degraded(e);
@@ -134,20 +130,18 @@ pub fn build_app_container(config: ArcConfiguration, shared_db: Arc<fjall::Datab
         info!("Loudness scan service disabled (loudness normalization is off).");
     }
 
-    let player_service = Arc::new(PlayerService::new(
-        &shared_db,
+    let player_service = PlayerService::new(
+        shared_db,
         &config.get_settings(),
         current_volume,
         metadata_service.clone(),
         queue_service.clone(),
         state_changes_tx.clone(),
         loudness_service,
-    ));
+    );
     info!("Player service successfully created.");
 
     BuildOutcome::Ready(Box::new(AppContainer {
-        config,
-        shared_db,
         song_repository,
         album_repository,
         loudness_repository,
@@ -174,9 +168,9 @@ mod tests {
     async fn build_wires_services_and_channels() {
         let tmp = TempDir::new().expect("temp dir");
         let db = Arc::new(fjall::Database::builder(tmp.path().join("test.db")).open().expect("open temp db"));
-        let config = Arc::new(Configuration::new(&db));
+        let config = Configuration::new(&db);
 
-        let mut container = match build_app_container(config, db) {
+        let mut container = match build_app_container(&config, &db) {
             BuildOutcome::Ready(c) => c,
             BuildOutcome::Degraded(e) => panic!("expected Ready, got Degraded: {e}"),
         };

@@ -1,8 +1,11 @@
+use std::cmp::Reverse;
+
 use chrono::DateTime;
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 use log::error;
 
 use api_models::{player::Song, playlist::Album};
+
 
 use crate::error::{RepoError, RepoResult};
 use crate::genre_utils::{is_junk_genre, normalize_genre_key, normalize_name, resolve_id3v1_genre, title_case_genre};
@@ -100,14 +103,14 @@ impl AlbumRepository for FjallAlbumRepository {
 
     fn find_all_sort_by_added_desc(&self, limit: usize) -> Vec<Album> {
         let mut albums = self.find_all();
-        albums.sort_by(|a, b| b.added.cmp(&a.added));
+        albums.sort_by_key(|b| Reverse(b.added));
         albums.truncate(limit);
         albums
     }
 
     fn find_all_sort_by_released_desc(&self, limit: usize) -> Vec<Album> {
         let mut albums = self.find_all();
-        albums.sort_by(|a, b| b.released.cmp(&a.released));
+        albums.sort_by_key(|b| Reverse(b.released));
         albums.truncate(limit);
         albums
     }
@@ -133,7 +136,7 @@ impl AlbumRepository for FjallAlbumRepository {
             .into_iter()
             .filter(|(_, (_, albums))| albums.len() >= 2)
             .map(|(_, (display_name, mut albums))| {
-                albums.sort_by(|a, b| b.added.cmp(&a.added));
+                albums.sort_by_key(|b| Reverse(b.added ));
                 albums.truncate(limit_per_genre);
                 (display_name, albums)
             })
@@ -160,7 +163,7 @@ impl AlbumRepository for FjallAlbumRepository {
             .into_iter()
             .filter(|(_, albums)| albums.len() >= 2)
             .map(|(decade, mut albums)| {
-                albums.sort_by(|a, b| b.released.cmp(&a.released));
+                albums.sort_by_key(|b| Reverse(b.released));
                 albums.truncate(limit_per_decade);
                 (decade, albums)
             })

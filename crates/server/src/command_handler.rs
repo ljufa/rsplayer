@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use config::ArcConfiguration;
 use log::{debug, error};
 use metadata::metadata_service::MetadataService;
 use metadata::playlist_service::PlaylistService;
@@ -32,7 +33,7 @@ pub async fn handle_user_commands(
     album_repository: ArcAlbumRepository,
     song_repository: ArcSongRepository,
     loudness_repository: ArcLoudnessRepository,
-    config_store: config::ArcConfiguration,
+    config_store: ArcConfiguration,
     mut input_commands_rx: Receiver<UserCommand>,
     system_commands_tx: mpsc::Sender<SystemCommand>,
     state_changes_sender: Sender<StateChangeEvent>,

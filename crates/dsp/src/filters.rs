@@ -88,7 +88,7 @@ impl BiquadCoefficients {
 
     /// Compute biquad coefficients from filter parameters.
     /// Formulas from the Audio EQ Cookbook (R. Bristow-Johnson) and `CamillaDSP`.
-    pub fn from_config(fs: usize, params: BiquadParameters) -> Self {
+    pub fn from_config(fs: usize, params: &BiquadParameters) -> Self {
         let fs = fs as f32;
         match params {
             BiquadParameters::Highpass { freq, q } => {
@@ -240,7 +240,7 @@ impl BiquadCoefficients {
                 let d1i = (2.0 * PI * freq_act) / q_act;
                 let c0i = (2.0 * PI * freq_target).powi(2);
                 let c1i = (2.0 * PI * freq_target) / q_target;
-                let fc = f32::midpoint(freq_target, freq_act);
+                let fc = f32::midpoint(*freq_target, *freq_act);
                 let gn = 2.0 * PI * fc / (PI * fc / fs).tan();
                 let gn2 = gn.powi(2);
                 let cci = c0i + gn * c1i + gn2;

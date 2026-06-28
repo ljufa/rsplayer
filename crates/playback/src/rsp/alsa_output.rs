@@ -273,7 +273,7 @@ impl AlsaOutput {
         is_dsd: bool,
         dsp_handle: Option<&DspHandle>,
         vu_meter: Option<VUMeter>,
-        software_gain: Option<Arc<AtomicU8>>,
+        software_gain: Option<&Arc<AtomicU8>>,
     ) -> Result<AlsaOutput> {
         debug!("Spec: {spec:?}");
 
@@ -396,7 +396,7 @@ impl AlsaOutput {
                 device_rate,
                 device_channels,
                 explicit_buf,
-                software_gain.clone(),
+                software_gain,
             )
         } else {
             let mut r = Err(Error::msg("no buffer size tried"));
@@ -412,7 +412,7 @@ impl AlsaOutput {
                     device_rate,
                     device_channels,
                     *buf,
-                    software_gain.clone(),
+                    software_gain,
                 );
                 if r.is_ok() {
                     break;
@@ -454,7 +454,7 @@ impl AlsaOutput {
                         Some(fallback_rate),
                         device_channels,
                         explicit_buf,
-                        software_gain.clone(),
+                        software_gain,
                     );
                     if retry.is_ok() {
                         result = retry;
@@ -473,7 +473,7 @@ impl AlsaOutput {
                             Some(fallback_rate),
                             device_channels,
                             *buf,
-                            software_gain.clone(),
+                            software_gain,
                         );
                         if retry.is_ok() {
                             result = retry;
@@ -499,7 +499,7 @@ impl AlsaOutput {
         device_rate: Option<u32>,
         device_channels: Option<u16>,
         buffer_size: cpal::BufferSize,
-        software_gain: Option<Arc<AtomicU8>>,
+        software_gain: Option<&Arc<AtomicU8>>,
     ) -> Result<AlsaOutput> {
         let source_channels = spec.channels().count();
         let output_channels = device_channels.map_or(source_channels, |ch| ch as usize);
@@ -523,7 +523,7 @@ impl AlsaOutput {
                 let ring_buf = SpscRb::<$T>::new(ring_len);
                 let (producer, consumer) = (ring_buf.producer(), ring_buf.consumer());
                 let ec_data = error_count_clone.clone();
-                let gain_level = software_gain.clone();
+                let gain_level = software_gain.cloned();
                 let stream = device
                     .build_output_stream(
                         &config,

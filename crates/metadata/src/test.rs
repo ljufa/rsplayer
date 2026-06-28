@@ -316,12 +316,12 @@ mod queue {
         assert_eq!(queue.get_current_song().unwrap().file, "assets/music.mp3");
     }
 
-    fn create_queue() -> QueueService {
+    fn create_queue() -> Arc<QueueService> {
         let ctx = Context::default();
         create_queue_with_ctx(&ctx)
     }
 
-    fn create_queue_with_ctx(ctx: &Context) -> QueueService {
+    fn create_queue_with_ctx(ctx: &Context) -> Arc<QueueService> {
         let db = fjall::Database::builder(&ctx.db_dir).open().expect("Failed to open test db");
         let song_repo = Arc::new(FjallSongRepository::new(&db));
         let stat_repo = Arc::new(FjallPlayStatisticsRepository::new(&db));
@@ -539,7 +539,7 @@ mod metadata {
 
 #[cfg(test)]
 mod playlist {
-    use std::vec;
+    use std::{sync::Arc, vec};
 
     use api_models::player::Song;
 
@@ -583,7 +583,7 @@ mod playlist {
         songs
     }
 
-    fn create_pl_service() -> PlaylistService {
+    fn create_pl_service() -> Arc<PlaylistService> {
         let ctx = Context::default();
         let db = fjall::Database::builder(&ctx.db_dir).open().expect("Failed to open test db");
         PlaylistService::new(&db)
@@ -644,7 +644,7 @@ pub mod test_shared {
     }
 
     pub struct TestContext {
-        pub metadata_service: MetadataService,
+        pub metadata_service: Arc<MetadataService>,
         pub sender: Sender<StateChangeEvent>,
         pub receiver: Receiver<StateChangeEvent>,
         pub song_repository: Arc<dyn SongRepository>,
