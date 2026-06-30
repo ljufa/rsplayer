@@ -221,22 +221,6 @@ fn VUMeterCanvas() -> Element {
     }
 }
 
-fn load_visualizer_type() -> VisualizerType {
-    (|| {
-        let storage = web_sys::window()?.local_storage().ok()??;
-        let value = storage.get_item("rsplayer_visualizer").ok()??;
-        VisualizerType::from_str(&value)
-    })()
-    .unwrap_or(VisualizerType::Lissajous)
-}
-
-fn save_visualizer_type(vt: VisualizerType) {
-    if let Some(window) = web_sys::window() {
-        if let Ok(Some(storage)) = window.local_storage() {
-            let _ = storage.set_item("rsplayer_visualizer", vt.as_str());
-        }
-    }
-}
 
 // ─── Track Info ──────────────────────────────────────────────────────────────
 
@@ -398,11 +382,17 @@ fn Controls(
                         title: "Toggle visualizer (V)",
                         onclick: {
                             let mut vt = visualizer_type;
+                            let state = use_context::<crate::state::AppState>();
                             move |_| {
                                 let current = *vt.read();
                                 let next = current.cycle();
                                 vt.set(next);
-                                save_visualizer_type(next);
+                                if let Some(mut settings) = state.global_settings.peek().clone() {
+                                    settings.ui_preferences.visualizer = next.as_str().to_string();
+                                    spawn(async move {
+                                        let _ = Request::post("/api/settings").json(&settings).unwrap().send().await;
+                                    });
+                                }
                             }
                         },
                         i { class: "material-icons", "equalizer" }

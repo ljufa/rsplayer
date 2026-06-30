@@ -1,5 +1,87 @@
 # Release Notes
 
+## v4.2.0 — 2026-06-30
+
+### New Features
+
+#### Windows Support (experimental)
+
+RSPlayer now builds and runs on Windows. Two artifacts are produced:
+
+- **Headless server** (`rsplayer_windows_amd64.exe`) — a standalone executable you can run directly from a terminal or schedule as a Windows service. No installation needed.
+- **Desktop installer** (`rsplayer-desktop_windows_amd64.exe`) — an NSIS installer that bundles the Tauri desktop app and automatically installs [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) if it is not already present (included with Windows 10/11 and Edge).
+
+Audio output uses WASAPI via `cpal`. The web UI is served at `http://localhost:8000` and works in any browser (see troubleshooting.md if Edge shows a blank page — this is an Enhanced Security Mode issue, not an RSPlayer bug).
+
+The CRT is statically linked (`-C target-feature=+crt-static`) so the binary has no dependency on `VCRUNTIME140.dll`.
+
+Platform limitations on Windows: network share mounting, ALSA/PipeWire volume, IR remote, system poweroff/reboot, and firmware USB integration are unavailable.
+
+#### Media Key Bindings in Desktop App
+
+The desktop application now registers with the OS media session, so hardware media keys and OS-level controls (lock screen, Bluetooth headset, keyboard media row) work out of the box:
+
+| Key / Event | Action |
+|---|---|
+| Play / Pause / Toggle | Toggle play/pause |
+| Next | Next track |
+| Previous | Previous track |
+| Stop | Stop |
+| Set volume | Set volume (0–100) |
+
+On **Linux** this uses MPRIS2 (D-Bus), on **macOS** the native MediaRemote framework, and on **Windows** the GlobalSystemMediaTransportControls API — all via the `souvlaki` crate. The media session is registered for the lifetime of the app; no configuration is needed.
+
+#### Remote Access URL in Desktop Settings
+
+When running as a desktop app, the Settings page now shows a **Remote access** link below the version string. It displays the machine's local network address (e.g. `http://192.168.1.42:8000`) so you can open the web UI from a phone or another device on the same LAN without having to look up the IP manually.
+
+### Improvements
+
+#### UX — First-Time Setup and New-User Guidance ([#20](https://github.com/ljufa/rsplayer/issues/20))
+
+Several changes improve the out-of-the-box experience for new users, especially on the desktop app.
+
+**Welcome modal expanded with setup steps**
+
+The first-time welcome modal now walks through a structured setup checklist:
+
+1. **Audio Device** (required) — direct link to Settings to select a playback device.
+2. **Music Library** (required) — configure local or network music directories.
+3. **Network Mounts** (optional, shown only on Linux/ALSA builds) — brief explanation that network share configuration is only available in the headless server install.
+4. **Internet Radio** (optional, shown only where supported) — explains that internet radio requires a network-connected server build and is unavailable in the desktop app.
+5. **Start Listening** — confirms setup is complete.
+
+This directly addresses the confusion reported in [#20](https://github.com/ljufa/rsplayer/issues/20): users installing the desktop app before the server expected radio stations and network mounts to work, but those features are only available in the headless server.
+
+**UI preferences moved from browser localStorage to backend database**
+
+Theme, visualizer style, background image toggle, and the "welcome shown" flag are now stored in the backend database via the existing settings API, rather than `localStorage`. This fixes the welcome modal never appearing in the Tauri desktop app, where the webview does not reliably persist `localStorage` across restarts. Preferences are now fully synchronized with the server and survive app restarts on all platforms.
+
+**Radio — Favorites empty state now guides users to browse**
+
+When the Favorites tab is empty, the Radio page now shows a descriptive empty state pointing to the Top/Country/Language/Search tabs instead of a blank list. Previously the empty state never rendered at all because the loading flag was not cleared for empty favorites.
+
+#### Remote Access URL — Copy Button and Improved Description
+
+The remote access URL shown at the bottom of the Settings page (desktop mode) has been improved:
+
+- The URL is now displayed as **plain text** instead of a clickable link — clicking the link previously redirected the Tauri webview away from the app.
+- A **copy button** (clipboard icon) is shown next to the URL for easy copying to another device.
+- The description now reads *"Open on another device (phone, tablet, browser):"* to make the purpose immediately clear.
+
+#### Desktop App — Default Port Changed to 8001
+
+The desktop application now starts on port **8001** by default (previously 8000). This avoids an accidental port conflict if the standalone headless server binary is also run on the same machine without a custom `PORT` environment variable — both previously defaulted to 8000. The server install (deb/rpm/systemd) continues to use port 80 via the `env` file and is unaffected.
+
+### Internal / Build
+
+- **cpal upgraded to 0.18.1** — the audio output library has been updated to 0.18.1. The fork's custom patches (DSD native output, ALSA buffer-size constraint fix, high-sample-rate support) have been rebased onto the new branch (`v_0.18.1_patched`).
+- **Cross-platform signal handling** — `tokio::signal::unix` (`SIGTERM`) is now wrapped in `#[cfg(unix)]` so the server crate compiles cleanly on Windows. On non-Unix platforms the terminate-signal future resolves never (`std::future::pending`), and Ctrl+C continues to work via `tokio::signal::ctrl_c` on all platforms.
+- **Windows CI job** (`build_desktop_windows`) added to `cd.yml`. Runs on `windows-latest`, installs `tauri-cli`, builds the headless `.exe` and the NSIS installer, and uploads both as release artifacts. Dispatch target `windows` is available alongside `macos`, `all`, and the Linux per-arch targets.
+- **Comparison table** in `README.md` extended with Language, Playback engine, OS support, and Native desktop app variant rows.
+
+---
+
 ## v4.1.0 — 2026-06-23
 
 ### New Features

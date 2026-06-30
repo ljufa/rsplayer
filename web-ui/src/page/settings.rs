@@ -926,6 +926,25 @@ pub fn SettingsPage() -> Element {
             }
 
             p { class: "text-xs text-base-content/40 mt-2 px-1", "Version: {settings.read().version}" }
+            if let Some(url) = settings.read().remote_access_url.clone() {
+                div { class: "flex items-center gap-2 mt-1 px-1",
+                    p { class: "text-xs text-base-content/40",
+                        "Open on another device (phone, tablet, browser): "
+                        span { class: "font-mono select-all", "{url}" }
+                    }
+                    button {
+                        class: "btn btn-xs btn-ghost",
+                        title: "Copy URL",
+                        onclick: move |_| {
+                            let _ = js_sys::eval(&format!(
+                                "navigator.clipboard.writeText('{}')",
+                                url
+                            ));
+                        },
+                        i { class: "material-icons text-sm", "content_copy" }
+                    }
+                }
+            }
 
         }
 
@@ -1573,14 +1592,11 @@ fn AppearanceSection() -> Element {
                 onclick: move |_| {
                     let next = !*state.show_bg_image.peek();
                     *state.show_bg_image.write() = next;
-                    if let Some(window) = web_sys::window() {
-                        if let Ok(Some(storage)) = window.local_storage() {
-                            let _ = storage
-                                .set_item(
-                                    "rsplayer_show_bg_image",
-                                    if next { "true" } else { "false" },
-                                );
-                        }
+                    if let Some(mut settings) = state.global_settings.peek().clone() {
+                        settings.ui_preferences.show_bg_image = next;
+                        spawn(async move {
+                            let _ = Request::post("/api/settings").json(&settings).unwrap().send().await;
+                        });
                     }
                 },
             }
@@ -1599,10 +1615,11 @@ fn AppearanceSection() -> Element {
                                 class: if active { "flex flex-col items-center gap-1 p-1 rounded-lg border-2 border-primary cursor-pointer" } else { "flex flex-col items-center gap-1 p-1 rounded-lg border-2 border-transparent cursor-pointer hover:border-base-content/20" }, // Swatch preview — rendered in its own data-theme context so colors
                                 onclick: move |_| {
                                     *state.current_theme.write() = id.to_string();
-                                    if let Some(window) = web_sys::window() {
-                                        if let Ok(Some(storage)) = window.local_storage() {
-                                            let _ = storage.set_item("rsplayer_theme", id);
-                                        }
+                                    if let Some(mut settings) = state.global_settings.peek().clone() {
+                                        settings.ui_preferences.theme = id.to_string();
+                                        spawn(async move {
+                                            let _ = Request::post("/api/settings").json(&settings).unwrap().send().await;
+                                        });
                                     }
                                 },
                                 // Swatch preview — rendered in its own data-theme context so colors

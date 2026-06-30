@@ -1,8 +1,8 @@
-# Local Linux Cross-Build
+# Local Build Guide
 
-This document describes how to cross-build the `rsplayer` backend from a Linux host for Linux and macOS targets.
+This document describes how to build `rsplayer` from source — on Linux (including cross-compilation for Linux/macOS targets) and natively on Windows.
 
-Common targets:
+Common cross-compilation targets (Linux host):
 
 - `arm-unknown-linux-gnueabihf` (ARMv6)
 - `armv7-unknown-linux-gnueabihf` (ARMv7)
@@ -130,6 +130,56 @@ TARGET=x86_64-apple-darwin cargo make build_release
 ```
 
 Darwin release output is binary-only (no `.deb`, `.rpm`, `.tgz` packaging).
+
+## Windows Build (native)
+
+Windows builds must be compiled natively on a Windows machine (or a Windows GitHub Actions runner). Cross-compiling from Linux to Windows is not supported.
+
+### Prerequisites
+
+1. **Rust** — install from [rustup.rs](https://rustup.rs/). The MSVC toolchain is selected by default on Windows.
+2. **Visual Studio Build Tools** or Visual Studio with the "Desktop development with C++" workload (needed by some C dependencies).
+3. **cargo-make** and **tauri-cli** (for the desktop app):
+   ```powershell
+   cargo install cargo-make
+   cargo install tauri-cli --version "^2"
+   ```
+4. **Node.js** — required for the web UI CSS build step.
+
+### Build headless server
+
+The Windows server binary is built without ALSA or LIRC features (those are Linux-only):
+
+```powershell
+# Build the web UI first (required — embedded into the server binary)
+cargo make build_ui_release
+
+# Build the headless server
+cargo build --package rsplayer --bin rsplayer --release --no-default-features --target x86_64-pc-windows-msvc
+```
+
+The binary is at `target\x86_64-pc-windows-msvc\release\rsplayer.exe`.
+
+### Build desktop app
+
+```powershell
+# Copy loading.html alongside the web UI dist
+copy crates\desktop\loading.html dist\web-ui\loading.html
+
+# Build and bundle as NSIS installer
+cd crates\desktop
+cargo tauri build --bundles nsis --ci
+```
+
+The NSIS installer is placed under `target\release\bundle\nsis\`.
+
+### Platform limitations on Windows
+
+- **Volume control**: software gain only (ALSA and PipeWire are unavailable).
+- **Network mounts**: SMB/NFS mounting from the UI is unavailable.
+- **Power control**: system poweroff/reboot commands are unavailable.
+- **IR remote**: LIRC integration is unavailable.
+- **Firmware USB**: serial integration works (cross-platform via `serialport` crate).
 
 ## Output
 

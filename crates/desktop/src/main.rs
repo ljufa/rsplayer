@@ -4,12 +4,15 @@
 use std::env;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread::{sleep, spawn};
 use std::time::{Duration, Instant};
 
+use api_models::common::{PlayerCommand, SystemRequest, UserCommand};
 use log::{error, info, warn};
+use souvlaki::{MediaControlEvent, MediaControls, PlatformConfig};
 use tauri::{WebviewUrl, WebviewWindowBuilder, WindowEvent, generate_context};
+use tokio::sync::{mpsc, oneshot};
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
@@ -42,11 +45,73 @@ async fn main() {
     // between the backend spawn (setup) and the window close handler.
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let shutdown_tx = Mutex::new(Some(shutdown_tx));
+
+    // Oneshot to receive the player command sender once the backend starts.
+    let (cmd_sender_tx, cmd_sender_rx) = oneshot::channel::<mpsc::Sender<UserCommand>>();
+
+    // Shared slot — starts None, filled once the backend hands us the sender.
+    // The souvlaki media event thread reads from this to dispatch commands.
+    let media_sender: Arc<Mutex<Option<mpsc::Sender<UserCommand>>>> = Arc::new(Mutex::new(None));
+
     // Start the backend as a tokio task (multi-thread runtime, so Tauri
     // can block the main thread with its event loop while the backend
     // runs on a worker thread — same approach as the headless server).
     tokio::spawn(async move {
-        rsplayer::run_backend(Some(shutdown_rx)).await;
+        rsplayer::run_backend(Some(shutdown_rx), Some(cmd_sender_tx)).await;
+    });
+
+    // Dedicated thread for souvlaki MPRIS2 / MediaRemote integration.
+    // Holds MediaControls alive for the app lifetime so the OS continues
+    // routing media key events here. The handler dispatches into the
+    // backend command channel via the shared Arc<Mutex<Option<Sender>>>.
+    let media_sender_souvlaki = Arc::clone(&media_sender);
+    spawn(move || {
+        let config = PlatformConfig {
+            dbus_name: "com.rsplayer.desktop",
+            display_name: "RSPlayer",
+            hwnd: None,
+        };
+
+        let mut controls = match MediaControls::new(config) {
+            Ok(c) => c,
+            Err(e) => {
+                warn!("Failed to create media controls: {:?}", e);
+                return;
+            }
+        };
+
+        if let Err(e) = controls.attach(move |event: MediaControlEvent| {
+            let cmd = match event {
+                MediaControlEvent::Play | MediaControlEvent::Pause | MediaControlEvent::Toggle => {
+                    Some(UserCommand::Player(PlayerCommand::TogglePlay))
+                }
+                MediaControlEvent::Next => Some(UserCommand::Player(PlayerCommand::Next)),
+                MediaControlEvent::Previous => Some(UserCommand::Player(PlayerCommand::Prev)),
+                MediaControlEvent::Stop => Some(UserCommand::Player(PlayerCommand::Stop)),
+                MediaControlEvent::SetVolume(volume) => {
+                    Some(UserCommand::System(SystemRequest::SetVol((volume * 100.0).round() as u8)))
+                }
+                _ => None,
+            };
+            if let Some(cmd) = cmd {
+                if let Ok(guard) = media_sender_souvlaki.lock() {
+                    if let Some(tx) = guard.as_ref() {
+                        if let Err(e) = tx.try_send(cmd) {
+                            warn!("Media key command dropped: {e}");
+                        }
+                    }
+                }
+            }
+        }) {
+            warn!("Failed to attach media controls handler: {:?}", e);
+            return;
+        }
+
+        info!("Media key bindings active (MPRIS2/MediaRemote).");
+        // Keep the thread alive to maintain the media session registration.
+        loop {
+            sleep(Duration::from_secs(1));
+        }
     });
 
     tauri::Builder::default()
@@ -70,6 +135,22 @@ async fn main() {
                         let url = format!("http://localhost:{http_port}");
                         let _ = w.eval(format!("window.location.replace('{url}')"));
                         return;
+                    }
+                }
+            });
+
+            // Background task: wait for the backend to hand us the command
+            // sender, then store it so the media event handler can use it.
+            let media_sender_init = Arc::clone(&media_sender);
+            tokio::spawn(async move {
+                match cmd_sender_rx.await {
+                    Ok(sender) => {
+                        if let Ok(mut guard) = media_sender_init.lock() {
+                            *guard = Some(sender);
+                        }
+                    }
+                    Err(_) => {
+                        warn!("Backend did not send command sender (degraded mode?).");
                     }
                 }
             });
@@ -116,7 +197,7 @@ fn port_is_free(port: u16) -> bool {
 /// random port. Also sets the `PORT` env var so the backend picks it up.
 fn find_available_port() -> u16 {
     // Preferred port: user override via PORT env, or default 8000
-    let preferred: u16 = std::env::var("PORT").ok().and_then(|s| s.parse().ok()).unwrap_or(8000);
+    let preferred: u16 = std::env::var("PORT").ok().and_then(|s| s.parse().ok()).unwrap_or(8001);
 
     if port_is_free(preferred) {
         return preferred;

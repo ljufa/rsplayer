@@ -5,9 +5,9 @@
 ![](https://img.shields.io/github/license/ljufa/rsplayer?style=flat-square)
 ![](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=flat-square)
 # RSPlayer
-RSPlayer is an open-source, headless music server primarily for Linux, with experimental macOS builds — run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser. A native desktop app (Linux x86_64, macOS) is also available.
+RSPlayer is an open-source, headless music server primarily for Linux, with experimental macOS and Windows builds — run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser. A native desktop app (Linux x86_64, macOS, Windows) is also available.
 
-It runs as a systemd service and exposes a responsive web UI, making it a great fit for machines without a monitor or keyboard — but equally at home on a dedicated desktop audio PC. Hardware and DIY integrations (GPIO DAC control, custom firmware) are fully optional.
+It runs as a systemdand exposes a responsive web UI, making it a great fit for machines without a monitor or keyboard — but equally at home on a dedicated desktop audio PC. Hardware and DIY integrations (GPIO DAC control, custom firmware) are fully optional.
 
 Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia) for audio decoding and [Cpal](https://github.com/rustaudio/cpal) for output, with a Rust-native audio pipeline for low-latency, high-performance playback.
 
@@ -20,12 +20,14 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 | Feature | RSPlayer | Volumio | Moode Audio | MPD |
 |---|---|---|---|---|
 | Language | Rust | Node.js | PHP/Bash | C |
-| Runs on x86_64 / NAS / server | ✓ | ✓ | Pi-only | ✓ |
+| Playback engine | Symphonia + cpal (pure rust) | MPD (plugin-based) | MPD (plugin-based) | plugin-based (FFmpeg, libFLAC, …) |
+| OS support | Linux, macOS, Windows | Linux | Linux (Pi) | Linux, macOS, Windows |
+| Native desktop app variant | Linux, macOS, Windows | — | — | — |
+| Web UI | ✓ | ✓ | ✓ | 3rd party |
+| Local browser playback | ✓ | — | — | — |
 | Parametric EQ / DSP | ✓ built-in | paid tier | ✓ (CamillaDSP) | via plugins |
 | Multi-room | planned | paid tier | ✓ | via plugins |
 | DSD playback | ✓ | ✓ | ✓ | ✓ |
-| Web UI | ✓ | ✓ | ✓ | 3rd party |
-| Local browser playback | ✓ | — | — | — |
 | Loudness normalization (EBU R128) | ✓ | — | — | — |
 | Synchronized lyrics | ✓ | — | — | — |
 | Docker | ✓ | ✓ | — | ✓ |
@@ -75,13 +77,11 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 ### Planned features
 - **Expanded Audio Codec Support**: Compatibility with a wider range of audio codecs.
 - **Intelligent Dynamic Playlists**: Advanced dynamic playlists that adapt based on user likes or playback counts for a personalized listening experience.
-- **Windows Compatibility**: Development of a Windows build to extend platform support.
 - **Music Recommendations**: Suggest similar tracks or artists based on listening history or current playback.
 - **Generate missing album cover image**: Auto-generate album art using album name.
 - **MPD protocol support**: Compatibility with MPD clients.
 - **Subsonic protocol support**: Compatibility with Subsonic clients.
 - **Multi-room playback**: Synchronized playback across multiple devices.
-- **MPRIS D-Bus integration**: Native Linux desktop media key and player integration.
 - **Community plugin framework**: Extensible architecture for third-party plugins.
 - **Improve playlists management create/modify/delete items and playlists**: Items can be added/removed to/from playlist from everywhere.
 - **New version detection and upgrade from the app**: Detect a new version and provide upgrade button
@@ -92,8 +92,8 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 
 RSPlayer offers two build variants:
 
-- **Server** — The headless music server daemon (systemd service). Available for all supported architectures.
-- **Desktop** — A standalone native GUI app (built with Tauri). Available for **x86_64 Linux** and **macOS** only.
+- **Server** — The headless music server daemon (systemd service on linux). Available for all supported architectures.
+- **Desktop** — A standalone native GUI app (built with Tauri). Available for **x86_64 Linux**, **macOS**, and **Windows x86_64**.
 
 ### Linux
 
@@ -114,28 +114,25 @@ All Linux packages include a systemd service for automatic startup. See the [rel
 | Apple Silicon (`aarch64-apple-darwin`) | raw binary | DMG |
 | Intel (`x86_64-apple-darwin`) | raw binary | DMG |
 
-### macOS (Apple Silicon + Intel) — experimental
-
-Server and desktop builds for `aarch64-apple-darwin` and `x86_64-apple-darwin` are supported via cross-compilation from Linux. Audio output uses CoreAudio via `cpal`; the web UI works as on Linux.
+Server and desktop builds for `aarch64-apple-darwin` and `x86_64-apple-darwin` are supported. Audio output uses CoreAudio via `cpal`; the web UI works as on Linux.
 
 - **Server binary**: Download `rsplayer_darwin_arm64` or `rsplayer_darwin_amd64` from the [releases page](https://github.com/ljufa/rsplayer/releases/latest).
 - **Desktop app**: Download the `.dmg` from the releases page for a native windowed experience.
 
-Current platform limitations on macOS:
+Platform limitations on macOS: network share mounting, ALSA/PipeWire volume, IR remote, system poweroff/reboot, and firmware USB integration are unavailable.
 
-- Network share mounting/unmounting from RSPlayer UI is unavailable.
-- ALSA/PipeWire volume backends are unavailable (use software volume mode).
-- IR remote, system poweroff/reboot, and firmware USB integration are unavailable.
+### Windows (experimental)
 
-To build from Linux:
+| Architecture | Server | Desktop |
+|---|---|---|
+| x86_64 (`x86_64-pc-windows-msvc`) | `rsplayer_windows_amd64.exe` | NSIS installer |
 
-```bash
-TARGET=aarch64-apple-darwin cargo make build_release
-# or
-TARGET=x86_64-apple-darwin cargo make build_release
-```
+Audio output uses WASAPI via `cpal`. The web UI is served at `http://localhost:8000` and works in any browser.
 
-The resulting binary is at `target/cross/<target>/release/rsplayer` when local cross target-dir override is active.
+- **Server**: Download `rsplayer_windows_amd64.exe` and run it directly — no installation needed.
+- **Desktop app**: Download `rsplayer-desktop_windows_amd64.exe` from the [releases page](https://github.com/ljufa/rsplayer/releases/latest) and run the installer.
+
+Platform limitations on Windows: network share mounting, ALSA/PipeWire volume, IR remote, system poweroff/reboot, and firmware USB integration are unavailable.
 
 ## Installation
 To install RSPlayer, execute the following script (requires curl):

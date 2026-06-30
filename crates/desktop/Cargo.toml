@@ -27,6 +27,8 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+souvlaki = "0.8"
+api_models = { path = "../api_models" }
 dirs = "6"
 tokio = { workspace = true }
 serde = { workspace = true }

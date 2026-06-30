@@ -16,17 +16,22 @@ pub mod system_commands;
 use fjall::PersistMode;
 use hardware::usb;
 use log::{error, info, warn};
+use tokio::sync::oneshot::{Receiver, Sender};
 use std::sync::Arc;
-use tokio::signal::unix::{Signal, SignalKind, signal};
+use tokio::sync::mpsc;
 use tokio::{select, spawn};
 
+use api_models::common::UserCommand;
 use crate::composition_root::{build_app_container, AppContainer, BuildOutcome};
 use crate::mount_service::MountService;
 use config::{ArcConfiguration, Configuration};
 
 use env_logger::Env;
 
-pub async fn run_backend(shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>) {
+pub async fn run_backend(
+    shutdown_rx: Option<Receiver<()>>,
+    command_sender_out: Option<Sender<mpsc::Sender<UserCommand>>>,
+) {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("failed to install rustls crypto provider");
@@ -61,22 +66,26 @@ pub async fn run_backend(shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>
 
     MountService::mount_all(&config.get_settings().network_storage_settings);
 
-    let mut term_signal = signal(SignalKind::terminate()).expect("failed to create signal future");
-
     let container = match build_app_container(&config, &shared_db) {
         BuildOutcome::Ready(c) => c,
         BuildOutcome::Degraded(e) => {
-            start_degraded(&mut term_signal, &e, &config).await;
+            start_degraded(&e, &config).await;
             return;
         }
     };
 
-    run(container, term_signal, shutdown_rx, &config, &shared_db).await;
+    run(container, shutdown_rx, command_sender_out, &config, &shared_db).await;
 
     info!("RSPlayer shutdown completed.");
 }
 
-async fn run(container: Box<AppContainer>, mut term_signal: Signal, shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>, config: &ArcConfiguration, shared_db: &Arc<fjall::Database>) {
+async fn run(
+    container: Box<AppContainer>,
+    shutdown_rx: Option<Receiver<()>>,
+    command_sender_out: Option<Sender<mpsc::Sender<UserCommand>>>,
+    config: &ArcConfiguration,
+    shared_db: &Arc<fjall::Database>,
+) {
     let AppContainer {
         album_repository,
         song_repository,
@@ -95,6 +104,10 @@ async fn run(container: Box<AppContainer>, mut term_signal: Signal, shutdown_rx:
 
     let (player_commands_tx, player_commands_rx) = user_commands.split();
     let (system_commands_tx, system_commands_rx) = system_commands.split();
+
+    if let Some(out) = command_sender_out {
+        let _ = out.send(player_commands_tx.clone());
+    }
 
     let (http_server_future, https_server_future, websocket_future) =
         server::start(state_changes_tx.subscribe(), player_commands_tx.clone(), config);
@@ -184,7 +197,7 @@ async fn run(container: Box<AppContainer>, mut term_signal: Signal, shutdown_rx:
             error!("Exit from websocket thread.");
         }
 
-        _ = term_signal.recv() => {
+        _ = terminate_signal() => {
             info!("Terminate signal received.");
             persist_db_on_shutdown(shared_db);
         }
@@ -206,14 +219,29 @@ fn persist_db_on_shutdown(db: &fjall::Database) {
     let _ = db.persist(PersistMode::SyncAll);
 }
 
+fn terminate_signal() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
+    #[cfg(unix)]
+    {
+        Box::pin(async {
+            use tokio::signal::unix::{SignalKind, signal};
+            let mut sig = signal(SignalKind::terminate()).expect("failed to create SIGTERM handler");
+            sig.recv().await;
+        })
+    }
+    #[cfg(not(unix))]
+    {
+        Box::pin(std::future::pending::<()>())
+    }
+}
+
 #[allow(clippy::redundant_pub_crate)]
-async fn start_degraded(term_signal: &mut Signal, error: &anyhow::Error, config: &Arc<Configuration>) {
+async fn start_degraded(error: &anyhow::Error, config: &Arc<Configuration>) {
     warn!("Starting server in degraded mode.");
     let http_server_future = server::start_degraded(config, error);
     select! {
         () = http_server_future => {}
 
-        _ = term_signal.recv() => {
+        _ = terminate_signal() => {
             info!("Terminate signal received.");
         }
 

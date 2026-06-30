@@ -200,6 +200,10 @@ async fn get_settings(State(state): State<AppState>) -> Json<Settings> {
     settings.version = env!("CARGO_PKG_VERSION").to_string();
     settings.demo_mode = env::var("DEMO_MODE").is_ok();
     settings.desktop_mode = env::var("RSPLAYER_DESKTOP").is_ok();
+    if settings.desktop_mode {
+        let port = env::var("PORT").unwrap_or_else(|_| "8000".to_string());
+        settings.remote_access_url = local_ip().map(|ip| format!("http://{ip}:{port}"));
+    }
 
     #[cfg(feature = "alsa")]
     {
@@ -260,7 +264,8 @@ fn get_cpal_audio_cards() -> Vec<api_models::common::AudioCard> {
     #[allow(deprecated)]
     if let Ok(devices) = host.output_devices() {
         for (idx, device) in devices.enumerate() {
-            if let Ok(name) = device.name() {
+            if let Ok(desc) = device.description() {
+                let name = desc.name().to_string();
                 let pcm = PcmOutputDevice {
                     name: name.clone(),
                     description: name.clone(),
@@ -554,4 +559,12 @@ fn get_server_config() -> (u16, u16, IpAddr) {
         .expect("BIND_ADDR is not a valid IP address");
 
     (http_port, https_port, bind_addr)
+}
+
+/// Returns the machine's outbound local IPv4 address by briefly connecting a
+/// UDP socket to an external address (no packets are sent).
+fn local_ip() -> Option<IpAddr> {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    Some(socket.local_addr().ok()?.ip())
 }

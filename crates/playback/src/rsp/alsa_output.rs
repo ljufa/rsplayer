@@ -526,7 +526,7 @@ impl AlsaOutput {
                 let gain_level = software_gain.cloned();
                 let stream = device
                     .build_output_stream(
-                        &config,
+                        config,
                         move |data: &mut [$T], _: &cpal::OutputCallbackInfo| {
                             let written = consumer.read(data).unwrap_or(0);
                             data[written..]
@@ -624,7 +624,7 @@ impl AlsaOutput {
                 let ec_data = error_count_clone.clone();
                 let stream = device
                     .build_output_stream(
-                        &config,
+                        config,
                         move |data: &mut [DsdU32], _: &cpal::OutputCallbackInfo| {
                             let written = consumer.read(data).unwrap_or(0);
                             data[written..].iter_mut().for_each(|s| *s = DsdU32::MID);

@@ -36,6 +36,39 @@ pub struct Settings {
     pub demo_mode: bool,
     #[serde(default)]
     pub desktop_mode: bool,
+    #[serde(default)]
+    pub remote_access_url: Option<String>,
+    #[serde(default)]
+    pub ui_preferences: UiPreferences,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UiPreferences {
+    #[serde(default)]
+    pub welcome_shown: bool,
+    #[serde(default = "UiPreferences::default_visualizer")]
+    pub visualizer: String,
+    #[serde(default = "UiPreferences::default_theme")]
+    pub theme: String,
+    #[serde(default = "UiPreferences::default_show_bg_image")]
+    pub show_bg_image: bool,
+}
+
+impl UiPreferences {
+    fn default_visualizer() -> String { "Lissajous".to_string() }
+    fn default_theme() -> String { "dark".to_string() }
+    fn default_show_bg_image() -> bool { true }
+}
+
+impl Default for UiPreferences {
+    fn default() -> Self {
+        Self {
+            welcome_shown: false,
+            visualizer: Self::default_visualizer(),
+            theme: Self::default_theme(),
+            show_bg_image: Self::default_show_bg_image(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -405,6 +438,8 @@ impl Default for Settings {
             version: String::new(),
             demo_mode: false,
             desktop_mode: false,
+            remote_access_url: None,
+            ui_preferences: UiPreferences::default(),
         }
     }
 }

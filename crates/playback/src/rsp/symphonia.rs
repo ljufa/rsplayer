@@ -221,7 +221,7 @@ pub fn play_file(
                     } else {
                         #[allow(deprecated)]
                         host.devices()?
-                            .find(|d| d.name().unwrap_or_default() == config.audio_device)
+                            .find(|d| d.description().map(|desc| desc.name() == config.audio_device.as_str()).unwrap_or(false))
                             .ok_or_else(|| format_err!("Device {} not found!", config.audio_device))?
                     };
 

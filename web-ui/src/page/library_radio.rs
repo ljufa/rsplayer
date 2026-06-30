@@ -88,6 +88,7 @@ pub fn LibraryRadioPage() -> Element {
             });
         } else if uuids.is_empty() && *filter.read() == FilterType::Favorites {
             *loading.write() = false;
+            *showing_stations.write() = true;
         }
     });
 
@@ -144,20 +145,17 @@ pub fn LibraryRadioPage() -> Element {
         div { class: "library-page",
             // ── Filter tabs ────────────────────────────────────────────────
             div { class: "flex gap-2 px-3 py-2 border-b border-base-300 overflow-x-auto",
-                for (label, ft) in [
+                for (label , ft) in [
                     ("Favorites", FilterType::Favorites),
                     ("Search", FilterType::Search),
                     ("Countries", FilterType::Country),
                     ("Languages", FilterType::Language),
                     ("Tags", FilterType::Tag),
-                ] {
+                ]
+                {
                     button {
                         key: "{label}",
-                        class: if *filter.read() == ft {
-                            "btn btn-sm btn-primary"
-                        } else {
-                            "btn btn-sm btn-ghost"
-                        },
+                        class: if *filter.read() == ft { "btn btn-sm btn-primary" } else { "btn btn-sm btn-ghost" },
                         onclick: {
                             let ft = ft.clone();
                             move |_| change_filter(ft.clone())
@@ -219,7 +217,10 @@ pub fn LibraryRadioPage() -> Element {
                         title: "Load all to queue",
                         onclick: move |_| {
                             for st in stations.read().iter() {
-                                ws_send(&ws, &UserCommand::Queue(QueueCommand::AddSongToQueue(st.url.clone())));
+                                ws_send(
+                                    &ws,
+                                    &UserCommand::Queue(QueueCommand::AddSongToQueue(st.url.clone())),
+                                );
                             }
                         },
                         i { class: "material-icons text-base", "playlist_play" }
@@ -257,21 +258,24 @@ pub fn LibraryRadioPage() -> Element {
                 if stations.read().is_empty() {
                     div { class: "flex flex-col items-center py-16 gap-3 text-base-content/40",
                         i { class: "material-icons text-5xl", "radio" }
-                        p {
-                            if *filter.read() == FilterType::Favorites {
-                                "No favorite stations yet."
-                            } else if *filter.read() == FilterType::Search {
-                                "No stations found. Try a different search term."
-                            } else {
-                                "No stations found."
+                        if *filter.read() == FilterType::Favorites {
+                            p { class: "text-center", "No favourite stations yet." }
+                            p { class: "text-sm text-center",
+                                "Browse by Country, Language, or Tags to discover stations and add them here."
                             }
+                        } else if *filter.read() == FilterType::Search {
+                            p { "No stations found. Try a different search term." }
+                        } else {
+                            p { "No stations found." }
                         }
                     }
                 } else {
                     div { class: "overflow-y-auto",
                         {
                             let is_favorites = *filter.read() == FilterType::Favorites;
-                            stations.read().iter()
+                            stations
+                                .read()
+                                .iter()
                                 .cloned()
                                 .map(move |st| {
                                     let url = st.url.clone();
@@ -283,10 +287,7 @@ pub fn LibraryRadioPage() -> Element {
                                             key: "{key}",
                                             class: "flex items-center gap-3 px-3 py-2 hover:bg-base-200 group",
                                             if !st.favicon.is_empty() {
-                                                img {
-                                                    class: "w-8 h-8 rounded-full object-cover",
-                                                    src: "{st.favicon}",
-                                                }
+                                                img { class: "w-8 h-8 rounded-full object-cover", src: "{st.favicon}" }
                                             } else {
                                                 span { class: "w-8 h-8 flex items-center justify-center rounded-full bg-base-300",
                                                     i { class: "material-icons text-sm", "radio" }
@@ -295,20 +296,26 @@ pub fn LibraryRadioPage() -> Element {
                                             div { class: "flex-1 min-w-0",
                                                 p { class: "text-sm font-medium truncate", "{st.name}" }
                                                 p { class: "text-xs text-base-content/50 truncate",
-                                                    "{st.codec} {st.bitrate}kbps • {st.tags}"
+                                                    "{st.codec} {st.bitrate}kbps • {st.tags}" // Re-query to refresh list
                                                 }
                                             }
                                             div { class: "flex sm:hidden sm:group-hover:flex items-center gap-1",
                                                 button {
                                                     class: "btn btn-ghost btn-xs",
                                                     title: "Add to queue",
-                                                    onclick: move |_| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddSongToQueue(url.clone()))),
+                                                    onclick: move |_| ws_send(
+                                                        &ws,
+                                                        &UserCommand::Queue(QueueCommand::AddSongToQueue(url.clone())),
+                                                    ),
                                                     i { class: "material-icons text-sm", "playlist_add" }
                                                 }
                                                 button {
                                                     class: "btn btn-ghost btn-xs",
                                                     title: "Play now",
-                                                    onclick: move |_| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddSongAndPlay(url2.clone()))),
+                                                    onclick: move |_| ws_send(
+                                                        &ws,
+                                                        &UserCommand::Queue(QueueCommand::AddSongAndPlay(url2.clone())),
+                                                    ),
                                                     i { class: "material-icons text-sm", "play_arrow" }
                                                 }
                                                 if is_favorites {
@@ -316,9 +323,17 @@ pub fn LibraryRadioPage() -> Element {
                                                         class: "btn btn-ghost btn-xs text-error",
                                                         title: "Remove from favorites",
                                                         onclick: move |_| {
-                                                            ws_send(&ws, &UserCommand::Metadata(MetadataCommand::DislikeMediaItem(format!("radio_uuid_{}", uuid.clone()))));
-                                                            // Re-query to refresh list
-                                                            ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryFavoriteRadioStations));
+                                                            ws_send(
+                                                                // Re-query to refresh list
+                                                                &ws,
+                                                                &UserCommand::Metadata(
+                                                                    MetadataCommand::DislikeMediaItem(format!("radio_uuid_{}", uuid.clone())),
+                                                                ),
+                                                            );
+                                                            ws_send(
+                                                                &ws,
+                                                                &UserCommand::Metadata(MetadataCommand::QueryFavoriteRadioStations),
+                                                            );
                                                         },
                                                         i { class: "material-icons text-sm", "favorite" }
                                                     }
@@ -326,7 +341,12 @@ pub fn LibraryRadioPage() -> Element {
                                                     button {
                                                         class: "btn btn-ghost btn-xs",
                                                         title: "Add to favorites",
-                                                        onclick: move |_| ws_send(&ws, &UserCommand::Metadata(MetadataCommand::LikeMediaItem(format!("radio_uuid_{}", uuid)))),
+                                                        onclick: move |_| ws_send(
+                                                            &ws,
+                                                            &UserCommand::Metadata(
+                                                                MetadataCommand::LikeMediaItem(format!("radio_uuid_{}", uuid)),
+                                                            ),
+                                                        ),
                                                         i { class: "material-icons text-sm", "favorite_border" }
                                                     }
                                                 }
@@ -340,50 +360,60 @@ pub fn LibraryRadioPage() -> Element {
             } else {
                 // Browse items list (country/language/tag)
                 div { class: "overflow-y-auto",
-                    {browse_items.read().iter().cloned().map(|item| {
-                        let (label, _count) = match &item {
-                            BrowseItem::Country(c) => (format!("{} ({})", c.name, c.stationcount), c.stationcount),
-                            BrowseItem::Language(l) => (format!("{} ({})", l.name, l.stationcount), l.stationcount),
-                            BrowseItem::Tag(t) => (format!("{} ({})", t.name, t.stationcount), t.stationcount),
-                            BrowseItem::Station(s) => (s.name.clone(), 0),
-                        };
-                        let key = match &item {
-                            BrowseItem::Country(c) => format!("country-{}", c.iso_3166_1),
-                            BrowseItem::Language(l) => format!("language-{}", l.name),
-                            BrowseItem::Tag(t) => format!("tag-{}", t.name),
-                            BrowseItem::Station(s) => format!("station-{}", s.stationuuid),
-                        };
-                        rsx! {
-                            div {
-                                key: "{key}",
-                                class: "flex items-center gap-2 px-3 py-2 hover:bg-base-200 group cursor-pointer",
-                                onclick: move |_| {
-                                    *loading.write() = true;
-                                    *showing_stations.write() = false;
-                                    let item = item.clone();
-                                    spawn(async move {
-                                        let fetched = match &item {
-                                            BrowseItem::Country(c) => {
-                                                fetch_stations("bycountrycodeexact", &c.iso_3166_1).await
-                                            }
-                                            BrowseItem::Language(l) => {
-                                                fetch_stations("bylanguageexact", &l.name).await
-                                            }
-                                            BrowseItem::Tag(t) => {
-                                                fetch_stations("bytagexact", &t.name).await
-                                            }
-                                            _ => vec![],
-                                        };
-                                        *stations.write() = fetched;
-                                        *loading.write() = false;
-                                        *showing_stations.write() = true;
-                                    });
-                                },
-                                i { class: "material-icons text-sm text-base-content/50", "chevron_right" }
-                                span { class: "flex-1 text-sm truncate", "{label}" }
-                            }
-                        }
-                    })}
+                    {
+                        browse_items
+                            .read()
+                            .iter()
+                            .cloned()
+                            .map(|item| {
+                                let (label, _count) = match &item {
+                                    BrowseItem::Country(c) => {
+                                        (format!("{} ({})", c.name, c.stationcount), c.stationcount)
+                                    }
+                                    BrowseItem::Language(l) => {
+                                        (format!("{} ({})", l.name, l.stationcount), l.stationcount)
+                                    }
+                                    BrowseItem::Tag(t) => {
+                                        (format!("{} ({})", t.name, t.stationcount), t.stationcount)
+                                    }
+                                    BrowseItem::Station(s) => (s.name.clone(), 0),
+                                };
+                                let key = match &item {
+                                    BrowseItem::Country(c) => format!("country-{}", c.iso_3166_1),
+                                    BrowseItem::Language(l) => format!("language-{}", l.name),
+                                    BrowseItem::Tag(t) => format!("tag-{}", t.name),
+                                    BrowseItem::Station(s) => format!("station-{}", s.stationuuid),
+                                };
+                                rsx! {
+                                    div {
+                                        key: "{key}",
+                                        class: "flex items-center gap-2 px-3 py-2 hover:bg-base-200 group cursor-pointer",
+                                        onclick: move |_| {
+                                            *loading.write() = true;
+                                            *showing_stations.write() = false;
+                                            let item = item.clone();
+                                            spawn(async move {
+                                                let fetched = match &item {
+                                                    BrowseItem::Country(c) => {
+                                                        fetch_stations("bycountrycodeexact", &c.iso_3166_1).await
+                                                    }
+                                                    BrowseItem::Language(l) => {
+                                                        fetch_stations("bylanguageexact", &l.name).await
+                                                    }
+                                                    BrowseItem::Tag(t) => fetch_stations("bytagexact", &t.name).await,
+                                                    _ => vec![],
+                                                };
+                                                *stations.write() = fetched;
+                                                *loading.write() = false;
+                                                *showing_stations.write() = true;
+                                            });
+                                        },
+                                        i { class: "material-icons text-sm text-base-content/50", "chevron_right" }
+                                        span { class: "flex-1 text-sm truncate", "{label}" }
+                                    }
+                                }
+                            })
+                    }
                 }
             }
         }

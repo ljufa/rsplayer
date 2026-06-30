@@ -16,6 +16,7 @@ on:
           - x86_64-unknown-linux-gnu
           - riscv64gc-unknown-linux-gnu
           - macos
+          - windows
   push:
     tags:
       - "*.*.*"
@@ -59,6 +60,7 @@ jobs:
   build_backend:
     needs: build_ui
     name: Release Backend
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.target != 'macos' && inputs.target != 'windows') }}
     runs-on: [self-hosted, linux, x64]
     container:
       image: ghcr.io/${{ github.repository_owner }}/rsplayer-builder:latest
@@ -201,9 +203,60 @@ jobs:
           path: pkg/*
           if-no-files-found: error
 
+  build_desktop_windows:
+    needs: build_ui
+    name: Build Windows (headless exe + NSIS installer)
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'windows' }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      # - uses: Swatinem/rust-cache@v2
+      #   with:
+      #     key: desktop-windows-x86_64
+
+      - name: Download web_ui
+        uses: actions/download-artifact@v8
+        with:
+          name: web_ui
+          path: dist/web-ui
+
+      - name: Install tauri-cli
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Build headless server binary
+        run: cargo build --package rsplayer --bin rsplayer --release --no-default-features --target x86_64-pc-windows-msvc
+
+      - name: Build desktop app and NSIS installer
+        shell: bash
+        run: |
+          cp crates/desktop/loading.html dist/web-ui/loading.html
+          cd crates/desktop
+          cargo tauri build --bundles nsis --ci
+
+      - name: Stage release assets
+        shell: bash
+        run: |
+          mkdir -p pkg
+          installer=$(find . -name "*-setup.exe" | head -1)
+          cp "$installer" pkg/rsplayer-desktop_windows_amd64.exe
+          cp target/x86_64-pc-windows-msvc/release/rsplayer.exe pkg/rsplayer_windows_amd64.exe
+
+      - name: Upload Windows assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: pkg-x86_64-pc-windows-msvc
+          path: pkg/*
+          if-no-files-found: error
+
   publish:
     if: ${{ always() }}
-    needs: [build_backend, build_desktop_macos, build_desktop_linux]
+    needs: [build_backend, build_desktop_macos, build_desktop_linux, build_desktop_windows]
     name: Create release
     runs-on: [self-hosted, linux, x64]
     steps:

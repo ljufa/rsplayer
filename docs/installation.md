@@ -4,8 +4,8 @@
 
 RSPlayer is available in two variants:
 
-- **Server** — The headless music server daemon. Runs as a systemd service (Linux) or standalone binary (macOS), controlled from any web browser. Available for all supported architectures.
-- **Desktop** — A standalone desktop application with a native window, built with Tauri. Available for **x86_64 Linux** and **macOS** only.
+- **Server** — The headless music server daemon. Runs as a systemd service (Linux) or standalone binary (macOS/Windows), controlled from any web browser. Available for all supported architectures.
+- **Desktop** — A standalone desktop application with a native window, built with Tauri. Available for **x86_64 Linux**, **macOS**, and **Windows x86_64**.
 
 ### Linux
 
@@ -41,12 +41,34 @@ Example release asset names: `rsplayer_3.5.6_amd64.deb` (server), `rsplayer-desk
 
 > Network mount management, Linux power actions, and firmware USB integration are unavailable on macOS.
 
+### Windows (experimental)
+
+| Architecture | Server | Desktop |
+|:---|:---|:---|
+| **x86_64** | `rsplayer_windows_amd64.exe` | `rsplayer-desktop_windows_amd64.exe` (NSIS installer) |
+
+Audio output uses WASAPI via `cpal`. The web UI is served at `http://localhost:8000`.
+
+> Network mount management, Linux power actions, ALSA/PipeWire volume, IR remote, and firmware USB integration are unavailable on Windows.
+
+#### Windows quick start
+
+**Server (headless):**
+
+1. Download `rsplayer_windows_amd64.exe` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest).
+2. Run it from a terminal or double-click — no installation needed.
+3. Open `http://localhost:8000` in your browser.
+
+**Desktop app:**
+
+1. Download `rsplayer-desktop_windows_amd64.exe` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest).
+2. Run the installer. It will download [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) automatically if not already present (included with Windows 10/11 and Edge).
+
 ### Unsupported Platforms
 
 The following platforms are not currently supported but may be considered in the future:
 
 - Android
-- Windows (x86_64 / aarch64)
 - FreeBSD
 
 ## Install or upgrade

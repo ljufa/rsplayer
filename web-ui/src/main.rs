@@ -96,21 +96,6 @@ fn show_panic_overlay(message: &str) {
 
 // ─── UI state (modals etc.) shared via context ───────────────────────────────
 
-const LS_VISITED_KEY: &str = "rsplayer_visited";
-
-fn is_first_visit() -> bool {
-    web_sys::window()
-        .and_then(|w| w.local_storage().ok().flatten())
-        .and_then(|s| s.get_item(LS_VISITED_KEY).ok().flatten())
-        .is_none()
-}
-
-fn mark_visited() {
-    if let Some(storage) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) {
-        let _ = storage.set_item(LS_VISITED_KEY, "1");
-    }
-}
-
 #[derive(Clone, Copy)]
 pub struct UiState {
     pub lyrics_open: Signal<bool>,
@@ -160,6 +145,18 @@ pub fn ws_system(ws: &Signal<Option<WebSocket>>, req: SystemRequest) {
     hooks::ws_send(ws, &UserCommand::System(req));
 }
 
+/// POST updated ui preferences back via the existing /api/settings endpoint.
+pub fn save_ui_prefs(state: AppState) {
+    let Some(mut settings) = state.global_settings.peek().clone() else { return };
+    settings.ui_preferences.welcome_shown = true;
+    settings.ui_preferences.visualizer = state.visualizer_type.peek().as_str().to_string();
+    settings.ui_preferences.theme = state.current_theme.peek().clone();
+    settings.ui_preferences.show_bg_image = *state.show_bg_image.peek();
+    spawn_local(async move {
+        let _ = Request::post("/api/settings").json(&settings).unwrap().send().await;
+    });
+}
+
 // ─── Root App ───────────────────────────────────────────────────────────────
 
 #[component]
@@ -176,7 +173,7 @@ fn App() -> Element {
     let ui_state = UiState {
         lyrics_open: use_signal(|| false),
         shortcuts_open: use_signal(|| false),
-        welcome_open: use_signal(is_first_visit),
+        welcome_open: use_signal(|| false),
         playlist_modal_open: use_signal(|| false),
         playlist_modal_id: use_signal(|| None),
         playlist_modal_name: use_signal(String::new),
@@ -202,14 +199,24 @@ fn App() -> Element {
         }
     });
 
-    // Fetch global settings from the backend to initialise local_browser_playback.
+    // Fetch global settings from the backend — also applies ui_preferences to local state.
     {
         let global_state = use_context::<AppState>();
+        let mut welcome = ui_state.welcome_open;
         use_effect(move || {
             let mut gs = global_state.clone();
             spawn_local(async move {
                 if let Ok(resp) = Request::get("/api/settings").send().await {
                     if let Ok(settings) = resp.json::<Settings>().await {
+                        let prefs = &settings.ui_preferences;
+                        *gs.current_theme.write() = prefs.theme.clone();
+                        *gs.show_bg_image.write() = prefs.show_bg_image;
+                        if let Some(vt) = crate::vumeter::VisualizerType::from_str(&prefs.visualizer) {
+                            *gs.visualizer_type.write() = vt;
+                        }
+                        if !prefs.welcome_shown {
+                            welcome.set(true);
+                        }
                         *gs.global_settings.write() = Some(settings.clone());
                         *gs.local_browser_playback.write() = settings.local_browser_playback;
                     }
@@ -295,24 +302,50 @@ fn App() -> Element {
             }
             NavBar {}
             main { class: "flex-1 backdrop-blur-md",
-                {match path().as_str() {
-                    "/" => rsx! { PlayerPage {} },
-                    "/queue" => rsx! { QueuePage {} },
-                    "/settings" => rsx! { SettingsPage {} },
-                    p if p.starts_with("/library/") => rsx! {
-                        LibrarySubNav {}
-                        {match p {
-                            "/library/files" => rsx! { LibraryFilesPage {} },
-                            "/library/artists" => rsx! { LibraryArtistsPage {} },
-                            "/library/radio" => rsx! { LibraryRadioPage {} },
-                            "/library/playlists" => rsx! { LibraryPlaylistsPage {} },
-                            "/library/stats" => rsx! { LibraryStatsPage {} },
-                            other => rsx! { NotFoundPage { route: other.to_string() } },
-                        }}
-                    },
-                    "/setup" => rsx! { HomePage {} },
-                    other => rsx! { NotFoundPage { route: other.to_string() } },
-                }}
+                {
+                    match path().as_str() {
+                        "/" => rsx! {
+                            PlayerPage {}
+                        },
+                        "/queue" => rsx! {
+                            QueuePage {}
+                        },
+                        "/settings" => rsx! {
+                            SettingsPage {}
+                        },
+                        p if p.starts_with("/library/") => rsx! {
+                            LibrarySubNav {}
+                            {
+                                match p {
+                                    "/library/files" => rsx! {
+                                        LibraryFilesPage {}
+                                    },
+                                    "/library/artists" => rsx! {
+                                        LibraryArtistsPage {}
+                                    },
+                                    "/library/radio" => rsx! {
+                                        LibraryRadioPage {}
+                                    },
+                                    "/library/playlists" => rsx! {
+                                        LibraryPlaylistsPage {}
+                                    },
+                                    "/library/stats" => rsx! {
+                                        LibraryStatsPage {}
+                                    },
+                                    other => rsx! {
+                                        NotFoundPage { route: other.to_string() }
+                                    },
+                                }
+                            }
+                        },
+                        "/setup" => rsx! {
+                            HomePage {}
+                        },
+                        other => rsx! {
+                            NotFoundPage { route: other.to_string() }
+                        },
+                    }
+                }
             }
             FooterPlayer {}
             Notifications {}
@@ -362,7 +395,7 @@ fn setup_keyboard_shortcuts(path: Signal<String>, ws: Signal<Option<WebSocket>>,
                 }
                 "Escape" => {
                     if *ui.welcome_open.peek() {
-                        mark_visited();
+                        save_ui_prefs(app_state.clone());
                         ui.welcome_open.set(false);
                     }
                     ui.shortcuts_open.set(false);
@@ -420,10 +453,11 @@ fn setup_keyboard_shortcuts(path: Signal<String>, ws: Signal<Option<WebSocket>>,
                     let current = *app_state.visualizer_type.peek();
                     let next = current.cycle();
                     app_state.visualizer_type.set(next);
-                    if let Some(window) = web_sys::window() {
-                        if let Ok(Some(storage)) = window.local_storage() {
-                            let _ = storage.set_item("rsplayer_visualizer", next.as_str());
-                        }
+                    if let Some(mut settings) = app_state.global_settings.peek().clone() {
+                        settings.ui_preferences.visualizer = next.as_str().to_string();
+                        spawn_local(async move {
+                            let _ = Request::post("/api/settings").json(&settings).unwrap().send().await;
+                        });
                     }
                 }
                 _ => {}
@@ -440,29 +474,39 @@ fn setup_keyboard_shortcuts(path: Signal<String>, ws: Signal<Option<WebSocket>>,
 #[component]
 fn WelcomeModal() -> Element {
     let mut ui = use_context::<UiState>();
+    let state = use_context::<AppState>();
     let CurrentPath(path) = use_context::<CurrentPath>();
 
-    let dismiss = move |_| {
-        mark_visited();
+    let state_d1 = state.clone();
+    let state_d2 = state.clone();
+    let state_gs = state.clone();
+    let dismiss_backdrop = move |_| {
+        save_ui_prefs(state_d1.clone());
+        ui.welcome_open.set(false);
+    };
+    let dismiss_btn = move |_| {
+        save_ui_prefs(state_d2.clone());
         ui.welcome_open.set(false);
     };
 
     let go_to_settings = move |e: Event<MouseData>| {
         e.prevent_default();
-        mark_visited();
+        save_ui_prefs(state_gs.clone());
         ui.welcome_open.set(false);
         navigate(path, "/settings");
     };
 
     rsx! {
         div { class: "modal modal-open",
-            div { class: "modal-backdrop", onclick: dismiss }
+            div { class: "modal-backdrop", onclick: dismiss_backdrop }
             div { class: "modal-box max-w-lg",
                 // Header
                 div { class: "flex flex-col items-center text-center mb-6",
                     i { class: "material-icons text-5xl text-primary mb-2", "music_note" }
                     h2 { class: "text-2xl font-bold", "Welcome to RSPlayer" }
-                    p { class: "text-base-content/60 text-sm mt-1", "Your personal music streaming server" }
+                    p { class: "text-base-content/60 text-sm mt-1",
+                        "Your personal music streaming server"
+                    }
                 }
 
                 // Required setup notice
@@ -470,14 +514,18 @@ fn WelcomeModal() -> Element {
                     i { class: "material-icons", "warning" }
                     div {
                         p { class: "font-semibold", "Required Setup" }
-                        p { class: "text-sm", "Before you can play music, configure the audio interface in Settings." }
+                        p { class: "text-sm",
+                            "Before you can play music, configure the audio interface in Settings."
+                        }
                     }
                 }
 
                 // Steps
                 div { class: "space-y-4 mb-6",
                     div { class: "flex gap-3 items-start",
-                        div { class: "badge badge-primary badge-lg shrink-0 mt-0.5", "1" }
+                        div { class: "badge badge-primary badge-lg shrink-0 mt-0.5",
+                            "1"
+                        }
                         div {
                             div { class: "flex items-center gap-2",
                                 span { class: "font-semibold", "Audio Interface" }
@@ -489,7 +537,9 @@ fn WelcomeModal() -> Element {
                         }
                     }
                     div { class: "flex gap-3 items-start",
-                        div { class: "badge badge-secondary badge-lg shrink-0 mt-0.5", "2" }
+                        div { class: "badge badge-secondary badge-lg shrink-0 mt-0.5",
+                            "2"
+                        }
                         div {
                             div { class: "flex items-center gap-2",
                                 span { class: "font-semibold", "Music Library" }
@@ -503,9 +553,33 @@ fn WelcomeModal() -> Element {
                     div { class: "flex gap-3 items-start",
                         div { class: "badge badge-ghost badge-lg shrink-0 mt-0.5", "3" }
                         div {
+                            div { class: "flex items-center gap-2",
+                                span { class: "font-semibold", "Network Mounts" }
+                                span { class: "badge badge-ghost badge-sm", "Optional" }
+                            }
+                            p { class: "text-sm text-base-content/60 mt-0.5",
+                                "For music stored on a NAS or network drive, configure mounts in Settings → Music Library."
+                            }
+                        }
+                    }
+                    div { class: "flex gap-3 items-start",
+                        div { class: "badge badge-ghost badge-lg shrink-0 mt-0.5", "4" }
+                        div {
+                            div { class: "flex items-center gap-2",
+                                span { class: "font-semibold", "Internet Radio" }
+                                span { class: "badge badge-ghost badge-sm", "Optional" }
+                            }
+                            p { class: "text-sm text-base-content/60 mt-0.5",
+                                "Browse Library → Radio by Country, Language, or Tags to discover stations. Add favourites to save them."
+                            }
+                        }
+                    }
+                    div { class: "flex gap-3 items-start",
+                        div { class: "badge badge-ghost badge-lg shrink-0 mt-0.5", "5" }
+                        div {
                             span { class: "font-semibold", "Start Listening" }
                             p { class: "text-sm text-base-content/60 mt-0.5",
-                                "Browse your library, add songs to queue, and enjoy! Press ? for keyboard shortcuts."
+                                "Browse your library, add songs to the queue, and enjoy! Press ? for keyboard shortcuts."
                             }
                         }
                     }
@@ -513,7 +587,7 @@ fn WelcomeModal() -> Element {
 
                 // Actions
                 div { class: "modal-action",
-                    button { class: "btn", onclick: dismiss, "Dismiss" }
+                    button { class: "btn", onclick: dismiss_btn, "Dismiss" }
                     a {
                         class: "btn btn-primary",
                         href: "/settings",
@@ -531,7 +605,10 @@ fn KeyboardShortcutsModal() -> Element {
     let mut ui = use_context::<UiState>();
     rsx! {
         div { class: "modal modal-open",
-            div { class: "modal-backdrop", onclick: move |_| ui.shortcuts_open.set(false) }
+            div {
+                class: "modal-backdrop",
+                onclick: move |_| ui.shortcuts_open.set(false),
+            }
             div { class: "modal-box max-w-md",
                 button {
                     class: "btn btn-sm btn-circle btn-ghost absolute right-2 top-2",
@@ -539,27 +616,55 @@ fn KeyboardShortcutsModal() -> Element {
                     "✕"
                 }
                 h3 { class: "font-bold text-lg mb-4", "Keyboard Shortcuts" }
-                h4 { class: "font-semibold text-sm text-base-content/60 uppercase mb-1", "Navigation" }
+                h4 { class: "font-semibold text-sm text-base-content/60 uppercase mb-1",
+                    "Navigation"
+                }
                 table { class: "table table-sm mb-4 w-full",
                     tbody {
-                        ShortcutRow { key_label: "1 / 2 / 3 / 4", description: "Now Playing / Queue / Library / Settings" }
-                        ShortcutRow { key_label: "P / F / A / R / T", description: "Playlists / Files / Artists / Radio / Stats" }
-                        ShortcutRow { key_label: "?",             description: "Show / hide this help" }
-                        ShortcutRow { key_label: "Esc",           description: "Close modal" }
+                        ShortcutRow {
+                            key_label: "1 / 2 / 3 / 4",
+                            description: "Now Playing / Queue / Library / Settings",
+                        }
+                        ShortcutRow {
+                            key_label: "P / F / A / R / T",
+                            description: "Playlists / Files / Artists / Radio / Stats",
+                        }
+                        ShortcutRow {
+                            key_label: "?",
+                            description: "Show / hide this help",
+                        }
+                        ShortcutRow { key_label: "Esc", description: "Close modal" }
                     }
                 }
-                h4 { class: "font-semibold text-sm text-base-content/60 uppercase mb-1", "Player (Now Playing page)" }
+                h4 { class: "font-semibold text-sm text-base-content/60 uppercase mb-1",
+                    "Player (Now Playing page)"
+                }
                 table { class: "table table-sm w-full",
                     tbody {
-                        ShortcutRow { key_label: "Space",         description: "Play / Pause" }
-                        ShortcutRow { key_label: "← / →",         description: "Previous / Next track" }
-                        ShortcutRow { key_label: "Shift + ← / →", description: "Seek back / forward 10 s" }
-                        ShortcutRow { key_label: "↑ / ↓",         description: "Volume up / down" }
-                        ShortcutRow { key_label: "M",             description: "Mute / Unmute" }
-                        ShortcutRow { key_label: "L",             description: "Like / Unlike track" }
-                        ShortcutRow { key_label: "Y",             description: "Toggle lyrics" }
-                        ShortcutRow { key_label: "S",             description: "Cycle playback mode" }
-                        ShortcutRow { key_label: "V",             description: "Cycle visualizer" }
+                        ShortcutRow { key_label: "Space", description: "Play / Pause" }
+                        ShortcutRow {
+                            key_label: "← / →",
+                            description: "Previous / Next track",
+                        }
+                        ShortcutRow {
+                            key_label: "Shift + ← / →",
+                            description: "Seek back / forward 10 s",
+                        }
+                        ShortcutRow {
+                            key_label: "↑ / ↓",
+                            description: "Volume up / down",
+                        }
+                        ShortcutRow { key_label: "M", description: "Mute / Unmute" }
+                        ShortcutRow {
+                            key_label: "L",
+                            description: "Like / Unlike track",
+                        }
+                        ShortcutRow { key_label: "Y", description: "Toggle lyrics" }
+                        ShortcutRow {
+                            key_label: "S",
+                            description: "Cycle playback mode",
+                        }
+                        ShortcutRow { key_label: "V", description: "Cycle visualizer" }
                     }
                 }
             }
@@ -598,72 +703,118 @@ fn PlaylistModal() -> Element {
             div { class: "modal-box max-w-md",
                 div { class: "flex items-center gap-2 px-4 py-3 border-b border-base-300 shrink-0",
                     h3 { class: "font-bold text-base flex-1 truncate", "{ui.playlist_modal_name}" }
-                    button { class: "btn btn-xs btn-circle btn-ghost", onclick: close, "✕" }
+                    button {
+                        class: "btn btn-xs btn-circle btn-ghost",
+                        onclick: close,
+                        "✕"
+                    }
                 }
                 div { class: "overflow-y-auto flex-1",
-                    {playlist_items.read().iter().map(|song| {
-                        let song = song.clone();
-                        let file  = song.file.clone();
-                        let file2 = song.file.clone();
-                        let file3 = song.file.clone();
-                        let title  = song.get_title();
-                        let artist = song.artist.clone().unwrap_or_default();
-                        let dur = song.time.as_ref().map(|t| format!(" • {}", dur_to_string(t))).unwrap_or_default();
-                        rsx! {
-                            div { class: "flex items-center gap-2 py-1.5 px-3 hover:bg-base-200 group",
-                                div { class: "flex-1 min-w-0",
-                                    p { class: "text-sm font-medium truncate", "{title}" }
-                                    p { class: "text-xs text-base-content/50 truncate", "{artist}{dur}" }
+                    {
+                        playlist_items
+                            .read()
+                            .iter()
+                            .map(|song| {
+                                let song = song.clone();
+                                let file = song.file.clone();
+                                let file2 = song.file.clone();
+                                let file3 = song.file.clone();
+                                let title = song.get_title();
+                                let artist = song.artist.clone().unwrap_or_default();
+                                let dur = song
+                                    .time
+                                    .as_ref()
+                                    .map(|t| format!(" • {}", dur_to_string(t)))
+                                    .unwrap_or_default();
+                                rsx! {
+                                    div { class: "flex items-center gap-2 py-1.5 px-3 hover:bg-base-200 group",
+                                        div { class: "flex-1 min-w-0",
+                                            p { class: "text-sm font-medium truncate", "{title}" }
+                                            p { class: "text-xs text-base-content/50 truncate", "{artist}{dur}" }
+                                        }
+                                        div { class: "hidden group-hover:flex gap-1",
+                                            button {
+                                                class: "btn btn-ghost btn-xs",
+                                                title: "Add to queue",
+                                                onclick: move |_| ws_send(
+                                                    &ws,
+                                                    &UserCommand::Queue(QueueCommand::AddSongToQueue(file.clone())),
+                                                ),
+                                                i { class: "material-icons text-sm", "queue_music" }
+                                            }
+                                            button {
+                                                class: "btn btn-ghost btn-xs",
+                                                title: "Play next",
+                                                onclick: move |_| ws_send(
+                                                    &ws,
+                                                    &UserCommand::Queue(QueueCommand::AddSongAfterCurrent(file2.clone())),
+                                                ),
+                                                i { class: "material-icons text-sm", "playlist_play" }
+                                            }
+                                            button {
+                                                class: "btn btn-ghost btn-xs",
+                                                title: "Add and play",
+                                                onclick: move |_| ws_send(
+                                                    &ws,
+                                                    &UserCommand::Queue(QueueCommand::AddSongAndPlay(file3.clone())),
+                                                ),
+                                                i { class: "material-icons text-sm", "play_arrow" }
+                                            }
+                                        }
+                                    }
                                 }
-                                div { class: "hidden group-hover:flex gap-1",
-                                    button {
-                                        class: "btn btn-ghost btn-xs",
-                                        title: "Add to queue",
-                                        onclick: move |_| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddSongToQueue(file.clone()))),
-                                        i { class: "material-icons text-sm", "queue_music" }
-                                    }
-                                    button {
-                                        class: "btn btn-ghost btn-xs",
-                                        title: "Play next",
-                                        onclick: move |_| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddSongAfterCurrent(file2.clone()))),
-                                        i { class: "material-icons text-sm", "playlist_play" }
-                                    }
-                                    button {
-                                        class: "btn btn-ghost btn-xs",
-                                        title: "Add and play",
-                                        onclick: move |_| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddSongAndPlay(file3.clone()))),
-                                        i { class: "material-icons text-sm", "play_arrow" }
-                                    }
-                                }
-                            }
-                        }
-                    })}
+                            })
+                    }
                 }
                 div { class: "flex gap-2 px-3 py-2 border-t border-base-300 shrink-0",
                     if let Some(ref id) = *ui.playlist_modal_id.read() {
                         if *ui.playlist_modal_is_album.read() {
                             button {
                                 class: "btn btn-primary btn-sm flex-1",
-                                onclick: { let id = id.clone(); move |_| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadAlbumInQueue(id.clone()))) },
+                                onclick: {
+                                    let id = id.clone();
+                                    move |_| ws_send(
+                                        &ws,
+                                        &UserCommand::Queue(QueueCommand::LoadAlbumInQueue(id.clone())),
+                                    )
+                                },
                                 i { class: "material-icons text-sm", "playlist_play" }
                                 "Load"
                             }
                             button {
                                 class: "btn btn-sm flex-1",
-                                onclick: { let id = id.clone(); move |_| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddAlbumToQueue(id.clone()))) },
+                                onclick: {
+                                    let id = id.clone();
+                                    move |_| ws_send(
+                                        &ws,
+                                        &UserCommand::Queue(QueueCommand::AddAlbumToQueue(id.clone())),
+                                    )
+                                },
                                 i { class: "material-icons text-sm", "queue" }
                                 "Add"
                             }
                         } else {
                             button {
                                 class: "btn btn-primary btn-sm flex-1",
-                                onclick: { let id = id.clone(); move |_| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadPlaylistInQueue(id.clone()))) },
+                                onclick: {
+                                    let id = id.clone();
+                                    move |_| ws_send(
+                                        &ws,
+                                        &UserCommand::Queue(QueueCommand::LoadPlaylistInQueue(id.clone())),
+                                    )
+                                },
                                 i { class: "material-icons text-sm", "playlist_play" }
                                 "Load"
                             }
                             button {
                                 class: "btn btn-sm flex-1",
-                                onclick: { let id = id.clone(); move |_| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddPlaylistToQueue(id.clone()))) },
+                                onclick: {
+                                    let id = id.clone();
+                                    move |_| ws_send(
+                                        &ws,
+                                        &UserCommand::Queue(QueueCommand::AddPlaylistToQueue(id.clone())),
+                                    )
+                                },
                                 i { class: "material-icons text-sm", "queue" }
                                 "Add"
                             }
@@ -708,24 +859,30 @@ fn QueueAddUrlModal() -> Element {
                             let val = ui.queue_add_url_input.read().clone();
                             if val.len() > 3 {
                                 for line in val.lines() {
-                                    if line.len() > 5{
-                                        ws_send(&ws, &UserCommand::Queue(QueueCommand::AddSongToQueue(line.to_string())));
+                                    if line.len() > 5 {
+                                        ws_send(
+                                            &ws,
+                                            &UserCommand::Queue(
+                                                QueueCommand::AddSongToQueue(line.to_string()),
+                                            ),
+                                        );
                                     }
                                 }
                             }
-                            ws_send(&ws, &UserCommand::Queue(QueueCommand::QueryCurrentQueue(
-                                CurrentQueueQuery::WithSearchTerm(String::new(), 0)
-                            )));
+                            ws_send(
+                                &ws,
+                                &UserCommand::Queue(
+                                    QueueCommand::QueryCurrentQueue(
+                                        CurrentQueueQuery::WithSearchTerm(String::new(), 0),
+                                    ),
+                                ),
+                            );
                             ui.queue_add_url_open.set(false);
                             ui.queue_add_url_input.set(String::new());
                         },
                         "Add"
                     }
-                    button {
-                        class: "btn",
-                        onclick: close,
-                        "Cancel"
-                    }
+                    button { class: "btn", onclick: close, "Cancel" }
                 }
             }
         }
@@ -764,20 +921,17 @@ fn QueueSavePlaylistModal() -> Element {
                         onclick: move |_| {
                             let name = ui.queue_save_playlist_input.read().clone();
                             if name.len() > 3 {
-                                ws_send(&ws, &UserCommand::Playlist(
-                                    PlaylistCommand::SaveQueueAsPlaylist(name)
-                                ));
+                                ws_send(
+                                    &ws,
+                                    &UserCommand::Playlist(PlaylistCommand::SaveQueueAsPlaylist(name)),
+                                );
                                 ui.queue_save_playlist_open.set(false);
                                 ui.queue_save_playlist_input.set(String::new());
                             }
                         },
                         "Save"
                     }
-                    button {
-                        class: "btn",
-                        onclick: close,
-                        "Cancel"
-                    }
+                    button { class: "btn", onclick: close, "Cancel" }
                 }
             }
         }
@@ -804,18 +958,19 @@ fn QueueClearConfirmModal() -> Element {
                         class: "btn btn-warning",
                         onclick: move |_| {
                             ws_send(&ws, &UserCommand::Queue(QueueCommand::ClearQueue));
-                            ws_send(&ws, &UserCommand::Queue(QueueCommand::QueryCurrentQueue(
-                                CurrentQueueQuery::WithSearchTerm(String::new(), 0)
-                            )));
+                            ws_send(
+                                &ws,
+                                &UserCommand::Queue(
+                                    QueueCommand::QueryCurrentQueue(
+                                        CurrentQueueQuery::WithSearchTerm(String::new(), 0),
+                                    ),
+                                ),
+                            );
                             ui.queue_clear_confirm_open.set(false);
                         },
                         "Confirm"
                     }
-                    button {
-                        class: "btn",
-                        onclick: close,
-                        "Cancel"
-                    }
+                    button { class: "btn", onclick: close, "Cancel" }
                 }
             }
         }
@@ -853,10 +1008,30 @@ fn NavBar() -> Element {
     rsx! {
         nav { class: "app-nav",
             ul { class: "app-nav__items",
-                NavItem { label: "Now Playing", icon: "music_note",    active: current == "/",         to: "/" }
-                NavItem { label: "Queue",       icon: "queue_music",   active: current == "/queue",    to: "/queue" }
-                NavItem { label: "Library",     icon: "library_music", active: is_library,             to: "/library/playlists" }
-                NavItem { label: "Settings",    icon: "tune",          active: current == "/settings", to: "/settings" }
+                NavItem {
+                    label: "Now Playing",
+                    icon: "music_note",
+                    active: current == "/",
+                    to: "/",
+                }
+                NavItem {
+                    label: "Queue",
+                    icon: "queue_music",
+                    active: current == "/queue",
+                    to: "/queue",
+                }
+                NavItem {
+                    label: "Library",
+                    icon: "library_music",
+                    active: is_library,
+                    to: "/library/playlists",
+                }
+                NavItem {
+                    label: "Settings",
+                    icon: "tune",
+                    active: current == "/settings",
+                    to: "/settings",
+                }
             }
         }
     }
@@ -870,13 +1045,14 @@ fn LibrarySubNav() -> Element {
     let current = path();
     rsx! {
         div { class: "flex gap-2 px-3 py-2 border-b border-base-300 overflow-x-auto",
-            for (label, to) in [
+            for (label , to) in [
                 ("Playlists", "/library/playlists"),
-                ("Files",     "/library/files"),
-                ("Artists",   "/library/artists"),
-                ("Radio",     "/library/radio"),
-                ("Stats",     "/library/stats"),
-            ] {
+                ("Files", "/library/files"),
+                ("Artists", "/library/artists"),
+                ("Radio", "/library/radio"),
+                ("Stats", "/library/stats"),
+            ]
+            {
                 button {
                     class: if current == to { "btn btn-sm btn-primary" } else { "btn btn-sm btn-ghost" },
                     onclick: move |_| navigate(path, to),
@@ -957,11 +1133,14 @@ fn FooterPlayer() -> Element {
                     }
                     button {
                         class: "btn btn-primary btn-circle btn-sm",
-                        onclick: {
-
-                            move |_| ws_user_cmd(&ws, UserCommand::Player(PlayerCommand::TogglePlay))
-                        },
-                        i { class: "material-icons", if playing { "pause" } else { "play_arrow" } }
+                        onclick: {move |_| ws_user_cmd(&ws, UserCommand::Player(PlayerCommand::TogglePlay))},
+                        i { class: "material-icons",
+                            if playing {
+                                "pause"
+                            } else {
+                                "play_arrow"
+                            }
+                        }
                     }
                     button {
                         class: "btn btn-ghost btn-xs",
@@ -974,12 +1153,17 @@ fn FooterPlayer() -> Element {
                     input {
                         r#type: "range",
                         class: "range range-xs flex-1",
-                        min: volume.min as i64, max: volume.max as i64, value: volume.current as i64,
-                        onchange: { let ws = ws; move |e: Event<FormData>| {
-                            if let Ok(v) = e.value().parse::<u8>() {
-                                ws_system(&ws, SystemRequest::SetVol(v));
+                        min: volume.min as i64,
+                        max: volume.max as i64,
+                        value: volume.current as i64,
+                        onchange: {
+                            let ws = ws;
+                            move |e: Event<FormData>| {
+                                if let Ok(v) = e.value().parse::<u8>() {
+                                    ws_system(&ws, SystemRequest::SetVol(v));
+                                }
                             }
-                        }},
+                        },
                     }
                 }
             }
@@ -1025,10 +1209,14 @@ fn Notifications() -> Element {
             div { class: "fixed top-4 right-4 z-50 max-w-xs transform-gpu",
                 match notif {
                     StateChangeEvent::NotificationSuccess(msg) => rsx! {
-                        div { class: "alert alert-success shadow-lg", span { "{msg}" } }
+                        div { class: "alert alert-success shadow-lg",
+                            span { "{msg}" }
+                        }
                     },
                     StateChangeEvent::NotificationError(msg) => rsx! {
-                        div { class: "alert alert-error shadow-lg", span { "{msg}" } }
+                        div { class: "alert alert-error shadow-lg",
+                            span { "{msg}" }
+                        }
                     },
                     _ => rsx! {},
                 }

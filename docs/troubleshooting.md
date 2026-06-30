@@ -107,4 +107,30 @@ journalctl -u rsplayer.service -f -n 300
 ## Playlist page is empty
 TODO
 
+## Windows-specific issues
+
+### Web UI shows a blank page in Microsoft Edge
+
+Edge's **Enhanced Security Mode** (ESM) can silently disable WebAssembly JIT compilation for local sites, causing a blank page while Chrome works fine.
+
+**Diagnose:** open Edge DevTools (F12) → Console tab → reload the page. If you see a message about WebAssembly being blocked, ESM is the cause.
+
+**Fix:** add `localhost` as an exception in Edge:
+
+1. Go to **Settings → Privacy, search, and services → Enhanced security on the web**.
+2. Under **Exceptions**, add `http://localhost:8000`.
+
+Alternatively, toggle Enhanced Security Mode off entirely for local development.
+
+### Windows Firewall blocks the server port
+
+The first time `rsplayer.exe` binds a port, Windows Firewall shows a permission dialog. If you dismissed it, the port is blocked.
+
+**Fix:** run the following in an elevated (Administrator) terminal:
+
+```powershell
+netsh advfirewall firewall add rule name="RSPlayer" dir=in action=allow protocol=TCP localport=8000
+```
+
+
 ### TODO...

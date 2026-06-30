@@ -57,13 +57,6 @@ pub struct AppState {
 
 impl AppState {
     pub fn new() -> Self {
-        let visualizer_type = (|| {
-            let storage = web_sys::window()?.local_storage().ok()??;
-            let value = storage.get_item("rsplayer_visualizer").ok()??;
-            VisualizerType::from_str(&value)
-        })()
-        .unwrap_or(VisualizerType::Lissajous);
-
         Self {
             volume: Signal::new(Volume::default()),
             player_info: Signal::new(None),
@@ -79,13 +72,7 @@ impl AppState {
             playlist_items: Signal::new(Vec::new()),
             metadata_scan_msg: Signal::new(None),
             notification: Signal::new(None),
-            current_theme: Signal::new({
-                (|| {
-                    let storage = web_sys::window()?.local_storage().ok()??;
-                    storage.get_item("rsplayer_theme").ok()?
-                })()
-                .unwrap_or_else(|| "dark".to_string())
-            }),
+            current_theme: Signal::new("dark".to_string()),
             global_settings: Signal::new(None),
             connected: Signal::new(false),
             startup_error: Signal::new(None),
@@ -95,20 +82,13 @@ impl AppState {
             vu_left: Signal::new(0),
             vu_right: Signal::new(0),
             vu_meter_enabled: Signal::new(false),
-            visualizer_type: Signal::new(visualizer_type),
+            visualizer_type: Signal::new(VisualizerType::Lissajous),
             local_browser_playback: Signal::new(false),
             album_image: Signal::new(None),
             lazy_genre_albums: Signal::new(HashMap::new()),
             lazy_decade_albums: Signal::new(HashMap::new()),
             audio_seeking: Signal::new(false),
-            show_bg_image: Signal::new({
-                (|| {
-                    let storage = web_sys::window()?.local_storage().ok()??;
-                    let v = storage.get_item("rsplayer_show_bg_image").ok()??;
-                    Some(v != "false")
-                })()
-                .unwrap_or(true)
-            }),
+            show_bg_image: Signal::new(true),
         }
     }
 

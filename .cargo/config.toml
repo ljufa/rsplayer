@@ -1,2 +1,5 @@
 [build]
 rustflags = ["--cfg", "tokio_unstable"]
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["--cfg", "tokio_unstable", "-C", "target-feature=+crt-static"]
