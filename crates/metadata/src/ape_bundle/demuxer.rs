@@ -73,7 +73,7 @@ impl ApeReader {
         let mut reader = source;
         let mut buf = vec![0u8; 65536];
         loop {
-            let n = match reader.read_buf(&mut buf[..]) {
+            let n = match symphonia::core::io::ReadBytes::read_buf(&mut reader, &mut buf[..]) {
                 Ok(n) => n,
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
                 Err(e) => return Err(Error::IoError(e)),

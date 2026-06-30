@@ -221,7 +221,15 @@ pub fn play_file(
                     } else {
                         #[allow(deprecated)]
                         host.devices()?
-                            .find(|d| d.description().map(|desc| desc.name() == config.audio_device.as_str()).unwrap_or(false))
+                            .find(|d| {
+                                // cpal 0.18: desc.name() is a human-readable label; the backend-specific
+                                // pcm_id (what alsa.rs stores in config.audio_device) lives in d.id().
+                                // Match id first, fall back to display name for non-ALSA platforms.
+                                d.id().map(|id| id.id() == config.audio_device.as_str()).unwrap_or(false)
+                                    || d.description()
+                                        .map(|desc| desc.name() == config.audio_device.as_str())
+                                        .unwrap_or(false)
+                            })
                             .ok_or_else(|| format_err!("Device {} not found!", config.audio_device))?
                     };
 
