@@ -88,9 +88,7 @@ async fn main() {
                 MediaControlEvent::Next => Some(UserCommand::Player(PlayerCommand::Next)),
                 MediaControlEvent::Previous => Some(UserCommand::Player(PlayerCommand::Prev)),
                 MediaControlEvent::Stop => Some(UserCommand::Player(PlayerCommand::Stop)),
-                MediaControlEvent::SetVolume(volume) => {
-                    Some(UserCommand::System(SystemRequest::SetVol((volume * 100.0).round() as u8)))
-                }
+                MediaControlEvent::SetVolume(volume) => Some(UserCommand::System(SystemRequest::SetVol((volume * 100.0).round() as u8))),
                 _ => None,
             };
             if let Some(cmd) = cmd {

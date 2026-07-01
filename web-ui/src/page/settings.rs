@@ -429,9 +429,7 @@ pub fn SettingsPage() -> Element {
                             },
                         }
                         {
-                            let has_alsa = settings.read().available_volume_control_types
-                                .iter()
-                                .any(|t| *t == VolumeCrtlType::Alsa);
+                            let has_alsa = settings.read().available_volume_control_types.contains(&VolumeCrtlType::Alsa);
                             if has_alsa {
                                 rsx! {
                                     NumberInput {

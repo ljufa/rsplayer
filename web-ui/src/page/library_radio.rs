@@ -296,7 +296,7 @@ pub fn LibraryRadioPage() -> Element {
                                             div { class: "flex-1 min-w-0",
                                                 p { class: "text-sm font-medium truncate", "{st.name}" }
                                                 p { class: "text-xs text-base-content/50 truncate",
-                                                    "{st.codec} {st.bitrate}kbps • {st.tags}" // Re-query to refresh list
+                                                    "{st.codec} {st.bitrate}kbps • {st.tags}"
                                                 }
                                             }
                                             div { class: "flex sm:hidden sm:group-hover:flex items-center gap-1",

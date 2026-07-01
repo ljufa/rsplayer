@@ -60,7 +60,7 @@ pub fn start(
     user_commands_tx: UserCommandSender,
     config: &Config,
 ) -> (impl Future<Output = ()>, Option<impl Future<Output = ()>>, impl Future<Output = ()>) {
-    let (ws_broadcast, _) = broadcast::channel::<Arc<String>>(32); 
+    let (ws_broadcast, _) = broadcast::channel::<Arc<String>>(32);
     let state = AppState {
         config: config.clone(),
         user_commands_tx,
@@ -396,13 +396,13 @@ fn range_not_satisfiable(file_size: u64) -> Response {
 fn mime_for_path(path: &Path) -> &'static str {
     match path.extension().and_then(|e| e.to_str()).unwrap_or("") {
         "mp3" => "audio/mpeg",
-        "ogg" | "opus"=> "audio/ogg",
+        "ogg" | "opus" => "audio/ogg",
         "flac" => "audio/flac",
         "wav" => "audio/wav",
         "aac" => "audio/aac",
         "m4a" => "audio/mp4",
         "wma" => "audio/x-ms-wma",
-        
+
         _ => "application/octet-stream",
     }
 }

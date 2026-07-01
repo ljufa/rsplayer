@@ -42,7 +42,7 @@ pub struct Settings {
     pub ui_preferences: UiPreferences,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UiPreferences {
     #[serde(default)]
     pub welcome_shown: bool,
@@ -55,9 +55,15 @@ pub struct UiPreferences {
 }
 
 impl UiPreferences {
-    fn default_visualizer() -> String { "Lissajous".to_string() }
-    fn default_theme() -> String { "dark".to_string() }
-    fn default_show_bg_image() -> bool { true }
+    fn default_visualizer() -> String {
+        "Lissajous".to_string()
+    }
+    fn default_theme() -> String {
+        "dark".to_string()
+    }
+    const fn default_show_bg_image() -> bool {
+        true
+    }
 }
 
 impl Default for UiPreferences {

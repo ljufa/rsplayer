@@ -6,7 +6,6 @@ use log::error;
 
 use api_models::{player::Song, playlist::Album};
 
-
 use crate::error::{RepoError, RepoResult};
 use crate::genre_utils::{is_junk_genre, normalize_genre_key, normalize_name, resolve_id3v1_genre, title_case_genre};
 pub use crate::ports::album_repository::{AlbumRepository, ArcAlbumRepository};
@@ -136,7 +135,7 @@ impl AlbumRepository for FjallAlbumRepository {
             .into_iter()
             .filter(|(_, (_, albums))| albums.len() >= 2)
             .map(|(_, (display_name, mut albums))| {
-                albums.sort_by_key(|b| Reverse(b.added ));
+                albums.sort_by_key(|b| Reverse(b.added));
                 albums.truncate(limit_per_genre);
                 (display_name, albums)
             })

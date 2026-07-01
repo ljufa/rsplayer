@@ -11,6 +11,7 @@ members = [
     "web-ui", "crates/desktop",
 ]
 default-members = [
+    "web-ui",
     "crates/api_models",
     "crates/server",
     "crates/config",

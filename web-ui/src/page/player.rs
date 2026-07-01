@@ -42,14 +42,6 @@ struct LastFmImage {
 
 // ─── Album art helper ────────────────────────────────────────────────────────
 
-/// Returns a local artwork URL if the song has an embedded image, else None.
-pub fn local_album_image(song: &Song) -> Option<String> {
-    if let Some(image_id) = song.image_id.as_ref() {
-        return Some(format!("/artwork/{}", image_id));
-    }
-    song.image_url.clone()
-}
-
 pub async fn fetch_album_cover(song: &Song) -> Option<String> {
     if let Some(image_id) = &song.image_id {
         return Some(format!("/artwork/{}", image_id));
@@ -141,8 +133,7 @@ pub fn PlayerPage() -> Element {
     });
 
     rsx! {
-        div {
-            class: "player-page",
+        div { class: "player-page",
             // VU meter canvas layer
             if *vu_meter_enabled.read() && *state.visualizer_type.read() != VisualizerType::None {
                 VUMeterCanvas {}
@@ -212,15 +203,11 @@ fn VUMeterCanvas() -> Element {
     });
 
     rsx! {
-        div {
-            class: "player-page__vumeter",
-            canvas {
-                id: "vumeter",
-            }
+        div { class: "player-page__vumeter",
+            canvas { id: "vumeter" }
         }
     }
 }
-
 
 // ─── Track Info ──────────────────────────────────────────────────────────────
 
@@ -355,7 +342,10 @@ fn Controls(
                 button {
                     class: "btn btn-ghost btn-md",
                     title: "Previous",
-                    onclick: { let ws = ws; move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::Prev)) },
+                    onclick: {
+                        let ws = ws;
+                        move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::Prev))
+                    },
                     i { class: "material-icons text-xl", "skip_previous" }
                 }
                 button {
@@ -363,14 +353,28 @@ fn Controls(
                     title: if playing { "Pause" } else { "Play" },
                     onclick: {
                         let ws = ws;
-                        move |_| ws_send(&ws, &UserCommand::Player(if playing { PlayerCommand::Pause } else { PlayerCommand::Play }))
+                        move |_| ws_send(
+                            &ws,
+                            &UserCommand::Player(
+                                if playing { PlayerCommand::Pause } else { PlayerCommand::Play },
+                            ),
+                        )
                     },
-                    i { class: "material-icons text-xl", if playing { "pause" } else { "play_arrow" } }
+                    i { class: "material-icons text-xl",
+                        if playing {
+                            "pause"
+                        } else {
+                            "play_arrow"
+                        }
+                    }
                 }
                 button {
                     class: "btn btn-ghost btn-md",
                     title: "Next",
-                    onclick: { let ws = ws; move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::Next)) },
+                    onclick: {
+                        let ws = ws;
+                        move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::Next))
+                    },
                     i { class: "material-icons text-xl", "skip_next" }
                 }
             }
@@ -390,7 +394,11 @@ fn Controls(
                                 if let Some(mut settings) = state.global_settings.peek().clone() {
                                     settings.ui_preferences.visualizer = next.as_str().to_string();
                                     spawn(async move {
-                                        let _ = Request::post("/api/settings").json(&settings).unwrap().send().await;
+                                        let _ = Request::post("/api/settings")
+                                            .json(&settings)
+                                            .unwrap()
+                                            .send()
+                                            .await;
                                     });
                                 }
                             }
@@ -401,7 +409,10 @@ fn Controls(
                 button {
                     class: "btn btn-ghost btn-sm",
                     title: "{shuffle_title}",
-                    onclick: { let ws = ws; move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::CyclePlaybackMode)) },
+                    onclick: {
+                        let ws = ws;
+                        move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::CyclePlaybackMode))
+                    },
                     i { class: "material-icons", "{shuffle_icon}" }
                 }
                 if let Some(ref id) = song_id {
@@ -409,14 +420,24 @@ fn Controls(
                         class: "btn btn-ghost btn-sm",
                         title: "Like / Unlike",
                         onclick: {
-                            let ws = ws; let id = id.clone();
+                            let ws = ws;
+                            let id = id.clone();
                             move |_| {
-                                let cmd = if liked { MetadataCommand::DislikeMediaItem(id.clone()) }
-                                          else     { MetadataCommand::LikeMediaItem(id.clone()) };
+                                let cmd = if liked {
+                                    MetadataCommand::DislikeMediaItem(id.clone())
+                                } else {
+                                    MetadataCommand::LikeMediaItem(id.clone())
+                                };
                                 ws_send(&ws, &UserCommand::Metadata(cmd));
                             }
                         },
-                        i { class: if liked { "material-icons text-error" } else { "material-icons" }, if liked { "favorite" } else { "favorite_border" } }
+                        i { class: if liked { "material-icons text-error" } else { "material-icons" },
+                            if liked {
+                                "favorite"
+                            } else {
+                                "favorite_border"
+                            }
+                        }
                     }
                 }
                 button {
@@ -428,8 +449,17 @@ fn Controls(
                 button {
                     class: "btn btn-ghost btn-sm",
                     title: if is_muted { "Unmute" } else { "Mute" },
-                    onclick: { let ws = ws; move |_| ws_system(&ws, SystemRequest::ToggleMute) },
-                    i { class: "material-icons", if is_muted { "volume_off" } else { "volume_up" } }
+                    onclick: {
+                        let ws = ws;
+                        move |_| ws_system(&ws, SystemRequest::ToggleMute)
+                    },
+                    i { class: "material-icons",
+                        if is_muted {
+                            "volume_off"
+                        } else {
+                            "volume_up"
+                        }
+                    }
                 }
             }
             SeekBar { ws, progress }
@@ -454,7 +484,7 @@ pub fn BrowserAudioPlayback() -> Element {
     let mut src_changing = use_signal(|| false);
 
     let state_a = state.clone();
-    let ws_a = ws.clone();
+    let ws_a = ws;
 
     // Create the <audio> element imperatively in <body> on first mount
     // so it survives Dioxus re-renders and page navigation.
@@ -528,7 +558,7 @@ pub fn BrowserAudioPlayback() -> Element {
                             .ok();
                         on_timeupdate.forget();
 
-                        let ws2 = ws_a.clone();
+                        let ws2 = ws_a;
                         let on_ended = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {
                             ws_send(&ws2, &UserCommand::Player(PlayerCommand::Next));
                         });
@@ -603,7 +633,7 @@ pub fn BrowserAudioPlayback() -> Element {
     // Sync volume from backend state changes.
     let state_v = state.clone();
     use_effect(move || {
-        let vol = state_v.volume.read().clone();
+        let vol = *state_v.volume.read();
         if !*state_v.local_browser_playback.read() {
             return;
         }
@@ -628,7 +658,7 @@ pub fn BrowserAudioPlayback() -> Element {
                 if let Some(window) = web_sys::window() {
                     if let Some(doc) = window.document() {
                         if let Some(el) = doc.get_element_by_id("local-audio-player") {
-                            let _ = el.remove();
+                            el.remove();
                         }
                     }
                 }
@@ -656,7 +686,9 @@ fn SeekBar(ws: Signal<Option<WebSocket>>, progress: SongProgress) -> Element {
             input {
                 r#type: "range",
                 class: "range range-primary range-xs w-full",
-                min: 0, max: tot as i64, value: cur as i64,
+                min: 0,
+                max: tot as i64,
+                value: cur as i64,
                 aria_label: "Track progress",
                 onchange: {
                     let ws = ws;
@@ -669,13 +701,16 @@ fn SeekBar(ws: Signal<Option<WebSocket>>, progress: SongProgress) -> Element {
                                 *seeking_sig.write() = true;
                                 if let Some(window) = web_sys::window() {
                                     if let Some(doc) = window.document() {
-                                        if let Some(el) = doc.get_element_by_id("local-audio-player") {
+                                        if let Some(el) = doc.get_element_by_id("local-audio-player")
+                                        {
                                             let audio: web_sys::HtmlAudioElement = el.unchecked_into();
                                             audio.set_current_time(f64::from(v));
                                         }
                                     }
                                 }
-                                progress_sig.write().current_time = std::time::Duration::from_secs(v.into());
+                                progress_sig.write().current_time = std::time::Duration::from_secs(
+                                    v.into(),
+                                );
                             }
                         }
                     }
@@ -700,24 +735,35 @@ fn VolumeControl(ws: Signal<Option<WebSocket>>, volume: Volume) -> Element {
                 button {
                     class: "btn btn-ghost btn-sm",
                     title: "Volume down",
-                    onclick: { let ws = ws; move |_| ws_system(&ws, SystemRequest::VolDown) },
+                    onclick: {
+                        let ws = ws;
+                        move |_| ws_system(&ws, SystemRequest::VolDown)
+                    },
                     i { class: "material-icons", "remove_circle" }
                 }
                 input {
                     r#type: "range",
                     class: "range range-sm flex-1",
-                    min: volume.min as i64, max: volume.max as i64, value: volume.current as i64,
+                    min: volume.min as i64,
+                    max: volume.max as i64,
+                    value: volume.current as i64,
                     aria_label: "Volume",
-                    onchange: { let ws = ws; move |e: Event<FormData>| {
-                        if let Ok(v) = e.value().parse::<u8>() {
-                            ws_system(&ws, SystemRequest::SetVol(v));
+                    onchange: {
+                        let ws = ws;
+                        move |e: Event<FormData>| {
+                            if let Ok(v) = e.value().parse::<u8>() {
+                                ws_system(&ws, SystemRequest::SetVol(v));
+                            }
                         }
-                    }},
+                    },
                 }
                 button {
                     class: "btn btn-ghost btn-sm",
                     title: "Volume up",
-                    onclick: { let ws = ws; move |_| ws_system(&ws, SystemRequest::VolUp) },
+                    onclick: {
+                        let ws = ws;
+                        move |_| ws_system(&ws, SystemRequest::VolUp)
+                    },
                     i { class: "material-icons", "add_circle" }
                 }
             }
@@ -754,17 +800,22 @@ fn LyricsModal(
                     div { class: "text-center py-8 text-base-content/50", "Loading lyrics..." }
                 } else if let Some(ref lines) = lyrics_data {
                     div { class: "lyrics-list py-4",
-                        {lines.iter().enumerate().map(|(idx, line)| {
-                            let is_active = Some(idx) == active_index;
-                            rsx! {
-                                div {
-                                    key: "lyric-{idx}",
-                                    id: if is_active { "lyric-active" } else { "" },
-                                    class: if is_active { "lyric-line is-active" } else { "lyric-line" },
-                                    "{line.text}"
-                                }
-                            }
-                        })}
+                        {
+                            lines
+                                .iter()
+                                .enumerate()
+                                .map(|(idx, line)| {
+                                    let is_active = Some(idx) == active_index;
+                                    rsx! {
+                                        div {
+                                            key: "lyric-{idx}",
+                                            id: if is_active { "lyric-active" } else { "" },
+                                            class: if is_active { "lyric-line is-active" } else { "lyric-line" },
+                                            "{line.text}"
+                                        }
+                                    }
+                                })
+                        }
                     }
                 } else if let Some(ref plain) = plain_lyrics {
                     div {

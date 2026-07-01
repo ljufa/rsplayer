@@ -16,22 +16,19 @@ pub mod system_commands;
 use fjall::PersistMode;
 use hardware::usb;
 use log::{error, info, warn};
-use tokio::sync::oneshot::{Receiver, Sender};
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio::sync::oneshot::{Receiver, Sender};
 use tokio::{select, spawn};
 
-use api_models::common::UserCommand;
 use crate::composition_root::{build_app_container, AppContainer, BuildOutcome};
 use crate::mount_service::MountService;
+use api_models::common::UserCommand;
 use config::{ArcConfiguration, Configuration};
 
 use env_logger::Env;
 
-pub async fn run_backend(
-    shutdown_rx: Option<Receiver<()>>,
-    command_sender_out: Option<Sender<mpsc::Sender<UserCommand>>>,
-) {
+pub async fn run_backend(shutdown_rx: Option<Receiver<()>>, command_sender_out: Option<Sender<mpsc::Sender<UserCommand>>>) {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("failed to install rustls crypto provider");
@@ -197,7 +194,7 @@ async fn run(
             error!("Exit from websocket thread.");
         }
 
-        _ = terminate_signal() => {
+        () = terminate_signal() => {
             info!("Terminate signal received.");
             persist_db_on_shutdown(shared_db);
         }
@@ -223,7 +220,7 @@ fn terminate_signal() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> 
     #[cfg(unix)]
     {
         Box::pin(async {
-            use tokio::signal::unix::{SignalKind, signal};
+            use tokio::signal::unix::{signal, SignalKind};
             let mut sig = signal(SignalKind::terminate()).expect("failed to create SIGTERM handler");
             sig.recv().await;
         })
@@ -241,7 +238,7 @@ async fn start_degraded(error: &anyhow::Error, config: &Arc<Configuration>) {
     select! {
         () = http_server_future => {}
 
-        _ = terminate_signal() => {
+        () = terminate_signal() => {
             info!("Terminate signal received.");
         }
 

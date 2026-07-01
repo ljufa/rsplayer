@@ -1,15 +1,24 @@
 use std::{
-    cmp::Reverse, collections::HashSet, fs::File, path::Path, sync::{
+    cmp::Reverse,
+    collections::HashSet,
+    fs::File,
+    path::Path,
+    sync::{
         Arc, RwLock,
         atomic::{AtomicBool, Ordering},
-    }, time,
+    },
+    time,
 };
 
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
 use fjall::{Database, KeyspaceCreateOptions, PersistMode};
 use log::{debug, info, warn};
-use symphonia::core::{formats::{FormatOptions, probe::Hint}, io::{MediaSourceStream}, meta::MetadataOptions};
+use symphonia::core::{
+    formats::{FormatOptions, probe::Hint},
+    io::MediaSourceStream,
+    meta::MetadataOptions,
+};
 use tokio::sync::broadcast::Sender;
 use walkdir::WalkDir;
 

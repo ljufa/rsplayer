@@ -147,7 +147,9 @@ pub fn ws_system(ws: &Signal<Option<WebSocket>>, req: SystemRequest) {
 
 /// POST updated ui preferences back via the existing /api/settings endpoint.
 pub fn save_ui_prefs(state: AppState) {
-    let Some(mut settings) = state.global_settings.peek().clone() else { return };
+    let Some(mut settings) = state.global_settings.peek().clone() else {
+        return;
+    };
     settings.ui_preferences.welcome_shown = true;
     settings.ui_preferences.visualizer = state.visualizer_type.peek().as_str().to_string();
     settings.ui_preferences.theme = state.current_theme.peek().clone();
@@ -1133,7 +1135,7 @@ fn FooterPlayer() -> Element {
                     }
                     button {
                         class: "btn btn-primary btn-circle btn-sm",
-                        onclick: {move |_| ws_user_cmd(&ws, UserCommand::Player(PlayerCommand::TogglePlay))},
+                        onclick: move |_| ws_user_cmd(&ws, UserCommand::Player(PlayerCommand::TogglePlay)),
                         i { class: "material-icons",
                             if playing {
                                 "pause"

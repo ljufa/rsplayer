@@ -82,11 +82,7 @@ pub fn build_app_container(config: &ArcConfiguration, shared_db: &Arc<fjall::Dat
     let playlist_service = PlaylistService::new(shared_db);
     info!("Playlist service successfully created.");
 
-    let queue_service = QueueService::new(
-        shared_db,
-        song_repository.clone(),
-        play_statistics_repository.clone(),
-    );
+    let queue_service = QueueService::new(shared_db, song_repository.clone(), play_statistics_repository.clone());
     info!("Queue service successfully created.");
 
     let usb_settings = config.get_settings().usb_settings;
