@@ -4,160 +4,81 @@
 ![](https://img.shields.io/github/v/release/ljufa/rsplayer)
 ![](https://img.shields.io/github/license/ljufa/rsplayer?style=flat-square)
 ![](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=flat-square)
+
 # RSPlayer
+
 RSPlayer is an open-source, headless music server primarily for Linux, with experimental macOS and Windows builds — run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser. A native desktop app (Linux x86_64, macOS, Windows) is also available.
 
-It runs as a systemdand exposes a responsive web UI, making it a great fit for machines without a monitor or keyboard — but equally at home on a dedicated desktop audio PC. Hardware and DIY integrations (GPIO DAC control, custom firmware) are fully optional.
+It runs as a systemd service and exposes a responsive web UI, making it a great fit for machines without a monitor or keyboard — but equally at home on a dedicated desktop audio PC. Under the hood it uses [Symphonia](https://github.com/pdeljanov/Symphonia) for decoding and [Cpal](https://github.com/rustaudio/cpal) for output, with a Rust-native pipeline for low-latency, high-performance playback.
 
-Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia) for audio decoding and [Cpal](https://github.com/rustaudio/cpal) for output, with a Rust-native audio pipeline for low-latency, high-performance playback.
+**Online demo → https://rsplayer.dlj.freemyip.com/**
 
-### Online demo -> https://rsplayer.dlj.freemyip.com/
+📖 **Full documentation:** https://ljufa.github.io/rsplayer/
 
-## How does RSPlayer compare?
+## Highlights
 
-> Approximate comparison as of early 2026. Features change frequently.
+- Pure-Rust playback engine (Symphonia + cpal) — Linux, macOS, and Windows; also a native desktop app
+- Low-latency ALSA / PipeWire output, plus local playback straight to your browser
+- Formats: FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE
+- Built-in DSP: parametric EQ, filters, and presets
+- EBU R128 per-song loudness normalization
+- Automatic high-quality resampling when the DAC can't match the source rate
+- Real-time music visualizer (12 styles) and synchronized lyrics (LRCLIB)
+- Library browsing, dynamic playlists, priority queue, drag-and-drop reordering
+- Network storage (SMB/CIFS, NFS) mount management from the settings page
+- Home Assistant integration and optional DIY hardware control
 
-| Feature | RSPlayer | Volumio | Moode Audio | MPD |
-|---|---|---|---|---|
-| Language | Rust | Node.js | PHP/Bash | C |
-| Playback engine | Symphonia + cpal (pure rust) | MPD (plugin-based) | MPD (plugin-based) | plugin-based (FFmpeg, libFLAC, …) |
-| OS support | Linux, macOS, Windows | Linux | Linux (Pi) | Linux, macOS, Windows |
-| Native desktop app variant | Linux, macOS, Windows | — | — | — |
-| Web UI | ✓ | ✓ | ✓ | 3rd party |
-| Local browser playback | ✓ | — | — | — |
-| Parametric EQ / DSP | ✓ built-in | paid tier | ✓ (CamillaDSP) | via plugins |
-| Multi-room | planned | paid tier | ✓ | via plugins |
-| DSD playback | ✓ | ✓ | ✓ | ✓ |
-| Loudness normalization (EBU R128) | ✓ | — | — | — |
-| Synchronized lyrics | ✓ | — | — | — |
-| Docker | ✓ | ✓ | — | ✓ |
-| RISC-V 64 | ✓ | — | — | — |
-| Home Assistant integration | ✓ | ✓ | — | ✓ |
-| DIY hardware integration | optional | — | — | — |
-| License | MIT | GPL | GPL | GPL |
+See the [full feature list](https://ljufa.github.io/rsplayer/#/?id=features) and [feature comparison](https://ljufa.github.io/rsplayer/#/feature_parity) for details.
 
-## Features
-- **Low Latency Output**: Direct output to ALSA or PipeWire minimizes latency.
-- **Local Browser Playback**: Stream audio directly to your web browser for local playback.
-- **Automatic Resampling**: High-quality FFT-based resampling (via rubato) when the output device doesn't support the source sample rate — no configuration needed. Automatically probes fallback rates for ALSA drivers that misreport their supported range.
-- **Fixed Output Sample Rate**: Optionally lock the output to a specific sample rate, overriding automatic detection.
-- **Multiple Music Sources**: Configure multiple local directories and network mounts as music sources, all scanned together.
-- **Network Storage Management**: Discover, mount, and manage SMB/CIFS and NFS shares directly from the settings page.
-- **Adjustable Playback Thread Priority**: Customize the priority of the playback thread up to a real-time rating of 99 via the settings page.
-- **Dedicated CPU Core for Playback**: By default, the playback thread is pinned to a single CPU core for optimized performance.
-- **Web UI Remote Control**: Manage your playback remotely with an intuitive web interface.
-- **Flexible Volume Control**: Choose ALSA mixer, PipeWire, or software gain volume control, with hardware control also supported via RSPlayer firmware integration.
-- **Written in Rust**: Enjoy the benefits of minimal dependencies and high performance, thanks to the Rust native implementation.
-- **Comprehensive Music Library Management**: Scan, search, and browse your music library and online radio stations with ease.
-- **Dynamic Playlists**: Automatically create dynamic playlists for personalized listening experiences.
-- **DSP Integration**: Advanced Digital Signal Processing with parametric EQ, filters, and presets.
-- **Web UI VU Meter**: Real-time audio visualization in the web interface.
-- **Extended Hardware Control**: Support for seek and power management via firmware interactions.
-- **Web UI Themes**: Support for customizable themes and dark/light modes (10+ built-in themes).
-- **Synchronized Lyrics**: Real-time synchronized lyrics support via LRCLIB integration.
-- **Playlists by genre, year**: Browse and create playlists based on genre or year.
-- **Loudness Normalization**: Per-song EBU R128 loudness normalization, toggleable from the settings page. Analysis runs automatically in the background while playback is stopped and results are stored permanently.
-- **Library Statistics**: Dedicated statistics page showing song/album/artist counts, total duration, play history, top genres, albums by decade, and loudness analysis progress.
-- **Priority Queue**: Add songs, albums, artists, or directories to play next without disrupting the queue order.
-- **Drag-and-Drop Queue Reordering**: Reorder queue items by dragging them directly in the queue view.
-- **Automatic Cache Busting**: Browser caches are automatically invalidated on every release — no stale UI after upgrading.
-- **Volume Persistence**: Volume level is saved on change and restored on restart, defaulting to 0 on first use to prevent hardware-max shock.
-- **Global Keyboard Shortcuts**: Full keyboard control for playback, navigation, and search (Space, arrows, M, L, Y, S, /, ?, 1-4, F/A/P/R/T).
-- **Monkey's Audio (APE) Support**: Play lossless APE files with full metadata support.
-- **Breadcrumb Navigation**: Clear navigation context on all library pages.
-- **Skeleton Loading & Empty States**: Visual feedback during loading and helpful empty state screens.
-
-## Known Limitations
-
-- **DSD passthrough bypass**: DSP (parametric EQ, filters), loudness normalization, and resampling are all bypassed for DSD files (`.dsf`, `.dff`). DSD bitstreams are passed directly to the DAC without any signal processing.
-- **Radio streams**: Loudness normalization is not applied to internet radio streams — it requires pre-scanned file metadata. Seeking is not supported for streams.
-- **Supported formats**: Supported formats include FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), and APE (Monkey's Audio).
-- **Local Browser Playback**: In this mode the browser's native audio engine plays files directly. DSP, loudness normalization, resampling, VU metering, and DSD playback are all unavailable — format support is limited to what the browser itself can decode.
-
-### Planned features
-- **Expanded Audio Codec Support**: Compatibility with a wider range of audio codecs.
-- **Intelligent Dynamic Playlists**: Advanced dynamic playlists that adapt based on user likes or playback counts for a personalized listening experience.
-- **Music Recommendations**: Suggest similar tracks or artists based on listening history or current playback.
-- **Generate missing album cover image**: Auto-generate album art using album name.
-- **MPD protocol support**: Compatibility with MPD clients.
-- **Subsonic protocol support**: Compatibility with Subsonic clients.
-- **Multi-room playback**: Synchronized playback across multiple devices.
-- **Community plugin framework**: Extensible architecture for third-party plugins.
-- **Improve playlists management create/modify/delete items and playlists**: Items can be added/removed to/from playlist from everywhere.
-- **New version detection and upgrade from the app**: Detect a new version and provide upgrade button
-- **Problem(bug) report with diagnostic**: Report problem by user
-- **Scheduled music library scans**: Enable user to define automatic library scan interval (or cron)
-
-## Supported Platforms
-
-RSPlayer offers two build variants:
-
-- **Server** — The headless music server daemon (systemd service on linux). Available for all supported architectures.
-- **Desktop** — A standalone native GUI app (built with Tauri). Available for **x86_64 Linux**, **macOS**, and **Windows x86_64**.
+## Quick Start
 
 ### Linux
 
-| Architecture | Typical Devices | Deb | RPM | Arch | Docker | Nix | Desktop |
-|---|---|---|---|---|---|---|---|
-| **x86_64** | Intel/AMD PCs, servers, NAS | ✓ | ✓ | ✓ | ✓ | ✓ | deb, rpm, tgz |
-| **ARM64** (aarch64) | RPi 4, RPi 5, ARMv8 boards | ✓ | ✓ | ✓ | — | ✓ | — |
-| **ARMv7** | RPi 2, RPi 3, 32-bit RPi 4 | ✓ | ✓ | ✓ | — | ✓ | — |
-| **ARMv6** | RPi Zero, RPi Zero W, RPi 1 | ✓ | ✓ | ✓ | — | ✓ | — |
-| **RISC-V 64** | RISC-V 64-bit boards | ✓ | ✓ | ✓ | — | ✓ | — |
+Requires `curl`. The script auto-detects your distribution (Debian/Ubuntu, Fedora/RHEL, Arch/Manjaro) and architecture (x86_64, ARM64/ARMv7/ARMv6, RISC-V 64), then installs and starts the systemd service.
 
-All Linux packages include a systemd service for automatic startup. See the [releases page](https://github.com/ljufa/rsplayer/releases/latest) for per-architecture filename suffixes.
-
-### macOS (experimental)
-
-| Architecture | Server | Desktop |
-|---|---|---|
-| Apple Silicon (`aarch64-apple-darwin`) | raw binary | DMG |
-| Intel (`x86_64-apple-darwin`) | raw binary | DMG |
-
-Server and desktop builds for `aarch64-apple-darwin` and `x86_64-apple-darwin` are supported. Audio output uses CoreAudio via `cpal`; the web UI works as on Linux.
-
-- **Server binary**: Download `rsplayer_darwin_arm64` or `rsplayer_darwin_amd64` from the [releases page](https://github.com/ljufa/rsplayer/releases/latest).
-- **Desktop app**: Download the `.dmg` from the releases page for a native windowed experience.
-
-Platform limitations on macOS: network share mounting, ALSA/PipeWire volume, IR remote, system poweroff/reboot, and firmware USB integration are unavailable.
-
-### Windows (experimental)
-
-| Architecture | Server | Desktop |
-|---|---|---|
-| x86_64 (`x86_64-pc-windows-msvc`) | `rsplayer_windows_amd64.exe` | NSIS installer |
-
-Audio output uses WASAPI via `cpal`. The web UI is served at `http://localhost:8000` and works in any browser.
-
-- **Server**: Download `rsplayer_windows_amd64.exe` and run it directly — no installation needed.
-- **Desktop app**: Download `rsplayer-desktop_windows_amd64.exe` from the [releases page](https://github.com/ljufa/rsplayer/releases/latest) and run the installer.
-
-Platform limitations on Windows: network share mounting, ALSA/PipeWire volume, IR remote, system poweroff/reboot, and firmware USB integration are unavailable.
-
-## Installation
-To install RSPlayer, execute the following script (requires curl):
 ```bash
 # Headless server
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)
-# Desktop app
+# Desktop app (x86_64 only)
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install_desktop.sh)
 ```
-`install.sh` detects your distribution and architecture, then installs the headless server package — it will configure and start the systemd service.  
-`install_desktop.sh` does the same for the desktop (GUI) app.
 
-To stop RSPlayer, run the following command:
+Manage the service:
+
 ```bash
-sudo systemctl stop rsplayer
+sudo systemctl start rsplayer   # start
+sudo systemctl stop rsplayer    # stop
+sudo systemctl status rsplayer  # check status
 ```
-To start RSPlayer service again, run the following command:
-```bash
-sudo systemctl start rsplayer
-```
-## Run as docker container
+
+Prefer to install a package manually (`.deb` / `.rpm` / `.tgz`) or run the raw binary? See the [Linux installation guide](https://ljufa.github.io/rsplayer/#/installation?id=linux).
+
+### macOS (experimental)
+
+No install script — download directly from the [latest release](https://github.com/ljufa/rsplayer/releases/latest):
+
+- **Server binary**: `rsplayer_darwin_arm64` (Apple Silicon) or `rsplayer_darwin_amd64` (Intel), then `chmod +x rsplayer && ./rsplayer`
+- **Desktop app**: open the `.dmg` and drag RSPlayer to Applications
+
+Audio output uses CoreAudio via `cpal`. See the [macOS installation guide](https://ljufa.github.io/rsplayer/#/installation?id=macos-experimental).
+
+### Windows (experimental)
+
+Download directly from the [latest release](https://github.com/ljufa/rsplayer/releases/latest):
+
+- **Server**: `rsplayer_windows_amd64.exe` — run it directly, then open `http://localhost:8000`
+- **Desktop app**: run the `rsplayer-desktop_windows_amd64.exe` NSIS installer (fetches WebView2 automatically if needed)
+
+Audio output uses WASAPI via `cpal`. See the [Windows installation guide](https://ljufa.github.io/rsplayer/#/installation?id=windows-experimental).
+
+### Docker
+
 ```bash
 docker run -p 8000:80 -v ${MUSIC_DIR}:/music -v rsplayer_data:/opt/rsplayer --device /dev/snd -it --rm ljufa/rsplayer:latest
 ```
-or [docker compose](docker/docker-compose.yaml)
+
+Or use [docker compose](docker/docker-compose.yaml):
+
 ```yaml
 services:
   rsplayer:
@@ -175,30 +96,30 @@ volumes:
     driver: local
 ```
 
-## Usage
-Once RSPlayer is installed, you can access the web user interface by navigating to http://localhost or the IP address of the machine on which it is installed.
+### Open the UI
 
-For detailed configuration instructions, please refer to the [documentation](https://ljufa.github.io/rsplayer/#/?id=basic-configuration).
+Navigate to `http://localhost` (or the IP of the machine running RSPlayer). For configuration, see the [documentation](https://ljufa.github.io/rsplayer/#/configuration).
 
-## Home Assistant Integration
-RSPlayer can be controlled from [Home Assistant](https://www.home-assistant.io/) via the [rsplayer_hacs_plugin](https://github.com/ljufa/rsplayer_hacs_plugin).
+## Documentation
 
-Features include media player control (play, pause, stop, next/prev, volume) and real-time sync with `rsplayer_firmware` power state.
+| Topic | Link |
+|---|---|
+| Overview & full feature list | https://ljufa.github.io/rsplayer/ |
+| Installation | https://ljufa.github.io/rsplayer/#/installation |
+| Configuration | https://ljufa.github.io/rsplayer/#/configuration |
+| Usage guide | https://ljufa.github.io/rsplayer/#/usage |
+| Troubleshooting | https://ljufa.github.io/rsplayer/#/troubleshooting |
+| Building from source | https://ljufa.github.io/rsplayer/#/build |
+| Feature comparison | https://ljufa.github.io/rsplayer/#/feature_parity |
 
-Install via HACS by adding `https://github.com/ljufa/rsplayer_hacs_plugin` as a custom repository.
+## Home Assistant & DIY Hardware
 
-## DIY Hardware
-For DIY enthusiasts, `rsplayer` offers the flexibility to integrate with custom hardware components.
-
-- **Hardware Designs**: [rsplayer_hardware](https://github.com/ljufa/rsplayer_hardware)
-- **Firmware**: [rsplayer_firmware](https://github.com/ljufa/rsplayer_firmware)
-
-See the [Hardware Integration documentation](https://ljufa.github.io/rsplayer/#/?id=hardware-integration) for more details.
+RSPlayer can be controlled from [Home Assistant](https://www.home-assistant.io/) via the [rsplayer_hacs_plugin](https://github.com/ljufa/rsplayer_hacs_plugin). For DIY builds, see [rsplayer_hardware](https://github.com/ljufa/rsplayer_hardware) and [rsplayer_firmware](https://github.com/ljufa/rsplayer_firmware).
 
 ## Contributing
-If you would like to contribute to RSPlayer, please submit a pull request or open an issue on the GitHub repository.
 
-For instructions on how to build the project from source, please see the [Building from Source](https://ljufa.github.io/rsplayer/#/BUILD) documentation.
+Contributions are welcome — submit a pull request or open an issue. To build from source, see the [Building from Source](https://ljufa.github.io/rsplayer/#/build) documentation.
 
 ## License
-RSPlayer is licensed under the MIT license. See the LICENSE file for more information.
+
+RSPlayer is licensed under the MIT license. See the [LICENSE](LICENSE) file for more information.
