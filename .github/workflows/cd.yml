@@ -207,7 +207,7 @@ jobs:
     needs: build_ui
     name: Build Windows (headless exe + NSIS installer)
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'windows' }}
-    runs-on: [self-hosted, X64, Windows]
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
 
