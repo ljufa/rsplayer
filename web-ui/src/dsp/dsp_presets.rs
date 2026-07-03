@@ -7,6 +7,7 @@ pub struct DspPreset {
     pub filters: Vec<FilterConfig>,
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn get_dsp_presets() -> Vec<DspPreset> {
     vec![
         DspPreset {

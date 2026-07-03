@@ -71,7 +71,7 @@ pub fn LibraryFilesPage() -> Element {
             .and_then(|s| {
                 s.split('&').chain(s.split('?')).find_map(|p| {
                     let p = p.trim_start_matches('?');
-                    p.strip_prefix("search=").map(|v| v.to_string())
+                    p.strip_prefix("search=").map(std::string::ToString::to_string)
                 })
             })
             .map(|raw| js_sys::decode_uri_component(&raw).map(String::from).unwrap_or(raw))
@@ -80,14 +80,14 @@ pub fn LibraryFilesPage() -> Element {
 
     // Initial query
     use_effect(move || {
-        if !route_search.is_empty() {
+        if route_search.is_empty() {
+            ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryLocalFiles(String::new(), 0)));
+        } else {
             search.set(route_search.clone());
             ws_send(
                 &ws,
                 &UserCommand::Metadata(MetadataCommand::SearchLocalFiles(route_search.clone(), 100)),
             );
-        } else {
-            ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryLocalFiles(String::new(), 0)));
         }
     });
 
@@ -214,7 +214,7 @@ fn LibraryNode(
     let label = item.get_title();
     let has_children = node_id.children(&tree.read().arena).count() > 0;
 
-    let mut toggle_dir = move |_| {
+    let mut toggle_dir = move |()| {
         let t = tree.read();
         let has_children = node_id.children(&t.arena).count() > 0;
 
@@ -313,7 +313,7 @@ fn LibraryNode(
                             class: "btn btn-ghost btn-xs",
                             title: "Add and play",
                             onclick: {
-                                let item = item.clone();
+                                let item = item;
                                 move |e| {
                                     e.stop_propagation();
                                     if let MetadataLibraryItem::SongItem(ref song) = item {

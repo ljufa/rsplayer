@@ -1,3 +1,15 @@
+// Canvas/visualizer pixel math makes numeric cast lints noise here, wasm is
+// single-threaded so futures never cross threads, and `volatile_composites`
+// fires inside the dioxus `asset!` macro.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::future_not_send,
+    clippy::volatile_composites
+)]
+
 mod dsp;
 mod hooks;
 pub mod lyrics;
@@ -135,9 +147,9 @@ pub fn navigate(mut path_sig: Signal<String>, to: &str) {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/// Send a UserCommand JSON over WebSocket.
-pub fn ws_user_cmd(ws: &Signal<Option<WebSocket>>, cmd: UserCommand) {
-    hooks::ws_send(ws, &cmd);
+/// Send a `UserCommand` JSON over WebSocket.
+pub fn ws_user_cmd(ws: &Signal<Option<WebSocket>>, cmd: &UserCommand) {
+    hooks::ws_send(ws, cmd);
 }
 
 /// Send a `SystemRequest` over the WebSocket, wrapped in `UserCommand::System`.
@@ -146,13 +158,13 @@ pub fn ws_system(ws: &Signal<Option<WebSocket>>, req: SystemRequest) {
 }
 
 /// POST updated ui preferences back via the existing /api/settings endpoint.
-pub fn save_ui_prefs(state: AppState) {
+pub fn save_ui_prefs(state: &AppState) {
     let Some(mut settings) = state.global_settings.peek().clone() else {
         return;
     };
     settings.ui_preferences.welcome_shown = true;
     settings.ui_preferences.visualizer = state.visualizer_type.peek().as_str().to_string();
-    settings.ui_preferences.theme = state.current_theme.peek().clone();
+    settings.ui_preferences.theme.clone_from(&state.current_theme.peek());
     settings.ui_preferences.show_bg_image = *state.show_bg_image.peek();
     spawn_local(async move {
         let _ = Request::post("/api/settings").json(&settings).unwrap().send().await;
@@ -211,9 +223,9 @@ fn App() -> Element {
                 if let Ok(resp) = Request::get("/api/settings").send().await {
                     if let Ok(settings) = resp.json::<Settings>().await {
                         let prefs = &settings.ui_preferences;
-                        *gs.current_theme.write() = prefs.theme.clone();
+                        (*gs.current_theme.write()).clone_from(&prefs.theme);
                         *gs.show_bg_image.write() = prefs.show_bg_image;
-                        if let Some(vt) = crate::vumeter::VisualizerType::from_str(&prefs.visualizer) {
+                        if let Some(vt) = crate::vumeter::VisualizerType::create_from_str(&prefs.visualizer) {
                             *gs.visualizer_type.write() = vt;
                         }
                         if !prefs.welcome_shown {
@@ -383,10 +395,9 @@ fn setup_keyboard_shortcuts(path: Signal<String>, ws: Signal<Option<WebSocket>>,
                 // ── Global navigation ──
                 "1" => navigate(path, "/"),
                 "2" => navigate(path, "/queue"),
-                "3" => navigate(path, "/library/playlists"),
+                "3" | "p" | "P" => navigate(path, "/library/playlists"),
                 "4" => navigate(path, "/settings"),
                 // ── Library sub-pages ──
-                "p" | "P" => navigate(path, "/library/playlists"),
                 "f" | "F" => navigate(path, "/library/files"),
                 "a" | "A" => navigate(path, "/library/artists"),
                 "r" | "R" => navigate(path, "/library/radio"),
@@ -397,7 +408,7 @@ fn setup_keyboard_shortcuts(path: Signal<String>, ws: Signal<Option<WebSocket>>,
                 }
                 "Escape" => {
                     if *ui.welcome_open.peek() {
-                        save_ui_prefs(app_state.clone());
+                        save_ui_prefs(&app_state);
                         ui.welcome_open.set(false);
                     }
                     ui.shortcuts_open.set(false);
@@ -437,9 +448,9 @@ fn setup_keyboard_shortcuts(path: Signal<String>, ws: Signal<Option<WebSocket>>,
                     if let Some(song) = app_state.current_song.peek().clone() {
                         let liked = song.statistics.as_ref().is_some_and(|st| st.liked_count > 0);
                         let cmd = if liked {
-                            MetadataCommand::DislikeMediaItem(song.file.clone())
+                            MetadataCommand::DislikeMediaItem(song.file)
                         } else {
-                            MetadataCommand::LikeMediaItem(song.file.clone())
+                            MetadataCommand::LikeMediaItem(song.file)
                         };
                         ws_send(&ws, &UserCommand::Metadata(cmd));
                     }
@@ -481,19 +492,19 @@ fn WelcomeModal() -> Element {
 
     let state_d1 = state.clone();
     let state_d2 = state.clone();
-    let state_gs = state.clone();
+    let state_gs = state;
     let dismiss_backdrop = move |_| {
-        save_ui_prefs(state_d1.clone());
+        save_ui_prefs(&state_d1);
         ui.welcome_open.set(false);
     };
     let dismiss_btn = move |_| {
-        save_ui_prefs(state_d2.clone());
+        save_ui_prefs(&state_d2);
         ui.welcome_open.set(false);
     };
 
     let go_to_settings = move |e: Event<MouseData>| {
         e.prevent_default();
-        save_ui_prefs(state_gs.clone());
+        save_ui_prefs(&state_gs);
         ui.welcome_open.set(false);
         navigate(path, "/settings");
     };
@@ -1130,12 +1141,12 @@ fn FooterPlayer() -> Element {
                 div { class: "flex items-center gap-2",
                     button {
                         class: "btn btn-ghost btn-xs",
-                        onclick: move |_| ws_user_cmd(&ws, UserCommand::Player(PlayerCommand::Prev)),
+                        onclick: move |_| ws_user_cmd(&ws, &UserCommand::Player(PlayerCommand::Prev)),
                         i { class: "material-icons", "skip_previous" }
                     }
                     button {
                         class: "btn btn-primary btn-circle btn-sm",
-                        onclick: move |_| ws_user_cmd(&ws, UserCommand::Player(PlayerCommand::TogglePlay)),
+                        onclick: move |_| ws_user_cmd(&ws, &UserCommand::Player(PlayerCommand::TogglePlay)),
                         i { class: "material-icons",
                             if playing {
                                 "pause"
@@ -1146,7 +1157,7 @@ fn FooterPlayer() -> Element {
                     }
                     button {
                         class: "btn btn-ghost btn-xs",
-                        onclick: move |_| ws_user_cmd(&ws, UserCommand::Player(PlayerCommand::Next)),
+                        onclick: move |_| ws_user_cmd(&ws, &UserCommand::Player(PlayerCommand::Next)),
                         i { class: "material-icons", "skip_next" }
                     }
                 }
@@ -1155,11 +1166,10 @@ fn FooterPlayer() -> Element {
                     input {
                         r#type: "range",
                         class: "range range-xs flex-1",
-                        min: volume.min as i64,
-                        max: volume.max as i64,
-                        value: volume.current as i64,
+                        min: i64::from(volume.min),
+                        max: i64::from(volume.max),
+                        value: i64::from(volume.current),
                         onchange: {
-                            let ws = ws;
                             move |e: Event<FormData>| {
                                 if let Ok(v) = e.value().parse::<u8>() {
                                     ws_system(&ws, SystemRequest::SetVol(v));

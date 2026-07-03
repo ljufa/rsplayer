@@ -326,11 +326,7 @@ impl FormatReader for ApeReader {
 
         let sample_index = required_ts.get().unsigned_abs().min(self.total_samples);
         #[allow(clippy::cast_possible_truncation)]
-        let target_frame = if self.samples_per_frame > 0 {
-            (sample_index / self.samples_per_frame) as u32
-        } else {
-            0
-        };
+        let target_frame = sample_index.checked_div(self.samples_per_frame).unwrap_or(0) as u32;
 
         self.current_frame = target_frame;
         let actual_ts = Timestamp::new((u64::from(self.current_frame) * self.samples_per_frame).cast_signed());

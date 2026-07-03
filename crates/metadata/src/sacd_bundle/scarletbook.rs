@@ -1,3 +1,7 @@
+// SACD sector sizes are small fixed constants (2048-byte sectors), so the
+// u64 -> usize/f64 conversions in this module cannot truncate or lose precision.
+#![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+
 use std::io::{Read, Seek, SeekFrom};
 
 use anyhow::{Result, anyhow};

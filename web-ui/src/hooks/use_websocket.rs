@@ -54,6 +54,8 @@ fn connect(app_state: AppState, ws_holder: Signal<Signal<Option<WebSocket>>>) {
 
     // onopen
     {
+        // Not redundant: `app_state` is used again in the onclose closure below.
+        #[allow(clippy::redundant_clone)]
         let mut state = app_state.clone();
         let mut holder = ws_holder;
         let ws_clone = ws.clone();
@@ -81,7 +83,7 @@ fn connect(app_state: AppState, ws_holder: Signal<Signal<Option<WebSocket>>>) {
 
     // onclose
     {
-        let state = app_state.clone();
+        let state = app_state;
         let onclose = Closure::<dyn FnMut(CloseEvent)>::new(move |_e: CloseEvent| {
             let mut s = state.clone();
             *s.connected.write() = false;

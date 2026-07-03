@@ -39,12 +39,12 @@ fn parse_time(time_str: &str) -> Option<f64> {
     if parts.len() == 2 {
         let mm = parts[0].parse::<f64>().ok()?;
         let ss = parts[1].replace(',', ".").parse::<f64>().ok()?;
-        Some(mm * 60.0 + ss)
+        Some(mm.mul_add(60.0, ss))
     } else if parts.len() == 3 {
         let hh = parts[0].parse::<f64>().ok()?;
         let mm = parts[1].parse::<f64>().ok()?;
         let ss = parts[2].replace(',', ".").parse::<f64>().ok()?;
-        Some(hh * 3600.0 + mm * 60.0 + ss)
+        Some(mm.mul_add(60.0, hh * 3600.0) + ss)
     } else {
         None
     }

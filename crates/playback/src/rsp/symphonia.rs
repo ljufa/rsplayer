@@ -226,8 +226,7 @@ pub fn play_file(
                                 // pcm_id (what alsa.rs stores in config.audio_device) lives in d.id().
                                 // Match id first, fall back to display name for non-ALSA platforms.
                                 d.id().is_ok_and(|id| id.id() == config.audio_device.as_str())
-                                    || d.description()
-                                        .is_ok_and(|desc| desc.name() == config.audio_device.as_str())
+                                    || d.description().is_ok_and(|desc| desc.name() == config.audio_device.as_str())
                             })
                             .ok_or_else(|| format_err!("Device {} not found!", config.audio_device))?
                     };
@@ -278,13 +277,14 @@ pub fn play_file(
                 }
                 // Write the decoded audio samples to the audio output if the presentation timestamp
 
-                let mut write_failed = false;
-                if let Some(output) = audio_output.as_mut()
+                let write_failed = if let Some(output) = audio_output.as_mut()
                     && let Err(e) = output.write(decoded_buff)
                 {
                     warn!("Audio output write error: {e}");
-                    write_failed = true;
-                }
+                    true
+                } else {
+                    false
+                };
                 if write_failed {
                     audio_output = None;
                 }

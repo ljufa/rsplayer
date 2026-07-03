@@ -4,6 +4,7 @@ use validator::Validate;
 
 use crate::common::{AudioCard, CardMixer, PcmOutputDevice, VolumeCrtlType};
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 pub struct Settings {
     pub volume_ctrl_settings: VolumeControlSettings,

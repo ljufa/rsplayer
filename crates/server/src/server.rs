@@ -344,6 +344,8 @@ async fn serve_music(State(state): State<AppState>, AxumPath(path): AxumPath<Str
         (0u64, end, false)
     };
 
+    // Bounded by STREAM_CHUNK, so the cast cannot truncate.
+    #[allow(clippy::cast_possible_truncation)]
     let chunk_len = (end - start + 1) as usize;
 
     if file_size == 0 || chunk_len == 0 {
@@ -355,9 +357,8 @@ async fn serve_music(State(state): State<AppState>, AxumPath(path): AxumPath<Str
             .unwrap();
     }
 
-    let mut file = match tokio::fs::File::open(&file_path).await {
-        Ok(f) => f,
-        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    let Ok(mut file) = tokio::fs::File::open(&file_path).await else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     };
     if file.seek(std::io::SeekFrom::Start(start)).await.is_err() {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -418,12 +419,12 @@ fn parse_range(range_str: &str, file_size: u64) -> Option<(u64, u64)> {
     let ranges = &range_str[6..];
     let range = ranges.split(',').next()?.trim();
 
-    if range.starts_with('-') {
-        let suffix: u64 = range[1..].parse().ok()?;
+    if let Some(rest) = range.strip_prefix('-') {
+        let suffix: u64 = rest.parse().ok()?;
         let start = file_size.saturating_sub(suffix);
         Some((start, file_size - 1))
-    } else if range.ends_with('-') {
-        let start: u64 = range[..range.len() - 1].parse().ok()?;
+    } else if let Some(rest) = range.strip_suffix('-') {
+        let start: u64 = rest.parse().ok()?;
         if start >= file_size {
             return None;
         }

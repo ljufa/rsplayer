@@ -44,7 +44,7 @@ struct LastFmImage {
 
 pub async fn fetch_album_cover(song: &Song) -> Option<String> {
     if let Some(image_id) = &song.image_id {
-        return Some(format!("/artwork/{}", image_id));
+        return Some(format!("/artwork/{image_id}"));
     }
     let album = song.album.as_deref()?;
     let artist = song.artist.as_deref()?;
@@ -69,7 +69,7 @@ async fn fetch_lyrics(song: &Song) -> Option<LrcLibResponse> {
     let artist = song.artist.as_deref().unwrap_or_default();
     let title = song.title.as_deref().unwrap_or_default();
     let album = song.album.as_deref().unwrap_or_default();
-    let duration = song.time.map(|d| d.as_secs()).unwrap_or(0);
+    let duration = song.time.map_or(0, |d| d.as_secs());
     let url = format!(
         "https://lrclib.net/api/get?artist_name={}&track_name={}&album_name={}&duration={}",
         js_sys::encode_uri_component(artist),
@@ -153,7 +153,7 @@ pub fn PlayerPage() -> Element {
                     current_song: current_song.read().clone(),
                     vu_meter_enabled: *vu_meter_enabled.read(),
                     visualizer_type: state.visualizer_type,
-                    on_lyrics: move |_| {
+                    on_lyrics: move |()| {
                         let open = *ui.lyrics_open.peek();
                         ui.lyrics_open.set(!open);
                     },
@@ -161,7 +161,7 @@ pub fn PlayerPage() -> Element {
             }
             if (ui.lyrics_open)() {
                 LyricsModal {
-                    on_close: move |_| ui.lyrics_open.set(false),
+                    on_close: move |()| ui.lyrics_open.set(false),
                     lyrics_data: lyrics_data.read().clone(),
                     plain_lyrics: plain_lyrics.read().clone(),
                     loading: *lyrics_loading.read(),
@@ -185,12 +185,10 @@ fn VUMeterCanvas() -> Element {
 
     use_effect(move || {
         let vt = *visualizer_type.read();
-        if vt != VisualizerType::None {
-            if let Some(m) = VUMeter::with_type("vumeter", vt) {
-                meter.set(Some(m));
-            }
-        } else {
+        if vt == VisualizerType::None {
             meter.set(None);
+        } else if let Some(m) = VUMeter::with_type("vumeter", vt) {
+            meter.set(Some(m));
         }
     });
 
@@ -250,12 +248,12 @@ fn TrackInfo(song: Option<Song>, player_info: Option<PlayerInfo>) -> Element {
                 .and_then(|pi| match (pi.track_loudness_lufs, pi.normalization_gain_db) {
                     (Some(l), Some(g)) => Some(format!(
                         "{:.1} LUFS  →  {:+.1} dB  →  {:.1} LUFS",
-                        l as f64 / 100.0,
-                        g as f64 / 100.0,
-                        (l + g) as f64 / 100.0
+                        f64::from(l) / 100.0,
+                        f64::from(g) / 100.0,
+                        f64::from(l + g) / 100.0
                     )),
-                    (Some(l), None) => Some(format!("{:.1} LUFS", l as f64 / 100.0)),
-                    (None, Some(g)) => Some(format!("{:+.1} dB (file tag)", g as f64 / 100.0)),
+                    (Some(l), None) => Some(format!("{:.1} LUFS", f64::from(l) / 100.0)),
+                    (None, Some(g)) => Some(format!("{:+.1} dB (file tag)", f64::from(g) / 100.0)),
                     _ => None,
                 });
             let artist = ps.artist.clone();
@@ -519,7 +517,7 @@ pub fn BrowserAudioPlayback() -> Element {
                             } else {
                                 let encoded = String::from(js_sys::encode_uri_component(file));
                                 let encoded = encoded.replace("%2F", "/");
-                                format!("/music/{}", encoded)
+                                format!("/music/{encoded}")
                             }
                         })
                         .unwrap_or_default();
@@ -623,7 +621,7 @@ pub fn BrowserAudioPlayback() -> Element {
                         PlayerState::PAUSED | PlayerState::STOPPED => {
                             let _ = audio.pause();
                         }
-                        _ => {}
+                        PlayerState::ERROR(_) => {}
                     }
                 }
             }
@@ -642,7 +640,7 @@ pub fn BrowserAudioPlayback() -> Element {
                 if let Some(el) = doc.get_element_by_id(audio_id) {
                     let audio: web_sys::HtmlAudioElement = el.unchecked_into();
                     if vol.max > 0 {
-                        audio.set_volume(vol.current as f64 / vol.max as f64);
+                        audio.set_volume(f64::from(vol.current) / f64::from(vol.max));
                     }
                 }
             }
@@ -725,7 +723,7 @@ fn SeekBar(ws: Signal<Option<WebSocket>>, progress: SongProgress) -> Element {
 #[component]
 fn VolumeControl(ws: Signal<Option<WebSocket>>, volume: Volume) -> Element {
     let pct = if volume.max > 0 {
-        (volume.current as f32 / volume.max as f32 * 100.0) as u8
+        (f32::from(volume.current) / f32::from(volume.max) * 100.0) as u8
     } else {
         0
     };
@@ -744,9 +742,9 @@ fn VolumeControl(ws: Signal<Option<WebSocket>>, volume: Volume) -> Element {
                 input {
                     r#type: "range",
                     class: "range range-sm flex-1",
-                    min: volume.min as i64,
-                    max: volume.max as i64,
-                    value: volume.current as i64,
+                    min: i64::from(volume.min),
+                    max: i64::from(volume.max),
+                    value: i64::from(volume.current),
                     aria_label: "Volume",
                     onchange: {
                         let ws = ws;

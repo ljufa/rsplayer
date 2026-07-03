@@ -131,14 +131,14 @@ pub fn QueuePage() -> Element {
             } else if queue().as_ref().is_none_or(|p| p.items.is_empty()) {
                 QueueEmpty {
                     has_search: !search().is_empty(),
-                    on_clear_search: move |_| {
+                    on_clear_search: move |()| {
                         search.set(String::new());
                         *loading.write() = true;
                         ws_send(&ws, &UserCommand::Queue(QueueCommand::QueryCurrentQueue(
                             CurrentQueueQuery::WithSearchTerm(String::new(), 0)
                         )));
                     },
-                    on_add_url: move |_| ui.queue_add_url_open.set(true),
+                    on_add_url: move |()| ui.queue_add_url_open.set(true),
                 }
             } else if let Some(page) = queue() {
                 div { class: "scroll-list overflow-y-auto",
@@ -155,16 +155,16 @@ pub fn QueuePage() -> Element {
                                 key: "{song.file}",
                                 song,
                                 is_current,
-                                on_play: move |_| {
+                                on_play: move |()| {
                                     ws_send(&ws, &UserCommand::Player(PlayerCommand::PlayItem(file.clone())));
                                 },
-                                on_play_next: move |_| {
+                                on_play_next: move |()| {
                                     ws_send(&ws, &UserCommand::Queue(QueueCommand::MoveItemAfterCurrent(file3.clone())));
                                     ws_send(&ws, &UserCommand::Queue(QueueCommand::QueryCurrentQueue(
                                         CurrentQueueQuery::WithSearchTerm(search(), 0)
                                     )));
                                 },
-                                on_remove: move |_| {
+                                on_remove: move |()| {
                                     ws_send(&ws, &UserCommand::Queue(QueueCommand::RemoveItem(file2.clone())));
                                     let mut cq = state.current_queue;
                                     let mut guard = cq.write();
@@ -172,8 +172,8 @@ pub fn QueuePage() -> Element {
                                         q.remove_item(&file2);
                                     }
                                 },
-                                on_drag_start: move |_| dragged_file.set(Some(file4.clone())),
-                                on_drop: move |_| {
+                                on_drag_start: move |()| dragged_file.set(Some(file4.clone())),
+                                on_drop: move |()| {
                                     if let Some(from) = dragged_file() {
                                         if from != file5 {
                                             ws_send(&ws, &UserCommand::Queue(QueueCommand::MoveItem(from, file5.clone())));

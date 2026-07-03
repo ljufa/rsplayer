@@ -40,7 +40,7 @@ struct Station {
     bitrate: usize,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum FilterType {
     Favorites,
     Country,
@@ -92,7 +92,7 @@ pub fn LibraryRadioPage() -> Element {
     });
 
     let mut change_filter = move |new_filter: FilterType| {
-        *filter.write() = new_filter.clone();
+        *filter.write() = new_filter;
         *loading.write() = true;
         *showing_stations.write() = false;
         *browse_items.write() = Vec::new();
@@ -155,10 +155,7 @@ pub fn LibraryRadioPage() -> Element {
                     button {
                         key: "{label}",
                         class: if *filter.read() == ft { "btn btn-sm btn-primary" } else { "btn btn-sm btn-ghost" },
-                        onclick: {
-                            let ft = ft.clone();
-                            move |_| change_filter(ft.clone())
-                        },
+                        onclick: move |_| change_filter(ft),
                         "{label}"
                     }
                 }
@@ -275,7 +272,6 @@ pub fn LibraryRadioPage() -> Element {
                             stations
                                 .read()
                                 .iter()
-                                .cloned()
                                 .map(move |st| {
                                     let url = st.url.clone();
                                     let url2 = st.url.clone();
@@ -343,7 +339,7 @@ pub fn LibraryRadioPage() -> Element {
                                                         onclick: move |_| ws_send(
                                                             &ws,
                                                             &UserCommand::Metadata(
-                                                                MetadataCommand::LikeMediaItem(format!("radio_uuid_{}", uuid)),
+                                                                MetadataCommand::LikeMediaItem(format!("radio_uuid_{uuid}")),
                                                             ),
                                                         ),
                                                         i { class: "material-icons text-sm", "favorite_border" }
@@ -425,10 +421,7 @@ async fn fetch_stations_by_uuid(uuids: Vec<String>) -> Vec<Station> {
 }
 
 async fn fetch_stations(by: &str, value: &str) -> Vec<Station> {
-    let url = format!(
-        "{RADIO_BROWSER_URL}stations/{by}/{}?limit=300&hidebroken=true&order=votes&reverse=true",
-        value
-    );
+    let url = format!("{RADIO_BROWSER_URL}stations/{by}/{value}?limit=300&hidebroken=true&order=votes&reverse=true");
     let Ok(resp) = Request::get(&url).send().await else {
         return vec![];
     };
@@ -436,7 +429,7 @@ async fn fetch_stations(by: &str, value: &str) -> Vec<Station> {
 }
 
 async fn search_stations_by_name(name: &str) -> Vec<Station> {
-    let url = format!("{RADIO_BROWSER_URL}stations/search?name={}&limit=300&hidebroken=true", name);
+    let url = format!("{RADIO_BROWSER_URL}stations/search?name={name}&limit=300&hidebroken=true");
     let Ok(resp) = Request::get(&url).send().await else {
         return vec![];
     };

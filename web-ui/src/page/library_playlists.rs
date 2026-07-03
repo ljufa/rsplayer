@@ -27,7 +27,7 @@ pub fn LibraryPlaylistsPage() -> Element {
 
     let default_expanded: HashSet<String> = ["recently-added-pl", "new-releases-pl", "saved-pl", "favorites-pl"]
         .iter()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
     let mut expanded: Signal<HashSet<String>> = use_signal(|| default_expanded);
 
@@ -60,19 +60,19 @@ pub fn LibraryPlaylistsPage() -> Element {
                         let new_releases:   Vec<_> = items.iter().filter(|i| i.is_new_release()).cloned().collect();
                         let saved:          Vec<_> = items.iter().filter(|i| i.is_saved()).cloned().collect();
                         let favorites:      Vec<_> = items.iter().filter(|i| i.is_most_played() || i.is_liked()).cloned().collect();
-                        let genre_headers   = pl.as_ref().map(|p| p.genre_headers()).unwrap_or_default();
-                        let decade_headers  = pl.as_ref().map(|p| p.decade_headers()).unwrap_or_default();
+                        let genre_headers   = pl.as_ref().map(api_models::playlist::Playlists::genre_headers).unwrap_or_default();
+                        let decade_headers  = pl.as_ref().map(api_models::playlist::Playlists::decade_headers).unwrap_or_default();
 
                         rsx! {
                             if !recently_added.is_empty() {
                                 SectionHeader {
                                     title: "Recently Added", count: recently_added.len(),
                                     is_expanded: expanded.read().contains("recently-added-pl"),
-                                    on_toggle: move |_| { let id = "recently-added-pl".to_string(); let mut e = expanded.write(); if e.contains(&id) { e.remove(&id); } else { e.insert(id); } },
+                                    on_toggle: move |()| { let id = "recently-added-pl".to_string(); let mut e = expanded.write(); if e.contains(&id) { e.remove(&id); } else { e.insert(id); } },
                                 }
                                 if expanded.read().contains("recently-added-pl") {
                                     AlbumCarousel {
-                                        items: recently_added.clone(),
+                                        items: recently_added,
                                         on_open: move |(id, name): (String, String)| { ui.playlist_modal_id.set(Some(id.clone())); ui.playlist_modal_name.set(name); ui.playlist_modal_is_album.set(true); ui.playlist_modal_open.set(true); ws_send(&ws, &UserCommand::Playlist(PlaylistCommand::QueryAlbumItems(id, 0))); },
                                         on_load: move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadAlbumInQueue(id))),
                                         on_add:  move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddAlbumToQueue(id))),
@@ -84,11 +84,11 @@ pub fn LibraryPlaylistsPage() -> Element {
                                 SectionHeader {
                                     title: "New Releases", count: new_releases.len(),
                                     is_expanded: expanded.read().contains("new-releases-pl"),
-                                    on_toggle: move |_| { let id = "new-releases-pl".to_string(); let mut e = expanded.write(); if e.contains(&id) { e.remove(&id); } else { e.insert(id); } },
+                                    on_toggle: move |()| { let id = "new-releases-pl".to_string(); let mut e = expanded.write(); if e.contains(&id) { e.remove(&id); } else { e.insert(id); } },
                                 }
                                 if expanded.read().contains("new-releases-pl") {
                                     AlbumCarousel {
-                                        items: new_releases.clone(),
+                                        items: new_releases,
                                         on_open: move |(id, name): (String, String)| { ui.playlist_modal_id.set(Some(id.clone())); ui.playlist_modal_name.set(name); ui.playlist_modal_is_album.set(true); ui.playlist_modal_open.set(true); ws_send(&ws, &UserCommand::Playlist(PlaylistCommand::QueryAlbumItems(id, 0))); },
                                         on_load: move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadAlbumInQueue(id))),
                                         on_add:  move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddAlbumToQueue(id))),
@@ -100,11 +100,11 @@ pub fn LibraryPlaylistsPage() -> Element {
                                 SectionHeader {
                                     title: "Saved Playlists", count: saved.len(),
                                     is_expanded: expanded.read().contains("saved-pl"),
-                                    on_toggle: move |_| { let id = "saved-pl".to_string(); let mut e = expanded.write(); if e.contains(&id) { e.remove(&id); } else { e.insert(id); } },
+                                    on_toggle: move |()| { let id = "saved-pl".to_string(); let mut e = expanded.write(); if e.contains(&id) { e.remove(&id); } else { e.insert(id); } },
                                 }
                                 if expanded.read().contains("saved-pl") {
                                     PlaylistCarousel {
-                                        items: saved.clone(),
+                                        items: saved,
                                         on_open: move |(id, name): (String, String)| { ui.playlist_modal_id.set(Some(id.clone())); ui.playlist_modal_name.set(name); ui.playlist_modal_is_album.set(false); ui.playlist_modal_open.set(true); ws_send(&ws, &UserCommand::Playlist(PlaylistCommand::QueryPlaylistItems(id, 0))); },
                                         on_load: move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadPlaylistInQueue(id))),
                                         on_add:  move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddPlaylistToQueue(id))),
@@ -116,11 +116,11 @@ pub fn LibraryPlaylistsPage() -> Element {
                                 SectionHeader {
                                     title: "Favorites", count: favorites.len(),
                                     is_expanded: expanded.read().contains("favorites-pl"),
-                                    on_toggle: move |_| { let id = "favorites-pl".to_string(); let mut e = expanded.write(); if e.contains(&id) { e.remove(&id); } else { e.insert(id); } },
+                                    on_toggle: move |()| { let id = "favorites-pl".to_string(); let mut e = expanded.write(); if e.contains(&id) { e.remove(&id); } else { e.insert(id); } },
                                 }
                                 if expanded.read().contains("favorites-pl") {
                                     PlaylistCarousel {
-                                        items: favorites.clone(),
+                                        items: favorites,
                                         on_open: move |(id, name): (String, String)| { ui.playlist_modal_id.set(Some(id.clone())); ui.playlist_modal_name.set(name); ui.playlist_modal_is_album.set(false); ui.playlist_modal_open.set(true); ws_send(&ws, &UserCommand::Playlist(PlaylistCommand::QueryPlaylistItems(id, 0))); },
                                         on_load: move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadPlaylistInQueue(id))),
                                         on_add:  move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddPlaylistToQueue(id))),
@@ -141,10 +141,10 @@ pub fn LibraryPlaylistsPage() -> Element {
                                 rsx! {
                                     SectionHeaderWithActions {
                                         key: "gh-{idx}-{section_id}",
-                                        title: genre.clone(), count: item_count, is_expanded: is_exp,
-                                        on_toggle: move |_| { let mut e = expanded.write(); if e.contains(&sid) { e.remove(&sid); } else { e.insert(sid.clone()); if !lazy_genre_albums.read().contains_key(&g1) { ws_send(&ws, &UserCommand::Playlist(PlaylistCommand::QueryAlbumsByGenre(g1.clone()))); } } },
-                                        on_load: move |_| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadGenreInQueue(g2.clone()))),
-                                        on_add:  move |_| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddGenreToQueue(g3.clone()))),
+                                        title: genre, count: item_count, is_expanded: is_exp,
+                                        on_toggle: move |()| { let mut e = expanded.write(); if e.contains(&sid) { e.remove(&sid); } else { e.insert(sid.clone()); if !lazy_genre_albums.read().contains_key(&g1) { ws_send(&ws, &UserCommand::Playlist(PlaylistCommand::QueryAlbumsByGenre(g1.clone()))); } } },
+                                        on_load: move |()| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadGenreInQueue(g2.clone()))),
+                                        on_add:  move |()| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddGenreToQueue(g3.clone()))),
                                     }
                                     if is_exp {
                                         if let Some(albums) = albums {
@@ -174,10 +174,10 @@ pub fn LibraryPlaylistsPage() -> Element {
                                 rsx! {
                                     SectionHeaderWithActions {
                                         key: "dh-{idx}-{section_id}",
-                                        title: decade.clone(), count: item_count, is_expanded: is_exp,
-                                        on_toggle: move |_| { let mut e = expanded.write(); if e.contains(&sid) { e.remove(&sid); } else { e.insert(sid.clone()); if !lazy_decade_albums.read().contains_key(&d1) { ws_send(&ws, &UserCommand::Playlist(PlaylistCommand::QueryAlbumsByDecade(d1.clone()))); } } },
-                                        on_load: move |_| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadDecadeInQueue(d2.clone()))),
-                                        on_add:  move |_| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddDecadeToQueue(d3.clone()))),
+                                        title: decade, count: item_count, is_expanded: is_exp,
+                                        on_toggle: move |()| { let mut e = expanded.write(); if e.contains(&sid) { e.remove(&sid); } else { e.insert(sid.clone()); if !lazy_decade_albums.read().contains_key(&d1) { ws_send(&ws, &UserCommand::Playlist(PlaylistCommand::QueryAlbumsByDecade(d1.clone()))); } } },
+                                        on_load: move |()| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadDecadeInQueue(d2.clone()))),
+                                        on_add:  move |()| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddDecadeToQueue(d3.clone()))),
                                     }
                                     if is_exp {
                                         if let Some(albums) = albums {
@@ -285,7 +285,7 @@ fn RawAlbumCarousel(
                 let title = album.title.clone(); let title2 = title.clone();
                 let artist = album.artist.clone().unwrap_or_default();
                 let year = album.released.as_ref().map(|d| format!("{}", d.format("%Y"))).unwrap_or_default();
-                let img_src = album.image_id.as_ref().map(|i| format!("/artwork/{i}")).unwrap_or_else(|| "/no_album.svg".to_string());
+                let img_src = album.image_id.as_ref().map_or_else(|| "/no_album.svg".to_string(), |i| format!("/artwork/{i}"));
                 rsx! {
                     div { key: "{id}", class: "carousel-item",
                         div { class: "card w-32 bg-base-200 cursor-pointer hover:bg-base-300 transition shadow-sm group",
@@ -328,7 +328,7 @@ fn PlaylistCarousel(
                     _ => return None,
                 };
                 let id2 = id.clone(); let id3 = id.clone(); let name2 = name.clone();
-                let img_src = image_id.map(|i| format!("/artwork/{i}")).unwrap_or_else(|| "/no_album.svg".to_string());
+                let img_src = image_id.map_or_else(|| "/no_album.svg".to_string(), |i| format!("/artwork/{i}"));
                 Some(rsx! {
                     div { key: "{id}", class: "carousel-item",
                         div { class: "card w-32 bg-base-200 cursor-pointer hover:bg-base-300 transition shadow-sm group",

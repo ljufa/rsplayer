@@ -741,4 +741,3 @@ impl AlsaOutput {
         _ = self.stream.pause();
     }
 }
-

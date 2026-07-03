@@ -62,7 +62,7 @@ pub fn LibraryArtistsPage() -> Element {
             .and_then(|s| {
                 s.split('&').chain(s.split('?')).find_map(|p| {
                     let p = p.trim_start_matches('?');
-                    p.strip_prefix("search=").map(|v| v.to_string())
+                    p.strip_prefix("search=").map(std::string::ToString::to_string)
                 })
             })
             .map(|raw| js_sys::decode_uri_component(&raw).map(String::from).unwrap_or(raw))
@@ -70,11 +70,11 @@ pub fn LibraryArtistsPage() -> Element {
     });
 
     use_effect(move || {
-        if !route_search.is_empty() {
+        if route_search.is_empty() {
+            ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryArtists));
+        } else {
             search.set(route_search.clone());
             ws_send(&ws, &UserCommand::Metadata(MetadataCommand::SearchArtists(route_search.clone())));
-        } else {
-            ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryArtists));
         }
     });
 
@@ -195,7 +195,7 @@ fn ArtistNode(item: MetadataLibraryItem, node_id: NodeId, ws: Signal<Option<WebS
             div {
                 class: "library-node__row flex items-center gap-1 pl-3 pr-2 py-1.5 hover:bg-base-200 group",
                 onclick: {
-                    let item = item.clone();
+                    let item = item;
                     move |_| {
                         if !is_song {
                             let t = tree.read();
@@ -295,9 +295,9 @@ fn ArtistNode(item: MetadataLibraryItem, node_id: NodeId, ws: Signal<Option<WebS
 
 fn queue_actions(item: MetadataLibraryItem, ws: Signal<Option<WebSocket>>) -> Element {
     let is_song = matches!(item, MetadataLibraryItem::SongItem(_));
+    let i2 = item.clone();
 
     if is_song {
-        let i2 = item.clone();
         rsx! {
             button {
                 class: "btn btn-ghost btn-xs",
@@ -313,7 +313,6 @@ fn queue_actions(item: MetadataLibraryItem, ws: Signal<Option<WebSocket>>) -> El
             }
         }
     } else {
-        let i2 = item.clone();
         rsx! {
             button {
                 class: "btn btn-ghost btn-xs",

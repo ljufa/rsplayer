@@ -19,7 +19,7 @@ pub enum VisualizerType {
 }
 
 impl VisualizerType {
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::None => "none",
             Self::NeonBar => "neonbar",
@@ -37,7 +37,7 @@ impl VisualizerType {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn create_from_str(s: &str) -> Option<Self> {
         match s {
             "none" => Some(Self::None),
             "neonbar" => Some(Self::NeonBar),
@@ -56,7 +56,8 @@ impl VisualizerType {
         }
     }
 
-    pub fn cycle(self) -> Self {
+    #[must_use]
+    pub const fn cycle(self) -> Self {
         match self {
             Self::None => Self::NeonBar,
             Self::NeonBar => Self::Spectrum,
@@ -75,7 +76,7 @@ impl VisualizerType {
     }
 }
 
-/// Particle: [x_px, y_px, vx_px, vy_px, life (0–1)]
+/// Particle: [`x_px`, `y_px`, `vx_px`, `vy_px`, life (0–1)]
 type Particle = [f64; 5];
 
 pub struct VUMeter {
@@ -94,9 +95,9 @@ pub struct VUMeter {
     circular_bars: Vec<f64>,
     lissajous_phase: f64,
     particles: Vec<Particle>,
-    /// Pulse rings for the Mirror visualizer: [radius_norm, life, hue]
+    /// Pulse rings for the Mirror visualizer: [`radius_norm`, life, hue]
     pulse_rings: Vec<[f64; 3]>,
-    /// Starfield: [x(-1..1), y(-1..1), z(0..1), prev_z]
+    /// Starfield: [x(-1..1), y(-1..1), z(0..1), `prev_z`]
     stars: Vec<[f64; 4]>,
     plasma_time: f64,
     /// Bounce balls: [x(0..1), y(0..1), vx, vy, hue]
@@ -165,8 +166,8 @@ impl VUMeter {
         self.left = left;
         self.right = right;
         let smoothing = 0.3;
-        self.smoothed_left = self.smoothed_left + (left as f64 - self.smoothed_left) * smoothing;
-        self.smoothed_right = self.smoothed_right + (right as f64 - self.smoothed_right) * smoothing;
+        self.smoothed_left = (f64::from(left) - self.smoothed_left).mul_add(smoothing, self.smoothed_left);
+        self.smoothed_right = (f64::from(right) - self.smoothed_right).mul_add(smoothing, self.smoothed_right);
 
         // Peak hold: snap up instantly, decay slowly
         if self.smoothed_left >= self.peak_left {
@@ -183,8 +184,7 @@ impl VUMeter {
         match self.visualizer_type {
             VisualizerType::Spectrum => self.update_spectrum_bars(),
             VisualizerType::Wave => self.update_wave(),
-            VisualizerType::Mirror => self.update_pulse_rings(),
-            VisualizerType::Tunnel => self.update_pulse_rings(),
+            VisualizerType::Mirror | VisualizerType::Tunnel => self.update_pulse_rings(),
             VisualizerType::Starfield => self.update_starfield(),
             VisualizerType::Dna => self.update_dna(),
             VisualizerType::Plasma => self.update_plasma(),
@@ -204,15 +204,15 @@ impl VUMeter {
         let bar_count = self.spectrum_bars_left.len();
 
         for i in 0..bar_count {
-            let freq_factor = ((i as f64 / bar_count as f64) * 3.0).sin().abs() * 0.4 + 0.6;
-            let random_factor = 0.7 + (js_sys::Math::random() * 0.3);
+            let freq_factor = ((i as f64 / bar_count as f64) * 3.0).sin().abs().mul_add(0.4, 0.6);
+            let random_factor = js_sys::Math::random().mul_add(0.3, 0.7);
             let decay_factor = if base_left > 100.0 { 0.5 } else { 0.65 };
 
             let target_left = (base_left * freq_factor * random_factor).min(255.0);
             let target_right = (base_right * freq_factor * random_factor).min(255.0);
 
-            self.spectrum_bars_left[i] = self.spectrum_bars_left[i] * decay_factor + target_left * (1.0 - decay_factor);
-            self.spectrum_bars_right[i] = self.spectrum_bars_right[i] * decay_factor + target_right * (1.0 - decay_factor);
+            self.spectrum_bars_left[i] = self.spectrum_bars_left[i].mul_add(decay_factor, target_left * (1.0 - decay_factor));
+            self.spectrum_bars_right[i] = self.spectrum_bars_right[i].mul_add(decay_factor, target_right * (1.0 - decay_factor));
 
             // Peak hold per bar
             if self.spectrum_bars_left[i] >= self.spectrum_peaks_left[i] {
@@ -231,7 +231,7 @@ impl VUMeter {
     fn update_wave(&mut self) {
         let avg_l = self.smoothed_left;
         let avg_r = self.smoothed_right;
-        self.wave_phase += 0.7 + (avg_l / 255.0) * 0.5;
+        self.wave_phase += (avg_l / 255.0).mul_add(0.5, 0.7);
 
         let point_count = self.wave_points.len();
         for i in 0..point_count {
@@ -240,31 +240,38 @@ impl VUMeter {
             // Left channel: 3 cycles
             let amp_l = (avg_l / 255.0).max(0.05);
             let noise_l = (js_sys::Math::random() - 0.5) * 0.08 * amp_l;
-            let target_l = (t * std::f64::consts::TAU * 3.0 + self.wave_phase).sin() * amp_l + noise_l;
+            let target_l = (t * std::f64::consts::TAU)
+                .mul_add(3.0, self.wave_phase)
+                .sin()
+                .mul_add(amp_l, noise_l);
             let decay_l = if avg_l > 50.0 { 0.25 } else { 0.5 };
-            self.wave_points[i] = self.wave_points[i] * decay_l + target_l * (1.0 - decay_l);
+            self.wave_points[i] = self.wave_points[i].mul_add(decay_l, target_l * (1.0 - decay_l));
 
             // Right channel: 5 cycles, desynchronised phase
             let amp_r = (avg_r / 255.0).max(0.05);
             let noise_r = (js_sys::Math::random() - 0.5) * 0.08 * amp_r;
-            let target_r = (t * std::f64::consts::TAU * 5.0 + self.wave_phase * 0.71).sin() * amp_r + noise_r;
+            let target_r = self
+                .wave_phase
+                .mul_add(0.71, t * std::f64::consts::TAU * 5.0)
+                .sin()
+                .mul_add(amp_r, noise_r);
             let decay_r = if avg_r > 50.0 { 0.25 } else { 0.5 };
-            self.wave_points_right[i] = self.wave_points_right[i] * decay_r + target_r * (1.0 - decay_r);
+            self.wave_points_right[i] = self.wave_points_right[i].mul_add(decay_r, target_r * (1.0 - decay_r));
         }
     }
 
     fn update_circular(&mut self) {
-        let avg = (self.smoothed_left + self.smoothed_right) / 2.0;
+        let avg = f64::midpoint(self.smoothed_left, self.smoothed_right);
         let bar_count = self.circular_bars.len();
 
         for i in 0..bar_count {
             let t = i as f64 / bar_count as f64;
-            let freq_factor = ((t * 4.0 + self.wave_phase * 0.5).sin() + 1.0) * 0.5;
-            let random_factor = 0.6 + js_sys::Math::random() * 0.4;
+            let freq_factor = (self.wave_phase.mul_add(0.5, t * 4.0).sin() + 1.0) * 0.5;
+            let random_factor = js_sys::Math::random().mul_add(0.4, 0.6);
             let target = (avg * freq_factor * random_factor).min(255.0);
 
             let decay = if avg > 50.0 { 0.4 } else { 0.65 };
-            self.circular_bars[i] = self.circular_bars[i] * decay + target * (1.0 - decay);
+            self.circular_bars[i] = self.circular_bars[i].mul_add(decay, target * (1.0 - decay));
         }
 
         self.wave_phase += 0.4;
@@ -279,7 +286,7 @@ impl VUMeter {
     }
 
     fn update_pulse_rings(&mut self) {
-        let avg = (self.smoothed_left + self.smoothed_right) / 2.0;
+        let avg = f64::midpoint(self.smoothed_left, self.smoothed_right);
         let intensity = avg / 255.0;
 
         // Spawn a ring every update; size and color reflect current volume
@@ -310,15 +317,15 @@ impl VUMeter {
     }
 
     fn update_starfield(&mut self) {
-        let avg = (self.smoothed_left + self.smoothed_right) / 2.0;
-        let speed = 0.008 + (avg / 255.0) * 0.035;
+        let avg = f64::midpoint(self.smoothed_left, self.smoothed_right);
+        let speed = (avg / 255.0).mul_add(0.035, 0.008);
 
         if self.stars.is_empty() {
             for _ in 0..200 {
                 let z = js_sys::Math::random();
                 self.stars.push([
-                    js_sys::Math::random() * 2.0 - 1.0,
-                    js_sys::Math::random() * 2.0 - 1.0,
+                    js_sys::Math::random().mul_add(2.0, -1.0),
+                    js_sys::Math::random().mul_add(2.0, -1.0),
                     z,
                     (z + 0.001).min(1.0),
                 ]);
@@ -329,8 +336,8 @@ impl VUMeter {
             star[3] = star[2];
             star[2] -= speed;
             if star[2] <= 0.01 {
-                star[0] = js_sys::Math::random() * 2.0 - 1.0;
-                star[1] = js_sys::Math::random() * 2.0 - 1.0;
+                star[0] = js_sys::Math::random().mul_add(2.0, -1.0);
+                star[1] = js_sys::Math::random().mul_add(2.0, -1.0);
                 star[2] = 1.0;
                 star[3] = 1.0;
             }
@@ -338,37 +345,37 @@ impl VUMeter {
     }
 
     fn update_dna(&mut self) {
-        let avg = (self.smoothed_left + self.smoothed_right) / 2.0;
-        self.wave_phase += 0.12 + (avg / 255.0) * 0.08;
+        let avg = f64::midpoint(self.smoothed_left, self.smoothed_right);
+        self.wave_phase += (avg / 255.0).mul_add(0.08, 0.12);
     }
 
     fn update_plasma(&mut self) {
-        let avg = (self.smoothed_left + self.smoothed_right) / 2.0;
-        self.plasma_time += 0.025 + (avg / 255.0) * 0.025;
+        let avg = f64::midpoint(self.smoothed_left, self.smoothed_right);
+        self.plasma_time += (avg / 255.0).mul_add(0.025, 0.025);
     }
 
     fn update_bounce(&mut self) {
-        let avg = (self.smoothed_left + self.smoothed_right) / 2.0;
+        let avg = f64::midpoint(self.smoothed_left, self.smoothed_right);
         let intensity = avg / 255.0;
 
         if self.bounce_balls.is_empty() {
             for i in 0..6 {
-                let angle = (i as f64 / 6.0) * std::f64::consts::TAU;
-                let speed = 0.004 + js_sys::Math::random() * 0.004;
+                let angle = (f64::from(i) / 6.0) * std::f64::consts::TAU;
+                let speed = js_sys::Math::random().mul_add(0.004, 0.004);
                 self.bounce_balls.push([
                     js_sys::Math::random(),
                     js_sys::Math::random(),
                     angle.cos() * speed,
                     angle.sin() * speed,
-                    i as f64 / 6.0 * 360.0,
+                    f64::from(i) / 6.0 * 360.0,
                 ]);
             }
         }
 
         let speed_factor = 1.0 + intensity * 4.0;
         for ball in &mut self.bounce_balls {
-            ball[0] += ball[2] * speed_factor;
-            ball[1] += ball[3] * speed_factor;
+            ball[0] = ball[2].mul_add(speed_factor, ball[0]);
+            ball[1] = ball[3].mul_add(speed_factor, ball[1]);
             if ball[0] < 0.0 {
                 ball[0] = 0.0;
                 ball[2] = ball[2].abs();
@@ -390,9 +397,9 @@ impl VUMeter {
     }
 
     fn update_particles(&mut self) {
-        let width = self.canvas.width() as f64;
-        let height = self.canvas.height() as f64;
-        let avg = (self.smoothed_left + self.smoothed_right) / 2.0;
+        let width = f64::from(self.canvas.width());
+        let height = f64::from(self.canvas.height());
+        let avg = f64::midpoint(self.smoothed_left, self.smoothed_right);
         let intensity = avg / 255.0;
 
         let cx = width / 2.0;
@@ -400,10 +407,10 @@ impl VUMeter {
         let aspect = height / width;
 
         // Spawn more particles when louder
-        let spawn = (intensity * 5.0) as usize + if intensity > 0.05 { 1 } else { 0 };
+        let spawn = (intensity * 5.0) as usize + usize::from(intensity > 0.05);
         for _ in 0..spawn {
             let angle = js_sys::Math::random() * std::f64::consts::TAU;
-            let speed = (1.5 + js_sys::Math::random() * 4.0) * intensity * (width * 0.012);
+            let speed = js_sys::Math::random().mul_add(4.0, 1.5) * intensity * (width * 0.012);
             self.particles.push([
                 cx,
                 cy,
@@ -436,8 +443,8 @@ impl VUMeter {
     }
 
     fn draw(&self) {
-        let width = self.canvas.width() as f64;
-        let height = self.canvas.height() as f64;
+        let width = f64::from(self.canvas.width());
+        let height = f64::from(self.canvas.height());
 
         self.ctx.clear_rect(0.0, 0.0, width, height);
 
@@ -490,7 +497,7 @@ impl VUMeter {
         for i in 0..bar_count {
             let x = i as f64 * (bar_width + gap);
             // Hue: violet (270°) at left → red (0°) at right
-            let hue = 270.0 - (i as f64 / (bar_count_f - 1.0)) * 270.0;
+            let hue = (i as f64 / (bar_count_f - 1.0)).mul_add(-270.0, 270.0);
 
             let h_left = (self.spectrum_bars_left[i] / 255.0) * max_bar_h;
             let h_right = (self.spectrum_bars_right[i] / 255.0) * max_bar_h;
@@ -523,8 +530,8 @@ impl VUMeter {
             (base_y, base_y, base_y + h)
         };
 
-        let color_tip = format!("hsl({:.0}, 100%, 65%)", hue);
-        let color_base = format!("hsla({:.0}, 100%, 40%, 0.55)", hue);
+        let color_tip = format!("hsl({hue:.0}, 100%, 65%)");
+        let color_base = format!("hsla({hue:.0}, 100%, 40%, 0.55)");
 
         let grad = self.ctx.create_linear_gradient(x, grad_top, x, grad_bot);
         if up {
@@ -543,7 +550,7 @@ impl VUMeter {
     }
 
     fn draw_spectrum_peak(&self, x: f64, y: f64, w: f64, hue: f64) {
-        let color = format!("hsl({:.0}, 100%, 82%)", hue);
+        let color = format!("hsl({hue:.0}, 100%, 82%)");
         self.ctx.set_fill_style_str(&color);
         self.ctx.set_shadow_blur(8.0);
         self.ctx.set_shadow_color(&color);
@@ -573,9 +580,9 @@ impl VUMeter {
             self.ctx.set_stroke_style_str(glow);
             self.ctx.set_shadow_blur(0.0);
             self.ctx.begin_path();
-            for i in 0..point_count {
+            for (i, &point) in points.iter().enumerate().take(point_count) {
                 let x = (i as f64 / point_count as f64) * width;
-                let y = center_y + points[i] * amp * 0.48;
+                let y = (point * amp).mul_add(0.48, center_y);
                 if i == 0 {
                     self.ctx.move_to(x, y);
                 } else {
@@ -590,9 +597,9 @@ impl VUMeter {
             self.ctx.set_shadow_blur(14.0);
             self.ctx.set_shadow_color(color);
             self.ctx.begin_path();
-            for i in 0..point_count {
+            for (i, &point) in points.iter().enumerate().take(point_count) {
                 let x = (i as f64 / point_count as f64) * width;
-                let y = center_y + points[i] * amp * 0.48;
+                let y = (point * amp).mul_add(0.48, center_y);
                 if i == 0 {
                     self.ctx.move_to(x, y);
                 } else {
@@ -618,18 +625,18 @@ impl VUMeter {
         self.ctx.clear_rect(0.0, 0.0, width, height);
 
         for i in 0..bar_count {
-            let angle = (i as f64 / bar_count as f64) * std::f64::consts::TAU - std::f64::consts::FRAC_PI_2;
+            let angle = (i as f64 / bar_count as f64).mul_add(std::f64::consts::TAU, -std::f64::consts::FRAC_PI_2);
             let value = self.circular_bars[i];
             let bar_length = (value / 255.0) * (width.min(height) * 0.35);
 
             let percent = (value / 255.0).min(1.0);
             let hue = 270.0 - percent * 270.0;
-            let color = format!("hsl({:.0},100%,60%)", hue);
+            let color = format!("hsl({hue:.0},100%,60%)");
 
-            let x1 = center_x + angle.cos() * base_radius;
-            let y1 = center_y + angle.sin() * base_radius;
-            let x2 = center_x + angle.cos() * (base_radius + bar_length);
-            let y2 = center_y + angle.sin() * (base_radius + bar_length);
+            let x1 = angle.cos().mul_add(base_radius, center_x);
+            let y1 = angle.sin().mul_add(base_radius, center_y);
+            let x2 = angle.cos().mul_add(base_radius + bar_length, center_x);
+            let y2 = angle.sin().mul_add(base_radius + bar_length, center_y);
 
             self.ctx.set_shadow_blur(10.0);
             self.ctx.set_shadow_color(&color);
@@ -682,7 +689,7 @@ impl VUMeter {
             let _ = fg.add_color_stop(0.92, "hsl(25,  100%, 54%)");
             let _ = fg.add_color_stop(1.0, "hsl(0,   100%, 54%)");
             self.ctx.set_shadow_blur(18.0);
-            self.ctx.set_shadow_color(&format!("hsla({:.0},100%,60%,0.75)", glow_hue));
+            self.ctx.set_shadow_color(&format!("hsla({glow_hue:.0},100%,60%,0.75)"));
             self.ctx.set_fill_style_canvas_gradient(&fg);
             self.ctx.fill_rect(x, y, fill_w, h);
             self.ctx.set_shadow_blur(0.0);
@@ -696,7 +703,7 @@ impl VUMeter {
             self.ctx.fill_rect(x, y, fill_w, (h * 0.20).max(2.0));
 
             // Bright leading edge flash
-            let edge_color = format!("hsl({:.0},100%,82%)", glow_hue);
+            let edge_color = format!("hsl({glow_hue:.0},100%,82%)");
             self.ctx.set_shadow_blur(14.0);
             self.ctx.set_shadow_color(&edge_color);
             self.ctx.set_fill_style_str(&edge_color);
@@ -708,8 +715,8 @@ impl VUMeter {
         // === Peak hold marker ===
         if peak > 3.0 {
             let phue = 220.0 - peak_pct * 220.0;
-            let pcol = format!("hsl({:.0},100%,85%)", phue);
-            let peak_x = x + w * peak_pct;
+            let pcol = format!("hsl({phue:.0},100%,85%)");
+            let peak_x = w.mul_add(peak_pct, x);
             self.ctx.set_shadow_blur(12.0);
             self.ctx.set_shadow_color(&pcol);
             self.ctx.set_fill_style_str(&pcol);
@@ -721,9 +728,9 @@ impl VUMeter {
         self.ctx.set_stroke_style_str("rgba(255,255,255,0.20)");
         self.ctx.set_line_width(1.0);
         for &t in &[0.25_f64, 0.5, 0.75, 0.9] {
-            let tx = x + w * t;
+            let tx = w.mul_add(t, x);
             self.ctx.begin_path();
-            self.ctx.move_to(tx, y + h * 0.5);
+            self.ctx.move_to(tx, h.mul_add(0.5, y));
             self.ctx.line_to(tx, y + h);
             self.ctx.stroke();
         }
@@ -747,8 +754,8 @@ impl VUMeter {
         self.ctx.begin_path();
         let steps = 400;
         for i in 0..=steps {
-            let t = (i as f64 / steps as f64) * std::f64::consts::TAU;
-            let x = cx + ax * (3.0 * t + self.lissajous_phase).sin();
+            let t = (f64::from(i) / f64::from(steps)) * std::f64::consts::TAU;
+            let x = cx + ax * 3.0f64.mul_add(t, self.lissajous_phase).sin();
             let y = cy + ay * (2.0 * t).sin();
             if i == 0 {
                 self.ctx.move_to(x, y);
@@ -765,8 +772,8 @@ impl VUMeter {
 
         for p in &self.particles {
             let life = p[4];
-            let size = (1.5 + (1.0 - life) * 2.5).max(0.5);
-            let color = format!("rgba(0, 255, 180, {})", life);
+            let size = (1.0 - life).mul_add(2.5, 1.5).max(0.5);
+            let color = format!("rgba(0, 255, 180, {life})");
             self.ctx.set_fill_style_str(&color);
             self.ctx.set_shadow_blur(10.0);
             self.ctx.set_shadow_color(&color);
@@ -793,9 +800,9 @@ impl VUMeter {
             let rx = (cx * radius_norm * 1.15).max(0.1);
             let ry = (cy * radius_norm * 1.15).max(0.1);
 
-            let line_w = (life * 3.5 + 0.5).max(0.5);
-            let color = format!("hsla({:.0},100%,65%,{:.3})", hue, life);
-            let glow = format!("hsl({:.0},100%,65%)", hue);
+            let line_w = life.mul_add(3.5, 0.5).max(0.5);
+            let color = format!("hsla({hue:.0},100%,65%,{life:.3})");
+            let glow = format!("hsl({hue:.0},100%,65%)");
 
             self.ctx.set_stroke_style_str(&color);
             self.ctx.set_shadow_blur(life * 22.0);
@@ -814,16 +821,16 @@ impl VUMeter {
         let cx = width / 2.0;
         let cy = height / 2.0;
         let scale = width.min(height) * 0.5;
-        let avg = (self.smoothed_left + self.smoothed_right) / 2.0;
+        let avg = f64::midpoint(self.smoothed_left, self.smoothed_right);
         let intensity = avg / 255.0;
 
         for star in &self.stars {
             let z = star[2];
             let prev_z = star[3];
-            let sx = (star[0] / z) * scale + cx;
-            let sy = (star[1] / z) * scale * (height / width) + cy;
-            let prev_sx = (star[0] / prev_z) * scale + cx;
-            let prev_sy = (star[1] / prev_z) * scale * (height / width) + cy;
+            let sx = (star[0] / z).mul_add(scale, cx);
+            let sy = ((star[1] / z) * scale).mul_add(height / width, cy);
+            let prev_sx = (star[0] / prev_z).mul_add(scale, cx);
+            let prev_sy = ((star[1] / prev_z) * scale).mul_add(height / width, cy);
 
             if sx < -10.0 || sx > width + 10.0 || sy < -10.0 || sy > height + 10.0 {
                 continue;
@@ -832,7 +839,7 @@ impl VUMeter {
             let brightness = 1.0 - z;
             let line_w = (brightness * 2.5 + 0.3).max(0.3);
             let hue = 200.0 + intensity * 50.0;
-            let color = format!("hsla({:.0},70%,90%,{:.2})", hue, brightness);
+            let color = format!("hsla({hue:.0},70%,90%,{brightness:.2})");
 
             self.ctx.set_stroke_style_str(&color);
             self.ctx.set_line_width(line_w);
@@ -858,14 +865,14 @@ impl VUMeter {
         for i in 0..=steps {
             let t = i as f64 / steps as f64;
             let x = t * width;
-            let phase = t * std::f64::consts::TAU * 2.5 + self.wave_phase;
-            let y1 = mid_y + phase.sin() * amp * amp_l;
-            let y2 = mid_y + (phase + std::f64::consts::PI).sin() * amp * amp_r;
+            let phase = (t * std::f64::consts::TAU).mul_add(2.5, self.wave_phase);
+            let y1 = (phase.sin() * amp).mul_add(amp_l, mid_y);
+            let y2 = ((phase + std::f64::consts::PI).sin() * amp).mul_add(amp_r, mid_y);
             let persp = (phase.cos() + 1.0) * 0.5;
             if persp < 0.08 {
                 continue;
             }
-            let hue = t * 180.0 + 180.0;
+            let hue = t.mul_add(180.0, 180.0);
             let color = format!("hsla({:.0},100%,70%,{:.2})", hue, persp * 0.55);
             self.ctx.set_stroke_style_str(&color);
             self.ctx.set_line_width(persp * 2.5 + 0.5);
@@ -887,7 +894,7 @@ impl VUMeter {
         for i in 0..=steps {
             let t = i as f64 / steps as f64;
             let x = t * width;
-            let y = mid_y + (t * std::f64::consts::TAU * 2.5 + self.wave_phase).sin() * amp * amp_l;
+            let y = ((t * std::f64::consts::TAU).mul_add(2.5, self.wave_phase).sin() * amp).mul_add(amp_l, mid_y);
             if i == 0 {
                 self.ctx.move_to(x, y);
             } else {
@@ -903,7 +910,7 @@ impl VUMeter {
         for i in 0..=steps {
             let t = i as f64 / steps as f64;
             let x = t * width;
-            let y = mid_y + (t * std::f64::consts::TAU * 2.5 + self.wave_phase + std::f64::consts::PI).sin() * amp * amp_r;
+            let y = (((t * std::f64::consts::TAU).mul_add(2.5, self.wave_phase) + std::f64::consts::PI).sin() * amp).mul_add(amp_r, mid_y);
             if i == 0 {
                 self.ctx.move_to(x, y);
             } else {
@@ -924,26 +931,26 @@ impl VUMeter {
 
         let blobs: [(f64, f64, f64); 3] = [
             (
-                width * (0.5 + 0.42 * (t * 0.71).sin()),
-                height * (0.5 + 0.42 * (t * 0.89).cos()),
-                190.0 + t.sin() * 40.0,
+                width * 0.42f64.mul_add((t * 0.71).sin(), 0.5),
+                height * 0.42f64.mul_add((t * 0.89).cos(), 0.5),
+                t.sin().mul_add(40.0, 190.0),
             ),
             (
-                width * (0.5 + 0.42 * (t * 1.13).cos()),
-                height * (0.5 + 0.42 * (t * 0.67).sin()),
-                270.0 + t.cos() * 40.0,
+                width * 0.42f64.mul_add((t * 1.13).cos(), 0.5),
+                height * 0.42f64.mul_add((t * 0.67).sin(), 0.5),
+                t.cos().mul_add(40.0, 270.0),
             ),
             (
-                width * (0.5 + 0.35 * (t * 0.83).sin()),
-                height * (0.5 + 0.35 * (t * 1.17).cos()),
-                330.0 + (t * 1.3).sin() * 40.0,
+                width * 0.35f64.mul_add((t * 0.83).sin(), 0.5),
+                height * 0.35f64.mul_add((t * 1.17).cos(), 0.5),
+                (t * 1.3).sin().mul_add(40.0, 330.0),
             ),
         ];
 
         for (cx, cy, hue) in blobs {
             if let Ok(grad) = self.ctx.create_radial_gradient(cx, cy, 0.0, cx, cy, r) {
-                let _ = grad.add_color_stop(0.0, &format!("hsla({:.0},100%,65%,0.75)", hue));
-                let _ = grad.add_color_stop(1.0, &format!("hsla({:.0},100%,65%,0.0)", hue));
+                let _ = grad.add_color_stop(0.0, &format!("hsla({hue:.0},100%,65%,0.75)"));
+                let _ = grad.add_color_stop(1.0, &format!("hsla({hue:.0},100%,65%,0.0)"));
                 self.ctx.set_fill_style_canvas_gradient(&grad);
                 self.ctx.fill_rect(0.0, 0.0, width, height);
             }
@@ -967,10 +974,10 @@ impl VUMeter {
                 continue;
             }
 
-            let rotation = self.lissajous_phase * 0.3 + idx as f64 * 0.12;
-            let color = format!("hsla({:.0},100%,65%,{:.3})", hue, life);
-            let glow = format!("hsl({:.0},100%,65%)", hue);
-            let line_w = (life * 2.5 + 0.5).max(0.5);
+            let rotation = (idx as f64).mul_add(0.12, self.lissajous_phase * 0.3);
+            let color = format!("hsla({hue:.0},100%,65%,{life:.3})");
+            let glow = format!("hsl({hue:.0},100%,65%)");
+            let line_w = life.mul_add(2.5, 0.5).max(0.5);
 
             self.ctx.save();
             let _ = self.ctx.translate(cx, cy);
@@ -1000,11 +1007,11 @@ impl VUMeter {
                 let y1 = self.bounce_balls[i][1] * height;
                 let x2 = self.bounce_balls[j][0] * width;
                 let y2 = self.bounce_balls[j][1] * height;
-                let dist = ((x2 - x1).powi(2) + (y2 - y1).powi(2)).sqrt();
+                let dist = (x2 - x1).hypot(y2 - y1);
                 if dist < max_dist {
                     let alpha = (1.0 - dist / max_dist) * 0.45;
-                    let hue = (self.bounce_balls[i][4] + self.bounce_balls[j][4]) / 2.0;
-                    self.ctx.set_stroke_style_str(&format!("hsla({:.0},100%,65%,{:.2})", hue, alpha));
+                    let hue = f64::midpoint(self.bounce_balls[i][4], self.bounce_balls[j][4]);
+                    self.ctx.set_stroke_style_str(&format!("hsla({hue:.0},100%,65%,{alpha:.2})"));
                     self.ctx.set_line_width(1.5);
                     self.ctx.set_shadow_blur(0.0);
                     self.ctx.begin_path();
@@ -1020,7 +1027,7 @@ impl VUMeter {
             let x = ball[0] * width;
             let y = ball[1] * height;
             let hue = ball[4];
-            let color = format!("hsl({:.0},100%,70%)", hue);
+            let color = format!("hsl({hue:.0},100%,70%)");
             self.ctx.set_fill_style_str(&color);
             self.ctx.set_shadow_blur(20.0);
             self.ctx.set_shadow_color(&color);

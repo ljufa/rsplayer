@@ -282,11 +282,7 @@ impl PlayerService {
         let metadata_service = self.metadata_service.clone();
         let dsp_handle = self.dsp_processor.lock().ok().and_then(|g| g.as_ref().map(DspProcessor::handle));
         let current_volume = self.current_volume.clone();
-        let software_gain = if self.software_gain_active {
-            Some(current_volume)
-        } else {
-            None
-        };
+        let software_gain = if self.software_gain_active { Some(current_volume) } else { None };
         let vu_meter_enabled = self.rsp_settings.vu_meter_enabled;
         let loudness_service = self.loudness_service.clone();
         let is_multi_core_platform = core_affinity::get_core_ids().is_some_and(|ids| ids.len() > 1);

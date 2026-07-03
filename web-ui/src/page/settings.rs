@@ -1,6 +1,6 @@
 use api_models::{
     common::{MetadataCommand, StorageCommand, SystemRequest, UserCommand, VolumeCrtlType},
-    settings::{DspFilter, DspSettings, FilterConfig, NetworkMountConfig, NetworkMountType, NormalizationSource, Settings},
+    settings::{DspFilter, FilterConfig, NetworkMountConfig, NetworkMountType, NormalizationSource, Settings},
 };
 use dioxus::prelude::*;
 use gloo_net::http::Request;
@@ -45,7 +45,7 @@ enum DspFilterType {
 }
 
 impl DspFilterType {
-    fn label(&self) -> &'static str {
+    const fn label(&self) -> &'static str {
         match self {
             DspFilterType::Peaking => "Peaking",
             DspFilterType::LowShelf => "LowShelf",
@@ -62,7 +62,7 @@ impl DspFilterType {
             DspFilterType::Gain => "Gain",
         }
     }
-    fn default_filter(&self) -> DspFilter {
+    const fn default_filter(&self) -> DspFilter {
         match self {
             DspFilterType::Peaking => DspFilter::Peaking {
                 freq: 1000.0,
@@ -95,7 +95,7 @@ impl DspFilterType {
     }
 }
 
-fn filter_type_of(f: &DspFilter) -> DspFilterType {
+const fn filter_type_of(f: &DspFilter) -> DspFilterType {
     match f {
         DspFilter::Peaking { .. } => DspFilterType::Peaking,
         DspFilter::LowShelf { .. } => DspFilterType::LowShelf,
@@ -300,7 +300,7 @@ pub fn SettingsPage() -> Element {
                                             if let Some(pcm) = first_pcm {
                                                 s.alsa_settings.output_device = pcm;
                                             } else {
-                                                s.alsa_settings.output_device.card_id = val.clone();
+                                                s.alsa_settings.output_device.card_id.clone_from(&val);
                                             }
                                             if val == "pipewire" {
                                                 s.volume_ctrl_settings.ctrl_device = VolumeCrtlType::Pipewire;
@@ -474,8 +474,8 @@ pub fn SettingsPage() -> Element {
                                         .fixed_output_sample_rate
                                         .unwrap_or(0);
                                     [
-                                        0u32, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600,
-                                        768000,
+                                        0u32, 44_100, 48_000, 88_200, 96_000, 176_400, 192_000, 352_800, 384_000, 705_600,
+                                        768_000,
                                     ]
                                         .iter()
                                         .map(move |&v| {
@@ -629,7 +629,6 @@ pub fn SettingsPage() -> Element {
                                     class: "select select-bordered select-sm w-full",
                                     onchange: move |e: Event<FormData>| {
                                         let src = match e.value().as_str() {
-                                            "Auto" => NormalizationSource::Auto,
                                             "FileTagsTrack" => NormalizationSource::FileTagsTrack,
                                             "FileTagsAlbum" => NormalizationSource::FileTagsAlbum,
                                             "Calculated" => NormalizationSource::Calculated,
@@ -690,9 +689,12 @@ pub fn SettingsPage() -> Element {
                                     onchange: move |e: Event<FormData>| {
                                         if let Ok(idx) = e.value().parse::<usize>() {
                                             if let Some(preset) = get_dsp_presets().get(idx) {
-                                                settings.write().rs_player_settings.dsp_settings.filters = preset
+                                                settings
+                                                    .write()
+                                                    .rs_player_settings
+                                                    .dsp_settings
                                                     .filters
-                                                    .clone();
+                                                    .clone_from(&preset.filters);
                                                 *dsp_dirty.write() = true;
                                             }
                                         }
@@ -713,7 +715,7 @@ pub fn SettingsPage() -> Element {
 
                             // Filter list
                             {
-                                let filters: Vec<(usize, FilterConfig)> = settings
+                                settings
                                     .read()
                                     .rs_player_settings
                                     .dsp_settings
@@ -721,9 +723,6 @@ pub fn SettingsPage() -> Element {
                                     .iter()
                                     .cloned()
                                     .enumerate()
-                                    .collect();
-                                filters
-                                    .into_iter()
                                     .map(|(i, fc)| {
                                         let ft = filter_type_of(&fc.filter);
                                         rsx! {
@@ -765,7 +764,7 @@ pub fn SettingsPage() -> Element {
                                                     }
                                                 }
                                                 DspFilterFields {
-                                                    filter: fc.filter.clone(),
+                                                    filter: fc.filter,
                                                     index: i,
                                                     settings,
                                                     dsp_dirty,
@@ -813,10 +812,7 @@ pub fn SettingsPage() -> Element {
                                             let dsp = settings.read().rs_player_settings.dsp_settings.clone();
                                             ws_send(
                                                 &ws,
-                                                &UserCommand::UpdateDsp(DspSettings {
-                                                    enabled: dsp.enabled,
-                                                    filters: dsp.filters,
-                                                }),
+                                                &UserCommand::UpdateDsp(dsp),
                                             );
                                             *dsp_dirty.write() = false;
                                             auto_save();
@@ -935,8 +931,7 @@ pub fn SettingsPage() -> Element {
                         title: "Copy URL",
                         onclick: move |_| {
                             let _ = js_sys::eval(&format!(
-                                "navigator.clipboard.writeText('{}')",
-                                url
+                                "navigator.clipboard.writeText('{url}')"
                             ));
                         },
                         i { class: "material-icons text-sm", "content_copy" }
@@ -1127,15 +1122,13 @@ fn MusicLibraryContent(
                         .unwrap_or_else(|| format!("/mnt/rsplayer/{}", m.name))
                 })
                 .collect();
-            let dirs: Vec<(usize, String)> = settings
+            settings
                 .read()
                 .metadata_settings
                 .effective_directories()
                 .into_iter()
                 .enumerate()
-                .filter(|(_, dir)| !mount_points.contains(dir))
-                .collect();
-            dirs.into_iter()
+                .filter(move |(_, dir)| !mount_points.contains(dir))
                 .map(|(i, dir)| {
                     let dir_status = music_dir_statuses
                         .iter()
@@ -1312,7 +1305,7 @@ fn MusicLibraryContent(
                                 domain: if mf_domain().is_empty() { None } else { Some(mf_domain()) },
                                 mount_point: None,
                             };
-                            let mount_point = format!("/mnt/rsplayer/{}", name);
+                            let mount_point = format!("/mnt/rsplayer/{name}");
                             {
                                 let mut s = settings.write();
                                 s.network_storage_settings.mounts.push(cfg.clone());
@@ -1394,13 +1387,14 @@ fn MusicLibraryContent(
         // Scan status message
         {
             let msg = state.metadata_scan_msg.read().clone();
-            if let Some(m) = msg {
-                rsx! {
-                    p { class: "text-xs text-base-content/60 mt-2 truncate", "{m}" }
-                }
-            } else {
-                rsx! {}
-            }
+            msg.map_or_else(
+                || rsx! {},
+                |m| {
+                    rsx! {
+                        p { class: "text-xs text-base-content/60 mt-2 truncate", "{m}" }
+                    }
+                },
+            )
         }
 
         div { class: "flex gap-2 mt-3 justify-end",
@@ -1486,32 +1480,40 @@ fn DspFilterFields(filter: DspFilter, index: usize, mut settings: Signal<Setting
         if let Ok(v) = val.parse::<f64>() {
             if let Some(fc) = settings.write().rs_player_settings.dsp_settings.filters.get_mut(index) {
                 match (&mut fc.filter, field) {
-                    (DspFilter::Peaking { freq, .. }, "freq") => *freq = v,
-                    (DspFilter::Peaking { gain, .. }, "gain") => *gain = v,
-                    (DspFilter::Peaking { q, .. }, "q") => *q = v,
-                    (DspFilter::LowShelf { freq, .. }, "freq") => *freq = v,
-                    (DspFilter::LowShelf { gain, .. }, "gain") => *gain = v,
-                    (DspFilter::LowShelf { q, .. }, "q") => *q = Some(v),
-                    (DspFilter::HighShelf { freq, .. }, "freq") => *freq = v,
-                    (DspFilter::HighShelf { gain, .. }, "gain") => *gain = v,
-                    (DspFilter::HighShelf { q, .. }, "q") => *q = Some(v),
-                    (DspFilter::LowPass { freq, .. }, "freq") => *freq = v,
-                    (DspFilter::LowPass { q, .. }, "q") => *q = v,
-                    (DspFilter::HighPass { freq, .. }, "freq") => *freq = v,
-                    (DspFilter::HighPass { q, .. }, "q") => *q = v,
-                    (DspFilter::BandPass { freq, .. }, "freq") => *freq = v,
-                    (DspFilter::BandPass { q, .. }, "q") => *q = v,
-                    (DspFilter::Notch { freq, .. }, "freq") => *freq = v,
-                    (DspFilter::Notch { q, .. }, "q") => *q = v,
-                    (DspFilter::AllPass { freq, .. }, "freq") => *freq = v,
-                    (DspFilter::AllPass { q, .. }, "q") => *q = v,
-                    (DspFilter::LowPassFO { freq }, "freq") => *freq = v,
-                    (DspFilter::HighPassFO { freq }, "freq") => *freq = v,
-                    (DspFilter::LowShelfFO { freq, .. }, "freq") => *freq = v,
-                    (DspFilter::LowShelfFO { gain, .. }, "gain") => *gain = v,
-                    (DspFilter::HighShelfFO { freq, .. }, "freq") => *freq = v,
-                    (DspFilter::HighShelfFO { gain, .. }, "gain") => *gain = v,
-                    (DspFilter::Gain { gain }, "gain") => *gain = v,
+                    (
+                        DspFilter::Peaking { freq, .. }
+                        | DspFilter::LowShelf { freq, .. }
+                        | DspFilter::HighShelf { freq, .. }
+                        | DspFilter::LowPass { freq, .. }
+                        | DspFilter::HighPass { freq, .. }
+                        | DspFilter::BandPass { freq, .. }
+                        | DspFilter::Notch { freq, .. }
+                        | DspFilter::AllPass { freq, .. }
+                        | DspFilter::LowPassFO { freq }
+                        | DspFilter::HighPassFO { freq }
+                        | DspFilter::LowShelfFO { freq, .. }
+                        | DspFilter::HighShelfFO { freq, .. },
+                        "freq",
+                    ) => *freq = v,
+                    (
+                        DspFilter::Peaking { gain, .. }
+                        | DspFilter::LowShelf { gain, .. }
+                        | DspFilter::HighShelf { gain, .. }
+                        | DspFilter::LowShelfFO { gain, .. }
+                        | DspFilter::HighShelfFO { gain, .. }
+                        | DspFilter::Gain { gain },
+                        "gain",
+                    ) => *gain = v,
+                    (
+                        DspFilter::Peaking { q, .. }
+                        | DspFilter::LowPass { q, .. }
+                        | DspFilter::HighPass { q, .. }
+                        | DspFilter::BandPass { q, .. }
+                        | DspFilter::Notch { q, .. }
+                        | DspFilter::AllPass { q, .. },
+                        "q",
+                    ) => *q = v,
+                    (DspFilter::LowShelf { q, .. } | DspFilter::HighShelf { q, .. }, "q") => *q = Some(v),
                     _ => {}
                 }
             }

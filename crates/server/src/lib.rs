@@ -76,6 +76,7 @@ pub async fn run_backend(shutdown_rx: Option<Receiver<()>>, command_sender_out: 
     info!("RSPlayer shutdown completed.");
 }
 
+#[allow(clippy::too_many_lines)]
 async fn run(
     container: Box<AppContainer>,
     shutdown_rx: Option<Receiver<()>>,

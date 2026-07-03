@@ -88,6 +88,7 @@ impl BiquadCoefficients {
 
     /// Compute biquad coefficients from filter parameters.
     /// Formulas from the Audio EQ Cookbook (R. Bristow-Johnson) and `CamillaDSP`.
+    #[allow(clippy::too_many_lines, clippy::cast_precision_loss)]
     pub fn from_config(fs: usize, params: &BiquadParameters) -> Self {
         let fs = fs as f32;
         match params {
@@ -228,7 +229,7 @@ impl BiquadCoefficients {
                 let w = 2.0 * PI * freq / fs;
                 let tn = (w / 2.0).tan();
                 let a = 10.0_f32.powf(gain / 40.0);
-                Self::normalize(a * tn + 1.0, a * tn - 1.0, 0.0, a * tn + a * a, a * tn - a * a, 0.0)
+                Self::normalize(a * tn + 1.0, a * tn - 1.0, 0.0, a.mul_add(tn, a * a), a.mul_add(tn, -a * a), 0.0)
             }
             BiquadParameters::LinkwitzTransform {
                 freq_act,

@@ -17,7 +17,7 @@ impl SoftwareGainVolumeControlDevice {
         Box::new(Self { level })
     }
 
-    const fn snapshot(&self, current: u8) -> Volume {
+    const fn snapshot(current: u8) -> Volume {
         Volume {
             step: SOFTWARE_GAIN_STEP,
             min: 0,
@@ -32,23 +32,23 @@ impl VolumeControlDevice for SoftwareGainVolumeControlDevice {
         let current = self.level.load(Ordering::Relaxed);
         let next = current.saturating_add(SOFTWARE_GAIN_STEP).min(SOFTWARE_GAIN_MAX);
         self.level.store(next, Ordering::Relaxed);
-        self.snapshot(next)
+        Self::snapshot(next)
     }
 
     fn vol_down(&mut self) -> Volume {
         let current = self.level.load(Ordering::Relaxed);
         let next = current.saturating_sub(SOFTWARE_GAIN_STEP);
         self.level.store(next, Ordering::Relaxed);
-        self.snapshot(next)
+        Self::snapshot(next)
     }
 
     fn get_vol(&mut self) -> Volume {
-        self.snapshot(self.level.load(Ordering::Relaxed))
+        Self::snapshot(self.level.load(Ordering::Relaxed))
     }
 
     fn set_vol(&mut self, level: u8) -> Volume {
         let clamped = level.min(SOFTWARE_GAIN_MAX);
         self.level.store(clamped, Ordering::Relaxed);
-        self.snapshot(clamped)
+        Self::snapshot(clamped)
     }
 }

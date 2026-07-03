@@ -106,7 +106,7 @@ impl AppState {
                 let local = song
                     .image_id
                     .as_ref()
-                    .map(|id| format!("/artwork/{}", id))
+                    .map(|id| format!("/artwork/{id}"))
                     .or_else(|| song.image_url.clone());
                 *self.album_image.write() = local;
                 *self.current_song.write() = Some(song);
