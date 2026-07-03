@@ -6,11 +6,11 @@ use std::sync::{
 };
 use std::thread::JoinHandle;
 use thread_priority::{ThreadBuilder, ThreadPriority};
-use tokio::sync::broadcast::Sender;
+use tokio::sync::broadcast::{Sender, error::RecvError};
 
 use api_models::{
     settings::{DspSettings, RsPlayerSettings, Settings},
-    state::{PlayerState, StateChangeEvent},
+    state::{PlayerInfo, PlayerState, StateChangeEvent},
 };
 use metadata::loudness_service::LoudnessService;
 use metadata::metadata_service::MetadataService;
@@ -38,6 +38,7 @@ pub struct PlayerService {
     changes_tx: Sender<StateChangeEvent>,
     dsp_processor: Arc<Mutex<Option<DspProcessor>>>,
     loudness_service: Arc<LoudnessService>,
+    last_player_info: Arc<Mutex<Option<PlayerInfo>>>,
 }
 
 const LAST_SONG_PAUSED_KEY: &str = "last_song_paused";
@@ -62,13 +63,7 @@ impl PlayerService {
         let mut rx = state_changes_tx.subscribe();
         let state_tx = state_changes_tx.clone();
 
-        let initial_time = match state_db.get(LAST_SONG_PROGRESS_KEY) {
-            Ok(Some(lt)) => String::from_utf8(lt.to_vec())
-                .unwrap_or_else(|_| "0".to_string())
-                .parse::<u32>()
-                .unwrap_or(0),
-            _ => 0,
-        };
+        let initial_time = Self::read_last_played_song_time(&state_db);
         let last_known_time = Arc::new(AtomicU32::new(initial_time));
         let last_known_time_clone = last_known_time.clone();
         let current_volume_clone = current_volume.clone();
@@ -90,12 +85,22 @@ impl PlayerService {
             }
         }));
         let dsp_processor_clone = dsp_processor.clone();
+        let last_player_info = Arc::new(Mutex::new(None));
+        let last_player_info_clone = last_player_info.clone();
 
         tokio::task::spawn(async move {
             let mut last_saved_secs: u64 = u64::MAX;
             loop {
-                match rx.recv().await {
-                    Ok(StateChangeEvent::SongTimeEvent(st)) => {
+                let event = match rx.recv().await {
+                    Ok(event) => event,
+                    Err(RecvError::Lagged(skipped)) => {
+                        warn!("State change receiver lagged, {skipped} events skipped");
+                        continue;
+                    }
+                    Err(RecvError::Closed) => break,
+                };
+                match event {
+                    StateChangeEvent::SongTimeEvent(st) => {
                         let lt_secs = st.current_time.as_secs();
                         #[allow(clippy::cast_possible_truncation)]
                         last_known_time_clone.store(lt_secs as u32, Ordering::Relaxed);
@@ -106,18 +111,14 @@ impl PlayerService {
                             _ = state_db_async.insert(LAST_SONG_PROGRESS_KEY, lt.as_bytes());
                         }
                     }
-                    Ok(StateChangeEvent::PlaybackStateEvent(ps)) => {
+                    StateChangeEvent::PlaybackStateEvent(ps) => {
                         debug!("Save player state: {ps:?}");
                         match ps {
                             PlayerState::PLAYING => {
                                 _ = state_db_async.remove(LAST_SONG_PAUSED_KEY);
-                                state_tx.send(StateChangeEvent::NotificationSuccess("Playing".to_string())).ok();
                             }
                             PlayerState::PAUSED | PlayerState::STOPPED => {
                                 _ = state_db_async.insert(LAST_SONG_PAUSED_KEY, "true");
-                                state_tx
-                                    .send(StateChangeEvent::NotificationSuccess("Playback paused".to_string()))
-                                    .ok();
                             }
                             PlayerState::ERROR(msg) => {
                                 state_tx
@@ -126,10 +127,13 @@ impl PlayerService {
                             }
                         }
                     }
-                    Ok(StateChangeEvent::VolumeChangeEvent(vol)) => {
+                    StateChangeEvent::VolumeChangeEvent(vol) => {
                         current_volume_clone.store(vol.current, Ordering::Relaxed);
                     }
-                    Ok(StateChangeEvent::PlayerInfoEvent(info)) => {
+                    StateChangeEvent::PlayerInfoEvent(info) => {
+                        if let Ok(mut guard) = last_player_info_clone.lock() {
+                            *guard = Some(info.clone());
+                        }
                         if let Ok(mut guard) = dsp_processor_clone.lock()
                             && let Some(proc) = guard.as_mut()
                         {
@@ -163,6 +167,7 @@ impl PlayerService {
             local_browser_playback: settings.local_browser_playback,
             dsp_processor,
             loudness_service,
+            last_player_info,
         };
         let last_played_song_progress = ps.get_last_played_song_time();
         if last_played_song_progress > 0 {
@@ -172,6 +177,9 @@ impl PlayerService {
     }
 
     pub fn play_from_current_queue_song(&self) {
+        if self.is_playing() {
+            return;
+        }
         if let Ok(Some(_)) = self.state_db.get(LAST_SONG_PAUSED_KEY) {
             let last_song_time = self.get_last_played_song_time();
             self.seek_current_song(last_song_time);
@@ -180,7 +188,24 @@ impl PlayerService {
         *self.playback_thread_handle.lock().expect("lock poisoned") = Some(self.play_all_in_queue());
     }
 
+    fn is_playing(&self) -> bool {
+        self.playback_thread_handle
+            .lock()
+            .expect("lock poisoned")
+            .as_ref()
+            .is_some_and(|handle| !handle.is_finished())
+    }
+
+    /// Info of the song currently being decoded, if playback is active (playing or paused).
+    pub fn get_current_player_info(&self) -> Option<PlayerInfo> {
+        if !self.is_playing() {
+            return None;
+        }
+        self.last_player_info.lock().ok().and_then(|guard| guard.clone())
+    }
+
     pub fn play_from_beginning(&self) {
+        self.stop_current_song();
         _ = self.state_db.remove(LAST_SONG_PAUSED_KEY);
         *self.playback_thread_handle.lock().expect("lock poisoned") = Some(self.play_all_in_queue());
     }
@@ -206,10 +231,10 @@ impl PlayerService {
     }
 
     pub fn toggle_play_pause(&self) {
-        if self.stop_signal.load(Ordering::Relaxed) {
-            self.play_from_current_queue_song();
-        } else {
+        if self.is_playing() {
             self.stop_current_song();
+        } else {
+            self.play_from_current_queue_song();
         }
     }
 
@@ -258,7 +283,7 @@ impl PlayerService {
         let dsp_handle = self.dsp_processor.lock().ok().and_then(|g| g.as_ref().map(DspProcessor::handle));
         let current_volume = self.current_volume.clone();
         let software_gain = if self.software_gain_active {
-            Some(current_volume.clone())
+            Some(current_volume)
         } else {
             None
         };
@@ -377,7 +402,6 @@ impl PlayerService {
                     let mut context = PlaybackContext::new(
                         stop_signal.clone(),
                         skip_to_time.clone(),
-                        current_volume.clone(),
                         software_gain.clone(),
                         changes_tx.clone(),
                         dsp_handle.clone(),
@@ -444,10 +468,13 @@ impl PlayerService {
     }
 
     fn get_last_played_song_time(&self) -> u16 {
-        let last_time = match self.state_db.get(LAST_SONG_PROGRESS_KEY) {
-            Ok(Some(lt)) => String::from_utf8(lt.to_vec()).unwrap_or_else(|_| "0".to_string()),
-            _ => "0".to_string(),
-        };
-        last_time.parse::<u16>().unwrap_or_default()
+        u16::try_from(Self::read_last_played_song_time(&self.state_db)).unwrap_or_default()
+    }
+
+    fn read_last_played_song_time(state_db: &Keyspace) -> u32 {
+        match state_db.get(LAST_SONG_PROGRESS_KEY) {
+            Ok(Some(lt)) => std::str::from_utf8(&lt).ok().and_then(|s| s.parse().ok()).unwrap_or(0),
+            _ => 0,
+        }
     }
 }

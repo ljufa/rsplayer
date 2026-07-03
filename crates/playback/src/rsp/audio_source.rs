@@ -70,10 +70,10 @@ pub fn probe_http_source(
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse::<usize>().ok());
 
-    let media_source: Box<dyn MediaSource> = if let Some(metaint_val) = metaint_val {
+    let media_source: Box<dyn MediaSource> = if let (Some(metaint_val), Some(rm)) = (metaint_val, radio_meta.clone()) {
         info!("ICY stream detected with metaint={metaint_val}");
         let reader = resp.into_body().into_reader();
-        let icy_reader = IcyMetadataReader::new(reader, metaint_val, changes_tx.clone(), radio_meta.clone().unwrap());
+        let icy_reader = IcyMetadataReader::new(reader, metaint_val, changes_tx.clone(), rm);
         Box::new(ReadOnlySource::new(Box::new(icy_reader)))
     } else {
         Box::new(ReadOnlySource::new(resp.into_body().into_reader()))

@@ -1,4 +1,4 @@
-# RSPlayer
+# RSPlayer — Rust-native music server
 
 RSPlayer is an open-source, headless music server primarily for Linux, with experimental macOS and Windows builds. Run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser. A native desktop app (Linux x86_64, macOS, Windows) is also available.
 
@@ -46,7 +46,7 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 
 ### Supported Formats
 
-FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), and APE (Monkey's Audio).
+FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE (Monkey's Audio), and SACD ISO disc images.
 
 ## Known Limitations
 

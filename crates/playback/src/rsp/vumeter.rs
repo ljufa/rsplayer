@@ -7,6 +7,13 @@ use tokio::sync::broadcast::Sender;
 
 const VU_UPDATE_INTERVAL: Duration = Duration::from_millis(50);
 
+/// Cubic perceptual volume curve: `gain = (vol/100)^3`. vol=100 → 1.0 (unity).
+#[inline]
+pub fn cubic_gain(volume: u8) -> f32 {
+    let v = f32::from(volume.min(100)) / 100.0;
+    v * v * v
+}
+
 /// VU meter state and logic.
 ///
 /// When VU metering is disabled the caller should simply not create a
@@ -19,19 +26,22 @@ pub struct VUMeter {
     current_max_l: f32,
     /// Current maximum absolute sample value (right channel).
     current_max_r: f32,
-    /// Current volume level (0-255) used to scale peaks.
-    volume: Arc<AtomicU8>,
+    /// Software gain level (0-100), `Some` only when software volume control
+    /// is active. The meter then shows the post-gain level actually sent to
+    /// the device. With hardware volume control the meter shows the source
+    /// amplitude — attenuation happens after the DAC where we cannot see it.
+    software_gain: Option<Arc<AtomicU8>>,
     /// Channel to send VU events to the frontend.
     changes_tx: Sender<StateChangeEvent>,
 }
 
 impl VUMeter {
-    pub(crate) fn new(volume: Arc<AtomicU8>, changes_tx: Sender<StateChangeEvent>) -> Self {
+    pub(crate) fn new(software_gain: Option<Arc<AtomicU8>>, changes_tx: Sender<StateChangeEvent>) -> Self {
         Self {
             last_update: std::time::Instant::now(),
             current_max_l: 0.0,
             current_max_r: 0.0,
-            volume,
+            software_gain,
             changes_tx,
         }
     }
@@ -39,7 +49,10 @@ impl VUMeter {
     /// Update peak values from a slice of samples.
     /// `samples` is an interleaved slice of channel-count samples.
     pub(crate) fn update_peaks(&mut self, channels: usize, samples: &[impl IntoSample<f32> + Copy]) {
-        let volume_factor = f32::from(self.volume.load(Ordering::Relaxed)) / 255.0;
+        let volume_factor = self
+            .software_gain
+            .as_ref()
+            .map_or(1.0, |level| cubic_gain(level.load(Ordering::Relaxed)));
         if channels >= 2 {
             for chunk in samples.chunks(channels) {
                 if chunk.len() >= 2 {

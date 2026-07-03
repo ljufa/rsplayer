@@ -44,6 +44,9 @@ pub fn handle_player_command(cmd: api_models::common::PlayerCommand, ctx: &Comma
             ctx.send_event(StateChangeEvent::PlaybackModeChangedEvent(mode));
             let settings = ctx.config_store.get_settings();
             ctx.send_event(StateChangeEvent::VuMeterEnabledEvent(settings.rs_player_settings.vu_meter_enabled));
+            if let Some(info) = ctx.player_service.get_current_player_info() {
+                ctx.send_event(StateChangeEvent::PlayerInfoEvent(info));
+            }
         }
     }
 }

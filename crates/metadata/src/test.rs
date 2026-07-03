@@ -129,6 +129,46 @@ mod queue {
     }
 
     #[test]
+    fn should_move_item_to_position_of_other_song() {
+        let queue = create_queue();
+        queue.add_song(&create_song("mp3"));
+        queue.add_song(&create_song("flac"));
+        queue.add_song(&create_song("wav"));
+        queue.add_song(&create_song("aac"));
+        queue.move_item("assets/music.aac", "assets/music.flac");
+        let files: Vec<String> = queue.get_all_songs().into_iter().map(|s| s.file).collect();
+        assert_eq!(
+            files,
+            vec!["assets/music.mp3", "assets/music.aac", "assets/music.flac", "assets/music.wav"]
+        );
+        // unknown song ids are ignored
+        queue.move_item("assets/music.nope", "assets/music.flac");
+        queue.move_item("assets/music.flac", "assets/music.nope");
+        let files: Vec<String> = queue.get_all_songs().into_iter().map(|s| s.file).collect();
+        assert_eq!(
+            files,
+            vec!["assets/music.mp3", "assets/music.aac", "assets/music.flac", "assets/music.wav"]
+        );
+    }
+
+    #[test]
+    fn should_move_item_after_current_song() {
+        let queue = create_queue();
+        queue.add_song(&create_song("mp3"));
+        queue.add_song(&create_song("flac"));
+        queue.add_song(&create_song("wav"));
+        queue.add_song(&create_song("aac"));
+        assert_eq!(queue.get_current_song().unwrap().file, "assets/music.mp3");
+        queue.move_item_after_current("assets/music.aac");
+        let files: Vec<String> = queue.get_all_songs().into_iter().map(|s| s.file).collect();
+        assert_eq!(
+            files,
+            vec!["assets/music.mp3", "assets/music.aac", "assets/music.flac", "assets/music.wav"]
+        );
+        assert_eq!(queue.get_current_song().unwrap().file, "assets/music.mp3");
+    }
+
+    #[test]
     fn should_return_false_move_at_the_end() {
         let queue = create_queue();
         queue.add_song(&create_song("mp3"));
@@ -189,8 +229,12 @@ mod queue {
         queue.add_song(&create_song_with_title("bye title1"));
         queue.add_song(&create_song_with_title("bye title2"));
         let (total, songs) = queue.get_queue_page(0, 20, |song| song.get_title().contains("title1"));
-        assert_eq!(total, 5);
+        assert_eq!(total, 3);
         assert_eq!(songs.len(), 3);
+        let (total, songs) = queue.get_queue_page(2, 20, |song| song.get_title().contains("title1"));
+        assert_eq!(total, 3);
+        assert_eq!(songs.len(), 1);
+        assert_eq!(songs[0].title.as_deref(), Some("bye title1"));
     }
 
     #[test]
@@ -317,8 +361,10 @@ mod queue {
     }
 
     fn create_queue() -> Arc<QueueService> {
-        let ctx = Context::default();
-        create_queue_with_ctx(&ctx)
+        // Leak the context so its Drop impl doesn't delete the DB directory
+        // while the returned service still has it open.
+        let ctx = Box::leak(Box::new(Context::default()));
+        create_queue_with_ctx(ctx)
     }
 
     fn create_queue_with_ctx(ctx: &Context) -> Arc<QueueService> {

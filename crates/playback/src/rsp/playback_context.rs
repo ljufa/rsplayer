@@ -11,8 +11,6 @@ use crate::rsp::vumeter::VUMeter;
 pub struct PlaybackContext {
     pub stop_signal: Arc<AtomicBool>,
     pub skip_to_time: Arc<AtomicU16>,
-    #[allow(dead_code)]
-    pub current_volume: Arc<AtomicU8>,
     /// Set when the user has selected `VolumeCrtlType::Software`; writers
     /// apply cubic gain `(vol/100)^3` to PCM samples each chunk. `None` when
     /// another volume control (ALSA mixer, Pipewire, hardware) is active so
@@ -27,14 +25,13 @@ impl PlaybackContext {
     pub fn new(
         stop_signal: Arc<AtomicBool>,
         skip_to_time: Arc<AtomicU16>,
-        current_volume: Arc<AtomicU8>,
         software_gain: Option<Arc<AtomicU8>>,
         changes_tx: Sender<StateChangeEvent>,
         dsp_handle: Option<DspHandle>,
         vu_meter_enabled: bool,
     ) -> Self {
         let vu_meter = if vu_meter_enabled {
-            Some(VUMeter::new(current_volume.clone(), changes_tx.clone()))
+            Some(VUMeter::new(software_gain.clone(), changes_tx.clone()))
         } else {
             None
         };
@@ -42,7 +39,6 @@ impl PlaybackContext {
         Self {
             stop_signal,
             skip_to_time,
-            current_volume,
             software_gain,
             changes_tx,
             dsp_handle,

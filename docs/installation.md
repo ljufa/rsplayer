@@ -30,7 +30,7 @@ Release filename suffixes by architecture:
 | armv6 | `armhfv6` | `armv6hl` | `armhfv6` |
 | riscv64 | `riscv64` | `riscv64` | `riscv64` |
 
-Example release asset names: `rsplayer_3.5.6_amd64.deb` (server), `rsplayer-desktop_3.5.6_amd64.deb` (desktop deb), `rsplayer-desktop_3.5.6_amd64.tgz` (desktop Arch tarball).
+Example release asset names: `rsplayer_<version>_amd64.deb` (server), `rsplayer-desktop_<version>_amd64.deb` (desktop deb), `rsplayer-desktop_<version>_amd64.tgz` (desktop Arch tarball).
 
 ### macOS (experimental)
 
@@ -79,7 +79,7 @@ bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.s
 ```
 The installation script detects your Linux distribution (Debian/Ubuntu, Fedora/RHEL/CentOS, Arch/Manjaro) and installs the appropriate package type (.deb, .rpm, or .tgz tarball).
 
-?> macOS does not use the Linux package install script. See the [macOS section](#macos-experimental) below for server and desktop download instructions.
+?> macOS does not use the Linux package install script. See the [macOS section](#macos-experimental) for server and desktop download instructions.
 
 * Manually download and install package
 The latest packages can be downloaded from [this page](https://github.com/ljufa/rsplayer/releases/latest). Available package types:
@@ -92,7 +92,7 @@ The latest packages can be downloaded from [this page](https://github.com/ljufa/
   - rename file to `rsplayer`
   - make it executable using `chmod +x rsplayer`
   - run using command `./rsplayer`
-  - optionally if you need to run rsplayer automatically as a service use [this systemd service file](../PKGS/debian/etc/systemd/system/rsplayer.service)
+  - optionally if you need to run rsplayer automatically as a service use [this systemd service file](https://github.com/ljufa/rsplayer/blob/master/PKGS/debian/etc/systemd/system/rsplayer.service)
 
 ### macOS (experimental) quick run
 
@@ -118,7 +118,7 @@ chmod +x rsplayer
 ## Verify installation
 * Run systemd service by `sudo systemctl start rsplayer`
 * Check service status by `sudo systemctl status rsplayer` and if it shows active go to the next step
-* Open browser at http://you-machine-ip-address i.e. http://raspberrypi.local.
+* Open browser at http://your-machine-ip-address, e.g. http://raspberrypi.local.
 
 ?>TIP: The HTTP and HTTPS ports and bind address are configured in the `/opt/rsplayer/env` file. By default, `PORT` is set to 80, `TLS_PORT` is set to 443, and `BIND_ADDR` is set to `0.0.0.0` (all interfaces). You can edit this file to change the ports and bind address used by `rsplayer`.
 * If the page can not load or there is an error message at top of the page please see the [Troubleshooting](troubleshooting.md) section.

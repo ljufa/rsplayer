@@ -14,13 +14,14 @@ impl DeviceCapabilities {
         let channels = find_device_channels(device, source_channels);
         Self { rate, channels }
     }
-
-    pub fn fallback_rates(_self: &Self, device: &Device, source_rate: u32) -> Vec<u32> {
-        fallback_rate_candidates(device, source_rate)
-    }
 }
 
-fn find_device_rate(device: &Device, source_rate: u32) -> Option<u32> {
+/// Check if the device supports `source_rate` natively.
+/// Returns `None` if supported, or `Some(best_rate)` to resample to.
+///
+/// Prefers integer multiples of the source rate (e.g. 22050→44100 at 2×)
+/// for cleaner resampling, falling back to the closest supported rate.
+pub fn find_device_rate(device: &Device, source_rate: u32) -> Option<u32> {
     let Ok(configs) = device.supported_output_configs() else {
         return None;
     };
@@ -64,7 +65,9 @@ fn find_device_rate(device: &Device, source_rate: u32) -> Option<u32> {
     best_multiple.or(closest_rate)
 }
 
-fn find_device_channels(device: &Device, source_channels: u16) -> Option<u16> {
+/// Check if the device supports `source_channels` natively.
+/// Returns `None` if supported, or `Some(closest_channels)` to map to.
+pub fn find_device_channels(device: &Device, source_channels: u16) -> Option<u16> {
     let Ok(configs) = device.supported_output_configs() else {
         return None;
     };
@@ -97,7 +100,17 @@ fn find_device_channels(device: &Device, source_channels: u16) -> Option<u16> {
     if supported { None } else { closest }
 }
 
-fn fallback_rate_candidates(device: &Device, source_rate: u32) -> Vec<u32> {
+/// Return a prioritised list of fallback rates to try when the device rejects
+/// `source_rate` at stream-open time despite claiming to support it via a range.
+///
+/// Some ALSA drivers (e.g. Merus MA12070P) advertise a continuous range like
+/// [44100, 192000] but only accept specific discrete rates.  We cannot know
+/// which rates actually work without probing, so the caller should iterate this
+/// list and use the first rate for which stream open succeeds.
+///
+/// Priority order: integer multiples of `source_rate` (cleanest resampling),
+/// then range boundary rates by distance, then well-known standard rates.
+pub fn fallback_rate_candidates(device: &Device, source_rate: u32) -> Vec<u32> {
     let Ok(configs) = device.supported_output_configs() else {
         return vec![];
     };

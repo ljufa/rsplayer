@@ -24,7 +24,7 @@ use symphonia::core::units::{Time, TimeBase, Timestamp};
 
 use crate::rsp::alsa_output::AlsaOutput;
 use crate::rsp::audio_source::{is_http_stream, probe_http_source, probe_local_file, resolve_ape_path, resolve_sacd_iso_path};
-use crate::rsp::device_capabilities::DeviceCapabilities;
+use crate::rsp::device_capabilities::{DeviceCapabilities, fallback_rate_candidates};
 use crate::rsp::playback_config::PlaybackConfig;
 use crate::rsp::playback_context::PlaybackContext;
 
@@ -37,8 +37,6 @@ pub enum PlaybackResult {
     PlaybackStopped,
     PlaybackFailed,
 }
-
-unsafe impl Send for PlaybackResult {}
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn play_file(
@@ -162,7 +160,9 @@ pub fn play_file(
 
     let mut decoder = codec_registry.make_audio_decoder(audio_params, &AudioDecoderOptions::default())?;
     let mut audio_output: Option<AlsaOutput> = None;
-    let mut vu_meter = context.take_vu_meter();
+    // Cloned (not moved) into each open attempt so the meter survives failed
+    // attempts and mid-song device reopens.
+    let vu_meter = context.take_vu_meter();
     let mut last_current_time = 0;
     // Decode and play the packets belonging to the selected track.
     let loop_result = loop {
@@ -242,11 +242,11 @@ pub fn play_file(
                         &config.settings,
                         is_dsd,
                         context.dsp_handle.as_ref(),
-                        vu_meter.take(),
+                        vu_meter.clone(),
                         context.software_gain.as_ref(),
                     ) else {
                         if caps.rate.is_none() {
-                            let fallback_rates = DeviceCapabilities::fallback_rates(&caps, &device, spec_rate);
+                            let fallback_rates = fallback_rate_candidates(&device, spec_rate);
                             for fallback_rate in fallback_rates {
                                 warn!("{spec_rate}Hz rejected, trying {fallback_rate}Hz");
                                 if let Some(handle) = &context.dsp_handle {
@@ -261,7 +261,7 @@ pub fn play_file(
                                     &config.settings,
                                     is_dsd,
                                     context.dsp_handle.as_ref(),
-                                    vu_meter.take(),
+                                    vu_meter.clone(),
                                     context.software_gain.as_ref(),
                                 ) {
                                     debug!("Audio opened with fallback rate");
@@ -297,7 +297,12 @@ pub fn play_file(
     };
 
     if let Some(audio_output) = audio_output.as_mut() {
-        audio_output.flush();
+        if matches!(loop_result, Ok(PlaybackResult::SongFinished)) {
+            // Natural end of song — let the buffered tail play out.
+            audio_output.drain(&context.stop_signal);
+        } else {
+            audio_output.flush();
+        }
     }
     debug!("Play finished with result {loop_result:?}");
     loop_result

@@ -6,7 +6,7 @@ use rubato::{Fft, FixedSync, Resampler};
 use std::sync::Arc;
 use symphonia::core::audio::{AudioSpec, GenericAudioBufferRef};
 
-use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use std::time::Duration;
 
 /// Number of consecutive error callbacks before the stream is considered
@@ -17,23 +17,36 @@ use std::time::Duration;
 /// genuine hardware failures.
 const ERROR_THRESHOLD: u32 = 30;
 
+use crate::rsp::device_capabilities::{fallback_rate_candidates, find_device_channels, find_device_rate};
 use crate::rsp::dsd::DsdU32;
-use crate::rsp::vumeter::VUMeter;
+use crate::rsp::vumeter::{VUMeter, cubic_gain};
 use dsp::DspHandle;
 use dsp::Equalizer;
 
-/// Cubic perceptual volume curve: `gain = (vol/100)^3`. vol=100 → 1.0 (unity).
-#[inline]
-fn cubic_gain(volume: u8) -> f32 {
-    let v = f32::from(volume.min(100)) / 100.0;
-    v * v * v
+/// Push all of `data` into the ring buffer, blocking while it is full.
+///
+/// A 1s timeout means the consumer (cpal callback) has stalled without
+/// necessarily reporting errors — treat it as a write failure instead of
+/// silently dropping the samples.
+fn push_to_ring<T: Clone + Copy + Default>(producer: &rb::Producer<T>, data: &[T], error_count: &AtomicU32) -> Result<()> {
+    let mut remaining = data;
+    loop {
+        if error_count.load(Ordering::Relaxed) >= ERROR_THRESHOLD {
+            return Err(Error::msg("Audio output error detected during write"));
+        }
+        match producer.write_blocking_timeout(remaining, Duration::from_secs(1)) {
+            Ok(Some(written)) => remaining = &remaining[written..],
+            Ok(None) => return Ok(()),
+            Err(e) => return Err(Error::msg(format!("Audio ring buffer write stalled: {e:?}"))),
+        }
+    }
 }
 
 use symphonia::core::audio::conv::{ConvertibleSample, FromSample, IntoSample};
 use symphonia::core::audio::sample::Sample;
 
 use cpal::traits::{DeviceTrait, StreamTrait};
-use rb::{RB, RbConsumer, RbProducer, SpscRb};
+use rb::{RB, RbConsumer, RbInspector, RbProducer, SpscRb};
 
 use log::{debug, error, warn};
 
@@ -97,7 +110,8 @@ where
             }
         }
 
-        // VU metering — read pre-volume so the meter reflects source amplitude.
+        // VU metering — reads pre-ring-buffer samples; the meter itself
+        // applies the software gain factor when software volume is active.
         if let Some(vu) = vu_meter {
             if needs_channel_map {
                 vu.update_peaks(self.output_channels, &self.channel_buf);
@@ -109,14 +123,8 @@ where
         // Push to ring buffer. Software gain is applied post-ring-buffer
         // in the cpal output callback so volume changes take effect within
         // the cpal buffer latency rather than the ring_buffer_size_ms latency.
-        let mut remaining: &[T] = if needs_channel_map { &self.channel_buf } else { &self.samples };
-        while let Ok(Some(written)) = self.producer.write_blocking_timeout(remaining, Duration::from_secs(1)) {
-            remaining = &remaining[written..];
-            if error_count.load(Ordering::Relaxed) >= ERROR_THRESHOLD {
-                return Err(Error::msg("Audio output error detected during write"));
-            }
-        }
-        Ok(())
+        let remaining: &[T] = if needs_channel_map { &self.channel_buf } else { &self.samples };
+        push_to_ring(&self.producer, remaining, error_count)
     }
 }
 
@@ -138,14 +146,7 @@ impl AudioWriter for DsdWriter {
         self.samples.clear();
         self.samples.resize(samples_needed, DsdU32::MID);
         decoded.copy_to_slice_interleaved(&mut self.samples);
-        let mut remaining: &[DsdU32] = &self.samples;
-        while let Ok(Some(written)) = self.producer.write_blocking_timeout(remaining, Duration::from_secs(1)) {
-            remaining = &remaining[written..];
-            if error_count.load(Ordering::Relaxed) >= ERROR_THRESHOLD {
-                return Err(Error::msg("Audio output error detected during write"));
-            }
-        }
-        Ok(())
+        push_to_ring(&self.producer, &self.samples, error_count)
     }
 }
 
@@ -160,6 +161,10 @@ where
     output_channels: usize,
     channel_in: Vec<Vec<f32>>,
     channel_out: Vec<Vec<f32>>,
+    /// Interleaved f32 staging buffer — EQ and VU run here, before the
+    /// final conversion to the device sample type, to avoid double
+    /// quantization on integer formats.
+    interleaved_f32: Vec<f32>,
     interleaved_out: Vec<T>,
 }
 
@@ -205,15 +210,14 @@ where
             .process_into_buffer(&input_adapter, &mut output_adapter, Some(&indexing))
             .map_err(|e| Error::msg(format!("resample error: {e}")))?;
 
-        // Re-interleave and convert to target sample type, mapping
-        // channels if the device requires a different count (e.g. mono→stereo).
-        // Software volume gain is applied later in the cpal output callback.
-        self.interleaved_out.clear();
+        // Re-interleave at device rate, mapping channels if the device
+        // requires a different count (e.g. mono→stereo). Stay in f32 so the
+        // equalizer and VU meter work on full-precision samples.
+        self.interleaved_f32.clear();
         for frame in 0..out_frames {
             for ch in 0..self.output_channels {
                 let src_ch = ch.min(self.channels - 1);
-                let sample_f32 = self.channel_out[src_ch][frame];
-                self.interleaved_out.push(<T as FromSample<f32>>::from_sample(sample_f32));
+                self.interleaved_f32.push(self.channel_out[src_ch][frame]);
             }
         }
 
@@ -221,23 +225,21 @@ where
         if let Some(dsp) = dsp
             && dsp.handle.has_filters.load(Ordering::Acquire)
         {
-            dsp.equalizer.process_samples(&mut self.interleaved_out);
+            dsp.equalizer.process_samples(&mut self.interleaved_f32);
         }
 
         // VU metering.
         if let Some(vu) = vu_meter {
-            vu.update_peaks(self.output_channels, &self.interleaved_out);
+            vu.update_peaks(self.output_channels, &self.interleaved_f32);
         }
 
-        // Push to ring buffer.
-        let mut remaining: &[T] = &self.interleaved_out;
-        while let Ok(Some(written)) = self.producer.write_blocking_timeout(remaining, Duration::from_secs(1)) {
-            remaining = &remaining[written..];
-            if error_count.load(Ordering::Relaxed) >= ERROR_THRESHOLD {
-                return Err(Error::msg("Audio output error detected during write"));
-            }
-        }
-        Ok(())
+        // Convert to the device sample type only once, at the very end.
+        // Software volume gain is applied later in the cpal output callback.
+        self.interleaved_out.clear();
+        self.interleaved_out
+            .extend(self.interleaved_f32.iter().map(|&s| <T as FromSample<f32>>::from_sample(s)));
+
+        push_to_ring(&self.producer, &self.interleaved_out, error_count)
     }
 }
 
@@ -256,6 +258,9 @@ pub struct AlsaOutput {
     writer: Box<dyn AudioWriter>,
     stream: cpal::Stream,
     error_count: Arc<AtomicU32>,
+    /// Returns the number of samples still queued in the ring buffer —
+    /// used by `drain` to let the tail of a song play out before pausing.
+    ring_fill: Box<dyn Fn() -> usize + Send>,
     /// DSP processing state — `None` when DSP is disabled or format is DSD.
     dsp: Option<DspState>,
     /// VU meter — `None` when VU metering is disabled.
@@ -597,6 +602,7 @@ impl AlsaOutput {
                         output_channels,
                         channel_in,
                         channel_out,
+                        interleaved_f32: Vec::with_capacity(max_out_samples),
                         interleaved_out: Vec::with_capacity(max_out_samples),
                     })
                 } else {
@@ -608,11 +614,12 @@ impl AlsaOutput {
                         channel_buf: Vec::new(),
                     })
                 };
-                (stream, writer)
+                let ring_fill: Box<dyn Fn() -> usize + Send> = Box::new(move || ring_buf.count());
+                (stream, writer, ring_fill)
             }};
         }
 
-        let (stream, writer) = match sample_format {
+        let (stream, writer, ring_fill) = match sample_format {
             cpal::SampleFormat::F32 => build_pcm_variant!(f32),
             cpal::SampleFormat::I32 => build_pcm_variant!(i32),
             cpal::SampleFormat::I16 => build_pcm_variant!(i16),
@@ -649,9 +656,10 @@ impl AlsaOutput {
                     producer,
                     samples: Vec::with_capacity(usize::try_from(duration).unwrap_or(0) * spec.channels().count()),
                 });
-                (stream, writer as Box<dyn AudioWriter>)
+                let ring_fill: Box<dyn Fn() -> usize + Send> = Box::new(move || ring_buf.count());
+                (stream, writer as Box<dyn AudioWriter>, ring_fill)
             }
-            _ => panic!("Unsupported sample format: {sample_format:?}"),
+            _ => return Err(Error::msg(format!("Unsupported sample format: {sample_format:?}"))),
         };
 
         if let Err(err) = stream.play() {
@@ -675,6 +683,7 @@ impl AlsaOutput {
             writer,
             stream,
             error_count,
+            ring_fill,
             dsp,
             vu_meter,
         })
@@ -710,162 +719,26 @@ impl AlsaOutput {
         Ok(())
     }
 
+    /// Stop the stream immediately, discarding anything still queued in the
+    /// ring buffer. Use `drain` instead when the song finished naturally.
     pub fn flush(&self) {
+        _ = self.stream.pause();
+    }
+
+    /// Let the ring buffer play out before pausing the stream, so the tail
+    /// of a song (up to `ring_buffer_size_ms`) is not cut off. Aborts early
+    /// when a stop is requested, the output errors out, or a deadline based
+    /// on the maximum configurable buffer size passes (stalled consumer).
+    pub fn drain(&self, stop_signal: &AtomicBool) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        while (self.ring_fill)() > 0
+            && !stop_signal.load(Ordering::Relaxed)
+            && self.error_count.load(Ordering::Relaxed) < ERROR_THRESHOLD
+            && std::time::Instant::now() < deadline
+        {
+            std::thread::sleep(Duration::from_millis(20));
+        }
         _ = self.stream.pause();
     }
 }
 
-/// Check if the device supports `source_rate` natively.
-/// Returns `None` if supported, or `Some(best_rate)` to resample to.
-///
-/// Prefers integer multiples of the source rate (e.g. 22050→44100 at 2×)
-/// for cleaner resampling, falling back to the closest supported rate.
-///
-/// Set `RSPLAYER_RESAMPLE_TO=<rate>` to force resampling (e.g. for testing).
-fn find_device_rate(device: &cpal::Device, source_rate: u32) -> Option<u32> {
-    let Ok(configs) = device.supported_output_configs() else {
-        return None;
-    };
-
-    let mut closest_rate: Option<u32> = None;
-    let mut min_distance = u32::MAX;
-    // Prefer integer multiples of source_rate (smallest factor first)
-    // for better resampling quality (e.g. 22050→44100 at 2× instead of
-    // 22050→32000 at ~1.45×).
-    let mut best_multiple: Option<u32> = None;
-    let mut best_factor = u32::MAX;
-
-    for config in configs {
-        if matches!(
-            config.sample_format(),
-            cpal::SampleFormat::DsdU32 | cpal::SampleFormat::DsdU16 | cpal::SampleFormat::DsdU8
-        ) {
-            continue;
-        }
-
-        let min_rate = config.min_sample_rate();
-        let max_rate = config.max_sample_rate();
-
-        if min_rate <= source_rate && max_rate >= source_rate {
-            return None;
-        }
-
-        for &rate in &[min_rate, max_rate] {
-            let distance = source_rate.abs_diff(rate);
-            if distance < min_distance {
-                min_distance = distance;
-                closest_rate = Some(rate);
-            }
-            if rate > source_rate && rate % source_rate == 0 {
-                let factor = rate / source_rate;
-                if factor < best_factor {
-                    best_factor = factor;
-                    best_multiple = Some(rate);
-                }
-            }
-        }
-    }
-
-    best_multiple.or(closest_rate)
-}
-
-/// Return a prioritised list of fallback rates to try when the device rejects
-/// `source_rate` at stream-open time despite claiming to support it via a range.
-///
-/// Some ALSA drivers (e.g. Merus MA12070P) advertise a continuous range like
-/// [44100, 192000] but only accept specific discrete rates.  We cannot know
-/// which rates actually work without probing, so the caller should iterate this
-/// list and use the first rate for which stream open succeeds.
-///
-/// Priority order:
-///   1. Integer multiples of `source_rate` (ascending factor) that fall within
-///      any reported range — cleanest resampling ratio.
-///   2. The range boundary rates (min/max of each config) sorted by distance
-///      from `source_rate` — most likely to be actually accepted by the driver.
-///   3. Well-known standard rates that fall within any reported range, sorted
-///      by distance — handles devices that only support e.g. 48000 Hz.
-fn fallback_rate_candidates(device: &cpal::Device, source_rate: u32) -> Vec<u32> {
-    const STANDARD_RATES: &[u32] = &[192_000, 176_400, 96_000, 88_200, 48_000, 44_100, 32_000, 22_050, 16_000];
-
-    let Ok(configs) = device.supported_output_configs() else {
-        return vec![];
-    };
-
-    let ranges: Vec<(u32, u32)> = configs
-        .filter(|c| {
-            !matches!(
-                c.sample_format(),
-                cpal::SampleFormat::DsdU32 | cpal::SampleFormat::DsdU16 | cpal::SampleFormat::DsdU8
-            )
-        })
-        .map(|c| (c.min_sample_rate(), c.max_sample_rate()))
-        .collect();
-
-    let in_any_range = |rate: u32| ranges.iter().any(|&(lo, hi)| rate >= lo && rate <= hi);
-
-    let mut candidates: Vec<u32> = Vec::new();
-
-    // 1. Integer multiples of source_rate (ascending factor: 2×, 3×, 4×).
-    for factor in 2..=4u32 {
-        let rate = source_rate.saturating_mul(factor);
-        if rate != source_rate && in_any_range(rate) {
-            candidates.push(rate);
-        }
-    }
-
-    // 2. Range boundary rates sorted by distance from source_rate.
-    #[allow(clippy::tuple_array_conversions)]
-    let mut boundaries: Vec<u32> = ranges.iter().flat_map(|&(lo, hi)| [lo, hi]).filter(|&r| r != source_rate).collect();
-    boundaries.sort_by_key(|&r| source_rate.abs_diff(r));
-    boundaries.dedup();
-    candidates.extend(boundaries);
-
-    // 3. Standard rates that fall within a range, sorted by distance.
-    let mut standard: Vec<u32> = STANDARD_RATES
-        .iter()
-        .copied()
-        .filter(|&r| r != source_rate && in_any_range(r))
-        .collect();
-    standard.sort_by_key(|&r| source_rate.abs_diff(r));
-    candidates.extend(standard);
-
-    // Deduplicate while preserving order.
-    let mut seen = std::collections::HashSet::new();
-    candidates.retain(|r| seen.insert(*r));
-    candidates
-}
-
-/// Check if the device supports `source_channels` natively.
-/// Returns `None` if supported, or `Some(closest_channels)` to map to.
-fn find_device_channels(device: &cpal::Device, source_channels: u16) -> Option<u16> {
-    let Ok(configs) = device.supported_output_configs() else {
-        return None;
-    };
-
-    let mut supported = false;
-    let mut closest: Option<u16> = None;
-    let mut min_distance = u16::MAX;
-
-    for config in configs {
-        if matches!(
-            config.sample_format(),
-            cpal::SampleFormat::DsdU32 | cpal::SampleFormat::DsdU16 | cpal::SampleFormat::DsdU8
-        ) {
-            continue;
-        }
-
-        let ch = config.channels();
-        if ch == source_channels {
-            supported = true;
-            break;
-        }
-
-        let distance = source_channels.abs_diff(ch);
-        if distance < min_distance {
-            min_distance = distance;
-            closest = Some(ch);
-        }
-    }
-
-    if supported { None } else { closest }
-}

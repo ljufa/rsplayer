@@ -1010,6 +1010,23 @@ fn MusicLibraryContent(
     let music_dir_statuses = state.music_dir_statuses.read().clone();
     let external_mounts = state.external_mounts.read().clone();
 
+    // Re-fetch settings whenever the detected external mounts change — the
+    // backend broadcasts ExternalMountsEvent after persisting a saved mount,
+    // so the managed mounts and music directory lists above update without
+    // a page refresh.
+    let external_mounts_signal = state.external_mounts;
+    use_effect(move || {
+        let _ = external_mounts_signal.read();
+        spawn(async move {
+            let mut settings = settings;
+            if let Ok(resp) = Request::get(API_SETTINGS_PATH).send().await {
+                if let Ok(s) = resp.json::<Settings>().await {
+                    *settings.write() = s;
+                }
+            }
+        });
+    });
+
     let mut auto_save = move || {
         *saving.write() = true;
         let s = settings.read().clone();

@@ -24,7 +24,7 @@ To configure `rsplayer`, navigate to the settings page in the web UI. Settings a
 These settings are hidden under the **Advanced** collapsible inside the Playback section. Defaults work well for most setups.
 
 - **Input buffer (MB):** The size of the buffer for audio data read from disk or network, in megabytes (1-200). (Hidden if Local Browser Playback is selected).
-- **Ring buffer (ms):** The size of the ring buffer between the decoder and the ALSA output stream, in milliseconds (1-10000). (Hidden if Local Browser Playback is selected).
+- **Ring buffer (ms):** The size of the ring buffer between the decoder and the ALSA output stream, in milliseconds (100-10000). (Hidden if Local Browser Playback is selected).
 - **Thread priority (1-99):** The real-time priority of the player thread, from 1 to 99. Higher values reduce the risk of audio dropouts on loaded systems. (Hidden if Local Browser Playback is selected).
 - **Fixed output sample rate:** When set, RSPlayer resamples all audio to this rate regardless of the source or device capabilities. Leave at "Auto (recommended)" unless your DAC requires a fixed clock rate.
 - **ALSA buffer size (frames, 0=default):** Manually override the ALSA hardware buffer frame size. (Hidden if Local Browser Playback is selected).
@@ -84,7 +84,7 @@ DSP also supports loading built-in presets and importing CamillaDSP configuratio
 
 The Music Sources section manages where rsplayer looks for your music files. You can combine multiple local directories and network shares.
 
-Supported file extensions: `.flac`, `.wav`, `.aiff`, `.aif`, `.ape`, `.mp3`, `.mp2`, `.mp1`, `.m4a`, `.ogg`, `.oga`, `.caf`, `.mka`, `.weba`, `.dsf`, `.dff`
+Supported file extensions: `.flac`, `.wav`, `.aiff`, `.aif`, `.ape`, `.mp3`, `.mp2`, `.mp1`, `.m4a`, `.ogg`, `.oga`, `.caf`, `.mka`, `.weba`, `.dsf`, `.dff`, `.iso` (SACD disc images)
 
 ### Local Directories
 

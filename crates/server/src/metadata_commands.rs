@@ -74,10 +74,12 @@ pub fn handle_metadata_command(cmd: MetadataCommand, ctx: &CommandContext) {
         MetadataCommand::LikeMediaItem(id) => {
             ctx.metadata_service.like_media_item(&id);
             ctx.send_notification(&format!("Song {id} liked"));
+            resend_current_song_if_affected(ctx, &id);
         }
         MetadataCommand::DislikeMediaItem(id) => {
             ctx.metadata_service.dislike_media_item(&id);
             ctx.send_notification(&format!("Song {id} disliked"));
+            resend_current_song_if_affected(ctx, &id);
         }
         MetadataCommand::QueryFavoriteRadioStations => {
             let favorites = ctx.metadata_service.get_favorite_radio_stations();
@@ -87,6 +89,16 @@ pub fn handle_metadata_command(cmd: MetadataCommand, ctx: &CommandContext) {
             let mut stats = ctx.metadata_service.get_library_stats();
             stats.songs_loudness_analysed = ctx.loudness_repository.count_analysed();
             ctx.send_event(StateChangeEvent::LibraryStatsEvent(stats));
+        }
+    }
+}
+
+/// Re-broadcast the current song with fresh statistics when it was the
+/// (dis)liked item, so clients update the like indicator immediately.
+fn resend_current_song_if_affected(ctx: &CommandContext, media_item_id: &str) {
+    if let Some(song) = ctx.queue_service.get_current_song() {
+        if song.file == media_item_id {
+            ctx.send_event(StateChangeEvent::CurrentSongEvent(song));
         }
     }
 }

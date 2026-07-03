@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/_assets/banner-dark.svg">
+    <img src="docs/_assets/banner-light.svg" alt="RSPlayer" width="416">
+  </picture>
+</p>
+
 ![](https://github.com/ljufa/rsplayer/actions/workflows/ci.yml/badge.svg)
 ![](https://github.com/ljufa/rsplayer/actions/workflows/cd.yml/badge.svg)
 ![](https://github.com/ljufa/rsplayer/actions/workflows/docker.yml/badge.svg)
@@ -98,7 +105,7 @@ volumes:
 
 ### Open the UI
 
-Navigate to `http://localhost` (or the IP of the machine running RSPlayer). For configuration, see the [documentation](https://ljufa.github.io/rsplayer/#/configuration).
+Navigate to `http://localhost` (or the IP of the machine running RSPlayer). For the Docker command above, the UI is at `http://localhost:8000`. For configuration, see the [documentation](https://ljufa.github.io/rsplayer/#/configuration).
 
 ## Documentation
 

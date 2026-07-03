@@ -1,5 +1,86 @@
 # Release Notes
 
+## v4.3.0 — 2026-07-03
+
+### Bug Fixes
+
+#### Song Endings Cut Off by up to the Ring Buffer Length
+
+When a song finished naturally, the audio output was paused immediately, discarding whatever was still queued in the ring buffer — with the default `ring_buffer_size_ms` of 1000 that meant the last ~1 second of every track was never played. The output now **drains** the ring buffer at the natural end of a song before pausing, so tracks play out fully. Skipping tracks and stopping remain instant (drain aborts immediately on a stop request, on output errors, or after a safety deadline).
+
+#### Play/Pause Broken After Queue Finishes
+
+The play/pause toggle used the internal stop flag to decide between play and pause. After the queue finished naturally the flag was stale, so the first press of play/pause did nothing and only the second press restarted playback. Playback state is now derived from the actual playback thread (`is_finished()`).
+
+Related hardening in the same area: sending `Play` while already playing no longer spawns a second concurrent playback thread writing to the same device, and `play_from_beginning` now defensively stops any running playback first.
+
+#### Silent Audio Drop on Stalled Output
+
+If the audio device stalled without reporting errors (e.g. suspended/hung USB device), ring-buffer writes timed out after 1 second and the unwritten samples were silently discarded while decoding continued — playback degraded into silent sample-dropping. A write timeout is now treated as an output error and flows into the existing reopen/retry machinery.
+
+#### Queue Search Pagination Returned Wrong Pages and Totals
+
+With a search term active, queue pagination applied the offset to the *unfiltered* queue and reported the total size of the whole queue instead of the match count. Paging through search results could skip or duplicate entries. The filter is now applied before offset/limit and the reported total is the exact number of matches. Additionally, 1–2 character search terms now actually filter (previously they were silently ignored), and the *Load more* button is hidden when there are no further results.
+
+#### Saved External Mount Not Shown Until Page Refresh (Settings)
+
+Clicking **Save** on a detected external network mount persisted it on the backend, but the managed-mounts and music-directories lists on the Settings page kept rendering the stale settings snapshot fetched at page load. The page now re-fetches settings when the external-mounts event arrives, so the saved mount appears in the lists immediately.
+
+#### Like Button Icon Not Updating (Player Page)
+
+Liking/unliking the current song persisted the change but the heart icon only updated after a track change or page reload. The backend now re-broadcasts the current song with fresh statistics after a like/dislike affecting it, so all connected clients update the icon immediately.
+
+#### VU Meter Fixes
+
+- The meter was permanently lost for the rest of the song when the audio output was reopened after a write failure or a sample-rate fallback. It now survives output reopens.
+- With software volume control the meter scaled peaks linearly by `vol/255` although the volume range is 0–100 and the applied gain is cubic — the meter read ~2.5× too low and tracked the wrong curve. It now applies the same cubic `(vol/100)³` gain as the output path, and shows source amplitude when a hardware volume control is active (hardware attenuation happens after the DAC and is not visible to a digital meter).
+
+#### Audio Format Info Missing Until Next Track ("No file playing")
+
+Opening the web UI while a song was already playing showed "No file playing" in place of the codec / bit-depth / sample-rate line (and no loudness info) until the next track started, because the player info event is only broadcast when decoding begins. The server now caches the current player info and sends it to clients on connect, so the format line is populated immediately.
+
+#### Broken Artwork on "Most Played" and "Liked" Cards
+
+The Favorites cards on the Playlists page showed broken-image icons: the backend sent the image as `/artwork/{id}` and the frontend prefixed `/artwork/` again, producing a `/artwork//artwork/{id}` request that 404'd. The backend now sends the bare artwork id, consistent with album cards.
+
+#### Queue Reorder Acted on the Wrong Song in Filtered Views
+
+With a queue search filter (or Focus view) active, drag-and-drop reordering and **Play Next** computed absolute queue positions from the filtered list — so they silently moved the *wrong* song. The move commands are now addressed by song id instead of queue index, which is correct in any view. Covered by new unit tests.
+
+#### Missing-Artwork Placeholder Invisible on Light Themes
+
+The "no album art" placeholder was drawn in white at 15% opacity, making it essentially invisible on light themes. It now uses a theme-agnostic mid-tone with an indigo spindle accent that reads on both light and dark card backgrounds.
+
+#### Playback Robustness
+
+- An audio device whose default sample format is unsupported (e.g. `U8`, `F64`) caused a panic in the playback thread; it now returns an error through the normal fallback/retry path.
+- An ICY radio stream advertising `icy-metaint` whose metadata extraction failed caused a panic; it now falls back to a plain (metadata-less) stream reader.
+- The state-persistence task now exits cleanly when the event channel closes (previously it busy-looped at 100% CPU) and logs when it lags behind the event stream.
+- Removed the "Playing" / "Playback paused" toast that appeared on every automatic track transition — playback state is already visible in the UI; error notifications are unchanged.
+
+### Improvements
+
+- **Faster song lookup in large queues** — playing or removing a song by id deserialized every queue entry. A byte-level prefilter now skips non-matching entries without parsing, making play-by-click near-free on multi-thousand-song queues.
+- **Faster queue clear/replace** — clearing and replacing the queue removed entries one by one; they now use the database's native keyspace clear, and bulk inserts go through a single write batch.
+- **Higher-quality EQ on resampled output** — when resampling to an integer device format, the equalizer and VU meter processed already-converted integer samples (double quantization). They now run in the f32 domain before the final conversion.
+
+### Visual Identity
+
+- **New logo** — an analog VU-meter mark ("Meter") replaces the old RSP lettering, with a single SVG master (`docs/_assets/logo.svg`) driving every asset.
+- **README banner** — light/dark wordmark lockups (text converted to vector paths, so they render identically everywhere) shown via GitHub's theme-aware `<picture>` switching.
+- **Documentation site** — the docsify sidebar now shows the banner lockup, the site has a favicon, and the landing page title states what RSPlayer is instead of "Home".
+- **Application icons** — all desktop/mobile icon sets (Linux PNGs, Windows `.ico` + Store logos, macOS `.icns`, Android/iOS) regenerated from the new mark via `cargo tauri icon`, plus a new multi-resolution web UI `favicon.ico`.
+
+### Internal
+
+- Deduplicated ~150 lines of device-probing code (`find_device_rate`, `find_device_channels`, `fallback_rate_candidates`) that existed in both `alsa_output.rs` and `device_capabilities.rs`; `device_capabilities.rs` is now the single implementation.
+- Removed an unnecessary `unsafe impl Send for PlaybackResult` and a dead `BrowseItem::Station` variant in the radio page.
+- Random-mode history index widened from `u16` to `u32` (no more silent wrap after 65k skips) with endian-stable keys.
+- Consolidated duplicated last-played-time parsing in `PlayerService`.
+- Fixed a latent test-harness bug where the queue test database directory was deleted while still open, masking database errors in tests.
+
+---
+
 ## v4.2.0 — 2026-06-30
 
 ### New Features

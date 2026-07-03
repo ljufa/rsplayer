@@ -52,7 +52,7 @@ pub fn handle_playlist_command(cmd: api_models::common::PlaylistCommand, ctx: &C
                     id: "most_played".to_string(),
                     name: "Most Played".to_string(),
                     description: Some("Your most played tracks".to_string()),
-                    image: first_most_played.image_id.clone().map(|id| format!("/artwork/{id}")),
+                    image: first_most_played.image_id.clone(),
                     owner_name: None,
                 };
                 pls.items.push(PlaylistType::MostPlayed(pl));
@@ -63,7 +63,7 @@ pub fn handle_playlist_command(cmd: api_models::common::PlaylistCommand, ctx: &C
                     id: "liked".to_string(),
                     name: "Liked".to_string(),
                     description: Some("Songs you liked".to_string()),
-                    image: first_liked.image_id.clone().map(|id| format!("/artwork/{id}")),
+                    image: first_liked.image_id.clone(),
                     owner_name: None,
                 };
                 pls.items.push(PlaylistType::Liked(pl));

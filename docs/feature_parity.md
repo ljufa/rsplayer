@@ -1,11 +1,11 @@
 # Feature Parity Comparison: rsplayer vs. Others
 
-This document provides a feature comparison between **rsplayer** and other popular music playback solutions as of January 2026.
+This document provides a feature comparison between **rsplayer** and other popular music playback solutions as of early 2026.
 
 | Feature Category | Feature | **rsplayer** | **Volumio** | **Roon** | **MPD** | **Navidrome** | **LMS** | **moOde** | **Daphile** | **piCorePlayer** |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Core** | **Architecture** | Headless Service + Web UI | OS / Headless + Web UI | Core + Remote + RAAT | Client-Server (Daemon) | Client-Server (Web/API) | Server + Squeezebox Clients | OS / Headless + Web UI | OS / Headless + Web UI | OS + Squeezelite + optional LMS |
-| | **Target Hardware** | SBCs (RPi), x86 Linux, macOS (experimental binaries) | SBCs, x86, Streamers | PC/Mac/Linux, Roon Ready | Linux, BSD, macOS, Win | PC, Server, NAS, SBCs | PC, NAS, SBCs | **RPi only** | x86 Dedicated PC | **RPi only** |
+| | **Target Hardware** | SBCs (RPi), x86 Linux, macOS/Windows (experimental) | SBCs, x86, Streamers | PC/Mac/Linux, Roon Ready | Linux, BSD, macOS, Win | PC, Server, NAS, SBCs | PC, NAS, SBCs | **RPi only** | x86 Dedicated PC | **RPi only** |
 | | **License / Cost** | Open Source / **Free** | Freemium | Subscription ($$$) | Open Source / **Free** | Open Source / **Free** | Open Source / **Free** | Open Source / **Free** | **Free** (closed source) | Open Source / **Free** |
 | | **Setup Complexity** | **Low** (single binary + script) | Low/Complex (OS image, dedicated hardware) | Medium (Core + Remotes) | **High** (daemon + separate client) | Low (Docker/binary) | Medium (Perl server + clients) | Low (RPi Imager OS image) | Low (bootable ISO image) | Low (RPi Imager SD image) |
 | **Playback** | **Audio Engine** | Rust (Symphonia) | MPD (Customized) | RAAT | C++ (Native) | Go + FFmpeg | Perl + FLAC/FFmpeg | MPD + CamillaDSP | LMS + Squeezelite | Squeezelite (+ optional LMS) |

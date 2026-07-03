@@ -94,7 +94,7 @@ journalctl -u rsplayer.service -f -n 300
 **Fix — increase the ALSA buffer frame size:**
 
 1. Open the RSPlayer settings page in your browser.
-2. Enable **Set alsa buffer frame size (Experimental!)**.
+2. Under Playback → Advanced, set **ALSA buffer size (frames, 0=default)**.
 3. Start with a value of **2000** and test playback.
 4. If playback still breaks, increase gradually: **3000**, **4000**, **5000**, etc., until playback is stable.
 5. Use the lowest value that gives stable playback, as larger buffers add more latency.
@@ -103,9 +103,6 @@ journalctl -u rsplayer.service -f -n 300
 - Increase the **Ring buffer size (ms)** — try values like 2000–5000 ms.
 - Lower the **Player thread priority** if you notice the system becoming unresponsive.
 - Avoid high-resolution files (e.g., 24-bit/192kHz) if your device struggles — standard 16-bit/44.1kHz is much less demanding.
-
-## Playlist page is empty
-TODO
 
 ## Windows-specific issues
 
@@ -131,6 +128,3 @@ The first time `rsplayer.exe` binds a port, Windows Firewall shows a permission 
 ```powershell
 netsh advfirewall firewall add rule name="RSPlayer" dir=in action=allow protocol=TCP localport=8000
 ```
-
-
-### TODO...

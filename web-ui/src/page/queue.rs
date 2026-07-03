@@ -18,7 +18,7 @@ pub fn QueuePage() -> Element {
     let queue = state.current_queue;
     let mut loading = use_signal(|| true);
     let mut search = use_signal(String::new);
-    let mut dragged_idx: Signal<Option<usize>> = use_signal(|| None);
+    let mut dragged_file: Signal<Option<String>> = use_signal(|| None);
 
     // Initial load
     use_effect(move || {
@@ -142,25 +142,24 @@ pub fn QueuePage() -> Element {
                 }
             } else if let Some(page) = queue() {
                 div { class: "scroll-list overflow-y-auto",
-                    {page.items.iter().enumerate().map(|(idx, song)| {
+                    {page.items.iter().map(|song| {
                         let song = song.clone();
                         let is_current = current_song_id.as_ref().is_some_and(|id| *id == song.file);
                         let file = song.file.clone();
                         let file2 = song.file.clone();
-                        let _file3 = song.file.clone();
-                        let start_idx = page.offset.saturating_sub(page.limit);
-                        let abs_idx = start_idx + idx;
+                        let file3 = song.file.clone();
+                        let file4 = song.file.clone();
+                        let file5 = song.file.clone();
                         rsx! {
                             QueueItem {
                                 key: "{song.file}",
                                 song,
-                                idx: abs_idx,
                                 is_current,
                                 on_play: move |_| {
                                     ws_send(&ws, &UserCommand::Player(PlayerCommand::PlayItem(file.clone())));
                                 },
                                 on_play_next: move |_| {
-                                    ws_send(&ws, &UserCommand::Queue(QueueCommand::MoveItemAfterCurrent(abs_idx)));
+                                    ws_send(&ws, &UserCommand::Queue(QueueCommand::MoveItemAfterCurrent(file3.clone())));
                                     ws_send(&ws, &UserCommand::Queue(QueueCommand::QueryCurrentQueue(
                                         CurrentQueueQuery::WithSearchTerm(search(), 0)
                                     )));
@@ -173,25 +172,27 @@ pub fn QueuePage() -> Element {
                                         q.remove_item(&file2);
                                     }
                                 },
-                                on_drag_start: move |_| dragged_idx.set(Some(abs_idx)),
+                                on_drag_start: move |_| dragged_file.set(Some(file4.clone())),
                                 on_drop: move |_| {
-                                    if let Some(from) = dragged_idx() {
-                                        if from != abs_idx {
-                                            ws_send(&ws, &UserCommand::Queue(QueueCommand::MoveItem(from, abs_idx)));
+                                    if let Some(from) = dragged_file() {
+                                        if from != file5 {
+                                            ws_send(&ws, &UserCommand::Queue(QueueCommand::MoveItem(from, file5.clone())));
                                             ws_send(&ws, &UserCommand::Queue(QueueCommand::QueryCurrentQueue(
                                                 CurrentQueueQuery::WithSearchTerm(search(), 0)
                                             )));
                                         }
                                     }
-                                    dragged_idx.set(None);
+                                    dragged_file.set(None);
                                 },
                             }
                         }
                     })}
-                    button {
-                        class: "btn btn-outline btn-primary btn-sm w-full mt-2",
-                        onclick: move |_| load_more(page.offset),
-                        "Load more"
+                    if page.offset < page.total {
+                        button {
+                            class: "btn btn-outline btn-primary btn-sm w-full mt-2",
+                            onclick: move |_| load_more(page.offset),
+                            "Load more"
+                        }
                     }
                 }
             }
@@ -202,7 +203,6 @@ pub fn QueuePage() -> Element {
 #[component]
 fn QueueItem(
     song: Song,
-    idx: usize,
     is_current: bool,
     on_play: EventHandler,
     on_play_next: EventHandler,

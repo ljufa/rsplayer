@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::{
     RwLock,
-    atomic::{AtomicU16, AtomicU64, Ordering},
+    atomic::{AtomicU32, AtomicU64, Ordering},
 };
 
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
@@ -15,11 +15,12 @@ use api_models::{common::PlaybackMode, player::Song, playlist::PlaylistPage, sta
 use crate::ports::{play_statistics_repository::ArcPlayStatisticsRepository, song_repository::ArcSongRepository};
 
 pub struct QueueService {
+    db: Database,
     queue_db: Keyspace,
     status_db: Keyspace,
     playback_mode: RwLock<PlaybackMode>,
     random_history_db: Keyspace,
-    random_history_index: AtomicU16,
+    random_history_index: AtomicU32,
     random_played_keys: RwLock<HashSet<Vec<u8>>>,
     next_id: AtomicU64,
     song_repository: ArcSongRepository,
@@ -59,11 +60,12 @@ impl QueueService {
             .unwrap_or(0);
 
         let service = Self {
+            db: db.clone(),
             queue_db,
             status_db,
             playback_mode: RwLock::new(playback_mode),
             random_history_db,
-            random_history_index: AtomicU16::new(0),
+            random_history_index: AtomicU32::new(0),
             random_played_keys: RwLock::new(HashSet::new()),
             next_id: AtomicU64::new(next_id),
             song_repository,
@@ -82,14 +84,7 @@ impl QueueService {
     }
 
     fn reset_random_state(&self) {
-        let keys: Vec<Vec<u8>> = self
-            .random_history_db
-            .iter()
-            .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
-            .collect();
-        for key in keys {
-            _ = self.random_history_db.remove(key);
-        }
+        _ = self.random_history_db.clear();
         self.random_history_index.store(0, Ordering::Relaxed);
         self.random_played_keys.write().expect("lock poisoned").clear();
     }
@@ -194,7 +189,7 @@ impl QueueService {
                 played.insert(rand_key.clone());
                 _ = self.status_db.insert(CURRENT_SONG_KEY, &rand_key);
                 let ridx = self.random_history_index.fetch_add(1, Ordering::Relaxed) + 1;
-                _ = self.random_history_db.insert(ridx.to_ne_bytes(), &rand_key);
+                _ = self.random_history_db.insert(ridx.to_be_bytes(), &rand_key);
                 true
             }
             PlaybackMode::LoopQueue => {
@@ -233,7 +228,7 @@ impl QueueService {
             let ridx = self.random_history_index.load(Ordering::Relaxed);
             if ridx > 0 {
                 let ridx = ridx - 1;
-                let Ok(Some(prev)) = self.random_history_db.get(ridx.to_ne_bytes()) else {
+                let Ok(Some(prev)) = self.random_history_db.get(ridx.to_be_bytes()) else {
                     return false;
                 };
                 self.random_history_index.store(ridx, Ordering::Relaxed);
@@ -276,8 +271,15 @@ impl QueueService {
     }
 
     fn find_entry_by_song_id(&self, song_id: &str) -> Option<(Vec<u8>, Vec<u8>)> {
+        // Cheap prefilter: the file path appears in the serialized JSON exactly as
+        // serde_json would escape it, so most entries are skipped without parsing.
+        let needle = serde_json::to_string(song_id).ok()?;
+        let needle = needle.as_bytes();
         self.queue_db.iter().find_map(|guard| {
             let (key, value) = guard.into_inner().ok()?;
+            if !value.windows(needle.len()).any(|window| window == needle) {
+                return None;
+            }
             let song = Song::bytes_to_song(&value)?;
             if song.file == song_id {
                 Some((key.to_vec(), value.to_vec()))
@@ -321,52 +323,34 @@ impl QueueService {
     }
 
     pub fn replace_all(&self, iter: impl IntoIterator<Item = Song>) {
-        let keys: Vec<Vec<u8>> = self
-            .queue_db
-            .iter()
-            .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
-            .collect();
-        for key in keys {
-            _ = self.queue_db.remove(key);
-        }
-        _ = self.status_db.remove(CURRENT_SONG_KEY);
-        _ = self.status_db.remove("priority_queue");
-        self.reset_random_state();
+        self.clear();
+        let mut batch = self.db.batch();
         for song in iter {
             let key = self.generate_id().to_be_bytes();
-            _ = self.queue_db.insert(key, song.to_json_string_bytes());
+            batch.insert(&self.queue_db, key, song.to_json_string_bytes());
         }
+        _ = batch.commit();
     }
 
     pub fn get_queue_page<F>(&self, offset: usize, limit: usize, song_filter: F) -> (usize, Vec<Song>)
     where
         F: Fn(&Song) -> bool,
     {
-        let total = self.queue_db.approximate_len();
-        if total == 0 {
-            return (0, vec![]);
+        let mut total = 0;
+        let mut items = Vec::new();
+        for guard in self.queue_db.iter() {
+            let Some(song) = guard.value().ok().and_then(|value| Song::bytes_to_song(&value)) else {
+                continue;
+            };
+            if !song_filter(&song) {
+                continue;
+            }
+            if total >= offset && items.len() < limit {
+                items.push(song);
+            }
+            total += 1;
         }
-        let Some(from) = self
-            .queue_db
-            .iter()
-            .nth(offset)
-            .and_then(|guard| guard.key().ok().map(|k| k.to_vec()))
-            .or_else(|| self.get_current_or_first_song_key())
-        else {
-            return (0, vec![]);
-        };
-        (
-            total,
-            self.queue_db
-                .range(from.as_slice()..)
-                .filter_map(|guard| {
-                    let value = guard.value().ok()?;
-                    Song::bytes_to_song(&value)
-                })
-                .filter(|s| song_filter(s))
-                .take(limit)
-                .collect(),
-        )
+        (total, items)
     }
 
     pub fn get_queue_page_starting_from_current_song(&self, limit: usize) -> Vec<Song> {
@@ -393,13 +377,8 @@ impl QueueService {
     }
 
     pub fn clear(&self) {
-        let keys: Vec<Vec<u8>> = self
-            .queue_db
-            .iter()
-            .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
-            .collect();
-        for key in keys {
-            _ = self.queue_db.remove(key);
+        if let Err(e) = self.queue_db.clear() {
+            log::error!("Failed to clear queue: {e}");
         }
         _ = self.status_db.remove(CURRENT_SONG_KEY);
         _ = self.status_db.remove("priority_queue");
@@ -410,12 +389,9 @@ impl QueueService {
         let page_size = 100;
         match query {
             CurrentQueueQuery::WithSearchTerm(term, offset) => {
+                let term = term.to_lowercase();
                 let (total, songs) = self.get_queue_page(offset, page_size, |song| {
-                    if term.len() > 2 {
-                        song.all_text().to_lowercase().contains(&term.to_lowercase())
-                    } else {
-                        true
-                    }
+                    term.is_empty() || song.all_text().to_lowercase().contains(&term)
                 });
                 Some(PlaylistPage {
                     total,
@@ -490,7 +466,36 @@ impl QueueService {
         }
     }
 
-    pub fn move_item_after_current(&self, from_index: usize) {
+    fn find_index_by_song_id(&self, song_id: &str) -> Option<usize> {
+        let needle = serde_json::to_string(song_id).ok()?;
+        let needle = needle.as_bytes();
+        self.queue_db
+            .iter()
+            .filter_map(|guard| guard.into_inner().ok())
+            .position(|(_, value)| {
+                value.windows(needle.len()).any(|window| window == needle)
+                    && Song::bytes_to_song(&value).is_some_and(|song| song.file == song_id)
+            })
+    }
+
+    pub fn move_item_after_current(&self, song_id: &str) {
+        if let Some(from_index) = self.find_index_by_song_id(song_id) {
+            self.move_item_after_current_by_index(from_index);
+        }
+    }
+
+    /// Move the song `from_id` to the queue position currently occupied by `to_id`.
+    pub fn move_item(&self, from_id: &str, to_id: &str) {
+        let Some(from_index) = self.find_index_by_song_id(from_id) else {
+            return;
+        };
+        let Some(to_index) = self.find_index_by_song_id(to_id) else {
+            return;
+        };
+        self.move_item_by_index(from_index, to_index);
+    }
+
+    fn move_item_after_current_by_index(&self, from_index: usize) {
         let keys: Vec<Vec<u8>> = self
             .queue_db
             .iter()
@@ -509,11 +514,11 @@ impl QueueService {
         } else {
             current_index + 1
         };
-        self.move_item(from_index, target_index);
+        self.move_item_by_index(from_index, target_index);
         self.add_to_priority_queue(keys[target_index].clone());
     }
 
-    pub fn move_item(&self, from_index: usize, to_index: usize) {
+    fn move_item_by_index(&self, from_index: usize, to_index: usize) {
         let entries: Vec<(Vec<u8>, Vec<u8>)> = self
             .queue_db
             .iter()

@@ -149,10 +149,10 @@ pub fn handle_queue_command(cmd: QueueCommand, ctx: &CommandContext) {
             add_songs_to_queue(ctx, &songs, &format!("songs from '{decade}' added to queue"));
         }
         QueueCommand::MoveItem(from, to) => {
-            ctx.queue_service.move_item(from, to);
+            ctx.queue_service.move_item(&from, &to);
         }
         QueueCommand::MoveItemAfterCurrent(from) => {
-            ctx.queue_service.move_item_after_current(from);
+            ctx.queue_service.move_item_after_current(&from);
             ctx.send_notification("Song moved after current");
         }
         LoadPlaylistInQueue(pl_id) => {

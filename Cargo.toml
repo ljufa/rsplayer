@@ -11,7 +11,7 @@ members = [
     "web-ui", "crates/desktop",
 ]
 default-members = [
-    "web-ui",
+    # "web-ui",
     "crates/api_models",
     "crates/server",
     "crates/config",
@@ -27,7 +27,7 @@ resolver = "2"
 # Single source of truth for the release version.
 # Read by: build scripts (CARGO_PKG_VERSION), cargo-deb, cargo-generate-rpm,
 # cargo-packager and Makefile.toml (RELEASE_VERSION env derives from it).
-version = "4.2.0"
+version = "4.3.0"
 
 [workspace.dependencies]
 anyhow = "1"

@@ -240,8 +240,9 @@ pub enum QueueCommand {
     AddGenreToQueue(String),
     LoadDecadeInQueue(String),
     AddDecadeToQueue(String),
-    MoveItem(usize, usize),
-    MoveItemAfterCurrent(usize),
+    /// Move the song with the first id to the position of the song with the second id.
+    MoveItem(String, String),
+    MoveItemAfterCurrent(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]

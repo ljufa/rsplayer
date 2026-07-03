@@ -54,7 +54,6 @@ enum BrowseItem {
     Country(Country),
     Language(Language),
     Tag(Tag),
-    Station(Station),
 }
 
 #[component]
@@ -376,13 +375,11 @@ pub fn LibraryRadioPage() -> Element {
                                     BrowseItem::Tag(t) => {
                                         (format!("{} ({})", t.name, t.stationcount), t.stationcount)
                                     }
-                                    BrowseItem::Station(s) => (s.name.clone(), 0),
                                 };
                                 let key = match &item {
                                     BrowseItem::Country(c) => format!("country-{}", c.iso_3166_1),
                                     BrowseItem::Language(l) => format!("language-{}", l.name),
                                     BrowseItem::Tag(t) => format!("tag-{}", t.name),
-                                    BrowseItem::Station(s) => format!("station-{}", s.stationuuid),
                                 };
                                 rsx! {
                                     div {
@@ -401,7 +398,6 @@ pub fn LibraryRadioPage() -> Element {
                                                         fetch_stations("bylanguageexact", &l.name).await
                                                     }
                                                     BrowseItem::Tag(t) => fetch_stations("bytagexact", &t.name).await,
-                                                    _ => vec![],
                                                 };
                                                 *stations.write() = fetched;
                                                 *loading.write() = false;

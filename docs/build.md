@@ -1,6 +1,6 @@
 # Local Build Guide
 
-This document describes how to build `rsplayer` from source — on Linux (including cross-compilation for Linux/macOS targets) and natively on Windows.
+This document describes how to build `rsplayer` from source — on Linux (including cross-compilation for other Linux architectures), natively on macOS, and natively on Windows.
 
 Common cross-compilation targets (Linux host):
 
@@ -9,8 +9,6 @@ Common cross-compilation targets (Linux host):
 - `aarch64-unknown-linux-gnu` (ARM64 Linux)
 - `x86_64-unknown-linux-gnu`
 - `riscv64gc-unknown-linux-gnu`
-- `aarch64-apple-darwin` (macOS Apple Silicon, experimental)
-- `x86_64-apple-darwin` (macOS Intel, experimental)
 
 ## Prerequisites
 
@@ -67,7 +65,7 @@ cd web-ui
 npm install
 ```
 
-`npm install` automatically runs a `postinstall` script that copies FontAwesome and Material Icons font files from `node_modules/` into `public/`. These directories are gitignored — do not commit them.
+`npm install` automatically runs a `postinstall` script that copies the Material Icons font files from `node_modules/` into `public/`. These directories are gitignored — do not commit them.
 
 ## Build Process
 
@@ -121,12 +119,11 @@ The build is orchestrated using `cargo-make`. Build the frontend release first, 
 
 ### macOS targets
 
-For macOS builds from Linux, use one of the darwin targets:
+macOS binaries are built **natively on a Mac** (cross-compiling from Linux is not supported — the osxcross-based pipeline was removed in v4.0.0; CI uses GitHub macOS runners). On a Mac with Rust, `cargo-make`, and the Dioxus CLI installed:
 
 ```bash
-TARGET=aarch64-apple-darwin cargo make build_release
-# or
-TARGET=x86_64-apple-darwin cargo make build_release
+cargo make build_ui_release
+cargo build --package rsplayer --bin rsplayer --release --no-default-features
 ```
 
 Darwin release output is binary-only (no `.deb`, `.rpm`, `.tgz` packaging).
@@ -192,4 +189,4 @@ When local `cargo-make` cross target-dir override is active, artifacts are under
 
 `target/cross/${TARGET}/release/`
 
-For example: `target/aarch64-unknown-linux-gnu/debian/rsplayer_1.0.3_arm64.deb`
+For example: `target/aarch64-unknown-linux-gnu/debian/rsplayer_<version>_arm64.deb`

@@ -24,8 +24,9 @@ Press **?** anywhere to show the keyboard shortcuts help:
 |-----|--------|
 | 1 | Now Playing |
 | 2 | Queue |
-| 3 | Library |
+| 3 | Library (Playlists) |
 | 4 | Settings |
+| F / A / P / R / T | Library sub-pages: Files / Artists / Playlists / Radio / Stats |
 | / | Focus search field |
 | ? | Show/hide keyboard shortcuts |
 
@@ -86,6 +87,8 @@ The top section displays information about the currently playing track:
 | Y | Toggle lyrics |
 | S | Shuffle / Repeat mode |
 | V | Cycle visualizer mode |
+| 1-4 | Navigate: Player / Queue / Library / Settings |
+| F / A / P / R / T | Library: Files / Artists / Playlists / Radio / Stats |
 | / | Focus search field |
 | ? | Show keyboard shortcuts help |
 | Esc | Close modal |
