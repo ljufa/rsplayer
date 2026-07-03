@@ -29,5 +29,5 @@ rubato = "3"
 mockall_double = "0.3"
 
 [dev-dependencies]
-mockall = "0.14"
+mockall = "0.15"
 random-string = "1"
