@@ -1,4 +1,5 @@
 mod alsa_output;
+pub mod audio_host;
 mod audio_source;
 mod device_capabilities;
 mod dsd;
@@ -6,4 +7,6 @@ mod playback_config;
 mod playback_context;
 pub mod player_service;
 mod symphonia;
+pub mod sync_sink;
+pub mod tee;
 mod vumeter;

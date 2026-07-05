@@ -47,7 +47,9 @@ Example release asset names: `rsplayer_<version>_amd64.deb` (server), `rsplayer-
 |:---|:---|:---|
 | **x86_64** | `rsplayer_windows_amd64.exe` | `rsplayer-desktop_windows_amd64.exe` (NSIS installer) |
 
-Audio output uses WASAPI via `cpal`. The web UI is served at `http://localhost:8000`.
+Audio output uses WASAPI by default via `cpal`. Installed **ASIO** drivers are also selectable in Settings → Audio interface (shown as `… (ASIO)`) for exclusive, low-latency, bit-perfect playback — set the sample rate and buffer size in the driver's own control panel. The web UI is served at `http://localhost:8000`.
+
+> ASIO is a trademark and software of Steinberg Media Technologies GmbH.
 
 > Network mount management, Linux power actions, ALSA/PipeWire volume, IR remote, and firmware USB integration are unavailable on Windows.
 

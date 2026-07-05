@@ -25,6 +25,7 @@ It runs as a systemd service and exposes a responsive web UI, making it a great 
 ## Highlights
 
 - Pure-Rust playback engine (Symphonia + cpal) — Linux, macOS, and Windows; also a native desktop app
+- Native multiroom (beta): synchronized playback across devices with automatic discovery and encrypted QUIC streaming
 - Low-latency ALSA / PipeWire output, plus local playback straight to your browser
 - Formats: FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE
 - Built-in DSP: parametric EQ, filters, and presets
@@ -76,7 +77,9 @@ Download directly from the [latest release](https://github.com/ljufa/rsplayer/re
 - **Server**: `rsplayer_windows_amd64.exe` — run it directly, then open `http://localhost:8000`
 - **Desktop app**: run the `rsplayer-desktop_windows_amd64.exe` NSIS installer (fetches WebView2 automatically if needed)
 
-Audio output uses WASAPI via `cpal`. See the [Windows installation guide](https://ljufa.github.io/rsplayer/#/installation?id=windows-experimental).
+Audio output uses WASAPI by default via `cpal`, and installed **ASIO** drivers are selectable in Settings → Audio interface for exclusive, low-latency, bit-perfect playback. See the [Windows installation guide](https://ljufa.github.io/rsplayer/#/installation?id=windows-experimental).
+
+> ASIO is a trademark and software of Steinberg Media Technologies GmbH.
 
 ### Docker
 

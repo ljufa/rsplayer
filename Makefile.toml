@@ -2,10 +2,12 @@
 CARGO_TARGET_DIR = "target"
 CROSS_TARGET_DIR = { value = "target/cross", condition = { env_not_set = ["CI"] } }
 
+# TARGET_HOST = "192.168.5.3"
+# TARGET = "arm-unknown-linux-gnueabihf"
 TARGET_HOST = "192.168.5.4"
-# TARGET = "x86_64-unknown-linux-gnu"
 TARGET = "aarch64-unknown-linux-gnu"
 # Version single source of truth is [workspace.package] in Cargo.toml
+# TARGET = "x86_64-unknown-linux-gnu"
 RELEASE_VERSION = { script = ["grep -m1 '^version' Cargo.toml | cut -d'\"' -f2"] }
 RELEASE_BRANCH = "main_public"
 
@@ -278,12 +280,76 @@ script = [
 
 # ── Deploy ────────────────────────────────
 
-[tasks.copy_remote.env]
-CARGO_TARGET_DIR = { value = "target/cross", condition = { env_not_set = ["CI"] } }
-
+# Runs copy_remote_3 and copy_remote_4 as two *separate* cargo-make
+# processes. `run_task = { parallel = true }` cannot be used here: parallel
+# tasks share one process and cargo-make applies task env blocks as
+# process-global variables, so TARGET/TARGET_HOST/CARGO_TARGET_DIR of the
+# two targets race and clobber each other.
 [tasks.copy_remote]
-description = "Cross-build release and rsync to target device"
-dependencies = ["build_release"]
+description = "Build and deploy to targets .3 and .4 in parallel"
+script = '''
+RC_DIR=$(mktemp -d)
+( cargo make copy_remote_3 2>&1; echo $? > "$RC_DIR/rc3" ) | sed -u 's/^/[.3 arm  ] /' &
+P3=$!
+( cargo make copy_remote_4 2>&1; echo $? > "$RC_DIR/rc4" ) | sed -u 's/^/[.4 arm64] /' &
+P4=$!
+wait $P3
+wait $P4
+RC3=$(cat "$RC_DIR/rc3" 2>/dev/null || echo 1)
+RC4=$(cat "$RC_DIR/rc4" 2>/dev/null || echo 1)
+rm -rf "$RC_DIR"
+echo "copy_remote_3 exit=$RC3, copy_remote_4 exit=$RC4"
+[ "$RC3" = "0" ] && [ "$RC4" = "0" ]
+'''
+
+[tasks.build_release_3.env]
+TARGET = "arm-unknown-linux-gnueabihf"
+# Dedicated per-target dir: parallel builds don't fight over cargo's
+# build-dir lock, and since no host build ever touches it, the defensive
+# `cargo clean` is unnecessary — deploys build incrementally.
+CARGO_TARGET_DIR = { value = "target/cross-arm", condition = { env_not_set = ["CI"] } }
+RUST_SYSROOT_LIB = { script = ["echo $(rustc --print sysroot)/lib"] }
+CROSS_CONTAINER_OPTS = "-e LD_LIBRARY_PATH=${RUST_SYSROOT_LIB} -v ${RUST_SYSROOT_LIB}:${RUST_SYSROOT_LIB}"
+
+[tasks.build_release_3]
+description = "Cross-build release for target .3 (arm)"
+script = [
+    "cross build --target ${TARGET} --release --package rsplayer --bin rsplayer",
+]
+
+[tasks.copy_remote_3.env]
+TARGET_HOST = "192.168.5.3"
+TARGET = "arm-unknown-linux-gnueabihf"
+CARGO_TARGET_DIR = { value = "target/cross-arm", condition = { env_not_set = ["CI"] } }
+
+[tasks.copy_remote_3]
+description = "Cross-build release and rsync to target .3"
+dependencies = ["build_release_3"]
+script = [
+    "rsync -avvP --rsync-path=\"sudo rsync\" ${CARGO_TARGET_DIR}/${TARGET}/release/rsplayer pi@${TARGET_HOST}:/usr/bin",
+    "ssh -x pi@${TARGET_HOST} \"sudo systemctl restart rsplayer\"",
+]
+
+[tasks.build_release_4.env]
+TARGET = "aarch64-unknown-linux-gnu"
+CARGO_TARGET_DIR = { value = "target/cross-aarch64", condition = { env_not_set = ["CI"] } }
+RUST_SYSROOT_LIB = { script = ["echo $(rustc --print sysroot)/lib"] }
+CROSS_CONTAINER_OPTS = "-e LD_LIBRARY_PATH=${RUST_SYSROOT_LIB} -v ${RUST_SYSROOT_LIB}:${RUST_SYSROOT_LIB}"
+
+[tasks.build_release_4]
+description = "Cross-build release for target .4 (aarch64)"
+script = [
+    "cross build --target ${TARGET} --release --package rsplayer --bin rsplayer",
+]
+
+[tasks.copy_remote_4.env]
+TARGET_HOST = "192.168.5.4"
+TARGET = "aarch64-unknown-linux-gnu"
+CARGO_TARGET_DIR = { value = "target/cross-aarch64", condition = { env_not_set = ["CI"] } }
+
+[tasks.copy_remote_4]
+description = "Cross-build release and rsync to target .4"
+dependencies = ["build_release_4"]
 script = [
     "rsync -avvP --rsync-path=\"sudo rsync\" ${CARGO_TARGET_DIR}/${TARGET}/release/rsplayer pi@${TARGET_HOST}:/usr/bin",
     "ssh -x pi@${TARGET_HOST} \"sudo systemctl restart rsplayer\"",

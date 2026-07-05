@@ -663,6 +663,72 @@ pub fn SettingsPage() -> Element {
                 },
             }
 
+            // ── Multiroom section ─────────────────────────────────────────────
+            SettingsSection {
+                title: "Multiroom (beta)",
+                icon: "speaker_group",
+                content: rsx! {
+                    ToggleRow {
+                        label: "Enable multiroom (synchronized playback)",
+                        checked: settings.read().multiroom_settings.enabled,
+                        onchange: move |_| {
+                            let v = !settings.read().multiroom_settings.enabled;
+                            settings.write().multiroom_settings.enabled = v;
+                            auto_save_restart();
+                        },
+                    }
+                    if settings.read().multiroom_settings.enabled {
+                        div { class: "mt-3 space-y-3",
+                            div { class: "form-control",
+                                label { class: "label",
+                                    span { class: "label-text font-medium", "Room name" }
+                                }
+                                input {
+                                    class: "input input-sm input-bordered w-full",
+                                    r#type: "text",
+                                    placeholder: "Living room",
+                                    value: "{settings.read().multiroom_settings.room_name}",
+                                    onchange: move |e: Event<FormData>| {
+                                        let name = e.value();
+                                        if !name.trim().is_empty() {
+                                            settings.write().multiroom_settings.room_name = name.trim().to_string();
+                                            auto_save_restart();
+                                        }
+                                    },
+                                }
+                            }
+                            NumberInput {
+                                label: "Sync buffer (ms)",
+                                value: settings.read().multiroom_settings.buffer_ms.to_string(),
+                                min: "200",
+                                max: "2000",
+                                onchange: move |v: String| {
+                                    if let Ok(n) = v.parse::<u32>() {
+                                        settings.write().multiroom_settings.buffer_ms = n.clamp(200, 2000);
+                                        auto_save_restart();
+                                    }
+                                },
+                            }
+                            NumberInput {
+                                label: "Output latency trim (ms)",
+                                value: settings.read().multiroom_settings.output_latency_offset_ms.to_string(),
+                                min: "-500",
+                                max: "500",
+                                onchange: move |v: String| {
+                                    if let Ok(n) = v.parse::<i32>() {
+                                        settings.write().multiroom_settings.output_latency_offset_ms = n.clamp(-500, 500);
+                                        auto_save_restart();
+                                    }
+                                },
+                            }
+                            p { class: "text-xs opacity-60",
+                                "Instances with multiroom enabled discover each other automatically on the local network. Group rooms from the player page. Changes take effect after a restart. Multiroom is in beta — if sync misbehaves on your hardware or network, please report it on GitHub."
+                            }
+                        }
+                    }
+                },
+            }
+
             // ── DSP section ───────────────────────────────────────────────────
             SettingsSection {
                 title: "DSP Equalizer",

@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use api_models::{
-    common::{MetadataCommand, PlaybackMode, PlayerCommand, SystemRequest, UserCommand, Volume},
+    common::{MetadataCommand, MultiroomCommand, PlaybackMode, PlayerCommand, SystemRequest, UserCommand, Volume},
     player::Song,
-    state::{PlayerInfo, PlayerState, SongProgress},
+    state::{MultiroomRole, PlayerInfo, PlayerState, SongProgress},
 };
 use dioxus::prelude::*;
 use gloo_net::http::Request;
@@ -140,23 +140,41 @@ pub fn PlayerPage() -> Element {
             }
             // Content
             div { class: "player-page__content",
-                TrackInfo {
-                    song: current_song.read().clone(),
-                    player_info: player_info.read().clone(),
-                }
-                Controls {
-                    ws,
-                    player_state: player_state.read().clone(),
-                    playback_mode: *playback_mode.read(),
-                    progress: progress.read().clone(),
-                    volume: *volume.read(),
-                    current_song: current_song.read().clone(),
-                    vu_meter_enabled: *vu_meter_enabled.read(),
-                    visualizer_type: state.visualizer_type,
-                    on_lyrics: move |()| {
-                        let open = *ui.lyrics_open.peek();
-                        ui.lyrics_open.set(!open);
-                    },
+                if state.multiroom_group.read().role == MultiroomRole::Follower {
+                    // A grouped follower plays the leader's stream: transport
+                    // controls are inactive, only the local volume applies.
+                    FollowerBanner { ws, group: state.multiroom_group }
+                    TrackInfo {
+                        song: current_song.read().clone(),
+                        player_info: player_info.read().clone(),
+                    }
+                    div { class: "mt-4",
+                        VolumeControl { ws, volume: *volume.read() }
+                    }
+                } else {
+                    TrackInfo {
+                        song: current_song.read().clone(),
+                        player_info: player_info.read().clone(),
+                    }
+                    Controls {
+                        ws,
+                        player_state: player_state.read().clone(),
+                        playback_mode: *playback_mode.read(),
+                        progress: progress.read().clone(),
+                        volume: *volume.read(),
+                        current_song: current_song.read().clone(),
+                        vu_meter_enabled: *vu_meter_enabled.read(),
+                        visualizer_type: state.visualizer_type,
+                        on_lyrics: move |()| {
+                            let open = *ui.lyrics_open.peek();
+                            ui.lyrics_open.set(!open);
+                        },
+                    }
+                    MultiroomPanel {
+                        ws,
+                        peers: state.multiroom_peers,
+                        group: state.multiroom_group,
+                    }
                 }
             }
             if (ui.lyrics_open)() {
@@ -462,6 +480,77 @@ fn Controls(
             }
             SeekBar { ws, progress }
             VolumeControl { ws, volume }
+        }
+    }
+}
+
+// ─── Multiroom ───────────────────────────────────────────────────────────────
+
+/// Banner shown while this instance plays as a grouped multiroom follower.
+#[component]
+fn FollowerBanner(ws: Signal<Option<WebSocket>>, group: Signal<api_models::state::MultiroomGroupState>) -> Element {
+    let leader = group.read().leader_name.clone().unwrap_or_else(|| "another room".to_string());
+    rsx! {
+        div { class: "alert alert-info shadow-sm mb-4",
+            i { class: "material-icons text-lg", "speaker_group" }
+            span { "Grouped with '{leader}' — playback is controlled by the leader." }
+            button {
+                class: "btn btn-sm btn-outline",
+                onclick: move |_| ws_send(&ws, &UserCommand::Multiroom(MultiroomCommand::LeaveGroup)),
+                "Leave group"
+            }
+        }
+    }
+}
+
+/// Discovered rsplayer instances with group membership toggles (leader side).
+#[component]
+fn MultiroomPanel(
+    ws: Signal<Option<WebSocket>>,
+    peers: Signal<Vec<api_models::state::MultiroomPeer>>,
+    group: Signal<api_models::state::MultiroomGroupState>,
+) -> Element {
+    let role = group.read().role;
+    // Hidden when multiroom is disabled or nothing was discovered.
+    if role == MultiroomRole::Off || (peers.read().is_empty() && role != MultiroomRole::Leader) {
+        return rsx! {};
+    }
+    rsx! {
+        div { class: "mt-6 mx-auto w-full max-w-md",
+            div { class: "flex items-center gap-2 mb-2 opacity-70",
+                i { class: "material-icons text-lg", "speaker_group" }
+                span { class: "text-sm font-medium", "Multiroom" }
+            }
+            div { class: "space-y-1",
+                for peer in peers.read().iter().cloned() {
+                    div { class: "flex items-center justify-between rounded-lg bg-base-200/60 px-3 py-2",
+                        div { class: "flex items-center gap-2 min-w-0",
+                            span {
+                                class: if peer.online { "w-2 h-2 rounded-full bg-success shrink-0" } else { "w-2 h-2 rounded-full bg-base-content/30 shrink-0" },
+                            }
+                            span { class: "text-sm truncate", title: "{peer.endpoint_id}", "{peer.room_name}" }
+                        }
+                        input {
+                            r#type: "checkbox",
+                            class: "toggle toggle-sm toggle-primary",
+                            checked: peer.in_group,
+                            disabled: !peer.online && !peer.in_group,
+                            onchange: {
+                                let id = peer.endpoint_id.clone();
+                                let in_group = peer.in_group;
+                                move |_| {
+                                    let cmd = if in_group {
+                                        MultiroomCommand::RemoveFromGroup(id.clone())
+                                    } else {
+                                        MultiroomCommand::AddToGroup(id.clone())
+                                    };
+                                    ws_send(&ws, &UserCommand::Multiroom(cmd));
+                                }
+                            },
+                        }
+                    }
+                }
+            }
         }
     }
 }

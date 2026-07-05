@@ -3,8 +3,10 @@
   - [Installation](installation.md)
   - [Configuration](configuration.md)
   - [Usage Guide](usage.md)
+  - [Multiroom Playback](multiroom.md)
   - [Troubleshooting](troubleshooting.md)
 - **Development**
   - [Building from Source](build.md)
+  - [Multiroom Architecture](multiroom_architecture.md)
   - [Release Notes](release_notes.md)
   - [Feature Parity](feature_parity.md)

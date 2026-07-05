@@ -5,6 +5,7 @@ use api_models::state::StateChangeEvent;
 use dsp::DspHandle;
 use tokio::sync::broadcast::Sender;
 
+use crate::rsp::tee::SyncTee;
 use crate::rsp::vumeter::VUMeter;
 
 #[derive(Clone)]
@@ -19,6 +20,8 @@ pub struct PlaybackContext {
     pub changes_tx: Sender<StateChangeEvent>,
     pub dsp_handle: Option<DspHandle>,
     pub vu_meter: Option<VUMeter>,
+    /// Multiroom PCM tee — `Some` when multiroom is enabled in settings.
+    pub sync_tee: Option<SyncTee>,
 }
 
 impl PlaybackContext {
@@ -29,6 +32,7 @@ impl PlaybackContext {
         changes_tx: Sender<StateChangeEvent>,
         dsp_handle: Option<DspHandle>,
         vu_meter_enabled: bool,
+        sync_tee: Option<SyncTee>,
     ) -> Self {
         let vu_meter = if vu_meter_enabled {
             Some(VUMeter::new(software_gain.clone(), changes_tx.clone()))
@@ -43,6 +47,7 @@ impl PlaybackContext {
             changes_tx,
             dsp_handle,
             vu_meter,
+            sync_tee,
         }
     }
 

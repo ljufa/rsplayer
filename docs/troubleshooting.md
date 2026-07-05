@@ -128,3 +128,16 @@ The first time `rsplayer.exe` binds a port, Windows Firewall shows a permission 
 ```powershell
 netsh advfirewall firewall add rule name="RSPlayer" dir=in action=allow protocol=TCP localport=8000
 ```
+
+### ASIO device is missing from the Audio interface list
+
+ASIO drivers only appear (as `… (ASIO)` entries) when **both** conditions hold:
+
+- The build includes the `asio` feature. Official Windows builds do; a self-compiled binary must be built with `--features asio` (see [build.md](build.md#windows-build-native)).
+- The device's ASIO driver is installed and its control panel opens successfully. Devices that only expose WASAPI show up under their WASAPI names instead.
+
+Because the device list is enumerated once at startup, an ASIO driver installed *after* launch will not appear until you **restart RSPlayer**.
+
+### Playback briefly stops when a new ASIO driver is scanned
+
+ASIO drivers are exclusive (single-client), so probing them can interrupt whatever is currently playing. RSPlayer avoids this by enumerating devices only at startup and reusing the cached list, so opening Settings during playback is safe. A deliberate device rescan (`GET /api/settings?rescan=true`) still re-probes the drivers and may cause a momentary dropout — trigger it while playback is stopped.

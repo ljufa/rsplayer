@@ -78,6 +78,36 @@ pub enum StateChangeEvent {
     MountStatusEvent(Vec<MountStatus>),
     MusicDirStatusEvent(Vec<MusicDirStatus>),
     ExternalMountsEvent(Vec<ExternalMount>),
+    MultiroomPeersEvent(Vec<MultiroomPeer>),
+    MultiroomGroupEvent(MultiroomGroupState),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MultiroomPeer {
+    pub endpoint_id: String,
+    pub room_name: String,
+    pub in_group: bool,
+    pub online: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum MultiroomRole {
+    /// Multiroom is disabled in settings.
+    #[default]
+    Off,
+    /// Enabled, discoverable, not part of any group.
+    Idle,
+    Leader,
+    Follower,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct MultiroomGroupState {
+    pub role: MultiroomRole,
+    /// Room name of the leader when `role == Follower`.
+    pub leader_name: Option<String>,
+    /// Group members as seen by the leader (empty unless `role == Leader`).
+    pub members: Vec<MultiroomPeer>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

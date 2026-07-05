@@ -129,6 +129,8 @@ nfs-utils = "*"
 default = ["alsa"]
 alsa = ["hardware/alsa"]
 lirc = ["hardware/lirc"]
+# ASIO output on Windows (see docs/build.md). Enabled for Windows release builds.
+asio = ["playback/asio", "cpal/asio"]
 
 [dependencies]
 api_models = { path = "../api_models" }
@@ -136,6 +138,7 @@ metadata = { path = "../metadata" }
 config = { path = "../config" }
 playback = { path = "../playback" }
 hardware = { path = "../hardware" }
+sync = { path = "../sync" }
 cpal.workspace = true
 
 #logging

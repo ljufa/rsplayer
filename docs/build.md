@@ -142,17 +142,23 @@ Windows builds must be compiled natively on a Windows machine (or a Windows GitH
    cargo install tauri-cli --version "^2"
    ```
 4. **Node.js** — required for the web UI CSS build step.
+5. **LLVM** — required for `bindgen` (ASIO). Install from [releases.llvm.org](https://releases.llvm.org/) or `choco install llvm`, then set `LIBCLANG_PATH` to its `bin` directory (e.g. `C:\Program Files\LLVM\bin`).
+6. **ASIO SDK** — required to link ASIO output. Download the [Steinberg ASIO SDK](https://www.steinberg.net/asiosdk), extract it, and set `CPAL_ASIO_DIR` to the extracted folder. The SDK is not redistributed with rsplayer; you accept Steinberg's license by downloading it.
 
 ### Build headless server
 
-The Windows server binary is built without ALSA or LIRC features (those are Linux-only):
+The Windows server binary is built without ALSA or LIRC (Linux-only) but **with** the `asio` feature for low-latency ASIO output:
 
 ```powershell
 # Build the web UI first (required — embedded into the server binary)
 cargo make build_ui_release
 
+# Point the build at the ASIO SDK and LLVM (once per shell)
+$env:CPAL_ASIO_DIR = "C:\path\to\asiosdk"
+$env:LIBCLANG_PATH = "C:\Program Files\LLVM\bin"
+
 # Build the headless server
-cargo build --package rsplayer --bin rsplayer --release --no-default-features --target x86_64-pc-windows-msvc
+cargo build --package rsplayer --bin rsplayer --release --no-default-features --features asio --target x86_64-pc-windows-msvc
 ```
 
 The binary is at `target\x86_64-pc-windows-msvc\release\rsplayer.exe`.
@@ -170,13 +176,55 @@ cargo tauri build --bundles nsis --ci
 
 The NSIS installer is placed under `target\release\bundle\nsis\`.
 
+The desktop app links ASIO too (via the desktop crate's Windows dependency); the same `CPAL_ASIO_DIR` and `LIBCLANG_PATH` must be set before `cargo tauri build`.
+
+### Audio output on Windows
+
+- **WASAPI** (default host) devices are always available.
+- **ASIO** drivers appear as `… (ASIO)` entries in Settings → Audio interface when the build includes the `asio` feature and an ASIO driver is installed. ASIO gives exclusive, low-latency, bit-perfect output; the driver's own control panel sets its buffer size and sample rate.
+
+> ASIO is a trademark and software of Steinberg Media Technologies GmbH.
+
 ### Platform limitations on Windows
 
-- **Volume control**: software gain only (ALSA and PipeWire are unavailable).
+- **Volume control**: software gain only (ALSA and PipeWire are unavailable). Software gain still applies to ASIO output.
 - **Network mounts**: SMB/NFS mounting from the UI is unavailable.
 - **Power control**: system poweroff/reboot commands are unavailable.
 - **IR remote**: LIRC integration is unavailable.
 - **Firmware USB**: serial integration works (cross-platform via `serialport` crate).
+
+### Self-hosted Windows runner (CI)
+
+The `build_desktop_windows` job runs on a self-hosted runner (`runs-on: [self-hosted, windows, x64]`). Unlike GitHub-hosted `windows-latest`, a bare machine has **nothing** pre-installed, so the runner will fail immediately (e.g. `bash: command not found`, because `dtolnay/rust-toolchain` is a bash action). Provision the machine **once**, in an elevated PowerShell:
+
+```powershell
+# Allow the runner to execute the per-step .ps1 files it generates.
+# Windows defaults to Restricted, which blocks them ("running scripts is disabled").
+# Elevated shell (runner as a service): use -Scope LocalMachine.
+# Non-elevated shell (runner runs as the current user): use -Scope CurrentUser.
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+
+# Toolchain + native build prerequisites
+winget install --id Git.Git -e                     # git (checkout) + Git Bash
+winget install --id Rustlang.Rustup -e             # rustup / cargo
+winget install --id LLVM.LLVM -e                   # libclang for bindgen (ASIO)
+winget install --id Microsoft.VisualStudio.2022.BuildTools -e `
+  --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+
+# Rust toolchain + MSVC target
+rustup toolchain install stable
+rustup target add x86_64-pc-windows-msvc
+
+# Optional: pre-install so it isn't rebuilt every run
+cargo install tauri-cli --version "^2" --locked
+```
+
+Notes:
+
+- The workflow sets `LIBCLANG_PATH: C:\Program Files\LLVM\bin`, which matches the default LLVM install location. Adjust the env in `cd.yml` if you install LLVM elsewhere.
+- **Visual Studio Build Tools** (the "Desktop development with C++" / VCTools workload) provides the MSVC linker and Windows SDK needed to compile the ASIO C++ shim and link the executables.
+- **Restart the runner service after provisioning** — the runner captures `PATH`/environment when it starts, so newly installed `cargo`, `rustup`, `clang` and `git` are not visible until it restarts.
+- The workflow's Windows steps use the built-in Windows PowerShell (`shell: powershell`), so neither Git Bash nor PowerShell 7 (`pwsh`) needs to be installed. Git itself is still needed for `actions/checkout`.
 
 ## Output
 

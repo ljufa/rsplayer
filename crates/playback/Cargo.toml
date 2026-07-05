@@ -28,6 +28,11 @@ rubato = "3"
 
 mockall_double = "0.3"
 
+[features]
+# ASIO output on Windows. Requires the Steinberg ASIO SDK + LLVM/libclang at
+# build time (see docs/build.md). No-op on non-Windows targets.
+asio = ["cpal/asio"]
+
 [dev-dependencies]
 mockall = "0.15"
 random-string = "1"

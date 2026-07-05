@@ -1,3 +1,4 @@
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use tokio::sync::broadcast::Sender;
@@ -23,6 +24,8 @@ pub struct CommandContext {
     pub song_repository: ArcSongRepository,
     pub loudness_repository: ArcLoudnessRepository,
     pub config_store: ArcConfiguration,
+    /// True while this instance plays as a grouped multiroom follower.
+    pub multiroom_follower_active: Arc<AtomicBool>,
     pub state_changes_sender: Sender<StateChangeEvent>,
 }
 
@@ -37,6 +40,7 @@ impl CommandContext {
         song_repository: ArcSongRepository,
         loudness_repository: ArcLoudnessRepository,
         config_store: ArcConfiguration,
+        multiroom_follower_active: Arc<AtomicBool>,
         state_changes_sender: Sender<StateChangeEvent>,
     ) -> Self {
         Self {
@@ -48,6 +52,7 @@ impl CommandContext {
             song_repository,
             loudness_repository,
             config_store,
+            multiroom_follower_active,
             state_changes_sender,
         }
     }

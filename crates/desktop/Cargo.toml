@@ -41,7 +41,12 @@ env_logger = { workspace = true }
 [target.'cfg(target_os = "linux")'.dependencies]
 rsplayer = { path = "../server" }
 
-[target.'cfg(not(target_os = "linux"))'.dependencies]
+# Windows: no ALSA, but enable ASIO output (requires ASIO SDK + LLVM at build time).
+[target.'cfg(target_os = "windows")'.dependencies]
+rsplayer = { path = "../server", default-features = false, features = ["asio"] }
+
+# macOS (and any other non-Linux, non-Windows): no ALSA, no ASIO.
+[target.'cfg(all(not(target_os = "linux"), not(target_os = "windows")))'.dependencies]
 rsplayer = { path = "../server", default-features = false }
 
 [features]

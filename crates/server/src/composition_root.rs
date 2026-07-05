@@ -1,10 +1,10 @@
-use std::sync::atomic::AtomicU8;
+use std::sync::atomic::{AtomicBool, AtomicU8};
 use std::sync::Arc;
 
 use log::{error, info};
 use tokio::sync::{broadcast, mpsc};
 
-use api_models::common::{SystemCommand, UserCommand};
+use api_models::common::{MultiroomCommand, SystemCommand, UserCommand};
 use api_models::state::StateChangeEvent;
 use config::ArcConfiguration;
 use hardware::audio_device::audio_service::{ArcAudioInterfaceSvc, AudioInterfaceService};
@@ -22,6 +22,7 @@ use metadata::ports::{
 use metadata::queue_service::QueueService;
 use metadata::song_repository::FjallSongRepository;
 use playback::rsp::player_service::PlayerService;
+use playback::rsp::tee::{SyncTee, TeeEvent};
 
 pub struct ChannelPair<T> {
     pub tx: mpsc::Sender<T>,
@@ -55,6 +56,19 @@ pub struct AppContainer {
     pub state_changes_tx: broadcast::Sender<StateChangeEvent>,
     pub user_commands: ChannelPair<UserCommand>,
     pub system_commands: ChannelPair<SystemCommand>,
+    pub multiroom_commands: ChannelPair<MultiroomCommand>,
+    /// True while this instance plays as a grouped multiroom follower;
+    /// local transport commands are rejected while set.
+    pub multiroom_follower_active: Arc<AtomicBool>,
+    /// Audio-side multiroom plumbing — `Some` when multiroom is enabled.
+    pub multiroom: Option<MultiroomParts>,
+}
+
+/// Everything the sync service needs beyond the command/event channels.
+pub struct MultiroomParts {
+    pub tee_rx: mpsc::Receiver<TeeEvent>,
+    pub tee_active: Arc<AtomicBool>,
+    pub sink_params: sync::follower::SinkParams,
 }
 
 pub enum BuildOutcome {
@@ -62,6 +76,7 @@ pub enum BuildOutcome {
     Degraded(anyhow::Error),
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn build_app_container(config: &ArcConfiguration, shared_db: &Arc<fjall::Database>) -> BuildOutcome {
     let song_repository: ArcSongRepository = Arc::new(FjallSongRepository::new(shared_db));
     let album_repository: ArcAlbumRepository = Arc::new(FjallAlbumRepository::new(shared_db));
@@ -112,6 +127,8 @@ pub fn build_app_container(config: &ArcConfiguration, shared_db: &Arc<fjall::Dat
 
     let user_commands = ChannelPair::<UserCommand>::new(5);
     let system_commands = ChannelPair::<SystemCommand>::new(5);
+    let multiroom_commands = ChannelPair::<MultiroomCommand>::new(16);
+    let multiroom_follower_active = Arc::new(AtomicBool::new(false));
     let (state_changes_tx, _) = broadcast::channel(64);
 
     let loudness_service = LoudnessService::new(
@@ -126,16 +143,46 @@ pub fn build_app_container(config: &ArcConfiguration, shared_db: &Arc<fjall::Dat
         info!("Loudness scan service disabled (loudness normalization is off).");
     }
 
+    let settings = config.get_settings();
+    let (sync_tee, sync_tee_rx) = if settings.multiroom_settings.enabled {
+        let (tee, rx) = SyncTee::new(settings.multiroom_settings.buffer_ms);
+        (Some(tee), Some(rx))
+    } else {
+        (None, None)
+    };
+
     let player_service = PlayerService::new(
         shared_db,
-        &config.get_settings(),
-        current_volume,
+        &settings,
+        current_volume.clone(),
         metadata_service.clone(),
         queue_service.clone(),
         state_changes_tx.clone(),
         loudness_service,
+        sync_tee.clone(),
     );
     info!("Player service successfully created.");
+
+    let multiroom = match (sync_tee, sync_tee_rx) {
+        (Some(tee), Some(tee_rx)) => Some(MultiroomParts {
+            tee_rx,
+            tee_active: tee.active_flag(),
+            sink_params: sync::follower::SinkParams {
+                audio_device: settings.alsa_settings.output_device.name.clone(),
+                rsp_settings: settings.rs_player_settings.clone(),
+                software_gain: if settings.volume_ctrl_settings.ctrl_device == api_models::common::VolumeCrtlType::Software {
+                    Some(current_volume)
+                } else {
+                    None
+                },
+                vu_meter_enabled: settings.rs_player_settings.vu_meter_enabled,
+                dsp_handle: player_service.dsp_handle(),
+                latency_offset_ms: settings.multiroom_settings.output_latency_offset_ms,
+                changes_tx: state_changes_tx.clone(),
+            },
+        }),
+        _ => None,
+    };
 
     BuildOutcome::Ready(Box::new(AppContainer {
         song_repository,
@@ -150,6 +197,9 @@ pub fn build_app_container(config: &ArcConfiguration, shared_db: &Arc<fjall::Dat
         state_changes_tx,
         user_commands,
         system_commands,
+        multiroom_commands,
+        multiroom_follower_active,
+        multiroom,
     }))
 }
 

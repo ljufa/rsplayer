@@ -13,7 +13,7 @@ use tokio::sync::broadcast::Sender;
 use tokio::sync::mpsc::{self, Receiver};
 
 use api_models::common::SystemCommand;
-use api_models::common::UserCommand::{self, Metadata, Player, Playlist, Queue, Storage, System, UpdateDsp};
+use api_models::common::UserCommand::{self, Metadata, Multiroom, Player, Playlist, Queue, Storage, System, UpdateDsp};
 use api_models::state::StateChangeEvent;
 
 use crate::command_context::{CommandContext, SystemCommandContext};
@@ -36,6 +36,8 @@ pub async fn handle_user_commands(
     config_store: ArcConfiguration,
     mut input_commands_rx: Receiver<UserCommand>,
     system_commands_tx: mpsc::Sender<SystemCommand>,
+    multiroom_commands_tx: mpsc::Sender<api_models::common::MultiroomCommand>,
+    multiroom_follower_active: std::sync::Arc<std::sync::atomic::AtomicBool>,
     state_changes_sender: Sender<StateChangeEvent>,
 ) {
     let ctx = CommandContext::new(
@@ -47,6 +49,7 @@ pub async fn handle_user_commands(
         song_repository,
         loudness_repository,
         config_store,
+        multiroom_follower_active,
         state_changes_sender,
     );
 
@@ -81,6 +84,12 @@ pub async fn handle_user_commands(
             System(req) => {
                 if let Err(e) = system_commands_tx.send(req.into()).await {
                     error!("Failed to forward SystemRequest to system handler: {e}");
+                }
+            }
+            Multiroom(multiroom_cmd) => {
+                // The receiver only exists while multiroom is enabled in settings.
+                if let Err(e) = multiroom_commands_tx.send(multiroom_cmd).await {
+                    debug!("Multiroom command dropped (multiroom disabled?): {e}");
                 }
             }
         }

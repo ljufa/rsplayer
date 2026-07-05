@@ -21,6 +21,7 @@ use dsp::DspProcessor;
 use super::symphonia::PlaybackResult;
 use crate::rsp::playback_config::PlaybackConfig;
 use crate::rsp::playback_context::PlaybackContext;
+use crate::rsp::tee::SyncTee;
 
 pub struct PlayerService {
     state_db: Keyspace,
@@ -39,6 +40,7 @@ pub struct PlayerService {
     dsp_processor: Arc<Mutex<Option<DspProcessor>>>,
     loudness_service: Arc<LoudnessService>,
     last_player_info: Arc<Mutex<Option<PlayerInfo>>>,
+    sync_tee: Option<SyncTee>,
 }
 
 const LAST_SONG_PAUSED_KEY: &str = "last_song_paused";
@@ -46,7 +48,7 @@ const LAST_SONG_PROGRESS_KEY: &str = "last_played_song_progress";
 
 impl PlayerService {
     #[must_use]
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     pub fn new(
         db: &Database,
         settings: &Settings,
@@ -55,6 +57,7 @@ impl PlayerService {
         queue_service: Arc<QueueService>,
         state_changes_tx: Sender<StateChangeEvent>,
         loudness_service: Arc<LoudnessService>,
+        sync_tee: Option<SyncTee>,
     ) -> Arc<Self> {
         let state_db = db
             .keyspace("player_state", KeyspaceCreateOptions::default)
@@ -168,12 +171,19 @@ impl PlayerService {
             dsp_processor,
             loudness_service,
             last_player_info,
+            sync_tee,
         };
         let last_played_song_progress = ps.get_last_played_song_time();
         if last_played_song_progress > 0 {
             ps.seek_current_song(last_played_song_progress);
         }
         Arc::new(ps)
+    }
+
+    /// Shared DSP handle so the multiroom sink applies this room's EQ.
+    #[must_use]
+    pub fn dsp_handle(&self) -> Option<dsp::DspHandle> {
+        self.dsp_processor.lock().ok().and_then(|g| g.as_ref().map(DspProcessor::handle))
     }
 
     pub fn play_from_current_queue_song(&self) {
@@ -287,11 +297,11 @@ impl PlayerService {
         let loudness_service = self.loudness_service.clone();
         let is_multi_core_platform = core_affinity::get_core_ids().is_some_and(|ids| ids.len() > 1);
         let local_browser_playback = self.local_browser_playback;
-        let prio = if is_multi_core_platform {
-            ThreadPriority::Crossplatform(playback_thread_prio.try_into().expect("invalid thread priority value"))
-        } else {
-            ThreadPriority::Min
-        };
+        let sync_tee = self.sync_tee.clone();
+        // Use the configured priority on single-core platforms too: with
+        // ThreadPriority::Min the audio thread on an RPi Zero was starved by
+        // web-UI/library requests sharing the one core, breaking playback.
+        let prio = ThreadPriority::Crossplatform(playback_thread_prio.try_into().expect("invalid thread priority value"));
         ThreadBuilder::default()
             .name("playback".to_string())
             .priority(prio)
@@ -402,6 +412,7 @@ impl PlayerService {
                         changes_tx.clone(),
                         dsp_handle.clone(),
                         vu_meter_enabled,
+                        sync_tee.clone(),
                     );
 
                     let play_result = if local_browser_playback {

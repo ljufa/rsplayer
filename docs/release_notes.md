@@ -1,5 +1,34 @@
 # Release Notes
 
+## v4.5.0 — 2026-07-05
+
+### Features
+
+#### Synchronized Multiroom Playback (beta)
+
+RSPlayer can now play the same music on several devices at once, synchronized to a few milliseconds — with **no external software** (Snapcast, Roon, etc.) and no cloud service. Every RSPlayer instance on the LAN discovers the others automatically, and any of them can stream its playback to the rest. A typical setup: a Raspberry Pi + USB DAC in the living room, another in the kitchen, and a desktop in the office, all grouped from the web UI and playing in sync. Full guide: [Multiroom Playback](multiroom.md).
+
+**Setup and grouping**
+
+- Enable it per device in **Settings → Multiroom**, give each a room name, and restart. Each device generates a permanent cryptographic identity on first start, so groups survive restarts and IP-address changes.
+- On the **player page**, a **Multiroom** panel lists discovered rooms; toggling a room on makes it a **follower** of the current device (the **leader**). Followers can join cleanly in the middle of a running track.
+- While grouped, a follower's transport controls are disabled (the leader drives play/pause/next/seek), but **volume and DSP/EQ stay per-room** — each room applies its own correction to the received stream. Leaving is one click from either side, and a lost connection returns a follower to standalone automatically.
+
+**How it stays in sync**
+
+- **Discovery** uses mDNS (the zero-config mechanism AirPlay/Chromecast use); transport is **[iroh](https://www.iroh.computer/)** QUIC, dialed by device identity rather than IP. All traffic is end-to-end encrypted and never leaves the LAN.
+- The leader decodes each track **once** and tees the raw PCM (f32, source rate) before its own processing, so every follower runs the audio through its own pipeline (resample, EQ, volume, visualizer). Loudness-normalization gain is carried from the leader. Bandwidth is ~2.8 Mbit/s per follower at 44.1 kHz stereo.
+- Three mechanisms hold the group together: **NTP-style clock synchronization** (sub-millisecond on a LAN), **scheduled playback** (every chunk carries the exact instant it must reach the speakers), and continuous **drift correction** (inaudible time-stretching to track each DAC's real position). In practice rooms align to single-digit milliseconds and stay locked for arbitrarily long sessions.
+
+**Networking:** requires UDP between devices — RSPlayer's fixed sync port is **UDP 47800**, plus mDNS on **UDP 5353**. See the doc for firewalld/ufw/iptables snippets.
+
+**Known limitations:** DSD tracks play on the leader only (they can't traverse the PCM chain); there is no gapless playback while grouped (each track starts a new synchronized session); low-power devices (e.g. Pi Zero) spend noticeable CPU as followers. Works across any mix of Linux, macOS, and Windows.
+
+> **Beta.** Sync quality depends on factors outside RSPlayer's control (audio-driver latency reporting, Wi-Fi APs, device firewalls). If it misbehaves, please [open an issue](https://github.com/ljufa/rsplayer/issues/new?template=multiroom_report.md) with the details listed in the doc.
+
+#### ASIO Output on Windows
+
+Windows builds now support **ASIO** in addition to WASAPI. Installed ASIO drivers appear as `… (ASIO)` entries in Settings → Audio interface and provide exclusive, low-latency, bit-perfect output; the driver's own control panel governs its buffer size and sample rate. The device selection encodes the host as an `asio:` prefix on the stored device name, so the rest of the pipeline is unchanged. Both local playback and multiroom-follower playback route through the selected host. Windows release binaries are linked against the Steinberg ASIO SDK (downloaded at build time — see `docs/build.md`); ASIO is a trademark and software of Steinberg Media Technologies GmbH.
 ## v4.3.0 — 2026-07-03
 
 ### Bug Fixes

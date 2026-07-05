@@ -18,6 +18,7 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 ## Features
 
 - **Low Latency Output**: Direct output to ALSA or PipeWire minimizes latency.
+- **Multiroom Playback**: Native synchronized playback across multiple RSPlayer devices — automatic discovery on the LAN, encrypted QUIC streaming, millisecond-level sync, per-room volume and EQ. See [Multiroom Playback](multiroom.md).
 - **Local Browser Playback**: Stream audio directly to your web browser for local playback.
 - **Automatic Resampling**: High-quality FFT-based resampling (via rubato) when the output device doesn't support the source sample rate — no configuration needed. Automatically probes fallback rates for ALSA drivers that misreport their supported range.
 - **Fixed Output Sample Rate**: Optionally lock the output to a specific sample rate, overriding automatic detection.
@@ -28,7 +29,6 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 - **Web UI Remote Control**: Manage your playback remotely with an intuitive web interface.
 - **Flexible Volume Control**: Choose ALSA mixer, PipeWire, or software gain volume control, with hardware control also supported via RSPlayer firmware integration.
 - **Volume Persistence**: Volume level is saved on change and restored on restart, defaulting to 0 on first use to prevent hardware-max shock.
-- **Written in Rust**: Enjoy the benefits of minimal dependencies and high performance, thanks to the Rust-native implementation.
 - **Comprehensive Music Library Management**: Scan, search, and browse your music library and online radio stations with ease.
 - **Dynamic Playlists**: Automatically create dynamic playlists for personalized listening experiences.
 - **Playlists by Genre, Year**: Browse and create playlists based on genre or year.
@@ -42,6 +42,7 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 - **Global Keyboard Shortcuts**: Full keyboard control for playback, navigation, and search (Space, arrows, M, L, Y, S, /, ?, 1-4, F/A/P/R/T).
 - **Breadcrumb Navigation**: Clear navigation context on all library pages.
 - **Skeleton Loading & Empty States**: Visual feedback during loading and helpful empty state screens.
+- **Written in Rust**: Enjoy the benefits of minimal dependencies and high performance, thanks to the Rust-native implementation.
 - **Extended Hardware Control**: Support for seek and power management via firmware interactions.
 
 ### Supported Formats
@@ -104,7 +105,6 @@ See the [Configuration](configuration.md) page for hardware integration details.
 - **Generate Missing Album Cover Image**: Auto-generate album art using the album name.
 - **MPD protocol support**: Compatibility with MPD clients.
 - **Subsonic protocol support**: Compatibility with Subsonic clients.
-- **Multi-room playback**: Synchronized playback across multiple devices.
 - **Community plugin framework**: Extensible architecture for third-party plugins.
 - **Improved playlist management**: Create/modify/delete items and playlists from everywhere.
 - **In-app upgrade**: Detect a new version and provide an upgrade button.

@@ -1,6 +1,6 @@
 use crate::state::AppState;
 use api_models::{
-    common::{PlayerCommand, QueueCommand, SystemRequest, UserCommand},
+    common::{MultiroomCommand, PlayerCommand, QueueCommand, SystemRequest, UserCommand},
     state::StateChangeEvent,
 };
 use dioxus::prelude::*;
@@ -74,6 +74,9 @@ fn connect(app_state: AppState, ws_holder: Signal<Signal<Option<WebSocket>>>) {
                 send(&json);
             }
             if let Ok(json) = serde_json::to_string(&UserCommand::System(SystemRequest::QueryCurrentVolume)) {
+                send(&json);
+            }
+            if let Ok(json) = serde_json::to_string(&UserCommand::Multiroom(MultiroomCommand::QueryState)) {
                 send(&json);
             }
         });

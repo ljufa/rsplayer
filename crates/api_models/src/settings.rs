@@ -41,6 +41,48 @@ pub struct Settings {
     pub remote_access_url: Option<String>,
     #[serde(default)]
     pub ui_preferences: UiPreferences,
+    #[serde(default)]
+    #[validate(nested)]
+    pub multiroom_settings: MultiroomSettings,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+pub struct MultiroomSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_room_name")]
+    #[validate(length(min = 1, max = 64))]
+    pub room_name: String,
+    /// How far ahead followers buffer audio; also the leader's own output delay while grouped.
+    #[serde(default = "default_multiroom_buffer_ms")]
+    #[validate(range(min = 200, max = 2000))]
+    pub buffer_ms: u32,
+    /// Per-device playback trim to compensate constant output-latency differences between rooms.
+    #[serde(default)]
+    #[validate(range(min = -500, max = 500))]
+    pub output_latency_offset_ms: i32,
+}
+
+fn default_room_name() -> String {
+    std::env::var("HOSTNAME")
+        .ok()
+        .filter(|h| !h.is_empty())
+        .unwrap_or_else(|| "RSPlayer".to_string())
+}
+
+const fn default_multiroom_buffer_ms() -> u32 {
+    750
+}
+
+impl Default for MultiroomSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            room_name: default_room_name(),
+            buffer_ms: default_multiroom_buffer_ms(),
+            output_latency_offset_ms: 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -255,7 +297,7 @@ pub struct UsbCmdChannelSettings {
 }
 
 const fn thread_priority_default_value() -> u8 {
-    1
+    40
 }
 const fn ring_buffer_size_default_value() -> usize {
     1000
@@ -279,7 +321,7 @@ impl Default for RsPlayerSettings {
             enabled: true,
             input_stream_buffer_size_mb: 10,
             ring_buffer_size_ms: 1000,
-            player_threads_priority: 1,
+            player_threads_priority: 40,
             alsa_buffer_size: None,
             fixed_output_sample_rate: None,
             dsp_settings: DspSettings::default(),
@@ -447,6 +489,7 @@ impl Default for Settings {
             desktop_mode: false,
             remote_access_url: None,
             ui_preferences: UiPreferences::default(),
+            multiroom_settings: MultiroomSettings::default(),
         }
     }
 }

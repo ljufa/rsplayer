@@ -5,7 +5,10 @@ use api_models::{
     playlist::{Album, PlaylistPage, Playlists},
     settings::Settings,
     stat::LibraryStats,
-    state::{ExternalMount, MountStatus, MusicDirStatus, PlayerInfo, PlayerState, SongProgress, StateChangeEvent},
+    state::{
+        ExternalMount, MountStatus, MultiroomGroupState, MultiroomPeer, MusicDirStatus, PlayerInfo, PlayerState, SongProgress,
+        StateChangeEvent,
+    },
 };
 use dioxus::prelude::*;
 use std::collections::HashMap;
@@ -53,6 +56,10 @@ pub struct AppState {
     /// Guard: true while the browser <audio> element is seeking to a new position.
     /// Suppresses stale timeupdate events that would overwrite the seek target.
     pub audio_seeking: Signal<bool>,
+    /// Other rsplayer instances discovered on the LAN (multiroom).
+    pub multiroom_peers: Signal<Vec<MultiroomPeer>>,
+    /// This instance's multiroom role and group membership.
+    pub multiroom_group: Signal<MultiroomGroupState>,
 }
 
 impl AppState {
@@ -89,6 +96,8 @@ impl AppState {
             lazy_decade_albums: Signal::new(HashMap::new()),
             audio_seeking: Signal::new(false),
             show_bg_image: Signal::new(true),
+            multiroom_peers: Signal::new(Vec::new()),
+            multiroom_group: Signal::new(MultiroomGroupState::default()),
         }
     }
 
@@ -174,6 +183,12 @@ impl AppState {
             }
             StateChangeEvent::VuMeterEnabledEvent(enabled) => {
                 *self.vu_meter_enabled.write() = enabled;
+            }
+            StateChangeEvent::MultiroomPeersEvent(peers) => {
+                *self.multiroom_peers.write() = peers;
+            }
+            StateChangeEvent::MultiroomGroupEvent(group) => {
+                *self.multiroom_group.write() = group;
             }
             _ => {}
         }

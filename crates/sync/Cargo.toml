@@ -1,0 +1,20 @@
+[package]
+name = "sync"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# local
+api_models = { path = "../api_models" }
+dsp = { path = "../dsp" }
+playback = { path = "../playback" }
+# general
+anyhow.workspace = true
+fjall.workspace = true
+futures.workspace = true
+log.workspace = true
+serde.workspace = true
+tokio.workspace = true
+iroh = "1"
+iroh-mdns-address-lookup = "0.4"
+postcard = { version = "1", features = ["use-std"] }

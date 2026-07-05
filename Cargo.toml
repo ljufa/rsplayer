@@ -7,11 +7,12 @@ members = [
     "crates/hardware",
     "crates/metadata",
     "crates/playback",
+    "crates/sync",
     "crates/wire",
     "web-ui", "crates/desktop",
 ]
 default-members = [
-    "web-ui",
+#    "web-ui",
     "crates/api_models",
     "crates/server",
     "crates/config",
@@ -19,6 +20,7 @@ default-members = [
     "crates/hardware",
     "crates/metadata",
     "crates/playback",
+    "crates/sync",
     "crates/wire",
 ]
 resolver = "2"
@@ -27,7 +29,7 @@ resolver = "2"
 # Single source of truth for the release version.
 # Read by: build scripts (CARGO_PKG_VERSION), cargo-deb, cargo-generate-rpm,
 # cargo-packager and Makefile.toml (RELEASE_VERSION env derives from it).
-version = "4.3.0"
+version = "4.5.0"
 
 [workspace.dependencies]
 anyhow = "1"
@@ -84,12 +86,42 @@ features = [
 
 [profile.release]
 opt-level = 3
+# Thin LTO + single codegen unit per crate: near fat-LTO size at a fraction
+# of its build time (crates still compile in parallel across the graph).
 codegen-units = 1
 debug = 0
 debug-assertions = false
 strip = true
-lto = true
+lto = "thin"
 
 [profile.release.package.rsplayer_web_ui]
 opt-level = "s"
 debug = false
+
+# Cold multiroom transport plumbing: iroh 1.0 unconditionally links its relay
+# and DNS clients, but rsplayer runs LAN-only (RelayMode::Disabled) so these
+# never execute — optimize them for size.
+[profile.release.package.iroh-relay]
+opt-level = "s"
+[profile.release.package.iroh-dns]
+opt-level = "s"
+[profile.release.package.hickory-resolver]
+opt-level = "s"
+[profile.release.package.hickory-proto]
+opt-level = "s"
+[profile.release.package.hickory-net]
+opt-level = "s"
+[profile.release.package.reqwest]
+opt-level = "s"
+[profile.release.package.hyper]
+opt-level = "s"
+[profile.release.package.hyper-util]
+opt-level = "s"
+[profile.release.package.h2]
+opt-level = "s"
+[profile.release.package.tokio-websockets]
+opt-level = "s"
+[profile.release.package.tokio-tungstenite]
+opt-level = "s"
+[profile.release.package.tungstenite]
+opt-level = "s"

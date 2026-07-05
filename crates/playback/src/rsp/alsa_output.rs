@@ -6,8 +6,10 @@ use rubato::{Fft, FixedSync, Resampler};
 use std::sync::Arc;
 use symphonia::core::audio::{AudioSpec, GenericAudioBufferRef};
 
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::time::Duration;
+
+use crate::rsp::tee::MonoClock;
 
 /// Number of consecutive error callbacks before the stream is considered
 /// fatally broken.  Transient ALSA errors (xruns, timestamp glitches) on
@@ -16,6 +18,12 @@ use std::time::Duration;
 /// rapidly, so keep this high enough to absorb bursts while still detecting
 /// genuine hardware failures.
 const ERROR_THRESHOLD: u32 = 30;
+
+/// Stop updating the device-latency estimate after this many callbacks
+/// (~6s at the default 4096-frame buffer): PipeWire/ALSA report values that
+/// ramp while their buffers fill, and multiroom sync needs a stable
+/// reference more than a live one.
+const LATENCY_FREEZE_AFTER_CALLBACKS: u32 = 64;
 
 use crate::rsp::device_capabilities::{fallback_rate_candidates, find_device_channels, find_device_rate};
 use crate::rsp::dsd::DsdU32;
@@ -265,6 +273,13 @@ pub struct AlsaOutput {
     dsp: Option<DspState>,
     /// VU meter — `None` when VU metering is disabled.
     vu_meter: Option<VUMeter>,
+    /// Device buffer latency (µs) reported by the driver at the last output
+    /// callback, and the `MonoClock` time it was measured — together with
+    /// the ring fill this yields the playback position for multiroom sync.
+    device_latency_micros: Arc<AtomicU64>,
+    latency_measured_at_micros: Arc<AtomicU64>,
+    output_rate: u32,
+    output_channels: usize,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -276,6 +291,7 @@ impl AlsaOutput {
         device: &cpal::Device,
         rsp_settings: &RsPlayerSettings,
         is_dsd: bool,
+        is_asio: bool,
         dsp_handle: Option<&DspHandle>,
         vu_meter: Option<VUMeter>,
         software_gain: Option<&Arc<AtomicU8>>,
@@ -382,6 +398,10 @@ impl AlsaOutput {
         // If Fixed(4096) fails to open the stream (rare), fall back to Default.
         let buf_sizes: &[cpal::BufferSize] = if is_dsd || rsp_settings.alsa_buffer_size.is_some() {
             &[] // handled below via explicit_buf
+        } else if is_asio {
+            // ASIO drivers dictate their own period; Fixed(4096) is rejected.
+            // Use the driver-preferred size.
+            &[cpal::BufferSize::Default]
         } else {
             &[cpal::BufferSize::Fixed(4096), cpal::BufferSize::Default]
         };
@@ -442,7 +462,9 @@ impl AlsaOutput {
                     let dsp_channels = device_channels.map_or_else(|| spec_clone.channels().count(), |ch| ch as usize);
                     handle.rebuild(dsp_channels, fallback_rate as usize);
                 }
-                let buf_sizes_for_rate: &[cpal::BufferSize] = if rsp_settings.alsa_buffer_size.is_none() && !is_dsd {
+                let buf_sizes_for_rate: &[cpal::BufferSize] = if is_asio {
+                    &[cpal::BufferSize::Default]
+                } else if rsp_settings.alsa_buffer_size.is_none() && !is_dsd {
                     &[cpal::BufferSize::Fixed(4096), cpal::BufferSize::Default]
                 } else {
                     &[]
@@ -520,6 +542,8 @@ impl AlsaOutput {
         let ring_len = ((rsp_settings.ring_buffer_size_ms * output_rate as usize) / 1000) * output_channels;
         let error_count = Arc::new(AtomicU32::new(0));
         let error_count_clone = error_count.clone();
+        let device_latency_micros = Arc::new(AtomicU64::new(0));
+        let latency_measured_at_micros = Arc::new(AtomicU64::new(0));
 
         // Build the stream and format-specific writer in one match.
         // Each arm creates its own typed ring buffer and sample buffer.
@@ -529,10 +553,34 @@ impl AlsaOutput {
                 let (producer, consumer) = (ring_buf.producer(), ring_buf.consumer());
                 let ec_data = error_count_clone.clone();
                 let gain_level = software_gain.cloned();
+                let cb_latency = device_latency_micros.clone();
+                let cb_latency_at = latency_measured_at_micros.clone();
+                let mut cb_samples_taken: u32 = 0;
                 let stream = device
                     .build_output_stream(
                         config,
-                        move |data: &mut [$T], _: &cpal::OutputCallbackInfo| {
+                        move |data: &mut [$T], info: &cpal::OutputCallbackInfo| {
+                            // Driver-reported time until this buffer reaches
+                            // the DAC — the multiroom playback-position sensor.
+                            // Reports are jumpy on some drivers (HDA Intel
+                            // PCH) and ramp up while server-side buffers fill
+                            // (PipeWire), so: low-pass filter (EWMA, α=1/8),
+                            // then freeze the value once warmed up — after
+                            // that only the ring backlog tracks drift.
+                            let ts = info.timestamp();
+                            let latency = ts.playback.duration_since(ts.callback);
+                            if !latency.is_zero() {
+                                if cb_samples_taken < LATENCY_FREEZE_AFTER_CALLBACKS {
+                                    cb_samples_taken += 1;
+                                    let sample = u64::try_from(latency.as_micros()).unwrap_or(u64::MAX);
+                                    let prev = cb_latency.load(Ordering::Relaxed);
+                                    let filtered = if prev == 0 { sample } else { (prev * 7 + sample) / 8 };
+                                    cb_latency.store(filtered, Ordering::Relaxed);
+                                }
+                                // Keep the measurement fresh so the aging
+                                // model in playback_lag_micros stays valid.
+                                cb_latency_at.store(MonoClock::now_micros(), Ordering::Relaxed);
+                            }
                             let written = consumer.read(data).unwrap_or(0);
                             data[written..]
                                 .iter_mut()
@@ -686,11 +734,52 @@ impl AlsaOutput {
             ring_fill,
             dsp,
             vu_meter,
+            device_latency_micros,
+            latency_measured_at_micros,
+            output_rate,
+            output_channels,
         })
     }
 }
 
 impl AlsaOutput {
+    /// Time until a sample pushed *now* reaches the DAC: the ring-buffer
+    /// backlog plus the device buffer latency reported by the driver at the
+    /// last callback (aged, since the device drains between callbacks).
+    /// Falls back to the ring backlog alone on drivers without timestamps.
+    pub fn playback_lag_micros(&self) -> u64 {
+        let ring_frames = (self.ring_fill)() / self.output_channels.max(1);
+        let ring_micros = ring_frames as u64 * 1_000_000 / u64::from(self.output_rate.max(1));
+        let latency = self.device_latency_micros.load(Ordering::Relaxed);
+        let measured_at = self.latency_measured_at_micros.load(Ordering::Relaxed);
+        let age = MonoClock::now_micros().saturating_sub(measured_at);
+        ring_micros + latency.saturating_sub(age)
+    }
+
+    /// True once the driver has reported at least one playback timestamp.
+    pub fn has_latency_measurement(&self) -> bool {
+        self.latency_measured_at_micros.load(Ordering::Relaxed) > 0
+    }
+
+    /// Prefills the ring buffer with `ms` of silence so the first real
+    /// sample written afterwards reaches the device roughly `ms` from now.
+    /// Used by multiroom playback to delay the leader's own output to the
+    /// group's shared start time. `chunk_frames` must not exceed the
+    /// `duration` this output was opened with (resampler chunk limit).
+    pub fn prefill_silence_ms(&mut self, ms: u32, spec: &AudioSpec, chunk_frames: usize) -> Result<()> {
+        let total_frames = usize::try_from(u64::from(spec.rate()) * u64::from(ms) / 1000).unwrap_or(0);
+        let chunk = chunk_frames.max(1);
+        let mut silence = symphonia::core::audio::AudioBuffer::<f32>::new(spec.clone(), chunk);
+        let mut remaining = total_frames;
+        while remaining > 0 {
+            let n = remaining.min(chunk);
+            silence.resize_with_silence(n);
+            self.write(GenericAudioBufferRef::F32(&silence))?;
+            remaining -= n;
+        }
+        Ok(())
+    }
+
     pub fn write(&mut self, decoded: GenericAudioBufferRef<'_>) -> Result<()> {
         if self.error_count.load(Ordering::Relaxed) >= ERROR_THRESHOLD {
             return Err(Error::msg("Audio output error detected"));

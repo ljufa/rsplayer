@@ -15,8 +15,14 @@ To configure `rsplayer`, navigate to the settings page in the web UI. Settings a
 
 ![Playback Settings](/_assets/settings_playback.png)
 
-- **Audio interface:** Selects the primary audio device for playback. Options include your available ALSA hardware cards, a `Pipewire` virtual card (if `wpctl` is installed on the host), or `Local Browser Playback` for streaming audio directly to your device's web browser.
+- **Audio interface:** Selects the primary audio device for playback. The available options depend on your platform:
+  - **Linux:** your ALSA hardware cards, a `Pipewire` virtual card (if `wpctl` is installed on the host), or `Local Browser Playback`.
+  - **Windows:** the WASAPI output devices (the default host) and, on builds that include the `asio` feature, any installed **ASIO** drivers — shown as `… (ASIO)`. ASIO gives exclusive, low-latency, bit-perfect output; its buffer size and sample rate are set in the driver's own control panel, not in RSPlayer.
+  - **macOS:** your CoreAudio output devices.
+  - `Local Browser Playback` (all platforms) streams audio directly to your device's web browser instead of playing on the host.
 - **PCM output device:** Choose the specific PCM device for the selected audio interface (hidden if Local Browser Playback is selected).
+
+?> **Device list is captured at startup.** RSPlayer enumerates audio devices once when it starts and reuses that list, because probing some backends (notably Windows ASIO, whose drivers are exclusive) while audio is playing can briefly interrupt the output stream. If you connect a new DAC or install a new ASIO driver after launch, restart RSPlayer for it to appear in the list.
 - **Auto-resume playback on startup:** If enabled, `rsplayer` will automatically resume playback of the last track when it starts.
 
 ### Advanced
@@ -102,6 +108,15 @@ The Network Mounts section (collapsible) lets you mount remote SMB/CIFS or NFS s
 - **Detected Network Mounts:** Network filesystems already mounted on the system (e.g., via `/etc/fstab` or manually) are automatically detected and listed. Click "Save" to add them as music sources without re-mounting.
 
 ?> Network mount management is available only on Linux builds. On non-Linux builds the Network Mounts UI is hidden.
+
+## Multiroom
+
+Synchronized playback across multiple RSPlayer devices on the same network. See the dedicated [Multiroom Playback](multiroom.md) page for setup, usage, and how it works.
+
+- **Enable multiroom (synchronized playback):** Turns the feature on and makes this device discoverable by other RSPlayer instances. Requires a restart.
+- **Room name:** The name other devices see for this instance (e.g. "Living room"). Defaults to the hostname.
+- **Sync buffer (ms):** How far ahead audio is scheduled (default 750). Higher values are more robust against network jitter and slow CPUs; lower values react faster to play/seek. This delays all rooms equally — it does not shift rooms relative to each other.
+- **Output latency trim (ms):** Per-room constant offset applied when this device plays as a follower. Positive values delay this room. Only needed for audio drivers that misreport their output latency; leave at 0 otherwise.
 
 ## Hardware
 

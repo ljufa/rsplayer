@@ -7,6 +7,14 @@ pub fn handle_player_command(cmd: api_models::common::PlayerCommand, ctx: &Comma
         CyclePlaybackMode, Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, Seek, SeekBackward, SeekForward, Stop, TogglePlay,
     };
 
+    // A grouped multiroom follower plays what the leader streams; local
+    // transport commands would fight over the audio device.
+    let is_transport = !matches!(cmd, QueryCurrentPlayerInfo | CyclePlaybackMode);
+    if is_transport && ctx.multiroom_follower_active.load(std::sync::atomic::Ordering::SeqCst) {
+        ctx.send_error("Playback is controlled by the multiroom group leader. Leave the group to control it locally.");
+        return;
+    }
+
     match cmd {
         Play => {
             ctx.player_service.stop_current_song();

@@ -225,8 +225,20 @@ Configure RSPlayer settings. For detailed configuration options, see the [Config
 | Visualization & Normalization | Visualization, loudness normalization |
 | DSP Equalizer | Parametric EQ, presets, CamillaDSP import |
 | Music Library | Music directories, network storage |
+| Multiroom | Synchronized playback across devices |
 | Hardware | USB command channel, power control |
 | System | Restart, shutdown |
+
+## Multiroom Playback
+
+Play the same music on several RSPlayer devices at once, synchronized:
+
+1. Enable multiroom in **Settings → Multiroom** on each device (restart required)
+2. On the leading device, open the player page — discovered rooms appear in the **Multiroom** panel below the controls
+3. Toggle rooms on to group them; everything the leader plays now plays everywhere in sync
+4. Each room keeps its own volume and EQ; followers show a banner with a **Leave group** button
+
+See the [Multiroom Playback](multiroom.md) page for details, settings, and troubleshooting.
 
 ## Loudness Normalization
 

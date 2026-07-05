@@ -122,6 +122,21 @@ pub enum UserCommand {
     UpdateDsp(DspSettings),
     Storage(StorageCommand),
     System(SystemRequest),
+    Multiroom(MultiroomCommand),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub enum MultiroomCommand {
+    QueryState,
+    /// Add a discovered peer (by endpoint id) to this leader's group.
+    AddToGroup(String),
+    /// Remove a peer (by endpoint id) from this leader's group.
+    RemoveFromGroup(String),
+    /// Follower-side: leave the group this instance is currently part of.
+    LeaveGroup,
+    /// Register a peer manually as `endpoint_id` or `endpoint_id@ip:port`
+    /// (fallback for networks where mDNS discovery does not work).
+    AddManualPeer(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]

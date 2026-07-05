@@ -207,18 +207,54 @@ jobs:
     needs: build_ui
     name: Build Windows (headless exe + NSIS installer)
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'windows' }}
-    runs-on: windows-latest
+    runs-on: [self-hosted, windows, x64]
+    # ASIO output is linked into every Windows build. bindgen (via asio-sys)
+    # needs libclang. This runner is self-hosted, so LLVM, Rust (rustup), the
+    # MSVC C++ Build Tools and Git must be pre-installed on the machine — see
+    # docs/build.md "Self-hosted Windows runner". LIBCLANG_PATH points at the
+    # LLVM install.
+    env:
+      LIBCLANG_PATH: C:\Program Files\LLVM\bin
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
+      # rustup is pre-installed on the runner; just make sure the toolchain and
+      # MSVC target are present. Done in pwsh so we don't depend on bash (the
+      # dtolnay/rust-toolchain action is a bash composite action, which a bare
+      # Windows runner has no shell for).
+      # - name: Install Rust toolchain
+      #   shell: pwsh
+      #   run: |
+      #     rustup toolchain install stable --profile minimal
+      #     rustup target add x86_64-pc-windows-msvc
 
       # - uses: Swatinem/rust-cache@v2
       #   with:
       #     key: desktop-windows-x86_64
+
+      # ASIO SDK (Steinberg). The SDK is downloaded, not vendored, per its
+      # license — redistributing the SDK is prohibited; shipping compiled
+      # binaries is permitted. asio-sys reads CPAL_ASIO_DIR to locate it.
+      - name: Cache ASIO SDK
+        id: cache-asio
+        uses: actions/cache@v4
+        with:
+          path: asiosdk
+          key: asio-sdk-2.3.3
+
+      - name: Download ASIO SDK
+        if: steps.cache-asio.outputs.cache-hit != 'true'
+        shell: powershell
+        run: |
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          Invoke-WebRequest -Uri 'https://www.steinberg.net/asiosdk' -OutFile asiosdk.zip -UseBasicParsing
+          Expand-Archive -Path asiosdk.zip -DestinationPath asiosdk -Force
+
+      - name: Set CPAL_ASIO_DIR
+        shell: powershell
+        run: |
+          $dir = (Get-ChildItem -Path "$env:GITHUB_WORKSPACE/asiosdk" -Directory | Select-Object -First 1).FullName
+          echo "CPAL_ASIO_DIR=$dir" >> $env:GITHUB_ENV
 
       - name: Download web_ui
         uses: actions/download-artifact@v8
@@ -226,26 +262,26 @@ jobs:
           name: web_ui
           path: dist/web-ui
 
-      - name: Install tauri-cli
-        run: cargo install tauri-cli --version "^2" --locked
+      # - name: Install tauri-cli
+      #   run: cargo install tauri-cli --version "^2" --locked
 
       - name: Build headless server binary
-        run: cargo build --package rsplayer --bin rsplayer --release --no-default-features --target x86_64-pc-windows-msvc
+        run: cargo build --package rsplayer --bin rsplayer --release --no-default-features --features asio --target x86_64-pc-windows-msvc
 
       - name: Build desktop app and NSIS installer
-        shell: bash
+        shell: powershell
         run: |
-          cp crates/desktop/loading.html dist/web-ui/loading.html
+          Copy-Item crates/desktop/loading.html dist/web-ui/loading.html
           cd crates/desktop
           cargo tauri build --bundles nsis --ci
 
       - name: Stage release assets
-        shell: bash
+        shell: powershell
         run: |
-          mkdir -p pkg
-          installer=$(find . -name "*-setup.exe" | head -1)
-          cp "$installer" pkg/rsplayer-desktop_windows_amd64.exe
-          cp target/x86_64-pc-windows-msvc/release/rsplayer.exe pkg/rsplayer_windows_amd64.exe
+          New-Item -ItemType Directory -Force -Path pkg | Out-Null
+          $installer = Get-ChildItem -Recurse -Filter *-setup.exe | Select-Object -First 1
+          Copy-Item $installer.FullName pkg/rsplayer-desktop_windows_amd64.exe
+          Copy-Item target/x86_64-pc-windows-msvc/release/rsplayer.exe pkg/rsplayer_windows_amd64.exe
 
       - name: Upload Windows assets
         uses: actions/upload-artifact@v7

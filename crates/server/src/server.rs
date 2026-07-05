@@ -5,7 +5,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use axum::{
     body::Body,
@@ -53,6 +53,12 @@ struct AppState {
     config: Config,
     user_commands_tx: UserCommandSender,
     ws_broadcast: broadcast::Sender<Arc<String>>,
+    /// Cached list of available output devices. Enumerating output devices is
+    /// expensive and, on the Windows ASIO host, probing the drivers can disrupt
+    /// the live output stream (see `get_cpal_audio_cards`). So we enumerate once
+    /// (eagerly at startup, before playback runs) and reuse the result until an
+    /// explicit rescan is requested via `GET /api/settings?rescan=true`.
+    audio_cards_cache: Arc<Mutex<Option<Vec<api_models::common::AudioCard>>>>,
 }
 
 pub fn start(
@@ -65,6 +71,9 @@ pub fn start(
         config: config.clone(),
         user_commands_tx,
         ws_broadcast: ws_broadcast.clone(),
+        // Enumerate now, while nothing is playing yet — this is the one moment
+        // an ASIO driver probe cannot interrupt a live stream.
+        audio_cards_cache: Arc::new(Mutex::new(Some(enumerate_audio_cards()))),
     };
 
     let app = build_router(state);
@@ -152,6 +161,9 @@ pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Out
             config: degraded_state,
             user_commands_tx: mpsc::channel(1).0,
             ws_broadcast: broadcast::channel(1).0,
+            // Degraded mode may itself stem from an audio failure — enumerate
+            // lazily on first request rather than risk a probe at startup.
+            audio_cards_cache: Arc::new(Mutex::new(None)),
         })
         .layer(cors);
 
@@ -195,7 +207,7 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Resp
     ws.on_upgrade(move |socket| user_connected(socket, state.ws_broadcast.subscribe(), state.user_commands_tx))
 }
 
-async fn get_settings(State(state): State<AppState>) -> Json<Settings> {
+async fn get_settings(State(state): State<AppState>, Query(query): Query<HashMap<String, String>>) -> Json<Settings> {
     let mut settings = state.config.get_settings_mut();
     settings.version = env!("CARGO_PKG_VERSION").to_string();
     settings.demo_mode = env::var("DEMO_MODE").is_ok();
@@ -205,9 +217,11 @@ async fn get_settings(State(state): State<AppState>) -> Json<Settings> {
         settings.remote_access_url = local_ip().map(|ip| format!("http://{ip}:{port}"));
     }
 
+    let force_rescan = query.get("rescan").map(String::as_str) == Some("true");
+    let cards = get_cached_audio_cards(&state, force_rescan);
+
     #[cfg(feature = "alsa")]
     {
-        let cards = hardware::audio_device::alsa::get_all_cards();
         if let Some(mixer_name) = &settings.volume_ctrl_settings.alsa_mixer_name {
             for card in &cards {
                 if let Some(mixer) = card.mixers.iter().find(|m| &m.name == mixer_name) {
@@ -228,7 +242,7 @@ async fn get_settings(State(state): State<AppState>) -> Json<Settings> {
 
     #[cfg(not(feature = "alsa"))]
     {
-        settings.alsa_settings.available_audio_cards = get_cpal_audio_cards();
+        settings.alsa_settings.available_audio_cards = cards;
         settings.available_volume_control_types = vec![
             api_models::common::VolumeCrtlType::Off,
             api_models::common::VolumeCrtlType::Software,
@@ -237,6 +251,34 @@ async fn get_settings(State(state): State<AppState>) -> Json<Settings> {
     }
 
     Json(settings.clone())
+}
+
+/// Return the cached audio-device list, enumerating (once) if the cache is
+/// empty or a rescan was explicitly requested. Caching avoids re-probing the
+/// audio backend on every settings fetch — which on the Windows ASIO host can
+/// interrupt the live output stream.
+fn get_cached_audio_cards(state: &AppState, force_rescan: bool) -> Vec<api_models::common::AudioCard> {
+    let mut guard = state
+        .audio_cards_cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if force_rescan || guard.is_none() {
+        *guard = Some(enumerate_audio_cards());
+    }
+    guard.as_ref().cloned().unwrap_or_default()
+}
+
+/// Enumerate the available output devices for the current platform/build.
+/// This is the expensive/intrusive operation cached by `get_cached_audio_cards`.
+fn enumerate_audio_cards() -> Vec<api_models::common::AudioCard> {
+    #[cfg(feature = "alsa")]
+    {
+        hardware::audio_device::alsa::get_all_cards()
+    }
+    #[cfg(not(feature = "alsa"))]
+    {
+        get_cpal_audio_cards()
+    }
 }
 
 #[cfg(not(feature = "alsa"))]
@@ -280,6 +322,37 @@ fn get_cpal_audio_cards() -> Vec<api_models::common::AudioCard> {
                     pcm_devices: vec![pcm],
                     mixers: vec![],
                 });
+            }
+        }
+    }
+
+    // Windows ASIO drivers, listed under a separate host. Each driver is stored
+    // with an `asio:` prefixed id so playback selects the ASIO host (see
+    // playback::rsp::audio_host).
+    #[cfg(all(target_os = "windows", feature = "asio"))]
+    if let Ok(asio_host) = cpal::host_from_id(cpal::HostId::Asio) {
+        #[allow(deprecated)]
+        if let Ok(devices) = asio_host.output_devices() {
+            for (idx, device) in devices.enumerate() {
+                if let Ok(desc) = device.description() {
+                    let name = desc.name().to_string();
+                    let id = format!("{}{name}", playback::rsp::audio_host::ASIO_PREFIX);
+                    let label = format!("{name} (ASIO)");
+                    let pcm = PcmOutputDevice {
+                        name: id.clone(),
+                        description: label.clone(),
+                        card_id: id.clone(),
+                    };
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                    cards.push(AudioCard {
+                        id: id.clone(),
+                        index: idx as i32,
+                        name: label.clone(),
+                        description: "ASIO".to_string(),
+                        pcm_devices: vec![pcm],
+                        mixers: vec![],
+                    });
+                }
             }
         }
     }

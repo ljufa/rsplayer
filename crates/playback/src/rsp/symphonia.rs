@@ -27,8 +27,7 @@ use crate::rsp::audio_source::{is_http_stream, probe_http_source, probe_local_fi
 use crate::rsp::device_capabilities::{DeviceCapabilities, fallback_rate_candidates};
 use crate::rsp::playback_config::PlaybackConfig;
 use crate::rsp::playback_context::PlaybackContext;
-
-use cpal::traits::{DeviceTrait, HostTrait};
+use crate::rsp::tee::{MonoClock, TeeSession, TeeSpec};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum PlaybackResult {
@@ -164,6 +163,11 @@ pub fn play_file(
     // attempts and mid-song device reopens.
     let vu_meter = context.take_vu_meter();
     let mut last_current_time = 0;
+    // Multiroom tee session for this track. Declared before the decode loop
+    // so it is dropped (ending the session) only after the drain at the end
+    // of this function — followers play out their scheduled tail exactly
+    // when the leader plays out its ring buffer.
+    let mut tee_session: Option<TeeSession> = None;
     // Decode and play the packets belonging to the selected track.
     let loop_result = loop {
         if context.is_stopped() {
@@ -183,6 +187,16 @@ pub fn play_file(
             );
             if let Err(err) = seek_result {
                 warn!("Seek failed: {err}");
+            }
+            // While streaming to a group, a seek must flush everywhere at
+            // once: end the session (followers flush on SessionEnd) and drop
+            // the local output so the pre-seek ring content is discarded and
+            // the next packet starts a fresh, re-timed session.
+            if tee_session.is_some() {
+                tee_session = None;
+                if let Some(out) = audio_output.take() {
+                    out.flush();
+                }
             }
         }
 
@@ -214,22 +228,7 @@ pub fn play_file(
                     let spec_rate = spec.rate();
                     let spec_channels = spec.channels().count();
 
-                    let host = cpal::default_host();
-                    let device = if config.audio_device.is_empty() || config.audio_device == "default" {
-                        host.default_output_device()
-                            .ok_or_else(|| format_err!("Default audio device not found!"))?
-                    } else {
-                        #[allow(deprecated)]
-                        host.devices()?
-                            .find(|d| {
-                                // cpal 0.18: desc.name() is a human-readable label; the backend-specific
-                                // pcm_id (what alsa.rs stores in config.audio_device) lives in d.id().
-                                // Match id first, fall back to display name for non-ALSA platforms.
-                                d.id().is_ok_and(|id| id.id() == config.audio_device.as_str())
-                                    || d.description().is_ok_and(|desc| desc.name() == config.audio_device.as_str())
-                            })
-                            .ok_or_else(|| format_err!("Device {} not found!", config.audio_device))?
-                    };
+                    let (device, is_asio) = crate::rsp::audio_host::find_device(&config.audio_device)?;
 
                     #[allow(clippy::cast_possible_truncation)]
                     let caps = DeviceCapabilities::query(&device, spec_rate, spec_channels as u16);
@@ -240,6 +239,7 @@ pub fn play_file(
                         &device,
                         &config.settings,
                         is_dsd,
+                        is_asio,
                         context.dsp_handle.as_ref(),
                         vu_meter.clone(),
                         context.software_gain.as_ref(),
@@ -259,6 +259,7 @@ pub fn play_file(
                                     &device,
                                     &config.settings,
                                     is_dsd,
+                                    is_asio,
                                     context.dsp_handle.as_ref(),
                                     vu_meter.clone(),
                                     context.software_gain.as_ref(),
@@ -274,7 +275,78 @@ pub fn play_file(
                     debug!("Audio opened");
 
                     audio_output.replace(audio_out);
+
+                    // Multiroom: delay our own output by the group buffer and
+                    // start a tee session whose frame 0 plays everywhere at
+                    // `epoch_micros`.
+                    if let Some(tee) = context.sync_tee.clone()
+                        && tee.is_active()
+                        && !is_dsd
+                        && let Some(out) = audio_output.as_mut()
+                    {
+                        let ring_headroom = u32::try_from(config.settings.ring_buffer_size_ms.saturating_sub(200)).unwrap_or(0);
+                        let prefill_ms = tee.buffer_ms().min(ring_headroom).max(100);
+                        let prefill_spec = decoded_buff.spec().clone();
+                        #[allow(clippy::cast_possible_truncation)]
+                        match out.prefill_silence_ms(prefill_ms, &prefill_spec, duration as usize) {
+                            Ok(()) => {
+                                // Epoch = when the first real sample reaches
+                                // this device, measured from the actual ring
+                                // backlog + driver-reported device latency —
+                                // not the nominal prefill duration.
+                                let lag = out.playback_lag_micros();
+                                let epoch_micros = MonoClock::now_micros() + lag;
+                                debug!(
+                                    "Multiroom session epoch: prefill {prefill_ms}ms, measured lag {}ms (device latency {})",
+                                    lag / 1000,
+                                    if out.has_latency_measurement() { "known" } else { "not reported" },
+                                );
+                                tee_session = Some(tee.begin_session(
+                                    TeeSpec {
+                                        rate: spec_rate,
+                                        channels: u8::try_from(spec_channels).unwrap_or(2),
+                                    },
+                                    epoch_micros,
+                                    normalization_gain_db,
+                                ));
+                            }
+                            Err(e) => warn!("Multiroom prefill failed, not streaming this track: {e}"),
+                        }
+                    }
                 }
+                // Tee the decoded samples to grouped followers. If the group
+                // dissolved mid-track, end the session; a new one starts at
+                // the next track (or seek).
+                if tee_session.is_some() && context.sync_tee.as_ref().is_some_and(|t| !t.is_active()) {
+                    tee_session = None;
+                }
+                // The first follower joined mid-track: start a session at the
+                // current position. No prefill and no interruption — the ring
+                // backlog already delays local playback, so scheduling the
+                // next frame at `now + lag` gives followers the same headroom.
+                if tee_session.is_none()
+                    && !is_dsd
+                    && let Some(tee) = context.sync_tee.as_ref()
+                    && tee.is_active()
+                    && let Some(out) = audio_output.as_ref()
+                {
+                    let lag = out.playback_lag_micros();
+                    let epoch_micros = MonoClock::now_micros() + lag;
+                    let spec = decoded_buff.spec();
+                    debug!("Multiroom mid-track session start (headroom {}ms)", lag / 1000);
+                    tee_session = Some(tee.begin_session(
+                        TeeSpec {
+                            rate: spec.rate(),
+                            channels: u8::try_from(spec.channels().count()).unwrap_or(2),
+                        },
+                        epoch_micros,
+                        normalization_gain_db,
+                    ));
+                }
+                if let Some(session) = tee_session.as_mut() {
+                    session.send_chunk(&decoded_buff);
+                }
+
                 // Write the decoded audio samples to the audio output if the presentation timestamp
 
                 let write_failed = if let Some(output) = audio_output.as_mut()
@@ -287,6 +359,12 @@ pub fn play_file(
                 };
                 if write_failed {
                     audio_output = None;
+                    tee_session = None;
+                }
+                // Report how far the local DAC has drifted from the nominal
+                // session timeline (throttled internally to every ~2s).
+                if let (Some(session), Some(output)) = (tee_session.as_mut(), audio_output.as_ref()) {
+                    session.maybe_send_correction(output.playback_lag_micros());
                 }
             }
             Err(Error::DecodeError(err)) => {

@@ -97,11 +97,15 @@ async fn run(
         state_changes_tx,
         user_commands,
         system_commands,
+        multiroom_commands,
+        multiroom_follower_active,
+        multiroom,
         ..
     } = *container;
 
     let (player_commands_tx, player_commands_rx) = user_commands.split();
     let (system_commands_tx, system_commands_rx) = system_commands.split();
+    let (multiroom_commands_tx, multiroom_commands_rx) = multiroom_commands.split();
 
     if let Some(out) = command_sender_out {
         let _ = out.send(player_commands_tx.clone());
@@ -148,6 +152,28 @@ async fn run(
         }
     };
 
+    let multiroom_settings = config.get_settings().multiroom_settings;
+    let sync_service_future = {
+        let deps = multiroom.map(|parts| sync::SyncDeps {
+            settings: multiroom_settings,
+            db: shared_db.clone(),
+            state_changes_tx: state_changes_tx.clone(),
+            commands_rx: multiroom_commands_rx,
+            player_service: player_service.clone(),
+            follower_active: multiroom_follower_active.clone(),
+            tee_rx: parts.tee_rx,
+            tee_active: parts.tee_active,
+            sink_params: parts.sink_params,
+        });
+        async {
+            if let Some(deps) = deps {
+                sync::run_sync_service(deps).await;
+            } else {
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+
     let shutdown_fut = async {
         if let Some(rx) = shutdown_rx {
             rx.await.ok();
@@ -168,10 +194,16 @@ async fn run(
                     config.clone(),
                     player_commands_rx,
                     system_commands_tx,
+                    multiroom_commands_tx,
+                    multiroom_follower_active,
                     state_changes_tx.clone()))
             => {
                 error!("Exit from command handler thread.");
             }
+
+        _ = spawn(sync_service_future) => {
+            error!("Exit from multiroom sync service.");
+        }
 
         _ = spawn(command_handler::handle_system_commands(
                 audio_service,
