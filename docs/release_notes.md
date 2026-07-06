@@ -17,7 +17,7 @@ RSPlayer can now play the same music on several devices at once, synchronized to
 **How it stays in sync**
 
 - **Discovery** uses mDNS (the zero-config mechanism AirPlay/Chromecast use); transport is **[iroh](https://www.iroh.computer/)** QUIC, dialed by device identity rather than IP. All traffic is end-to-end encrypted and never leaves the LAN.
-- The leader decodes each track **once** and tees the raw PCM (f32, source rate) before its own processing, so every follower runs the audio through its own pipeline (resample, EQ, volume, visualizer). Loudness-normalization gain is carried from the leader. Bandwidth is ~2.8 Mbit/s per follower at 44.1 kHz stereo.
+- The leader decodes each track **once** and tees the raw PCM (source rate, pre-DSP) before its own processing, so every follower runs the audio through its own pipeline (resample, EQ, volume, visualizer). Loudness-normalization gain is carried from the leader. Audio travels as 16-bit PCM (~1.4 Mbit/s per follower at 44.1 kHz stereo); 16-bit sources cross the wire losslessly, and the leader's local playback is always untouched.
 - Three mechanisms hold the group together: **NTP-style clock synchronization** (sub-millisecond on a LAN), **scheduled playback** (every chunk carries the exact instant it must reach the speakers), and continuous **drift correction** (inaudible time-stretching to track each DAC's real position). In practice rooms align to single-digit milliseconds and stay locked for arbitrarily long sessions.
 
 **Networking:** requires UDP between devices — RSPlayer's fixed sync port is **UDP 47800**, plus mDNS on **UDP 5353**. See the doc for firewalld/ufw/iptables snippets.

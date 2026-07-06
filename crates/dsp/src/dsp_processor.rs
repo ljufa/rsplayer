@@ -154,7 +154,7 @@ pub struct DspHandle {
 
 impl DspHandle {
     /// Build a fresh equalizer for `channels`/`rate` and push it into the
-    /// pending slot.  Called by `AlsaOutput::new` on the playback thread
+    /// pending slot.  Called by `AudioOutput::new` on the playback thread
     /// when a new track opens — no `DspProcessor` reference is needed.
     pub fn rebuild(&self, channels: usize, rate: usize) {
         if let Ok(settings) = self.settings.lock() {

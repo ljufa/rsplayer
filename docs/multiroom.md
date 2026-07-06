@@ -102,7 +102,7 @@ Devices find each other with **mDNS** announcements (the same zero-config mechan
 
 ### Audio distribution
 
-The leader decodes each track **once** and duplicates the raw PCM (32-bit float, at the source sample rate) before any of its local processing. Grouped followers receive it in timestamped chunks over a reliable QUIC stream and run it through their **own** output pipeline — device-rate resampling, parametric EQ, volume, visualizer all apply per room. Loudness-normalization gain computed by the leader is carried along and applied by each follower. Bandwidth is roughly 2.8 Mbit/s per follower for 44.1 kHz stereo (12 Mbit/s at 192 kHz) — trivial for wired networks and fine for healthy Wi-Fi.
+The leader decodes each track **once** and duplicates the raw PCM (at the source sample rate) before any of its local processing. Grouped followers receive it as 16-bit PCM in timestamped chunks over a reliable QUIC stream and run it through their **own** output pipeline — device-rate resampling, parametric EQ, volume, visualizer all apply per room. Loudness-normalization gain computed by the leader is carried along and applied by each follower. Bandwidth is roughly 1.4 Mbit/s per follower for 44.1 kHz stereo (6 Mbit/s at 192 kHz) — trivial for wired networks and fine for healthy Wi-Fi. 16-bit sources (CDs, most FLAC) cross the wire losslessly; higher bit depths are transparently reduced to 16 bits for transmission on follower rooms only — the leader's local playback is untouched.
 
 ### Staying in sync
 

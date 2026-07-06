@@ -22,7 +22,7 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::{Time, TimeBase, Timestamp};
 
-use crate::rsp::alsa_output::AlsaOutput;
+use crate::rsp::audio_output::AudioOutput;
 use crate::rsp::audio_source::{is_http_stream, probe_http_source, probe_local_file, resolve_ape_path, resolve_sacd_iso_path};
 use crate::rsp::device_capabilities::{DeviceCapabilities, fallback_rate_candidates};
 use crate::rsp::playback_config::PlaybackConfig;
@@ -158,7 +158,7 @@ pub fn play_file(
     let is_dsd = audio_params.codec == CODEC_TYPE_DSD_LSBF || audio_params.codec == CODEC_TYPE_DSD_MSBF;
 
     let mut decoder = codec_registry.make_audio_decoder(audio_params, &AudioDecoderOptions::default())?;
-    let mut audio_output: Option<AlsaOutput> = None;
+    let mut audio_output: Option<AudioOutput> = None;
     // Cloned (not moved) into each open attempt so the meter survives failed
     // attempts and mid-song device reopens.
     let vu_meter = context.take_vu_meter();
@@ -233,7 +233,7 @@ pub fn play_file(
                     #[allow(clippy::cast_possible_truncation)]
                     let caps = DeviceCapabilities::query(&device, spec_rate, spec_channels as u16);
 
-                    let Ok(audio_out) = AlsaOutput::new(
+                    let Ok(audio_out) = AudioOutput::new(
                         spec,
                         duration,
                         &device,
@@ -253,7 +253,7 @@ pub fn play_file(
                                     handle.rebuild(ch, fallback_rate as usize);
                                 }
                                 let spec_for_retry = decoded_buff.spec().clone();
-                                if let Ok(audio_out) = AlsaOutput::new(
+                                if let Ok(audio_out) = AudioOutput::new(
                                     spec_for_retry,
                                     duration,
                                     &device,

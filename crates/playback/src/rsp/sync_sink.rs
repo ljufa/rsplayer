@@ -27,7 +27,7 @@ use symphonia::core::audio::{AudioBuffer, AudioMut, AudioSpec, Channels, Generic
 use thread_priority::{ThreadBuilder, ThreadPriority};
 use tokio::sync::broadcast::Sender;
 
-use crate::rsp::alsa_output::AlsaOutput;
+use crate::rsp::audio_output::AudioOutput;
 use crate::rsp::tee::MonoClock;
 use crate::rsp::vumeter::VUMeter;
 use dsp::DspHandle;
@@ -178,7 +178,7 @@ fn run_sink(
     } else {
         None
     };
-    let output = AlsaOutput::new(
+    let output = AudioOutput::new(
         spec.clone(),
         CHUNK_FRAMES as u64,
         &device,
@@ -254,7 +254,7 @@ fn run_sink(
 }
 
 struct Pipeline {
-    output: AlsaOutput,
+    output: AudioOutput,
     buf: AudioBuffer<f32>,
     channels: usize,
     gain: Option<f32>,

@@ -241,8 +241,8 @@ async fn handle_audio_stream(mut stream: RecvStream, sessions: &Sessions, clock:
         let local_play_at_micros = clock.leader_to_local_micros(corrected);
         let samples: Vec<f32> = chunk
             .payload
-            .chunks_exact(4)
-            .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+            .chunks_exact(2)
+            .map(|b| crate::protocol::decode_sample([b[0], b[1]]))
             .collect();
         match tx.try_send(ScheduledChunk {
             local_play_at_micros,

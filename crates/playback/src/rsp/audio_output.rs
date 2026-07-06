@@ -251,7 +251,7 @@ where
     }
 }
 
-/// DSP-related state bundled together.  `None` in `AlsaOutput` when DSP is
+/// DSP-related state bundled together.  `None` in `AudioOutput` when DSP is
 /// disabled or the format is DSD (which cannot be processed).
 struct DspState {
     /// Playback-thread-exclusive equalizer — never shared, never locked
@@ -262,7 +262,7 @@ struct DspState {
     handle: DspHandle,
 }
 
-pub struct AlsaOutput {
+pub struct AudioOutput {
     writer: Box<dyn AudioWriter>,
     stream: cpal::Stream,
     error_count: Arc<AtomicU32>,
@@ -283,7 +283,7 @@ pub struct AlsaOutput {
 }
 
 #[allow(clippy::too_many_arguments)]
-impl AlsaOutput {
+impl AudioOutput {
     #[allow(clippy::too_many_arguments, clippy::too_many_lines, deprecated)]
     pub fn new(
         spec: AudioSpec,
@@ -295,7 +295,7 @@ impl AlsaOutput {
         dsp_handle: Option<&DspHandle>,
         vu_meter: Option<VUMeter>,
         software_gain: Option<&Arc<AtomicU8>>,
-    ) -> Result<AlsaOutput> {
+    ) -> Result<AudioOutput> {
         debug!("Spec: {spec:?}");
 
         if let Ok(default_cfg) = device.default_output_config() {
@@ -410,7 +410,7 @@ impl AlsaOutput {
             .map_or(cpal::BufferSize::Default, cpal::BufferSize::Fixed);
 
         let mut result = if buf_sizes.is_empty() {
-            AlsaOutput::open_with_format(
+            AudioOutput::open_with_format(
                 &spec_clone,
                 duration,
                 device,
@@ -426,7 +426,7 @@ impl AlsaOutput {
         } else {
             let mut r = Err(Error::msg("no buffer size tried"));
             for buf in buf_sizes {
-                r = AlsaOutput::open_with_format(
+                r = AudioOutput::open_with_format(
                     &spec_clone,
                     duration,
                     device,
@@ -470,7 +470,7 @@ impl AlsaOutput {
                     &[]
                 };
                 if buf_sizes_for_rate.is_empty() {
-                    let retry = AlsaOutput::open_with_format(
+                    let retry = AudioOutput::open_with_format(
                         &spec_clone,
                         duration,
                         device,
@@ -489,7 +489,7 @@ impl AlsaOutput {
                     }
                 } else {
                     for buf in buf_sizes_for_rate {
-                        let retry = AlsaOutput::open_with_format(
+                        let retry = AudioOutput::open_with_format(
                             &spec_clone,
                             duration,
                             device,
@@ -527,7 +527,7 @@ impl AlsaOutput {
         device_channels: Option<u16>,
         buffer_size: cpal::BufferSize,
         software_gain: Option<&Arc<AtomicU8>>,
-    ) -> Result<AlsaOutput> {
+    ) -> Result<AudioOutput> {
         let source_channels = spec.channels().count();
         let output_channels = device_channels.map_or(source_channels, |ch| ch as usize);
         let output_rate = device_rate.unwrap_or_else(|| spec.rate());
@@ -727,7 +727,7 @@ impl AlsaOutput {
             DspState { equalizer, handle }
         });
 
-        Ok(AlsaOutput {
+        Ok(AudioOutput {
             writer,
             stream,
             error_count,
@@ -742,7 +742,7 @@ impl AlsaOutput {
     }
 }
 
-impl AlsaOutput {
+impl AudioOutput {
     /// Time until a sample pushed *now* reaches the DAC: the ring-buffer
     /// backlog plus the device buffer latency reported by the driver at the
     /// last callback (aged, since the device drains between callbacks).

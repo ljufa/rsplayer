@@ -1,4 +1,4 @@
-mod alsa_output;
+mod audio_output;
 pub mod audio_host;
 mod audio_source;
 mod device_capabilities;

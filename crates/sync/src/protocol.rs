@@ -11,11 +11,12 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use api_models::state::MultiroomGroupState;
 
 pub const ALPN: &[u8] = b"rsplayer/sync/1";
-pub const PROTOCOL_VERSION: u16 = 1;
+/// Version 2: audio payload changed from f32 LE to i16 LE.
+pub const PROTOCOL_VERSION: u16 = 2;
 
 /// Upper bound for control messages (group state, song metadata).
 pub const MAX_CONTROL_FRAME_BYTES: u32 = 256 * 1024;
-/// Upper bound for one audio chunk frame (fits >1s of 192kHz/2ch f32).
+/// Upper bound for one audio chunk frame (fits >1s of 192kHz/2ch i16).
 pub const MAX_AUDIO_FRAME_BYTES: u32 = 4 * 1024 * 1024;
 
 /// Messages sent by the leader on the control (bidirectional) stream.
@@ -59,7 +60,8 @@ pub enum ControlToLeader {
     Pong,
 }
 
-/// PCM stream parameters. Samples are always interleaved f32 little-endian.
+/// PCM stream parameters. Samples are always interleaved i16 little-endian
+/// (see [`encode_sample`] / [`decode_sample`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamSpec {
     pub rate: u32,
@@ -82,8 +84,25 @@ pub struct AudioChunk {
     /// When to play the first frame, on the leader's monotonic clock (µs).
     pub play_at_micros: u64,
     pub frames: u32,
-    /// Interleaved f32 little-endian samples.
+    /// Interleaved i16 little-endian samples.
     pub payload: Vec<u8>,
+}
+
+/// Converts one decoded f32 sample to the i16 LE wire format.
+///
+/// Scale is 32768 so that samples decoded from 16-bit sources (which
+/// Symphonia converts to f32 by dividing by 32768) survive the wire
+/// bit-exactly; 24-bit+ sources are quantized to 16 bits.
+#[must_use]
+#[allow(clippy::cast_possible_truncation)]
+pub fn encode_sample(s: f32) -> [u8; 2] {
+    (((s * 32768.0).round()).clamp(-32768.0, 32767.0) as i16).to_le_bytes()
+}
+
+/// Converts one i16 LE wire sample back to f32.
+#[must_use]
+pub fn decode_sample(b: [u8; 2]) -> f32 {
+    f32::from(i16::from_le_bytes(b)) / 32768.0
 }
 
 /// Clock-sync probes, exchanged as QUIC datagrams (postcard, no framing).
@@ -126,11 +145,30 @@ mod tests {
             seq: 42,
             play_at_micros: 1_234_567,
             frames: 2,
-            payload: vec![0, 0, 128, 63, 0, 0, 128, 191],
+            payload: [1.0f32, -1.0, 0.5, -0.5].iter().flat_map(|s| encode_sample(*s)).collect(),
         };
         let bytes = postcard::to_stdvec(&chunk).unwrap();
         let back: AudioChunk = postcard::from_bytes(&bytes).unwrap();
         assert_eq!(chunk, back);
+    }
+
+    #[test]
+    fn sample_wire_format_is_transparent_for_16bit_sources() {
+        // A 16-bit source decoded the way Symphonia does it (/32768) must
+        // survive encode → decode bit-exactly.
+        for v in [i16::MIN, -12_345, -1, 0, 1, 12_345, i16::MAX] {
+            let decoded = f32::from(v) / 32768.0;
+            assert_eq!(decode_sample(encode_sample(decoded)), decoded, "sample {v}");
+        }
+    }
+
+    #[test]
+    fn sample_encoding_clamps_out_of_range() {
+        assert_eq!(encode_sample(1.5), i16::MAX.to_le_bytes());
+        assert_eq!(encode_sample(-1.5), i16::MIN.to_le_bytes());
+        // 1.0 * 32768 overflows i16 and must clamp, not wrap.
+        assert_eq!(encode_sample(1.0), i16::MAX.to_le_bytes());
+        assert_eq!(encode_sample(-1.0), i16::MIN.to_le_bytes());
     }
 
     #[test]

@@ -14,13 +14,13 @@ Internals of the multiroom sync feature: code layout, wire protocol, timing mode
 | `crates/sync/src/follower.rs` | Control-stream driver, clock pinger, per-session audio receivers, sink lifecycle |
 | `crates/playback/src/rsp/tee.rs` | `SyncTee`/`TeeSession`: PCM copy-out from the decode loop; `MonoClock` |
 | `crates/playback/src/rsp/sync_sink.rs` | `SyncSink`: scheduled playback thread with drift correction |
-| `crates/playback/src/rsp/alsa_output.rs` | `prefill_silence_ms`, `playback_lag_micros` (playback-position sensor) |
+| `crates/playback/src/rsp/audio_output.rs` | `prefill_silence_ms`, `playback_lag_micros` (playback-position sensor) |
 | `crates/playback/src/rsp/symphonia.rs` | Tee hook points in the decode loop (session lifecycle) |
 | `crates/server/src/composition_root.rs` | Builds `SyncTee` + channels when enabled, wires `SyncDeps` |
 | `crates/api_models/src/{settings,common,state}.rs` | `MultiroomSettings`, `MultiroomCommand`, UI events |
 | `web-ui/src/page/player.rs` | Peer panel (leader) and follower banner |
 
-Dependency direction: `server → sync → playback`. The tee and sink live in `playback` because they need `AlsaOutput` (crate-private); `sync` consumes them. `crates/wire` is unrelated (USB front-panel protocol).
+Dependency direction: `server → sync → playback`. The tee and sink live in `playback` because they need `AudioOutput` (crate-private); `sync` consumes them. `crates/wire` is unrelated (USB front-panel protocol).
 
 ## Identity, Discovery, Dialing
 
@@ -53,9 +53,11 @@ While grouped, the follower's server rejects local transport commands via a shar
 - **Control = one bidirectional stream** (reliable, ordered — exactly what session state needs).
 - **Audio = one reliable *uni* stream per session** (leader → follower). With 500–1000 ms of scheduling headroom, a LAN retransmit never threatens a deadline, QUIC flow control provides free backpressure, and flush-on-seek/stop is simply "drop the stream". Datagrams were rejected for audio: they'd require reinventing ordering/loss handling for zero latency benefit at this buffer depth.
 - **Clock probes = QUIC datagrams**: timing packets must never queue behind retransmitted audio bytes (head-of-line blocking would corrupt RTT measurements).
-- `AudioChunk { session_id, seq, play_at_micros, frames, payload }` — payload is interleaved **f32 LE at the source sample rate**.
+- `AudioChunk { session_id, seq, play_at_micros, frames, payload }` — payload is interleaved **i16 LE at the source sample rate** (protocol version 2; version 1 carried f32 LE — the handshake rejects mismatched versions).
 
-Why f32 at source rate (and not the leader's output format): the tee is taken **pre-EQ, pre-resample, pre-volume** in the decode loop. Anything later would bake the leader's room EQ and device sample rate into every room. Followers run the received PCM through their own full output pipeline (rate conversion, EQ, VU, software volume), so per-room correction keeps working. Loudness-normalization gain is the one leader-side value that must be carried along (`StreamStart.gain_db_hundredths`) because it is normally applied inside the leader's DSP chain. Cost: 2.8 Mbit/s per follower at 44.1 kHz stereo; a 16-bit wire format is the planned optimization for weak devices (Pi Zero).
+Why pre-DSP at source rate (and not the leader's output format): the tee is taken **pre-EQ, pre-resample, pre-volume** in the decode loop. Anything later would bake the leader's room EQ and device sample rate into every room. Followers run the received PCM through their own full output pipeline (rate conversion, EQ, VU, software volume), so per-room correction keeps working. Loudness-normalization gain is the one leader-side value that must be carried along (`StreamStart.gain_db_hundredths`) because it is normally applied inside the leader's DSP chain.
+
+Why i16 on the wire (the tee itself stays f32): halves bandwidth (1.4 Mbit/s per follower at 44.1 kHz stereo) and per-chunk conversion work — QUIC crypto plus the sample stream dominate follower CPU on weak devices (Pi Zero). The scale factor is 32768 (`protocol::encode_sample`/`decode_sample`), matching Symphonia's int→float conversion, so 16-bit source material crosses the wire bit-exactly; deeper sources are quantized to 16 bits for followers only.
 
 ## The Timing Model
 
@@ -63,7 +65,7 @@ Everything hangs off one invariant: **chunk timestamps are sample counts, not se
 
 - `MonoClock` (process-wide monotonic µs; defined in `playback::rsp::tee` because both the playback thread and the sync crate must share a single epoch per process).
 - At session start the leader computes `epoch` = the moment frame 0 reaches its own DAC. Every chunk then carries `play_at = epoch + first_frame / rate`. `first_frame` is counted **on the playback thread**, so a chunk dropped anywhere downstream shifts nothing — followers hear a gap, never a permanent offset.
-- The leader delays its own output by the sync buffer: `AlsaOutput::prefill_silence_ms` pushes silence through the normal writer path (so resampler/EQ state stays consistent), and `epoch` is then *measured* as `now + playback_lag` rather than assumed.
+- The leader delays its own output by the sync buffer: `AudioOutput::prefill_silence_ms` pushes silence through the normal writer path (so resampler/EQ state stays consistent), and `epoch` is then *measured* as `now + playback_lag` rather than assumed.
 
 ### Clock sync (`clock.rs`)
 
@@ -118,13 +120,13 @@ What the feature costs in each state — the design goal is that you only ever p
 |-------|--------------|---------------|---------|
 | Disabled | untouched | zero | untouched |
 | Enabled, not grouped | untouched | negligible | untouched |
-| Grouped, leader | untouched locally | small copy per chunk + QUIC/2.8 Mbit/s per follower | +`buffer_ms` on play/seek |
+| Grouped, leader | untouched locally | small copy per chunk + QUIC/1.4 Mbit/s per follower | +`buffer_ms` on play/seek |
 | Grouped, follower | altered only while correcting | QUIC decrypt + stream (~45 % on Pi Zero, trivial on desktop) | scheduled by leader |
 
 - **Disabled**: the gate is at composition time (`composition_root.rs`) — no `SyncTee` is constructed, the sync service future is never started, so there is no endpoint, no UDP socket, no mDNS traffic, no extra threads. The decode loop's tee hooks are `None`-checks. Playback is bit-for-bit what it was before the feature existed.
 - **Enabled, not grouped**: what runs is an idle UDP socket, periodic mDNS announcements, and one parked ingestion task. The audio hot path pays one atomic load per packet (`SyncTee::is_active`). No audio is copied or serialized.
-- **Grouped, as leader**: local output is *bit-identical* to ungrouped playback — the tee copies decoded f32 pre-EQ/pre-resample and the local pipeline processes the same samples either way. Costs: one interleave copy per chunk on the playback thread (bounded, `try_send`, can never block — see Fan-out), QUIC encryption + 2.8 Mbit/s per follower on the tokio runtime, and `buffer_ms` (default 500 ms) of self-delay on session start so followers can align — a latency cost on play/seek reaction, not a quality cost.
-- **Grouped, as follower**: the only state where samples can be altered: the drift corrector time-stretches by ≤ 0.8 % *while actively slewing* (hysteresis keeps it off in steady state) and hard corrections skip/fade once on join or after a stall. Otherwise received PCM passes through the follower's normal output pipeline (own EQ, VU, volume) unchanged. CPU is dominated by QUIC crypto + the f32 stream — ~45 % on a Pi Zero, trivial on desktop-class hardware.
+- **Grouped, as leader**: local output is *bit-identical* to ungrouped playback — the tee copies decoded f32 pre-EQ/pre-resample and the local pipeline processes the same samples either way. Costs: one interleave copy per chunk on the playback thread (bounded, `try_send`, can never block — see Fan-out), QUIC encryption + 1.4 Mbit/s per follower on the tokio runtime, and `buffer_ms` (default 500 ms) of self-delay on session start so followers can align — a latency cost on play/seek reaction, not a quality cost.
+- **Grouped, as follower**: the only state where samples can be altered: the drift corrector time-stretches by ≤ 0.8 % *while actively slewing* (hysteresis keeps it off in steady state) and hard corrections skip/fade once on join or after a stall. Otherwise received PCM passes through the follower's normal output pipeline (own EQ, VU, volume) unchanged, and 16-bit source material arrives bit-exact (see Wire Protocol). CPU is dominated by QUIC crypto + the sample stream — measured ~45 % on a Pi Zero with the old f32 wire format; the i16 format halves the stream side of that.
 - **Caveat**: while grouped, every track starts a fresh session with its own prefill, so transitions are **not gapless** (known leftover). Ungrouped playback — enabled or not — keeps normal gapless behavior.
 
 ## Decisions Summary
@@ -133,7 +135,8 @@ What the feature costs in each state — the design goal is that you only ever p
 |----------|---------------------|-----|
 | iroh 1.0 | hand-rolled quinn + mdns-sd | discovery + identity + encryption in one coherent layer; wire-protocol stability guarantee across versions |
 | Stream decoded PCM | "play file X at T" + local decode | sample-identical output everywhere; no library access needed; radio works; decoder differences can't drift |
-| f32 @ source rate, pre-DSP tee | post-EQ tee at device rate | per-room EQ/resampling must keep working; leader's device config must not leak into other rooms |
+| source rate, pre-DSP tee | post-EQ tee at device rate | per-room EQ/resampling must keep working; leader's device config must not leak into other rooms |
+| i16 wire format (32768 scale) | f32 on the wire (v1) | half the bandwidth and conversion CPU (matters on Pi Zero followers); 16-bit sources still bit-exact, deeper sources quantized only for follower rooms |
 | Sample-count timestamps | send-time timestamps | immune to network jitter and chunk drops |
 | Reliable uni stream for audio | QUIC datagrams | buffer depth makes retransmits free; ordering/loss handling for free; flush = drop stream |
 | Leader publishes DAC-position corrections | followers slave to nominal timeline | leader's DAC is a drifting clock too; a nominal timeline would walk away from what the leader actually plays |
@@ -149,7 +152,7 @@ Most of the building blocks are established concepts; the names in the code are 
 - **Sensor smoothing**: the EWMA filters on latency reports and scheduling error are first-order IIR low-pass filters (exponential smoothing) — the standard cheap noise filter with O(1) state.
 - **Slew hysteresis**: the start/stop double threshold is a Schmitt trigger — the textbook cure for a noisy signal chattering across a single threshold (which here produced a correction toggling on/off chunk by chunk).
 - **Drift correction by micro-resampling**: playing marginally faster/slower to servo a buffer level is how PulseAudio's `module-combine-sink` keeps multiple sinks aligned (adaptive resampling) and how Snapcast implements "soft sync"; the general DSP topic is asynchronous sample-rate conversion (ASRC). Our linear-interpolation stretch is the simplest ASRC — at ≤ 0.8 % ratio its distortion is far below audibility, so nothing fancier is warranted.
-- **System shape**: the leader/follower buffered-timestamp architecture (decode once, distribute timestamped PCM, followers schedule against a synced clock) is the same shape as **Snapcast** — the main departures are QUIC/iroh transport with encryption and identity, pre-DSP f32 tee for per-room EQ, and the driver-reported-latency feedback loop instead of fixed per-device offsets.
+- **System shape**: the leader/follower buffered-timestamp architecture (decode once, distribute timestamped PCM, followers schedule against a synced clock) is the same shape as **Snapcast** — the main departures are QUIC/iroh transport with encryption and identity, the pre-DSP source-rate tee for per-room EQ, and the driver-reported-latency feedback loop instead of fixed per-device offsets.
 - The follower's correction loop as a whole is a feedback controller with a deadband: measure error, apply bounded proportional correction, suppress response to noise — closer to control-engineering common sense (hysteresis + slew limiting) than to any single named algorithm.
 
 ## Testing

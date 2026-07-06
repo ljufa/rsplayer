@@ -84,7 +84,7 @@ pub fn spawn_tee_ingestion(
                             };
                             let play_at_micros = epoch_micros + first_frame * 1_000_000 / u64::from(session.spec.rate);
                             let frames = samples.len() / usize::from(session.spec.channels);
-                            let payload = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
+                            let payload = samples.iter().flat_map(|s| crate::protocol::encode_sample(*s)).collect();
                             let chunk = Arc::new(AudioChunk {
                                 session_id,
                                 seq,
