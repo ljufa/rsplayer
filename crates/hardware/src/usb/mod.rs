@@ -81,16 +81,7 @@ impl UsbService {
                         let mut port_guard = self.port.lock().expect("lock poisoned");
                         *port_guard = Some(new_port);
                     }
-                    let cached_song = self.last_song_cache.lock().expect("lock poisoned").clone();
-                    if let Some((t, a, al)) = cached_song {
-                        debug!("Resending cached track info: {t} - {a}");
-                        let _ = self.send_track_info(&t, &a, &al);
-                    }
-                    let cached_mode = *self.last_playback_mode_cache.lock().expect("lock poisoned");
-                    if let Some(mode) = cached_mode {
-                        debug!("Resending cached playback mode: {mode:?}");
-                        let _ = self.send(&HostToFw::PlaybackMode(mode));
-                    }
+                    self.resync_state();
                     Ok(())
                 }
                 Err(e) => {
@@ -124,6 +115,23 @@ impl UsbService {
 
     pub fn send_power_command(&self, on: bool) -> Result<()> {
         self.send(if on { &HostToFw::PowerOn } else { &HostToFw::PowerOff })
+    }
+
+    /// Pushes everything the panel needs after a (re)connect or firmware
+    /// power-on: cached track info and playback mode, plus a volume query so
+    /// the host learns the firmware's current level. Idempotent.
+    pub fn resync_state(&self) {
+        let cached_song = self.last_song_cache.lock().expect("lock poisoned").clone();
+        if let Some((t, a, al)) = cached_song {
+            debug!("Resending cached track info: {t} - {a}");
+            let _ = self.send_track_info(&t, &a, &al);
+        }
+        let cached_mode = *self.last_playback_mode_cache.lock().expect("lock poisoned");
+        if let Some(mode) = cached_mode {
+            debug!("Resending cached playback mode: {mode:?}");
+            let _ = self.send(&HostToFw::PlaybackMode(mode));
+        }
+        let _ = self.send(&HostToFw::QueryVolume);
     }
 }
 
@@ -173,30 +181,34 @@ pub fn spawn_receiver_thread(
                     info!("USB Listener loop started successfully");
 
                     loop {
-                        frame.clear();
                         match reader.read_until(0x00, &mut frame) {
                             Ok(0) => {
                                 error!("USB EOF, connection lost.");
                                 break;
                             }
                             Ok(_) => {
-                                // Strip trailing COBS sentinel; postcard decodes the body in place.
-                                if frame.last() == Some(&0x00) {
-                                    frame.pop();
-                                }
-                                if frame.is_empty() {
+                                // read_until only returns without the delimiter
+                                // at EOF; loop again so Ok(0) reports it.
+                                if frame.last() != Some(&0x00) {
                                     continue;
                                 }
-                                match postcard::from_bytes_cobs::<FwToHost>(&mut frame) {
-                                    Ok(msg) => {
-                                        debug!("Got fw message: {msg:?}");
-                                        dispatch_fw_to_host_msg(msg, &player_commands_tx, &system_commands_tx, &state_changes_tx);
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to decode fw message ({} bytes): {e}", frame.len());
+                                // Strip trailing COBS sentinel; postcard decodes the body in place.
+                                frame.pop();
+                                if !frame.is_empty() {
+                                    match postcard::from_bytes_cobs::<FwToHost>(&mut frame) {
+                                        Ok(msg) => {
+                                            debug!("Got fw message: {msg:?}");
+                                            dispatch_fw_to_host_msg(&service, msg, &player_commands_tx, &system_commands_tx, &state_changes_tx);
+                                        }
+                                        Err(e) => {
+                                            error!("Failed to decode fw message ({} bytes): {e}", frame.len());
+                                        }
                                     }
                                 }
+                                frame.clear();
                             }
+                            // Timeout between panel messages: keep any partial
+                            // frame — the rest of it arrives with the next read.
                             Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {}
                             Err(e) => {
                                 error!("Error reading from USB: {e}");
@@ -224,6 +236,7 @@ pub fn spawn_receiver_thread(
 }
 
 fn dispatch_fw_to_host_msg(
+    service: &UsbService,
     msg: FwToHost,
     player_commands_tx: &Sender<UserCommand>,
     system_commands_tx: &Sender<SystemCommand>,
@@ -236,6 +249,12 @@ fn dispatch_fw_to_host_msg(
         FwToHost::Power(is_on) => {
             info!("Firmware power state changed: {is_on}");
             let _ = state_changes_tx.send(StateChangeEvent::RSPlayerFirmwarePowerEvent(is_on));
+            if is_on {
+                // Panel just came up (power-on or USB reconnect): replay the
+                // cached display state so it doesn't sit blank until the next
+                // natural event.
+                service.resync_state();
+            }
         }
         FwToHost::Player(cmd) => {
             let pc = match cmd {
