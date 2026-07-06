@@ -1,3 +1,6 @@
+//! Storage commands: SMB/NFS mount/unmount via `MountService`, persisting
+//! successful mounts into settings and reporting mount/music-dir status.
+
 use api_models::common::StorageCommand;
 use api_models::state::StateChangeEvent;
 use log::error;

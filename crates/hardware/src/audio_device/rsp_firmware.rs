@@ -1,3 +1,7 @@
+//! Volume control via the `RSPlayer` front-panel firmware's hardware
+//! attenuator: commands go out over the USB link, the resulting level
+//! comes back asynchronously as `FwToHost::Volume`.
+
 use crate::usb::ArcUsbService;
 use api_models::common::Volume;
 use wire::HostToFw;

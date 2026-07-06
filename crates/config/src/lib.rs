@@ -1,3 +1,12 @@
+//! Settings persistence.
+//!
+//! [`Configuration`] owns the `configuration` fjall keyspace and an in-memory
+//! `RwLock<Settings>` cache of the single JSON-serialized [`Settings`] value;
+//! reads clone the cache, writes update cache and disk together. One-time
+//! schema migrations (legacy `alsa_mixer` object, single `music_directory`)
+//! run in [`Configuration::new`] when the stored JSON predates the current
+//! model.
+
 use std::sync::{Arc, RwLock};
 
 use api_models::settings::Settings;
@@ -69,8 +78,4 @@ impl Configuration {
             .tree
             .insert(SETTINGS_KEY, serde_json::to_vec(settings).expect("failed to serialize settings"));
     }
-}
-
-pub fn get_static_dir_path() -> String {
-    "ui".to_string()
 }

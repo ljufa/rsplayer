@@ -1,3 +1,12 @@
+//! Command enums and small shared value types.
+//!
+//! [`UserCommand`] is the single entry point for everything a client can ask
+//! the server to do; it fans out into per-domain enums (player, queue,
+//! playlist, metadata, storage, system, multiroom). Commands arrive as JSON
+//! over the WebSocket, get routed through one mpsc channel in
+//! `server::command_handler`, and results come back as
+//! [`crate::state::StateChangeEvent`]s — there are no per-command replies.
+
 use std::time::Duration;
 
 use crate::{
@@ -285,9 +294,4 @@ pub fn dur_to_string(duration: &Duration) -> String {
         result = format!("{hours:0>2}:{minutes:0>2}:{seconds:0>2}");
     }
     result
-}
-
-#[must_use]
-pub fn to_database_key(input: &str) -> String {
-    input.to_string()
 }

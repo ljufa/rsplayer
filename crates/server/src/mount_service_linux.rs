@@ -1,3 +1,10 @@
+//! SMB/NFS mounting of network music shares (Linux implementation; other
+//! platforms get the no-op `mount_service_stub`).
+//!
+//! Mounts under `/mnt/rsplayer/<name>` via nix `mount(2)` — requires the
+//! binary to run with the needed privileges — with reachability pre-checks
+//! and read-only fallbacks.
+
 use std::fs;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;

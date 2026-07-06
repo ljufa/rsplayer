@@ -1,3 +1,6 @@
+//! Fjall-backed [`PlayStatisticsRepository`]: play/skip/like counters per
+//! song key, feeding the "most played" and "liked" dynamic playlists.
+
 use api_models::stat::PlayItemStatistics;
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 

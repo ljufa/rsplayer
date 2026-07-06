@@ -1,3 +1,11 @@
+//! Desktop app: the headless server wrapped in a Tauri window.
+//!
+//! Runs `rsplayer::run_backend` in-process on a free port (cwd moved to the
+//! OS config dir so the databases land there), points a webview at it, and
+//! integrates OS media keys via souvlaki (MPRIS2 on Linux, MediaRemote on
+//! macOS, SMTC on Windows). Closing the window shuts the backend down
+//! gracefully through a oneshot channel.
+
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 

@@ -1,3 +1,19 @@
+//! Music library: scanning, storage, queue, playlists, radio and loudness.
+//!
+//! Persistence is fjall (LSM key-value store), one `Database` shared by the
+//! whole process with one keyspace per concern (`songs`, `albums`, `queue`,
+//! `playlist`, `play_statistics`, `loudness`…). Songs are keyed by
+//! library-relative file path; albums by normalized `artist|album`.
+//!
+//! Layout: `metadata_service` — scanner and library queries;
+//! `queue_service` — the playback queue; `playlist_service` — saved
+//! playlists; `*_repository` — fjall implementations of the `ports` traits
+//! (kept behind traits so tests can use `ports::fakes`); `loudness_*` —
+//! EBU R128 analysis for volume normalization; `icy_reader`/`radio_*` —
+//! internet-radio metadata; `*_bundle` — custom Symphonia format/codec
+//! plugins (APE, DSF/DSD, SACD ISO) registered via [`build_probe`] and
+//! [`build_codec_registry`], which the playback crate also uses.
+
 pub mod album_repository;
 pub mod ape_bundle;
 pub mod audio_metadata_extractor;

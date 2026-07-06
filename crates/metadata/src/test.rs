@@ -639,7 +639,7 @@ mod playlist {
 pub mod test_shared {
     use std::{path::Path, sync::Arc};
 
-    use api_models::{common::to_database_key, player::Song, settings::MetadataStoreSettings, state::StateChangeEvent};
+    use api_models::{player::Song, settings::MetadataStoreSettings, state::StateChangeEvent};
     use tokio::sync::broadcast::{Receiver, Sender};
 
     use crate::{
@@ -650,10 +650,8 @@ pub mod test_shared {
     };
 
     pub fn create_song(ext: &str) -> Song {
-        let file = format!("assets/music.{ext}");
-        let id = to_database_key(&file);
         Song {
-            file: id,
+            file: format!("assets/music.{ext}"),
             ..Default::default()
         }
     }

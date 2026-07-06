@@ -1,3 +1,5 @@
+//! Repository error type shared by all `ports` trait implementations.
+
 use thiserror::Error;
 
 #[derive(Debug, Error)]

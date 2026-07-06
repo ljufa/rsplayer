@@ -1,3 +1,13 @@
+//! Parametric EQ / DSP applied on the playback thread.
+//!
+//! [`Equalizer`] runs a per-channel chain of biquad/gain filters over
+//! interleaved samples (any Symphonia sample type; converted to f32 and back).
+//! Configuration flows one way: the command handler owns a [`DspProcessor`],
+//! builds a fresh `Equalizer` whenever settings or per-track normalization
+//! gain change, and parks it in [`DspHandle::pending`]; the playback thread
+//! swaps it in between writes — the audio hot path never waits on a lock
+//! (see `dsp_processor.rs` for the threading contract).
+
 use anyhow::Result;
 use log::error;
 

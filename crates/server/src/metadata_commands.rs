@@ -1,3 +1,7 @@
+//! Metadata commands: library browse/search queries, like/dislike, stats,
+//! and `RescanMetadata`, which runs the scanner on its own named thread so
+//! the command loop stays responsive.
+
 use api_models::common::MetadataCommand::{self, QueryLocalFiles, RescanMetadata};
 use api_models::common::MetadataLibraryItem;
 use api_models::state::StateChangeEvent;

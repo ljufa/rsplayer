@@ -1,3 +1,7 @@
+//! System commands: volume (through the hardware audio service), mute,
+//! power-off/restart (disabled in demo and desktop modes) and front-panel
+//! firmware power.
+
 use std::process::exit;
 
 use api_models::common::SystemCommand::{self, PowerOff, RestartRSPlayer, RestartSystem, SetVol, ToggleMute, VolDown, VolUp};

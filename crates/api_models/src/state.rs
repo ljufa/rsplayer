@@ -1,3 +1,12 @@
+//! Server → client events.
+//!
+//! [`StateChangeEvent`] is the single broadcast enum: every server-side change
+//! (song, queue, volume, scan progress, notifications, multiroom state, VU
+//! levels…) is published on one `tokio::sync::broadcast` channel and pushed to
+//! all connected WebSocket clients as JSON. Queries in
+//! [`crate::common::UserCommand`] are answered through these events too, so
+//! every client converges on the same state regardless of who asked.
+
 use core::default::Default;
 use core::option::Option;
 

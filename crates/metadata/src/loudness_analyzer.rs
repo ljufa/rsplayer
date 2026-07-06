@@ -1,3 +1,9 @@
+//! Integrated-loudness measurement (EBU R128) of one file.
+//!
+//! Decodes the whole track with Symphonia and feeds it to the `ebur128`
+//! crate; returns integrated LUFS. DSD is skipped — it cannot go through
+//! the PCM analysis chain.
+
 use std::{fs::File, path::Path};
 
 use symphonia::core::{

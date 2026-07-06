@@ -1,3 +1,9 @@
+//! Repository traits (ports, in the hexagonal-architecture sense).
+//!
+//! Services depend on these `Arc<dyn …>` traits rather than on fjall
+//! directly; production wiring lives in the sibling `*_repository` modules,
+//! tests use [`fakes`].
+
 pub mod album_repository;
 pub mod loudness_repository;
 pub mod play_statistics_repository;

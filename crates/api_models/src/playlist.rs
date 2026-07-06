@@ -1,3 +1,10 @@
+//! Albums, playlists and the composite home-page listing.
+//!
+//! [`PlaylistType`] models one row source on the UI's home page: saved
+//! playlists, dynamic ones (most played, liked), album carousels (latest,
+//! recently added) and lazy `GenreHeader`/`DecadeHeader` entries that carry
+//! only a count until the user expands the section.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 

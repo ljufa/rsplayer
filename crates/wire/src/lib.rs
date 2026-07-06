@@ -1,3 +1,13 @@
+//! Protocol shared between the server and the `RSPlayer` front-panel firmware
+//! (USB serial; see the separate `rsplayer_firmware` repository).
+//!
+//! `no_std` because the firmware side compiles it for a microcontroller:
+//! strings are fixed-capacity `heapless` types and messages are
+//! postcard-encoded, COBS-framed (bounded by [`MAX_FRAME`]). [`HostToFw`]
+//! pushes display/volume state to the panel; [`FwToHost`] carries knob,
+//! button and power events back. Unrelated to the multiroom sync protocol in
+//! `crates/sync`.
+
 #![no_std]
 
 pub use heapless;

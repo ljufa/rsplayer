@@ -1,3 +1,12 @@
+//! The persisted [`Settings`] tree.
+//!
+//! One JSON blob stored by `rsplayer_config` (fjall) and round-tripped whole
+//! through `GET/POST /api/settings` — there is no merge: a client posting an
+//! older schema silently drops newer sections, which is why every newer field
+//! carries `#[serde(default)]`. Serialized names are frozen (e.g. the
+//! `alsa_*` names predate cross-platform support and now configure the cpal
+//! output on every OS).
+
 use serde::{Deserialize, Serialize};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 use validator::Validate;

@@ -1,3 +1,10 @@
+//! Biquad filter implementations (peaking, shelves, pass/notch, Linkwitz
+//! transform) plus a plain gain stage.
+//!
+//! Coefficient formulas follow the Audio EQ Cookbook (R. Bristow-Johnson);
+//! types and naming mirror `CamillaDSP`, which this is a trimmed-down port
+//! of, so its filter documentation applies here too.
+
 use std::f32::consts::PI;
 
 // ── Public configuration types ──────────────────────────────────────────────

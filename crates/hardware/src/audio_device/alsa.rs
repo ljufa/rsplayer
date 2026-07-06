@@ -1,3 +1,7 @@
+//! ALSA card/mixer enumeration and mixer-based volume control (Linux,
+//! feature `alsa`). Card and PCM-device listing here feeds the settings
+//! UI's device picker.
+
 use std::ffi::CString;
 
 use alsa::{Mixer, card};

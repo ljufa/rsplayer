@@ -1,3 +1,11 @@
+//! Dependency wiring — the only place concrete implementations meet.
+//!
+//! [`build_app_container`] constructs repositories (fjall), services, the
+//! command/state channels, and — when multiroom is enabled — the `SyncTee`
+//! plus the pieces the sync service needs. Returns `Degraded` instead of a
+//! container when the audio device fails, so `lib.rs` can fall back to the
+//! settings-only server.
+
 use std::sync::atomic::{AtomicBool, AtomicU8};
 use std::sync::Arc;
 

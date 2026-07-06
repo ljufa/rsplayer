@@ -1,3 +1,7 @@
+//! Software volume: just stores the 0–100 level in the shared atomic; the
+//! playback path applies the cubic gain curve to samples (see
+//! `playback::rsp::vumeter::cubic_gain`).
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 

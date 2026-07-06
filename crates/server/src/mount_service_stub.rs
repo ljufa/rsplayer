@@ -1,3 +1,6 @@
+//! No-op `MountService` for non-Linux platforms: mounting fails with a
+//! clear message, status queries return local-directory information only.
+
 use api_models::settings::{MetadataStoreSettings, NetworkMountConfig, NetworkStorageSettings};
 use api_models::state::{ExternalMount, MountStatus, MusicDirStatus};
 

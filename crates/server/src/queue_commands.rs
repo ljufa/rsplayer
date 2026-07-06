@@ -1,3 +1,7 @@
+//! Queue commands: load/add songs, albums, artists, directories, genres
+//! and decades into the playback queue, reorder/remove items, and answer
+//! queue queries with `CurrentQueueEvent` pages.
+
 use api_models::common::QueueCommand::{
     self, AddLocalLibDirectory, AddSongToQueue, ClearQueue, LoadAlbumInQueue, LoadArtistInQueue, LoadPlaylistInQueue, LoadSongToQueue,
     QueryCurrentQueue, QueryCurrentSong, RemoveItem,

@@ -1,3 +1,15 @@
+//! Library scanner and metadata queries.
+//!
+//! [`MetadataService`] walks the configured music directories, probes each
+//! file with Symphonia (plus the custom APE/DSF/SACD readers), extracts tags
+//! and artwork (written to `artwork/<uuid>`, referenced by `Song.image_id`)
+//! and fills the
+//! song/album repositories. Scans run on a background thread guarded by
+//! `scan_running`; progress streams to clients as `MetadataSongScan*` events.
+//! SACD ISOs expand into one virtual song per track (`#SACD_` marker in the
+//! file key). Also answers browse/search queries and computes
+//! [`api_models::stat::LibraryStats`].
+
 use std::{
     cmp::Reverse,
     collections::HashSet,
@@ -23,7 +35,7 @@ use tokio::sync::broadcast::Sender;
 use walkdir::WalkDir;
 
 use api_models::{
-    common::{MetadataLibraryItem, to_database_key},
+    common::MetadataLibraryItem,
     player::Song,
     settings::MetadataStoreSettings,
     stat::{LibraryStats, PlayItemStatistics},
@@ -333,8 +345,7 @@ impl MetadataService {
         if !music_dir_pref.ends_with('/') {
             music_dir_pref.push('/');
         }
-        let file_path = input.replace(&music_dir_pref, "");
-        to_database_key(file_path.as_str())
+        input.replace(&music_dir_pref, "")
     }
 
     fn full_path_to_database_key(settings: &MetadataStoreSettings, input: &str) -> String {
@@ -347,7 +358,7 @@ impl MetadataService {
                 return Self::full_path_to_database_key_for_dir(dir, input);
             }
         }
-        to_database_key(input)
+        input.to_string()
     }
 
     fn get_diff(&self, settings: &MetadataStoreSettings) -> (Vec<String>, Vec<String>) {

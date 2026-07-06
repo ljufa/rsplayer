@@ -1,3 +1,10 @@
+//! Library statistics and per-song play counters.
+//!
+//! [`PlayItemStatistics`] is persisted per song key by
+//! `rsplayer_metadata::play_statistic_repository` and drives the "most
+//! played" / "liked" dynamic playlists; [`LibraryStats`] is the aggregate
+//! shown on the UI's stats page.
+
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 

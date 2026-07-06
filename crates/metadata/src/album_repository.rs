@@ -1,3 +1,9 @@
+//! Fjall-backed [`AlbumRepository`].
+//!
+//! Albums are keyed by [`FjallAlbumRepository::album_db_key`] — normalized
+//! `artist|album` (see `genre_utils::normalize_name`) so tag-case and
+//! diacritic variants of the same album merge into one entry.
+
 use std::cmp::Reverse;
 
 use chrono::DateTime;

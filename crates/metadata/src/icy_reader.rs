@@ -1,3 +1,9 @@
+//! ICY (`SHOUTcast`) metadata extraction for radio streams.
+//!
+//! Wraps the HTTP body `Read` and strips the in-band metadata blocks that
+//! appear every `metaint` bytes, publishing `StreamTitle` changes as
+//! `CurrentSongEvent`s while handing the pure audio bytes to the decoder.
+
 use std::io::{Read, Result as IoResult};
 
 use api_models::player::Song;

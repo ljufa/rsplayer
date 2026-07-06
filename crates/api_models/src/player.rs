@@ -1,3 +1,10 @@
+//! [`Song`] — the central music-item type.
+//!
+//! A `Song` is identified by its `file` field (library-relative path, or a
+//! URL for radio streams); that key is used across the queue, playlists,
+//! statistics and the metadata database. Tag fields are optional because they
+//! come from whatever the scanner could extract.
+
 use std::{collections::HashMap, time::Duration};
 
 use chrono::{DateTime, Utc};

@@ -1,3 +1,10 @@
+//! Genre and name normalization for stable database keys.
+//!
+//! Tags are messy: numeric `ID3v1` genre indices (`(17)`), junk values, case
+//! and diacritic variants. These helpers resolve indices against
+//! [`ID3V1_GENRES`], filter junk, and fold names (NFKD, lowercase,
+//! alphanumeric-only) so equivalent spellings share one album/genre key.
+
 use unicode_normalization::UnicodeNormalization;
 
 pub const ID3V1_GENRES: &[&str] = &[

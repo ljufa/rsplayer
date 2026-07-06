@@ -1,3 +1,10 @@
+//! Background loudness scan of the whole library.
+//!
+//! Runs on its own thread pool (half the cores), analysing songs that have
+//! no stored loudness yet and persisting results via the loudness
+//! repository. Pauses itself while playback is active (`is_playing`) so the
+//! analysis never competes with the audio thread for CPU or disk.
+
 use std::{
     path::Path,
     sync::{

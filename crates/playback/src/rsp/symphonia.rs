@@ -1,3 +1,15 @@
+//! The decode loop — [`play_file`] runs one track start to finish on the
+//! playback thread.
+//!
+//! Probes the source (local file, HTTP/ICY radio, APE, SACD ISO track),
+//! opens the matching [`AudioOutput`] (PCM at source rate, or the DSD path),
+//! then packet-by-packet: decode → multiroom tee → write. Handles seeks
+//! (`skip_to_time`), mid-track format changes (rate/channel switch reopens
+//! the output), loudness-normalization gain, progress events, and the
+//! multiroom session lifecycle (epoch at ring-prefill or mid-track join).
+//! Returns a [`PlaybackResult`] that tells `PlayerService` whether to
+//! advance the queue.
+
 use std::time::Duration;
 
 use anyhow::{Result, format_err};

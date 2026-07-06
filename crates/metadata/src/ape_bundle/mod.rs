@@ -1,3 +1,9 @@
+//! Monkey's Audio (APE) support as a Symphonia plugin.
+//!
+//! [`ApeReader`] parses the container/frame layout, [`ApeDecoder`]
+//! decompresses to PCM. Registered by
+//! [`crate::build_probe`]/[`crate::build_codec_registry`].
+
 pub mod decoder;
 pub mod demuxer;
 

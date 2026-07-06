@@ -1,3 +1,7 @@
+//! Output-device capability probing: does the device support the source
+//! rate/channel count natively, and if not, what should we resample to?
+//! Single implementation shared by the local player and the multiroom sink.
+
 use cpal::Device;
 use cpal::traits::DeviceTrait;
 

@@ -1,3 +1,23 @@
+//! [`AudioOutput`] — the one output path for every platform and every
+//! stream (local playback and multiroom sink alike).
+//!
+//! Despite the crate's Linux heritage this is pure cpal: ALSA/PipeWire,
+//! `CoreAudio`, WASAPI and ASIO all go through here. The writer thread pushes
+//! decoded buffers into a lock-free SPSC ring (sized `ring_buffer_size_ms`,
+//! blocking when full — that back-pressure paces the decode loop); the cpal
+//! callback drains it, applying software volume last so volume changes act
+//! within one device buffer. Between push and drain sit the format-typed
+//! writers: rubato FFT resampling when the device can't do the source rate,
+//! channel mapping, EQ (`DspHandle` pending-swap) and VU metering.
+//!
+//! Opening negotiates the sample format/rate/channels against the device's
+//! capabilities with retry ladders for drivers that reject configs they
+//! advertise; DSD sources take a separate branch (native DSD formats, no
+//! PCM processing). For multiroom this file also hosts the
+//! playback-position sensor (`playback_lag_micros`: ring backlog + filtered,
+//! then frozen, driver-reported latency) and `prefill_silence_ms` (leader
+//! self-delay through the normal writer path).
+
 use anyhow::{Error, Result};
 use api_models::settings::RsPlayerSettings;
 use log::info;

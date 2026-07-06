@@ -1,3 +1,14 @@
+//! The rsplayer binary's composition and lifetime.
+//!
+//! [`run_backend`] opens the shared fjall database, builds every service via
+//! `composition_root`, then races the long-lived futures in one `select!`:
+//! HTTP(S) servers + WebSocket fan-out, the user/system command handlers,
+//! the multiroom sync service, and shutdown signals (SIGTERM/ctrl-c, or the
+//! desktop app's oneshot). Whichever finishes first takes the process down;
+//! the database is persisted on the signal paths. If the audio device can't
+//! be opened at startup the server comes up in *degraded* mode: settings UI
+//! only, so the user can fix the device selection remotely.
+
 extern crate log;
 pub mod command_context;
 pub mod command_handler;

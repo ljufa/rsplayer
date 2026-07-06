@@ -1,3 +1,9 @@
+//! VU metering and the software volume curve.
+//!
+//! [`VUMeter`] tracks per-channel peaks on the playback/callback path and
+//! publishes throttled `VUEvent`s (50 ms) to the UI; [`cubic_gain`] is the
+//! perceptual volume curve used everywhere software volume is applied.
+
 use api_models::state::StateChangeEvent;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};

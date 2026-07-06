@@ -1,3 +1,6 @@
+//! Fjall-backed [`LoudnessRepository`]: measured integrated loudness (LUFS)
+//! per song key, consumed by playback for volume normalization.
+
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 
 use crate::error::{RepoError, RepoResult};

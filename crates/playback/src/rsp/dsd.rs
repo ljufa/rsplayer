@@ -1,3 +1,8 @@
+//! DSD sample types bridging Symphonia buffers and cpal's `DsdU32`/native
+//! DSD stream formats. Raw 1-bit data packed in u32 words — never converted,
+//! attenuated or DSP-processed; `EQUILIBRIUM`/`MID` is the DSD silence
+//! pattern (0x69), not a numeric zero.
+
 use symphonia::core::audio::conv::FromSample;
 
 // DSD Wrapper types

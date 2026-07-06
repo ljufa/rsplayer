@@ -1,3 +1,6 @@
+//! LIRC infrared remote support (feature `lirc`): reads button events from
+//! the lircd socket and maps them to player/system commands.
+
 use std::io;
 
 use anyhow::Result;

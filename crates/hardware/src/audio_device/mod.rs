@@ -1,3 +1,11 @@
+//! Volume control abstraction.
+//!
+//! [`VolumeControlDevice`] has one implementation per
+//! `VolumeCrtlType`: ALSA mixer (Linux, feature `alsa`), `PipeWire`
+//! (`wpctl`), pure software gain (applied to PCM on the playback path),
+//! the front-panel firmware's hardware attenuator, or no-op. Selected and
+//! wired in `audio_service`.
+
 use api_models::common::Volume;
 
 #[cfg(feature = "alsa")]

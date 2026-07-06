@@ -1,3 +1,6 @@
+//! `PipeWire` volume control by shelling out to `wpctl` against
+//! `@DEFAULT_AUDIO_SINK@`.
+
 use api_models::common::Volume;
 use log::error;
 use std::process::Command;

@@ -1,3 +1,8 @@
+//! Per-playback-thread state bundle: the atomics the command side steers
+//! with (`stop_signal`, `skip_to_time`), plus the optional processing hooks
+//! (software gain, DSP handle, VU meter, multiroom tee) the decode loop and
+//! output writers consult.
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, Ordering};
 

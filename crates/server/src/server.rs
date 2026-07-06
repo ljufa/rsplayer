@@ -1,3 +1,13 @@
+//! HTTP/HTTPS server and WebSocket endpoint (axum).
+//!
+//! Serves the embedded web UI (rust-embed; from disk in debug builds), the
+//! REST-ish `/api/*` routes (settings, artwork, local-browser audio
+//! streaming with range support) and `/api/ws`, where commands come in as
+//! JSON `UserCommand`s and every `StateChangeEvent` is fanned out to all
+//! connected clients through one broadcast channel. Audio-card enumeration
+//! is cached at startup because probing drivers (ASIO especially) can
+//! disrupt a live stream.
+
 use std::collections::HashMap;
 use std::env;
 use std::future::Future;

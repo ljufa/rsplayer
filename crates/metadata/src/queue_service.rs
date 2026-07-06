@@ -1,3 +1,13 @@
+//! The playback queue.
+//!
+//! Songs live in the `queue` keyspace under monotonically increasing ids
+//! (`next_id`), so insertion order is iteration order; the current position
+//! and playback mode persist in `queue_status` across restarts. Random mode
+//! keeps its played-song history in its own keyspace so "previous" works and
+//! no song repeats until the queue is exhausted. All mutation goes through
+//! the command handler — this type is internally synchronized but has no
+//! external listeners; callers publish the resulting `CurrentQueueEvent`.
+
 use std::collections::HashSet;
 use std::ops::Bound;
 use std::str::FromStr;

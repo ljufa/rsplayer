@@ -1,3 +1,7 @@
+//! [`CommandContext`] — the service bundle passed to every command handler,
+//! plus the `multiroom_follower_active` flag that locks local transport
+//! while grouped.
+
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 

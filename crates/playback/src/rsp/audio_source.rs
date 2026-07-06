@@ -1,3 +1,10 @@
+//! Source resolution: turns a queue item's key into a probed media source.
+//!
+//! Local paths are resolved against the configured music directories;
+//! HTTP(S) URLs are fetched with `Icy-Metadata: 1` and wrapped in
+//! [`IcyMetadataReader`] so radio title updates flow out as events; APE and
+//! SACD-ISO keys (`…#SACD_<n>`) get their special readers.
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, format_err};

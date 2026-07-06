@@ -1,3 +1,10 @@
+//! Saved playlists plus the composite home-page listing.
+//!
+//! `playlist` keyspace holds playlist items keyed `{name}_{index}`; the service
+//! also assembles the dynamic rows (most played, liked, recently added,
+//! by-genre/decade headers) from the other repositories into
+//! [`api_models::playlist::Playlists`].
+
 use std::sync::Arc;
 
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};

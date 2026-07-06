@@ -1,3 +1,11 @@
+//! Command dispatch.
+//!
+//! One task drains the `UserCommand` mpsc channel and routes each command
+//! to its domain handler (`*_commands.rs`), all sharing [`CommandContext`].
+//! A second task handles `SystemCommand`s (volume, power) against the
+//! hardware audio service. Sequential by design — one command at a time,
+//! state flows back via broadcast events.
+
 use std::sync::Arc;
 
 use config::ArcConfiguration;
@@ -53,10 +61,9 @@ pub async fn handle_user_commands(
         state_changes_sender,
     );
 
-    loop {
-        let Some(cmd) = input_commands_rx.recv().await else {
-            continue;
-        };
+    // recv() returns None only when every sender is gone — the process is
+    // shutting down, so exit rather than spin on a closed channel.
+    while let Some(cmd) = input_commands_rx.recv().await {
         debug!("Received command {cmd:?}");
         match cmd {
             Player(player_cmd) => {
@@ -105,10 +112,8 @@ pub async fn handle_system_commands(
 ) {
     let ctx = SystemCommandContext::new(ai_service, usb_service, config, state_changes_sender);
 
-    loop {
-        if let Some(cmd) = input_commands_rx.recv().await {
-            debug!("Received system command {cmd:?}");
-            handle_system_command(cmd, &ctx).await;
-        }
+    while let Some(cmd) = input_commands_rx.recv().await {
+        debug!("Received system command {cmd:?}");
+        handle_system_command(cmd, &ctx).await;
     }
 }

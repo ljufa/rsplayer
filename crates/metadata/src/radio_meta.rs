@@ -1,3 +1,7 @@
+//! Station-level radio metadata from HTTP response headers (`icy-name`,
+//! `ice-audio-info`…), enriched by provider-specific lookups in
+//! [`radio_providers`].
+
 use crate::radio_providers;
 
 #[derive(Clone, Debug)]

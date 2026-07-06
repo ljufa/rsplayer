@@ -1,3 +1,6 @@
+//! Playlist commands: saved-playlist CRUD, the dynamic playlists
+//! (most played, liked) and the album carousels behind the home page.
+
 use api_models::common::PlaylistCommand::{
     QueryAlbumItems, QueryAlbumsByDecade, QueryAlbumsByGenre, QueryPlaylist, QueryPlaylistItems, SaveQueueAsPlaylist,
 };

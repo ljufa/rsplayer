@@ -1,3 +1,7 @@
+//! Per-provider API lookups for richer radio metadata (currently
+//! Radiosphere: now-playing track and channel artwork), keyed off the
+//! stream URL.
+
 use api_models::player::Song;
 use serde_json;
 

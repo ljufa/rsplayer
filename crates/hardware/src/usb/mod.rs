@@ -1,3 +1,10 @@
+//! USB serial link to the `RSPlayer` front-panel firmware.
+//!
+//! Speaks the `wire` crate protocol (postcard + COBS frames): a sender
+//! thread mirrors `StateChangeEvent`s (track, progress, VU, mode) to the
+//! panel display, a receiver thread turns panel input (`FwToHost`) into
+//! player/system commands. Reconnects when the device disappears.
+
 use anyhow::Result;
 use api_models::{
     common::{PlayerCommand, SystemCommand, UserCommand},

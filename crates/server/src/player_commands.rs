@@ -1,3 +1,6 @@
+//! Transport commands (play/pause/seek/next…) → `PlayerService`. Rejected
+//! with a notification while this instance is a grouped multiroom follower.
+
 use api_models::state::StateChangeEvent;
 
 use crate::command_context::CommandContext;

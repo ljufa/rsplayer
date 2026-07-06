@@ -1,3 +1,15 @@
+//! Playback orchestration: the boundary between async command handling and
+//! the blocking audio world.
+//!
+//! [`PlayerService`] owns the playback thread (spawned per play/resume at
+//! the configured `player_threads_priority` — never `Min`, which starved
+//! audio on single-core devices), advances the queue on `SongFinished`,
+//! persists pause/progress state in the `player_state` keyspace for resume
+//! across restarts, pauses the loudness scan while playing, and owns the
+//! `DspProcessor` (settings changes rebuild the EQ from here). Control in:
+//! atomics (`stop_signal`, `skip_to_time`); results out:
+//! `StateChangeEvent`s.
+
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 use log::{debug, error, info, trace, warn};
 use std::sync::{
@@ -397,13 +409,7 @@ impl PlayerService {
                     #[allow(clippy::cast_possible_truncation)]
                     let normalization_gain_hundredths = normalization_gain_db.map(|g| (g * 100.0) as i32);
 
-                    let config = PlaybackConfig::new(
-                        audio_device.clone(),
-                        rsp_settings.clone(),
-                        music_dirs.clone(),
-                        vu_meter_enabled,
-                        local_browser_playback,
-                    );
+                    let config = PlaybackConfig::new(audio_device.clone(), rsp_settings.clone(), music_dirs.clone());
 
                     let mut context = PlaybackContext::new(
                         stop_signal.clone(),

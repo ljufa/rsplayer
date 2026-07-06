@@ -1,3 +1,11 @@
+//! Threading contract between DSP configuration and the audio hot path.
+//!
+//! [`DspProcessor`] (command-handler thread, exclusive owner) builds
+//! `Equalizer`s from settings + per-track normalization gain; [`DspHandle`]
+//! (cloned into playback threads) exposes them via a `pending` slot and a
+//! lock-free `has_filters` flag, so the audio callback path takes no lock
+//! unless an update is actually waiting.
+
 use log::{info, warn};
 use std::sync::{
     Arc, Mutex,

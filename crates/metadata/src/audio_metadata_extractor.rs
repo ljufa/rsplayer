@@ -1,3 +1,7 @@
+//! Tag → [`Song`] mapping: pulls Symphonia's standard tags, duration and
+//! embedded artwork out of a probed format reader. First occurrence of a
+//! tag wins; non-standard tags land in `Song.tags`.
+
 use std::time::Duration;
 
 use api_models::player::Song;

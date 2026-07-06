@@ -1,3 +1,9 @@
+//! DSD support as a Symphonia plugin.
+//!
+//! [`DsfReader`] demuxes `.dsf` files, [`DsdDecoder`] passes the raw 1-bit
+//! stream through untouched — actual output happens in the playback crate's
+//! DSD path (native DSD or `DoP`), never through the PCM/DSP chain.
+
 pub mod decoder;
 pub mod demuxer;
 pub mod dsf;

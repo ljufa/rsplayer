@@ -1,3 +1,7 @@
+//! Fjall-backed [`SongRepository`]: JSON-serialized [`Song`]s in the `songs`
+//! keyspace, keyed by library-relative file path (the same key the queue,
+//! playlists and statistics reference).
+
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 use log::error;
 

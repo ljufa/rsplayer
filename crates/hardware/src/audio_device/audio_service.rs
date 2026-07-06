@@ -1,3 +1,7 @@
+//! [`AudioInterfaceService`] — owns the active [`VolumeControlDevice`]
+//! chosen from settings and serializes access to it; the target of all
+//! `SystemCommand` volume operations.
+
 use std::sync::Arc;
 use std::sync::atomic::AtomicU8;
 

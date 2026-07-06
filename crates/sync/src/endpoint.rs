@@ -25,9 +25,10 @@ const CONNECTION_IDLE_TIMEOUT: Duration = Duration::from_secs(8);
 const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(2);
 
 /// Fixed UDP port for the sync endpoint, so a firewall can be opened for it
-/// (e.g. `firewall-cmd --add-port=47800/udp`). An unsolicited inbound QUIC
-/// dial — a peer initiating a group — never gets through a default-deny
-/// firewall on a random ephemeral port.
+/// (e.g. `firewall-cmd --add-port=47800/udp`).
+///
+/// An unsolicited inbound QUIC dial — a peer initiating a group — never
+/// gets through a default-deny firewall on a random ephemeral port.
 pub const SYNC_UDP_PORT: u16 = 47800;
 
 /// The bound iroh endpoint plus the mDNS lookup handle (kept for `subscribe`).
