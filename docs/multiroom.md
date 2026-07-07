@@ -44,6 +44,12 @@ On **each** device that should take part:
 3. Give the device a **room name** (e.g. "Living room", "Kitchen") — this is the name other devices will see.
 4. Restart RSPlayer (the settings page offers this after saving).
 
+![Multiroom settings on the first device](/_assets/multiroom_settings_leader.png)
+
+The same section on the second device — only the room name differs:
+
+![Multiroom settings on the second device](/_assets/multiroom_settings_follower.png)
+
 Each device generates a permanent cryptographic identity on first start, so groups keep working across restarts and IP address changes.
 
 ## Usage
@@ -56,6 +62,8 @@ On the device that should be the **leader** (the one whose queue and playback yo
 2. Toggle a room **on** to add it to the group. It becomes a **follower** immediately.
 3. Play music as usual — every track you play on the leader now also plays, synchronized, in all grouped rooms. Followers even join cleanly in the middle of a running track.
 
+![Multiroom panel on the leader's player page](/_assets/multiroom_player_leader.png)
+
 ### Follower behavior
 
 While a device is a grouped follower:
@@ -64,6 +72,8 @@ While a device is a grouped follower:
 - Its own transport controls (play/pause/next/seek) are disabled; commands go through the leader.
 - **Volume stays local**: each room keeps its own volume control, and its own DSP/EQ settings apply to the received stream — per-room correction works as usual.
 - The current song and progress from the leader are mirrored in the follower's UI.
+
+![Follower player page with the group banner](/_assets/multiroom_player_follower.png)
 
 ### Ungrouping
 

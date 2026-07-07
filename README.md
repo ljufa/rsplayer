@@ -18,9 +18,16 @@ RSPlayer is an open-source, headless music server primarily for Linux, with expe
 
 It runs as a systemd service and exposes a responsive web UI, making it a great fit for machines without a monitor or keyboard — but equally at home on a dedicated desktop audio PC. Under the hood it uses [Symphonia](https://github.com/pdeljanov/Symphonia) for decoding and [Cpal](https://github.com/rustaudio/cpal) for output, with a Rust-native pipeline for low-latency, high-performance playback.
 
-**Online demo → https://rsplayer.dlj.freemyip.com/**
 
 📖 **Full documentation:** https://ljufa.github.io/rsplayer/
+
+## See it in action
+
+🖥️ **Online demo:** https://rsplayer.dlj.freemyip.com/
+
+🎬 **One-minute video tour** — navigation, queue, library, and settings:
+
+https://github.com/user-attachments/assets/88ba2a8e-a016-49e9-81f0-12ce53ce4ecb
 
 ## Highlights
 

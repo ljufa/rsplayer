@@ -163,7 +163,13 @@ case $pkg_type in
         ;;
     arch)
         echo "[INFO] Installing alsa-lib dependency..."
-        $SUDO pacman -S --needed alsa-lib
+        if pacman -Q alsa-lib >/dev/null 2>&1; then
+            echo "[INFO] alsa-lib already installed, skipping"
+        elif ! $SUDO pacman -S --needed --noconfirm alsa-lib; then
+            echo "[WARN] Failed to install alsa-lib via pacman (possibly a stale multilib sync db)."
+            echo "[WARN] Try 'sudo pacman -Syu' to fully sync/upgrade your system, then re-run this installer."
+            echo "[WARN] Continuing installation; rsplayer may fail to start without alsa-lib."
+        fi
         echo "[INFO] Extracting tarball to / (files go to /usr/bin, /etc, /opt/rsplayer)"
         $SUDO tar -xzvf "${pkg_file_name}" -C /
         echo "[INFO] Creating groups..."

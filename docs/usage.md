@@ -238,6 +238,8 @@ Play the same music on several RSPlayer devices at once, synchronized:
 3. Toggle rooms on to group them; everything the leader plays now plays everywhere in sync
 4. Each room keeps its own volume and EQ; followers show a banner with a **Leave group** button
 
+![Multiroom panel on the leader's player page](/_assets/multiroom_player_leader.png)
+
 See the [Multiroom Playback](multiroom.md) page for details, settings, and troubleshooting.
 
 ## Loudness Normalization
