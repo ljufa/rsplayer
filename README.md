@@ -58,6 +58,14 @@ bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.s
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install_desktop.sh)
 ```
 
+The desktop app is also available as a Flatpak (x86_64 and ARM64, submission to Flathub in progress):
+
+```bash
+flatpak install flathub io.github.ljufa.rsplayer
+```
+
+By default the Flatpak can read music from `~/Music` and removable drives and host mounts (`/media`, `/run/media`, `/mnt`); grant other folders with [Flatseal](https://flathub.org/apps/com.github.tchx84.Flatseal) or `flatpak override --filesystem=...` (symlinks only work if their target is also granted). Network-share mounting and system power actions are not available inside the sandbox — use the headless server package for those. Packaging lives in [`PKGS/flatpak`](PKGS/flatpak/README.md).
+
 Manage the service:
 
 ```bash

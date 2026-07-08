@@ -1,0 +1,6 @@
+# Generated from Cargo.lock (see README.md); the authoritative copy lives in
+# the flathub/io.github.ljufa.rsplayer repo.
+cargo-sources.json
+# flatpak-builder work dirs
+build-dir/
+.flatpak-builder/

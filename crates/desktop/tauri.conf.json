@@ -1,6 +1,6 @@
 {
   "productName": "rsplayer-desktop",
-  "identifier": "com.rsplayer.desktop",
+  "identifier": "io.github.ljufa.rsplayer",
   "build": {
     "frontendDist": "../../dist/web-ui"
   },

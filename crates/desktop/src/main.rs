@@ -75,7 +75,9 @@ async fn main() {
     let media_sender_souvlaki = Arc::clone(&media_sender);
     spawn(move || {
         let config = PlatformConfig {
-            dbus_name: "com.rsplayer.desktop",
+            // Registers org.mpris.MediaPlayer2.rsplayer on D-Bus — must stay
+            // in sync with the --own-name grant in PKGS/flatpak manifest.
+            dbus_name: "rsplayer",
             display_name: "RSPlayer",
             hwnd: None,
         };

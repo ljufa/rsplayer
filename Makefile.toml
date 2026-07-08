@@ -257,6 +257,66 @@ script = [
     "cd crates/desktop && cargo tauri dev",
 ]
 
+# ── Flatpak (local build & run) ───────────
+# Builds the desktop app as a flatpak from the *local working tree*
+# (including uncommitted changes) and installs it into the user flatpak
+# installation. The canonical Flathub manifest in PKGS/flatpak builds from
+# the GitHub release tag instead; see PKGS/flatpak/README.md.
+
+[tasks.flatpak_cargo_sources]
+description = "Generate PKGS/flatpak/cargo-sources.json from Cargo.lock (skipped when up to date)"
+script = [
+    "set -e",
+    "OUT=PKGS/flatpak/cargo-sources.json",
+    "if [ -f $OUT ] && [ $OUT -nt Cargo.lock ]; then echo 'cargo-sources.json is up to date'; exit 0; fi",
+    "# Self-contained tooling under target/flatpak: generator script + python venv",
+    "TOOLS=target/flatpak/tools",
+    "mkdir -p $TOOLS",
+    "if [ ! -f $TOOLS/flatpak-cargo-generator.py ]; then curl -sfLo $TOOLS/flatpak-cargo-generator.py https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py; fi",
+    "if [ ! -x $TOOLS/venv/bin/python3 ]; then python3 -m venv $TOOLS/venv && $TOOLS/venv/bin/pip -q install aiohttp toml tomlkit; fi",
+    "$TOOLS/venv/bin/python3 $TOOLS/flatpak-cargo-generator.py Cargo.lock -o $OUT",
+]
+
+[tasks.build_flatpak]
+description = "Build the desktop app flatpak from the working tree and install it (user installation)"
+dependencies = ["flatpak_cargo_sources"]
+script = [
+    "set -e",
+    "test -f dist/web-ui/public/index.html || { echo 'dist/web-ui is missing — run: cargo make build_ui_release'; exit 1; }",
+    "# Stage tracked + untracked (non-ignored) files plus the gitignored web UI dist",
+    "rm -rf target/flatpak/src",
+    "mkdir -p target/flatpak/src",
+    "git ls-files -co --exclude-standard -z | tar --null -T - -cf - | tar -xf - -C target/flatpak/src",
+    "cp -r dist target/flatpak/src/dist",
+    "# Derive a local-source manifest from the canonical one: git+archive sources -> staged dir",
+    "sed -e 's|^      - type: git$|      - type: dir\\n        path: src|' -e '/^        url: https:\\/\\/github.com\\/ljufa\\/rsplayer.git$/d' -e '/^        tag: /d' -e '/^        commit: /d' -e '/^      - type: archive$/,/^        dest: dist\\/web-ui$/d' PKGS/flatpak/io.github.ljufa.rsplayer.yml > target/flatpak/io.github.ljufa.rsplayer.yml",
+    "cp PKGS/flatpak/cargo-sources.json target/flatpak/",
+    "# Use native flatpak-builder when present, else the org.flatpak.Builder flatpak.",
+    "# FLATPAK_USER_DIR works around the sandboxed builder not finding user-installed SDKs.",
+    "if command -v flatpak-builder >/dev/null 2>&1; then BUILDER='flatpak-builder'; else BUILDER=\"flatpak run --env=FLATPAK_USER_DIR=$HOME/.local/share/flatpak --command=flatpak-builder org.flatpak.Builder\"; fi",
+    "# Export to a local repo and install from the HOST flatpak (not --install from",
+    "# inside the builder sandbox): the desktop-file export rewrites Exec to the",
+    "# path of the installing flatpak binary, and from inside the sandbox that is",
+    "# /app/bin/flatpak — which doesn't exist on the host, breaking menu launches.",
+    "cd target/flatpak && $BUILDER --force-clean --disable-rofiles-fuse --repo=repo build-dir io.github.ljufa.rsplayer.yml",
+    "flatpak --user remote-add --if-not-exists --no-gpg-verify rsplayer-local \"file://$PWD/repo\"",
+    "flatpak --user install --reinstall --noninteractive rsplayer-local io.github.ljufa.rsplayer || flatpak --user install --noninteractive rsplayer-local io.github.ljufa.rsplayer",
+]
+
+[tasks.run_flatpak]
+description = "Run the locally installed flatpak desktop app"
+command = "flatpak"
+args = ["run", "io.github.ljufa.rsplayer"]
+
+[tasks.flatpak_bundle]
+description = "Create a single-file .flatpak bundle (for testing on other machines/VMs) from the repo produced by build_flatpak"
+script = [
+    "set -e",
+    "test -d target/flatpak/repo || { echo 'No target/flatpak/repo — run: cargo make build_flatpak'; exit 1; }",
+    "flatpak build-bundle target/flatpak/repo target/flatpak/rsplayer-${RELEASE_VERSION}.flatpak io.github.ljufa.rsplayer master",
+    "echo \"Bundle ready: target/flatpak/rsplayer-${RELEASE_VERSION}.flatpak\"",
+]
+
 # ── BE (Backend) ──────────────────────────
 
 [tasks.build_dev]

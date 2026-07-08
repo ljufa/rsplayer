@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.ljufa.rsplayer</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>RSPlayer</name>
+  <summary>Hi-fi music player with bit-perfect playback</summary>
+  <developer id="io.github.ljufa">
+    <name>Dragan Ljubojevic</name>
+  </developer>
+  <description>
+    <p>
+      RSPlayer is a music player built for high-quality playback of local
+      music libraries. It decodes FLAC, WAV, ALAC, DSD (DSF/DFF), MP3, AAC,
+      Ogg and more, and can send audio bit-perfect to a USB DAC via direct
+      ALSA access, or through PipeWire/PulseAudio for everyday listening.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Fast library scanning with rich metadata, album art and lyrics</li>
+      <li>Gapless playback, ReplayGain/loudness analysis and a parametric DSP chain</li>
+      <li>Bit-perfect exclusive output to USB DACs, including DSD</li>
+      <li>Internet radio and streaming metadata</li>
+      <li>Multiroom: group RSPlayer instances on your LAN for synchronized playback</li>
+      <li>Media key / MPRIS integration</li>
+    </ul>
+    <p>
+      The desktop app embeds the same engine that powers the headless RSPlayer
+      server, which you can also run on a Raspberry Pi, NAS or home server and
+      control from any browser.
+    </p>
+    <p>
+      Note: by default the app can read music from your Music folder and from
+      removable drives and mounts (/media, /run/media, /mnt). If your library lives elsewhere,
+      grant access to that folder with Flatseal or "flatpak override". Mounting network shares from inside the app and
+      system power actions are not available in the Flatpak sandbox.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.ljufa.rsplayer.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+  <url type="homepage">https://github.com/ljufa/rsplayer</url>
+  <url type="bugtracker">https://github.com/ljufa/rsplayer/issues</url>
+  <url type="vcs-browser">https://github.com/ljufa/rsplayer</url>
+  <branding>
+    <color type="primary" scheme_preference="light">#8ff0a4</color>
+    <color type="primary" scheme_preference="dark">#26a269</color>
+  </branding>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/ljufa/rsplayer/main/docs/_assets/flathub/player_main.png</image>
+      <caption>Now Playing with real-time visualizer and multiroom control</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/ljufa/rsplayer/main/docs/_assets/flathub/queue.png</image>
+      <caption>Play queue with search and drag-and-drop reordering</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/ljufa/rsplayer/main/docs/_assets/flathub/library.png</image>
+      <caption>Music library browser</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/ljufa/rsplayer/main/docs/_assets/flathub/settings.png</image>
+      <caption>Settings: playback, DSP equalizer, multiroom and library</caption>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="4.5.0" date="2026-07-08">
+      <description>
+        <p>Multiroom synchronized playback (beta), Windows ASIO output and first Flathub release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

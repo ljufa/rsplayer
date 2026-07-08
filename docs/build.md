@@ -226,6 +226,15 @@ Notes:
 - **Restart the runner service after provisioning** — the runner captures `PATH`/environment when it starts, so newly installed `cargo`, `rustup`, `clang` and `git` are not visible until it restarts.
 - The workflow's Windows steps use the built-in Windows PowerShell (`shell: powershell`), so neither Git Bash nor PowerShell 7 (`pwsh`) needs to be installed. Git itself is still needed for `actions/checkout`.
 
+## Flatpak (desktop app)
+
+The desktop app is packaged for Flathub from `PKGS/flatpak/` — see
+[`PKGS/flatpak/README.md`](https://github.com/ljufa/rsplayer/blob/master/PKGS/flatpak/README.md)
+for regenerating `cargo-sources.json`, building locally with `flatpak-builder`,
+and the per-release update checklist. The manifest builds the workspace offline
+from vendored crates plus the `web-ui-dist-<version>.tar.gz` release asset
+published by the "Full release" workflow.
+
 ## Output
 
 After a successful build, Linux packages and binaries are located under the target output directories:

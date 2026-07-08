@@ -89,6 +89,12 @@ The latest packages can be downloaded from [this page](https://github.com/ljufa/
 - **RPM packages**: For Fedora, RHEL, CentOS, openSUSE — `rsplayer_*_x86_64.rpm`, `rsplayer_*_aarch64.rpm`, `rsplayer_*_armv7hl.rpm`, `rsplayer_*_armv6hl.rpm`, `rsplayer_*_riscv64.rpm`, and `rsplayer-desktop-*.x86_64.rpm`
 - **Arch tarballs**: For Arch Linux, Manjaro — `rsplayer_*_amd64.tgz`, `rsplayer_*_arm64.tgz`, `rsplayer_*_armhfv7.tgz`, `rsplayer_*_armhfv6.tgz`, `rsplayer_*_riscv64.tgz` (server), and `rsplayer-desktop_*_amd64.tgz` (desktop)
 
+* Desktop app as a Flatpak (x86_64 and ARM64; submission to Flathub in progress)
+```bash
+flatpak install flathub io.github.ljufa.rsplayer
+```
+The Flatpak sandbox can read music from `~/Music` and removable drives and host mounts (`/media`, `/run/media`, `/mnt`) by default; grant additional folders with [Flatseal](https://flathub.org/apps/com.github.tchx84.Flatseal) or `flatpak override --filesystem=...`. Note that symlinks only resolve if the target path is also granted to the sandbox. Network-share mounting and system power actions are unavailable inside the sandbox — install the headless server package if you need them. Bit-perfect exclusive ALSA output to USB DACs works normally.
+
 * Download and manually install binary file
   - Under latest release page find `rsplayer_*` file for your system and download
   - rename file to `rsplayer`

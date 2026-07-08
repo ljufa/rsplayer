@@ -110,6 +110,13 @@ See the [Configuration](configuration.md) page for hardware integration details.
 - **In-app upgrade**: Detect a new version and provide an upgrade button.
 - **Problem (bug) report with diagnostics**: Report problems directly from the app.
 - **Scheduled music library scans**: Define an automatic library scan interval (or cron).
+- Use better default settings for playback per os: Default output and volume control for windows, mac and linux...
+- Logging to file for desktop app - rolling file
+- homebrew packaging and publishing
+- android apk (maybe kiosk mode) + publish to google play store
+- private rpm and deb repository for updates on linux vs. self update?
+- aur packaging for arch
+
 
 ## Contributing
 

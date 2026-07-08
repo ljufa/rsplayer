@@ -1348,8 +1348,8 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation",
  "web-sys",
- "windows 0.62.2",
- "windows-core 0.62.2",
+ "windows 0.61.3",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -6857,7 +6857,7 @@ checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
 
 [[package]]
 name = "rsplayer"
-version = "4.5.0"
+version = "4.5.1"
 dependencies = [
  "anyhow",
  "api_models",
@@ -6890,7 +6890,7 @@ dependencies = [
 
 [[package]]
 name = "rsplayer-desktop"
-version = "4.5.0"
+version = "4.5.1"
 dependencies = [
  "api_models",
  "dirs",

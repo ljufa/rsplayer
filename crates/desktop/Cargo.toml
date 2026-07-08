@@ -11,7 +11,7 @@ description = "RSPlayer Desktop"
 # product name, version, identifier and binaries are derived from this manifest.
 [package.metadata.packager]
 product-name = "RSPlayer"
-identifier = "com.rsplayer.desktop"
+identifier = "io.github.ljufa.rsplayer"
 category = "Music"
 icons = [
     "icons/icon.icns",

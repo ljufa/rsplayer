@@ -244,10 +244,20 @@ async fn get_settings(State(state): State<AppState>, Query(query): Query<HashMap
         settings.available_volume_control_types = vec![
             api_models::common::VolumeCrtlType::Off,
             api_models::common::VolumeCrtlType::Alsa,
-            api_models::common::VolumeCrtlType::Pipewire,
             api_models::common::VolumeCrtlType::Software,
         ];
-        settings.network_mounts_available = true;
+        // The Pipewire volume control shells out to wpctl or pactl — only
+        // offer it when one of them is present (the Flatpak runtime has no
+        // wpctl but ships pactl, which reaches the host via the pulse socket).
+        if hardware::audio_device::pipewire::is_volume_ctl_available() {
+            settings
+                .available_volume_control_types
+                .insert(2, api_models::common::VolumeCrtlType::Pipewire);
+        }
+        // mount() needs CAP_SYS_ADMIN, which the Flatpak sandbox never grants
+        // — hide network-mount settings there (users grant library folders to
+        // the sandbox with Flatseal / `flatpak override` instead).
+        settings.network_mounts_available = !std::path::Path::new("/.flatpak-info").exists();
     }
 
     #[cfg(not(feature = "alsa"))]

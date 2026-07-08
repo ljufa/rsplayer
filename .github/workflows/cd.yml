@@ -57,6 +57,21 @@ jobs:
           name: web_ui
           path: dist/web-ui
 
+      # Published as a release asset (pkg-* artifacts are merged by the
+      # publish job). Consumed by the Flathub manifest (PKGS/flatpak) as an
+      # offline source for building the desktop app.
+      - name: Package web UI dist for Flathub
+        run: |
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          tar -czf web-ui-dist-${version}.tar.gz -C dist web-ui
+
+      - name: Upload web UI dist asset
+        uses: actions/upload-artifact@v7
+        with:
+          name: pkg-web-ui
+          path: web-ui-dist-*.tar.gz
+          if-no-files-found: error
+
   build_backend:
     needs: build_ui
     name: Release Backend

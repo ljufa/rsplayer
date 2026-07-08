@@ -29,7 +29,7 @@ resolver = "2"
 # Single source of truth for the release version.
 # Read by: build scripts (CARGO_PKG_VERSION), cargo-deb, cargo-generate-rpm,
 # cargo-packager and Makefile.toml (RELEASE_VERSION env derives from it).
-version = "4.5.0"
+version = "4.5.1"
 
 [workspace.dependencies]
 anyhow = "1"

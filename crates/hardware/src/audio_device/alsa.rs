@@ -65,8 +65,9 @@ pub fn get_all_cards() -> Vec<AudioCard> {
         });
     }
 
-    // Add Pipewire as a virtual card if wpctl is available
-    if std::process::Command::new("wpctl").arg("--version").output().is_ok() {
+    // Add Pipewire as a virtual card if wpctl is available, or when running
+    // sandboxed where playback still reaches PipeWire without wpctl.
+    if super::pipewire::is_wpctl_available() || is_sandboxed_pipewire_available() {
         result.push(AudioCard {
             id: "pipewire".to_string(),
             index: 999,
@@ -82,6 +83,15 @@ pub fn get_all_cards() -> Vec<AudioCard> {
     }
 
     result
+}
+
+/// The Flatpak runtime ships no `wpctl`, but its alsa-lib routes the `default`
+/// PCM to the host's `PipeWire` through the `PulseAudio` compatibility socket —
+/// playback works, so the virtual Pipewire card should still be offered.
+fn is_sandboxed_pipewire_available() -> bool {
+    std::path::Path::new("/.flatpak-info").exists()
+        && std::env::var_os("XDG_RUNTIME_DIR")
+            .is_some_and(|dir| std::path::Path::new(&dir).join("pulse/native").exists())
 }
 
 fn get_card_mixers(card_id: &str, card_idx: i32) -> Vec<CardMixer> {

@@ -318,7 +318,7 @@ const fn default_dsp_enabled() -> bool {
     false
 }
 const fn default_vu_meter_enabled() -> bool {
-    false
+    true
 }
 const fn default_normalization_target_lufs() -> f64 {
     -18.0
