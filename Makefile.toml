@@ -301,6 +301,10 @@ script = [
     "cd target/flatpak && $BUILDER --force-clean --disable-rofiles-fuse --repo=repo build-dir io.github.ljufa.rsplayer.yml",
     "flatpak --user remote-add --if-not-exists --no-gpg-verify rsplayer-local \"file://$PWD/repo\"",
     "flatpak --user install --reinstall --noninteractive rsplayer-local io.github.ljufa.rsplayer || flatpak --user install --noninteractive rsplayer-local io.github.ljufa.rsplayer",
+    "# Refresh the cached AppStream catalog so software stores (COSMIC Store,",
+    "# GNOME Software) see the rebuilt metadata/screenshots immediately —",
+    "# flatpak otherwise refreshes remote catalogs only about once a day.",
+    "flatpak --user update --appstream rsplayer-local",
 ]
 
 [tasks.run_flatpak]
