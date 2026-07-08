@@ -1,5 +1,19 @@
 # Release Notes
 
+## v4.5.1 — 2026-07-08
+
+> **No update required.** This is a packaging-only release for Flatpak/Flathub support — it contains no playback, server, or UI changes that affect existing installations. If you run v4.5.0, there is nothing to gain by upgrading.
+
+### Flatpak / Flathub Support (desktop app)
+
+The desktop app is now packaged as a Flatpak under the ID `io.github.ljufa.rsplayer` (submission to Flathub in progress; packaging lives in `PKGS/flatpak/`).
+
+- **App identifier** changed from `com.rsplayer.desktop` to `io.github.ljufa.rsplayer` (Flathub requires a verifiable ID). The MPRIS bus name is now `org.mpris.MediaPlayer2.rsplayer`.
+- **Sandbox-aware behavior**: inside the Flatpak sandbox, network-share mounting and system power actions are hidden (they need privileges the sandbox never grants). Music is readable from `~/Music` and removable drives/mounts (`/media`, `/run/media`, `/mnt`); other folders can be granted with Flatseal. Note that symlinks only resolve if their target is also granted.
+- **PipeWire in the sandbox**: the PipeWire playback device is offered via the runtime's PulseAudio compatibility layer, and the PipeWire volume control falls back to `pactl` where WirePlumber's `wpctl` is unavailable (native installs are unchanged and still prefer `wpctl`). Bit-perfect exclusive ALSA output to USB DACs works normally.
+- **Release workflow** now publishes a `web-ui-dist-<version>.tar.gz` asset, consumed by the offline Flathub build.
+- New cargo-make tasks for local packaging work: `build_flatpak` (build + install from the working tree), `run_flatpak`, `flatpak_bundle` (single-file bundle for testing on other machines), and `flatpak_cargo_sources`.
+
 ## v4.5.0 — 2026-07-05
 
 ### Features

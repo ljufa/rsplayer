@@ -63,7 +63,7 @@ modules:
       - type: git
         url: https://github.com/ljufa/rsplayer.git
         tag: '4.5.1'
-        commit: __RELEASE_COMMIT__
+        commit: 47f8b330d914cc776bcbcd7041e6ae187e092dc2
       # Vendored crate sources for the offline build. Regenerate on every
       # Cargo.lock change — see PKGS/flatpak/README.md.
       - cargo-sources.json
@@ -71,5 +71,5 @@ modules:
       # RustEmbed at compile time. Published by the "Full release" workflow.
       - type: archive
         url: https://github.com/ljufa/rsplayer/releases/download/4.5.1/web-ui-dist-4.5.1.tar.gz
-        sha256: __WEB_UI_DIST_SHA256__
+        sha256: 5d6f63fb06cc2704effa468ca1b54dfa17e734103b8fc673e40de147e1860f77
         dest: dist/web-ui
