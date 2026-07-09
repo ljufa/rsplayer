@@ -85,13 +85,19 @@ pub fn get_all_cards() -> Vec<AudioCard> {
     result
 }
 
-/// The Flatpak runtime ships no `wpctl`, but its alsa-lib routes the `default`
-/// PCM to the host's `PipeWire` through the `PulseAudio` compatibility socket —
-/// playback works, so the virtual Pipewire card should still be offered.
+/// Sandboxed runtimes (Flatpak, Snap) route the `default` ALSA PCM to the
+/// host's `PipeWire` through the `PulseAudio` compatibility socket — playback
+/// works, so the virtual Pipewire card should still be offered. Flatpak is
+/// detected via `/.flatpak-info`, Snap via the `SNAP_NAME` env var. Snapd
+/// remaps `XDG_RUNTIME_DIR` to `/run/user/<uid>/snap.<name>`; the shared
+/// pulse socket lives one directory up.
 fn is_sandboxed_pipewire_available() -> bool {
-    std::path::Path::new("/.flatpak-info").exists()
-        && std::env::var_os("XDG_RUNTIME_DIR")
-            .is_some_and(|dir| std::path::Path::new(&dir).join("pulse/native").exists())
+    let is_sandboxed = std::path::Path::new("/.flatpak-info").exists() || std::env::var_os("SNAP_NAME").is_some();
+    is_sandboxed
+        && std::env::var_os("XDG_RUNTIME_DIR").is_some_and(|dir| {
+            let dir = std::path::Path::new(&dir);
+            dir.join("pulse/native").exists() || dir.join("../pulse/native").exists()
+        })
 }
 
 fn get_card_mixers(card_id: &str, card_idx: i32) -> Vec<CardMixer> {

@@ -158,6 +158,47 @@ jobs:
           path: target/cross/x86_64-unknown-linux-gnu/pkg/*
           if-no-files-found: error
 
+  build_snap:
+    needs: build_ui
+    name: Build Snap
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'x86_64-unknown-linux-gnu' }}
+    # GitHub-hosted runner: snapcore/action-build needs snapd + LXD, which
+    # are not available inside the self-hosted builder container.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Same pre-seeding as the flatpak: the web UI is not built inside the
+      # snap; snapcraft packs the working tree with dist/web-ui in place.
+      - name: Download web_ui
+        uses: actions/download-artifact@v8
+        with:
+          name: web_ui
+          path: dist/web-ui
+
+      - name: Build snap
+        id: snapcraft
+        uses: snapcore/action-build@v3
+
+      - name: Upload snap package
+        uses: actions/upload-artifact@v7
+        with:
+          name: pkg-snap
+          path: ${{ steps.snapcraft.outputs.snap }}
+          if-no-files-found: error
+
+      # Uploaded to the candidate channel; promote to stable manually after
+      # smoke-testing (see PKGS/snap/README.md). Requires the
+      # SNAPCRAFT_STORE_CREDENTIALS secret (snapcraft export-login).
+      - name: Publish to Snap Store (candidate)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.snapcraft.outputs.snap }}
+          release: candidate
+
   build_desktop_macos:
     needs: build_ui
     name: Build macOS (DMG + server binary)
@@ -307,7 +348,7 @@ jobs:
 
   publish:
     if: ${{ always() }}
-    needs: [build_backend, build_desktop_macos, build_desktop_linux, build_desktop_windows]
+    needs: [build_backend, build_desktop_macos, build_desktop_linux, build_desktop_windows, build_snap]
     name: Create release
     runs-on: [self-hosted, linux, x64]
     steps:

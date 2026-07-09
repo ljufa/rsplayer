@@ -1,0 +1,198 @@
+# Snap packaging for the RSPlayer desktop app (Tauri wrapper around the
+# embedded server) — the Snap Store counterpart of PKGS/flatpak. Lives at
+# snap/snapcraft.yaml (repo root) because snapcraft and snapcore/action-build
+# expect it there. See PKGS/snap/README.md for build/test/release docs.
+#
+# Like the flatpak, this packages the desktop app only: the headless server
+# keeps its deb/rpm/tgz/Docker channels (systemd, system user, mount(),
+# reboot/poweroff don't fit strict confinement).
+name: rsplayer
+title: RSPlayer
+base: core24
+# Version is read from the workspace Cargo.toml in override-build.
+adopt-info: rsplayer
+grade: stable
+confinement: strict
+license: MIT
+icon: crates/desktop/icons/icon.png
+website: https://github.com/ljufa/rsplayer
+source-code: https://github.com/ljufa/rsplayer
+issues: https://github.com/ljufa/rsplayer/issues
+summary: Hi-fi music player with bit-perfect playback
+description: |
+  RSPlayer is a music player built for high-quality playback of local
+  music libraries. It decodes FLAC, WAV, ALAC, DSD (DSF/DFF), MP3, AAC,
+  Ogg and more, and can send audio bit-perfect to a USB DAC via direct
+  ALSA access, or through PipeWire/PulseAudio for everyday listening.
+
+  Features:
+
+  - Fast library scanning with rich metadata, album art and lyrics
+  - Gapless playback, ReplayGain/loudness analysis and a parametric DSP chain
+  - Bit-perfect exclusive output to USB DACs, including DSD
+  - Internet radio and streaming metadata
+  - Multiroom: group RSPlayer instances on your LAN for synchronized playback
+  - Media key / MPRIS integration
+
+  The desktop app embeds the same engine that powers the headless RSPlayer
+  server, which you can also run on a Raspberry Pi, NAS or home server and
+  control from any browser.
+
+  For bit-perfect direct ALSA output to a USB DAC, connect the alsa
+  interface:
+
+      sudo snap connect rsplayer:alsa
+
+  For music libraries on external/removable drives (/media, /mnt):
+
+      sudo snap connect rsplayer:removable-media
+
+  Note: mounting network shares from inside the app and system power
+  actions are not available in the snap sandbox.
+
+platforms:
+  amd64:
+
+layout:
+  # WebKitGTK spawns its helper processes (WebKitNetworkProcess,
+  # WebKitWebProcess) by absolute path. The gnome extension does not ship
+  # WebKitGTK (unlike the org.gnome.Platform flatpak runtime), so it is
+  # staged below and bind-mounted to its expected location — the documented
+  # Tauri snap pattern.
+  /usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/webkit2gtk-4.1:
+    bind: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/webkit2gtk-4.1
+  # alsa-lib config and plugin dir, so ALSA inside the snap uses the staged
+  # copies (card definitions + the pulse plugin for the "default" PCM).
+  /usr/share/alsa:
+    bind: $SNAP/usr/share/alsa
+  /usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/alsa-lib:
+    bind: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/alsa-lib
+  # NOTE: no /etc/asound.conf bind-file layout here — creating files under
+  # /etc via layout is denied by SELinux on Fedora hosts (snap-update-ns
+  # "mounton" denial). The snap's asound.conf is wired in with the
+  # ALSA_CONFIG_PATH env var instead (see apps.rsplayer.environment).
+
+slots:
+  mpris:
+    interface: mpris
+    # Allows owning org.mpris.MediaPlayer2.rsplayer on D-Bus — must stay in
+    # sync with the souvlaki dbus_name in crates/desktop/src/main.rs.
+    name: rsplayer
+
+apps:
+  rsplayer:
+    command: usr/bin/rsplayer-desktop
+    desktop: usr/share/applications/io.github.ljufa.rsplayer.desktop
+    # Provides GTK/desktop integration, wayland/x11/opengl plugs and themes.
+    extensions: [gnome]
+    plugs:
+      # The webview talks to the embedded server on localhost; network is
+      # also needed for internet radio, streaming metadata and multiroom
+      # (QUIC + LAN discovery).
+      - network
+      - network-bind
+      # Regular playback through the PipeWire/PulseAudio socket.
+      - audio-playback
+      # Direct ALSA (hw:) access for bit-perfect / exclusive output to USB
+      # DACs. NOT auto-connected: users run `sudo snap connect rsplayer:alsa`.
+      - alsa
+      # Music library in $HOME.
+      - home
+      # Music on external drives (/media, /run/media, /mnt). NOT
+      # auto-connected: `sudo snap connect rsplayer:removable-media`.
+      - removable-media
+    slots:
+      - mpris
+    environment:
+      # WebKitGTK's bubblewrap web-process sandbox cannot nest inside snap
+      # confinement (it auto-disables under flatpak via /.flatpak-info, but
+      # has no snap detection) — disable it; snap confinement still applies.
+      # Older WebKitGTK honors WEBKIT_FORCE_SANDBOX=0, 2.46+ only the
+      # DANGEROUS variant; set both so either staged version works.
+      WEBKIT_FORCE_SANDBOX: "0"
+      WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
+      # The gnome extension sets GTK_USE_PORTAL=1; turn it off so GTK's
+      # portal file choosers etc. aren't used (per-app env overrides the
+      # extension's value). NOTE: this alone is not enough — the GLib in the
+      # gnome-46 platform auto-detects the snap sandbox and routes the
+      # network monitor and proxy resolver through xdg-desktop-portal
+      # regardless of GTK_USE_PORTAL (see the two GIO_USE_* vars below).
+      GTK_USE_PORTAL: "0"
+      # Force GIO's non-portal implementations for the webview's network
+      # process. Without these, WebKit resolves the proxy and network
+      # status via xdg-desktop-portal; on hosts where the portal cannot
+      # verify snap-confined callers (Fedora/SELinux: "Unable to open
+      # /proc/<pid>/root", or "not available inside the sandbox"), those
+      # calls fail, WebKit concludes there is no network, and the page load
+      # of the embedded server dies with the portal error shown as the page.
+      #   base  = GNetworkMonitorBase, always reports available (no portal)
+      #   dummy = GDummyProxyResolver, direct connections (no portal)
+      # The app only talks to its own localhost server, so no proxy or
+      # connectivity monitoring is needed. Verified on Fedora: the webview
+      # connects and the UI's WebSocket comes up.
+      GIO_USE_NETWORK_MONITOR: base
+      GIO_USE_PROXY_RESOLVER: dummy
+      # Loaded instead of /usr/share/alsa/alsa.conf (which it includes) —
+      # routes the "default" PCM to PulseAudio/PipeWire. Replaces an
+      # /etc/asound.conf layout that SELinux blocks on Fedora hosts.
+      ALSA_CONFIG_PATH: $SNAP/etc/asound.conf
+
+parts:
+  rsplayer:
+    # nil plugin + explicit cargo invocation so the build mirrors the
+    # flatpak module exactly (--package rsplayer-desktop --features
+    # custom-protocol). The archive Rust on core24 (noble) is too old for
+    # edition 2024, so the toolchain comes from rustup — installed via
+    # sh.rustup.rs, NOT the rustup snap: the gnome extension injects the
+    # gnome SDK snap's libs into LD_LIBRARY_PATH during build, which breaks
+    # the rustup snap's binary (GLIBC_PRIVATE symbol lookup error), while
+    # rustup.rs binaries target an old-glibc baseline and are unaffected.
+    plugin: nil
+    source: .
+    build-packages:
+      - curl
+      - ca-certificates
+      - build-essential
+      - pkg-config
+      - libwebkit2gtk-4.1-dev
+      - libsoup-3.0-dev
+      - libjavascriptcoregtk-4.1-dev
+      - librsvg2-dev
+      - libasound2-dev
+      - libssl-dev
+    stage-packages:
+      - libwebkit2gtk-4.1-0
+      - libasound2t64
+      - libasound2-data
+      # ALSA->PulseAudio routing for the "default" PCM (see /etc/asound.conf
+      # layout above).
+      - libasound2-plugins
+      # pactl, so the Pipewire volume-control type stays available in the
+      # sandbox (the server offers it only when wpctl or pactl is present).
+      - pulseaudio-utils
+    override-build: |
+      craftctl set version="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
+      # The server embeds dist/web-ui via RustEmbed at compile time. The
+      # Dioxus/WASM UI is not built here (same as the flatpak): CI seeds
+      # dist/web-ui from the web_ui artifact; locally run
+      # `cargo make build_ui_release` first.
+      if [ ! -f dist/web-ui/public/index.html ]; then
+        echo "ERROR: dist/web-ui is missing — build the web UI first (cargo make build_ui_release)" >&2
+        exit 1
+      fi
+      # The Tauri window first loads loading.html from the frontend dist.
+      cp crates/desktop/loading.html dist/web-ui/loading.html
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | sh -s -- -y --default-toolchain stable --profile minimal
+      export PATH="$HOME/.cargo/bin:$PATH"
+      cargo build --release --locked --package rsplayer-desktop --features custom-protocol
+      install -Dm755 target/release/rsplayer-desktop "$CRAFT_PART_INSTALL/usr/bin/rsplayer-desktop"
+      install -Dm644 PKGS/snap/io.github.ljufa.rsplayer.desktop \
+        "$CRAFT_PART_INSTALL/usr/share/applications/io.github.ljufa.rsplayer.desktop"
+      install -Dm644 crates/desktop/icons/icon.png \
+        "$CRAFT_PART_INSTALL/usr/share/icons/hicolor/512x512/apps/rsplayer.png"
+      install -Dm644 'crates/desktop/icons/128x128@2x.png' \
+        "$CRAFT_PART_INSTALL/usr/share/icons/hicolor/256x256/apps/rsplayer.png"
+      install -Dm644 crates/desktop/icons/128x128.png \
+        "$CRAFT_PART_INSTALL/usr/share/icons/hicolor/128x128/apps/rsplayer.png"
+      install -Dm644 PKGS/snap/asound.conf "$CRAFT_PART_INSTALL/etc/asound.conf"

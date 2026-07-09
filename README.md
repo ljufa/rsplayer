@@ -66,6 +66,16 @@ flatpak install flathub io.github.ljufa.rsplayer
 
 By default the Flatpak can read music from `~/Music` and removable drives and host mounts (`/media`, `/run/media`, `/mnt`); grant other folders with [Flatseal](https://flathub.org/apps/com.github.tchx84.Flatseal) or `flatpak override --filesystem=...` (symlinks only work if their target is also granted). Network-share mounting and system power actions are not available inside the sandbox — use the headless server package for those. Packaging lives in [`PKGS/flatpak`](PKGS/flatpak/README.md).
 
+On Ubuntu the desktop app is also available as a Snap (x86_64):
+
+```bash
+sudo snap install rsplayer
+sudo snap connect rsplayer:alsa             # bit-perfect direct ALSA output to USB DACs
+sudo snap connect rsplayer:removable-media  # music on /media, /run/media, /mnt
+```
+
+The same sandbox limitations as the Flatpak apply (no network-share mounting or power actions). Packaging lives in [`PKGS/snap`](PKGS/snap/README.md).
+
 Manage the service:
 
 ```bash

@@ -321,6 +321,43 @@ script = [
     "echo \"Bundle ready: target/flatpak/rsplayer-${RELEASE_VERSION}.flatpak\"",
 ]
 
+# ── Snap (local build & install) ──────────
+# Builds the desktop app snap from the working tree with snapcraft (LXD
+# backend). Like the flatpak, the web UI must be pre-built: snapcraft packs
+# the tree with dist/web-ui in place. See PKGS/snap/README.md.
+
+[tasks.build_snap]
+description = "Build the desktop app snap from the working tree (snapcraft/LXD)"
+script = [
+    "set -e",
+    "test -f dist/web-ui/public/index.html || { echo 'No dist/web-ui — run: cargo make build_ui_release'; exit 1; }",
+    "# Stage a clean tree (same trick as build_flatpak): snapcraft copies the",
+    "# whole source dir into the LXD container and does not respect .gitignore,",
+    "# so building from the repo root would ship the multi-GB target/ caches",
+    "# (and choke on root-owned files left by docker builds).",
+    "rm -rf target/snap/src",
+    "mkdir -p target/snap/src",
+    "git ls-files -co --exclude-standard -z | tar --null -T - -cf - | tar -xf - -C target/snap/src",
+    "cp -r dist target/snap/src/dist",
+    "(cd target/snap/src && snapcraft pack)",
+    "mv target/snap/src/rsplayer_*.snap .",
+    "ls -1 rsplayer_*.snap",
+]
+
+[tasks.install_snap]
+description = "Install the locally built snap (dangerous mode, unsigned)"
+script = [
+    "set -e",
+    "snap_file=$(ls -1t rsplayer_*.snap | head -1)",
+    "test -n \"$snap_file\" || { echo 'No rsplayer_*.snap — run: cargo make build_snap'; exit 1; }",
+    "sudo snap install --dangerous \"$snap_file\"",
+]
+
+[tasks.run_snap]
+description = "Run the locally installed snap desktop app"
+command = "snap"
+args = ["run", "rsplayer"]
+
 # ── BE (Backend) ──────────────────────────
 
 [tasks.build_dev]

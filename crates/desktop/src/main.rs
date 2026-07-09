@@ -76,7 +76,8 @@ async fn main() {
     spawn(move || {
         let config = PlatformConfig {
             // Registers org.mpris.MediaPlayer2.rsplayer on D-Bus — must stay
-            // in sync with the --own-name grant in PKGS/flatpak manifest.
+            // in sync with the --own-name grant in the PKGS/flatpak manifest
+            // and the mpris slot `name:` in snap/snapcraft.yaml.
             dbus_name: "rsplayer",
             display_name: "RSPlayer",
             hwnd: None,

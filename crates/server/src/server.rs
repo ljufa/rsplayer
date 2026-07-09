@@ -254,10 +254,12 @@ async fn get_settings(State(state): State<AppState>, Query(query): Query<HashMap
                 .available_volume_control_types
                 .insert(2, api_models::common::VolumeCrtlType::Pipewire);
         }
-        // mount() needs CAP_SYS_ADMIN, which the Flatpak sandbox never grants
-        // — hide network-mount settings there (users grant library folders to
-        // the sandbox with Flatseal / `flatpak override` instead).
-        settings.network_mounts_available = !std::path::Path::new("/.flatpak-info").exists();
+        // mount() needs CAP_SYS_ADMIN, which the Flatpak and Snap sandboxes
+        // never grant — hide network-mount settings there (users grant
+        // library folders to the sandbox with Flatseal / `flatpak override`
+        // / `snap connect` instead).
+        settings.network_mounts_available =
+            !(std::path::Path::new("/.flatpak-info").exists() || std::env::var_os("SNAP_NAME").is_some());
     }
 
     #[cfg(not(feature = "alsa"))]
