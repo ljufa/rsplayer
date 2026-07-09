@@ -178,7 +178,7 @@ jobs:
 
       - name: Build snap
         id: snapcraft
-        uses: snapcore/action-build@v3
+        uses: snapcore/action-build@v1
 
       - name: Upload snap package
         uses: actions/upload-artifact@v7
