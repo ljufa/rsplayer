@@ -1,5 +1,25 @@
 # Release Notes
 
+## v4.5.2 — 2026-07-09
+
+> **No update required.** This is a packaging-only release that adds a Snap of the desktop app — it contains no playback, server, or UI changes that affect existing installations. If you already run RSPlayer, there is nothing to gain by upgrading.
+
+### Snap / Snap Store Support (desktop app)
+
+The desktop app is now packaged as a **Snap** for Ubuntu (and other snapd distributions), alongside the existing Flatpak. It ships the same Tauri desktop app under strict confinement; the headless server keeps its deb/rpm/tgz/Docker channels. Packaging lives in `PKGS/snap/` with the manifest at `snap/snapcraft.yaml`.
+
+```bash
+sudo snap install rsplayer
+sudo snap connect rsplayer:alsa             # bit-perfect direct ALSA output to USB DACs
+sudo snap connect rsplayer:removable-media  # music on external/removable drives
+```
+
+- **Strict confinement** with the `gnome` extension. Interfaces: `audio-playback` (PipeWire/PulseAudio), `alsa` (direct `hw:` output — connect manually for bit-perfect), `network`/`network-bind` (embedded server, internet radio, multiroom), `mpris` (media keys, matching the `org.mpris.MediaPlayer2.rsplayer` bus name), `home` and `removable-media` for the music library.
+- **Sandbox-aware behavior** (same as the Flatpak): inside the snap, network-share mounting and system power actions are hidden — detected via the `SNAP_NAME` environment. Music is readable from `~/Music`, and from removable drives once `removable-media` is connected. App data lives in `~/snap/rsplayer/current/.config/rsplayer`.
+- **PipeWire in the sandbox**: the "Pipewire" playback device is offered through the PulseAudio compatibility socket, with `pactl` staged so the PipeWire volume control stays available. Bit-perfect exclusive ALSA output to USB DACs works once the `alsa` interface is connected.
+- **Host compatibility**: the bundled WebKitGTK is kept off `xdg-desktop-portal` (via `GTK_USE_PORTAL=0` plus GIO's non-portal network monitor and proxy resolver), so the webview loads on hosts where the portal cannot verify snap-confined callers. Targeted at Ubuntu; verified working on non-Ubuntu hosts too.
+- **Build & release**: a new `build_snap` job in `cd.yml` builds the snap on each release and, on tags, uploads it to the Snap Store `candidate` channel (promote to `stable` after a smoke test). New cargo-make tasks for local packaging work: `build_snap`, `install_snap`, and `run_snap`.
+
 ## v4.5.1 — 2026-07-08
 
 > **No update required.** This is a packaging-only release for Flatpak/Flathub support — it contains no playback, server, or UI changes that affect existing installations. If you run v4.5.0, there is nothing to gain by upgrading.

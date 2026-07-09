@@ -64,6 +64,11 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="4.5.2" date="2026-07-09">
+      <description>
+        <p>Packaging-only release: the desktop app is now available as a Snap for Ubuntu. No Flatpak changes.</p>
+      </description>
+    </release>
     <release version="4.5.1" date="2026-07-08">
       <description>
         <p>Multiroom synchronized playback (beta), Windows ASIO output and first Flathub release.</p>
