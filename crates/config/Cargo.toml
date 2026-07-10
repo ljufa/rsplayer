@@ -10,3 +10,6 @@ serde.workspace = true
 serde_json.workspace = true
 fjall.workspace = true
 api_models = { path = "../api_models"}
+
+[dev-dependencies]
+tempfile = "3"

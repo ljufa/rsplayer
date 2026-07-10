@@ -2,6 +2,8 @@
 
 To configure `rsplayer`, navigate to the settings page in the web UI. Settings are organized into collapsible sections. Here is an overview of the available settings.
 
+?> **First launch:** RSPlayer picks working playback defaults for your platform, so sound works before you ever open Settings. On Windows and macOS it plays through the system default output device with `Software` volume control. On desktop Linux (including the Flatpak and Snap apps) it plays through the `Pipewire` virtual card and controls the system default sink volume directly (falling back to `Software` gain when no `wpctl`/`pactl` is available). On a headless Linux server it plays through the default ALSA device with `Software` volume control. All of this can be changed in Settings at any time — the defaults apply only until you save your own.
+
 ![Settings Overview](/_assets/settings_main.png)
 
 ## Appearance

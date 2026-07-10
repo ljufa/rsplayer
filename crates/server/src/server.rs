@@ -258,8 +258,7 @@ async fn get_settings(State(state): State<AppState>, Query(query): Query<HashMap
         // never grant — hide network-mount settings there (users grant
         // library folders to the sandbox with Flatseal / `flatpak override`
         // / `snap connect` instead).
-        settings.network_mounts_available =
-            !(std::path::Path::new("/.flatpak-info").exists() || std::env::var_os("SNAP_NAME").is_some());
+        settings.network_mounts_available = !hardware::platform::is_sandboxed();
     }
 
     #[cfg(not(feature = "alsa"))]

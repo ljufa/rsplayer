@@ -64,6 +64,11 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="4.6.0" date="2026-07-10">
+      <description>
+        <p>Platform-aware playback defaults: sound works on first launch without visiting Settings. Fixes off-screen confirmation dialogs and first-launch volume issues; updated welcome dialog.</p>
+      </description>
+    </release>
     <release version="4.5.2" date="2026-07-09">
       <description>
         <p>Packaging-only release: the desktop app is now available as a Snap for Ubuntu. No Flatpak changes.</p>

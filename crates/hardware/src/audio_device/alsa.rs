@@ -67,7 +67,7 @@ pub fn get_all_cards() -> Vec<AudioCard> {
 
     // Add Pipewire as a virtual card if wpctl is available, or when running
     // sandboxed where playback still reaches PipeWire without wpctl.
-    if super::pipewire::is_wpctl_available() || is_sandboxed_pipewire_available() {
+    if super::pipewire::is_wpctl_available() || crate::platform::is_sandboxed_pipewire_available() {
         result.push(AudioCard {
             id: "pipewire".to_string(),
             index: 999,
@@ -83,21 +83,6 @@ pub fn get_all_cards() -> Vec<AudioCard> {
     }
 
     result
-}
-
-/// Sandboxed runtimes (Flatpak, Snap) route the `default` ALSA PCM to the
-/// host's `PipeWire` through the `PulseAudio` compatibility socket — playback
-/// works, so the virtual Pipewire card should still be offered. Flatpak is
-/// detected via `/.flatpak-info`, Snap via the `SNAP_NAME` env var. Snapd
-/// remaps `XDG_RUNTIME_DIR` to `/run/user/<uid>/snap.<name>`; the shared
-/// pulse socket lives one directory up.
-fn is_sandboxed_pipewire_available() -> bool {
-    let is_sandboxed = std::path::Path::new("/.flatpak-info").exists() || std::env::var_os("SNAP_NAME").is_some();
-    is_sandboxed
-        && std::env::var_os("XDG_RUNTIME_DIR").is_some_and(|dir| {
-            let dir = std::path::Path::new(&dir);
-            dir.join("pulse/native").exists() || dir.join("../pulse/native").exists()
-        })
 }
 
 fn get_card_mixers(card_id: &str, card_idx: i32) -> Vec<CardMixer> {
@@ -130,7 +115,7 @@ impl AlsaPcmCard {
         while elapsed_time < WAIT_TIME_MS {
             if let Ok(dev) = alsa::PCM::new(self.device_name.as_str(), alsa::Direction::Playback, false) {
                 let status = dev.status().unwrap();
-                debug!("Device status {:?} after elapsed time {}", &status.get_state(), &elapsed_time);
+                debug!("Device status {:?} after elapsed time {}", status.get_state(), elapsed_time);
                 if status.get_state() != State::Running {
                     return Ok(());
                 }
@@ -141,7 +126,7 @@ impl AlsaPcmCard {
         Err(anyhow::format_err!(
             "Audio device [{}] remains locked after [{}]ms",
             self.device_name,
-            &elapsed_time
+            elapsed_time
         ))
     }
 

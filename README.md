@@ -47,41 +47,27 @@ See the [full feature list](https://ljufa.github.io/rsplayer/#/?id=features) and
 
 ## Quick Start
 
-### Linux
+## Linux
 
+### Headless server
 Requires `curl`. The script auto-detects your distribution (Debian/Ubuntu, Fedora/RHEL, Arch/Manjaro) and architecture (x86_64, ARM64/ARMv7/ARMv6, RISC-V 64), then installs and starts the systemd service.
-
 ```bash
-# Headless server
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)
-# Desktop app (x86_64 only)
+```
+
+### Desktop app (flatpak or snap)
+<p>
+  <a href="https://flathub.org/apps/io.github.ljufa.rsplayer"><img height="56" alt="Get it on Flathub" src="https://flathub.org/api/badge?locale=en"></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://snapcraft.io/rsplayer"><img height="56" alt="Get it from the Snap Store" src="https://snapcraft.io/en/dark/install.svg"></a>
+</p>
+
+Playback works out of the box. To enable bit-perfect direct ALSA output to USB DACs and music on host mounts like `/mnt`, see [desktop app sandbox permissions](https://ljufa.github.io/rsplayer/#/installation?id=desktop-app-flatpak-and-snap).
+
+or deb/rmp install using script
+
+```bash
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install_desktop.sh)
-```
-
-The desktop app is also available as a Flatpak (x86_64 and ARM64, submission to Flathub in progress):
-
-```bash
-flatpak install flathub io.github.ljufa.rsplayer
-```
-
-By default the Flatpak can read music from `~/Music` and removable drives and host mounts (`/media`, `/run/media`, `/mnt`); grant other folders with [Flatseal](https://flathub.org/apps/com.github.tchx84.Flatseal) or `flatpak override --filesystem=...` (symlinks only work if their target is also granted). Network-share mounting and system power actions are not available inside the sandbox — use the headless server package for those. Packaging lives in [`PKGS/flatpak`](PKGS/flatpak/README.md).
-
-On Ubuntu the desktop app is also available as a Snap (x86_64):
-
-```bash
-sudo snap install rsplayer
-sudo snap connect rsplayer:alsa             # bit-perfect direct ALSA output to USB DACs
-sudo snap connect rsplayer:removable-media  # music on /media, /run/media, /mnt
-```
-
-The same sandbox limitations as the Flatpak apply (no network-share mounting or power actions). Packaging lives in [`PKGS/snap`](PKGS/snap/README.md).
-
-Manage the service:
-
-```bash
-sudo systemctl start rsplayer   # start
-sudo systemctl stop rsplayer    # stop
-sudo systemctl status rsplayer  # check status
 ```
 
 Prefer to install a package manually (`.deb` / `.rpm` / `.tgz`) or run the raw binary? See the [Linux installation guide](https://ljufa.github.io/rsplayer/#/installation?id=linux).

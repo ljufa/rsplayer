@@ -69,7 +69,9 @@ pub async fn run_backend(shutdown_rx: Option<Receiver<()>>, command_sender_out: 
     );
     info!("Shared database opened.");
 
-    let config = Configuration::new(&shared_db);
+    let platform_profile = hardware::platform::PlatformProfile::detect();
+    info!("Detected platform profile: {platform_profile:?}");
+    let config = Configuration::new(&shared_db, platform_profile.first_launch_settings());
     info!("Configuration successfully loaded.");
 
     MountService::mount_all(&config.get_settings().network_storage_settings);

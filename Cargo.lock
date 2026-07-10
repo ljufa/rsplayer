@@ -1024,6 +1024,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -6857,7 +6858,7 @@ checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
 
 [[package]]
 name = "rsplayer"
-version = "4.5.2"
+version = "4.6.0"
 dependencies = [
  "anyhow",
  "api_models",
@@ -6890,7 +6891,7 @@ dependencies = [
 
 [[package]]
 name = "rsplayer-desktop"
-version = "4.5.2"
+version = "4.6.0"
 dependencies = [
  "api_models",
  "dirs",

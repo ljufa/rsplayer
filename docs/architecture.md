@@ -12,12 +12,12 @@ carries the per-file detail — this page is the map.
 |-------|----------------|
 | `crates/api_models` | Shared serde data model: commands, events, settings, songs/albums. Crosses the WebSocket as JSON and is persisted — schema changes must stay backward-compatible |
 | `crates/server` | The `rsplayer` binary: composition root, axum HTTP/WS server, command dispatch, network mounts |
-| `crates/config` | `Settings` persistence (one JSON blob in fjall) with in-memory cache and schema migrations |
+| `crates/config` | `Settings` persistence (one JSON blob in fjall) with in-memory cache and schema migrations; first launch persists platform-aware defaults supplied by the server (from `hardware::platform`) |
 | `crates/playback` | The audio engine: Symphonia decode loop, cpal output (`AudioOutput`), DSD path, VU, multiroom tee/sink |
 | `crates/metadata` | Library scanner, fjall repositories (songs/albums/stats/loudness), queue, playlists, radio metadata, APE/DSF/SACD Symphonia plugins |
 | `crates/dsp` | Parametric EQ (biquads, CamillaDSP-derived) with a lock-free config handoff to the audio thread |
 | `crates/sync` | Multiroom leader/follower over iroh QUIC — see the dedicated doc |
-| `crates/hardware` | Volume-control devices (ALSA/PipeWire/software/firmware), USB front-panel link, LIRC remote |
+| `crates/hardware` | Volume-control devices (ALSA/PipeWire/software/firmware), USB front-panel link, LIRC remote, platform/sandbox detection with first-launch playback defaults |
 | `crates/wire` | `no_std` protocol shared with the front-panel firmware repo (postcard + COBS over USB serial) |
 | `crates/desktop` | Tauri wrapper: embeds the backend in-process, webview UI, OS media keys |
 | `web-ui` | Dioxus web frontend (not covered here) |

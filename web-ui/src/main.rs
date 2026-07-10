@@ -315,7 +315,10 @@ fn App() -> Element {
                 div { class: "app-bg" }
             }
             NavBar {}
-            main { class: "flex-1 backdrop-blur-md",
+            // No backdrop-filter here: it would turn `main` into the containing
+            // block for position:fixed descendants, breaking viewport centering
+            // of modals rendered inside pages. The blur lives on .app-bg instead.
+            main { class: "flex-1",
                 {
                     match path().as_str() {
                         "/" => rsx! {
@@ -522,13 +525,13 @@ fn WelcomeModal() -> Element {
                     }
                 }
 
-                // Required setup notice
-                div { class: "alert alert-warning mb-5",
-                    i { class: "material-icons", "warning" }
+                // Ready-to-play notice
+                div { class: "alert alert-success mb-5",
+                    i { class: "material-icons", "check_circle" }
                     div {
-                        p { class: "font-semibold", "Required Setup" }
+                        p { class: "font-semibold", "Ready to Play" }
                         p { class: "text-sm",
-                            "Before you can play music, configure the audio interface in Settings."
+                            "RSPlayer picked a working audio output for this system — add your music and start listening."
                         }
                     }
                 }
@@ -541,11 +544,11 @@ fn WelcomeModal() -> Element {
                         }
                         div {
                             div { class: "flex items-center gap-2",
-                                span { class: "font-semibold", "Audio Interface" }
-                                span { class: "badge badge-warning badge-sm", "Required" }
+                                span { class: "font-semibold", "Music Library" }
+                                span { class: "badge badge-info badge-sm", "Recommended" }
                             }
                             p { class: "text-sm text-base-content/60 mt-0.5",
-                                "In Settings → Playback, select your audio interface and PCM device."
+                                "In Settings → Music Library, add directories containing your music files."
                             }
                         }
                     }
@@ -555,11 +558,11 @@ fn WelcomeModal() -> Element {
                         }
                         div {
                             div { class: "flex items-center gap-2",
-                                span { class: "font-semibold", "Music Library" }
+                                span { class: "font-semibold", "Audio Interface" }
                                 span { class: "badge badge-info badge-sm", "Recommended" }
                             }
                             p { class: "text-sm text-base-content/60 mt-0.5",
-                                "In Settings → Music Library, add directories containing your music files."
+                                "Playback works out of the box through your system's default output. For the best experience and quality, select your DAC directly in Settings → Playback."
                             }
                         }
                     }

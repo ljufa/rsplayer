@@ -222,7 +222,7 @@ mod tests {
     async fn build_wires_services_and_channels() {
         let tmp = TempDir::new().expect("temp dir");
         let db = Arc::new(fjall::Database::builder(tmp.path().join("test.db")).open().expect("open temp db"));
-        let config = Configuration::new(&db);
+        let config = Configuration::new(&db, api_models::settings::Settings::default());
 
         let mut container = match build_app_container(&config, &db) {
             BuildOutcome::Ready(c) => c,

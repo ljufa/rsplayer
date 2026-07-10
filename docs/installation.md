@@ -89,18 +89,49 @@ The latest packages can be downloaded from [this page](https://github.com/ljufa/
 - **RPM packages**: For Fedora, RHEL, CentOS, openSUSE — `rsplayer_*_x86_64.rpm`, `rsplayer_*_aarch64.rpm`, `rsplayer_*_armv7hl.rpm`, `rsplayer_*_armv6hl.rpm`, `rsplayer_*_riscv64.rpm`, and `rsplayer-desktop-*.x86_64.rpm`
 - **Arch tarballs**: For Arch Linux, Manjaro — `rsplayer_*_amd64.tgz`, `rsplayer_*_arm64.tgz`, `rsplayer_*_armhfv7.tgz`, `rsplayer_*_armhfv6.tgz`, `rsplayer_*_riscv64.tgz` (server), and `rsplayer-desktop_*_amd64.tgz` (desktop)
 
-* Desktop app as a Flatpak (x86_64 and ARM64; submission to Flathub in progress)
-```bash
-flatpak install flathub io.github.ljufa.rsplayer
-```
-The Flatpak sandbox can read music from `~/Music` and removable drives and host mounts (`/media`, `/run/media`, `/mnt`) by default; grant additional folders with [Flatseal](https://flathub.org/apps/com.github.tchx84.Flatseal) or `flatpak override --filesystem=...`. Note that symlinks only resolve if the target path is also granted to the sandbox. Network-share mounting and system power actions are unavailable inside the sandbox — install the headless server package if you need them. Bit-perfect exclusive ALSA output to USB DACs works normally.
-
 * Download and manually install binary file
   - Under latest release page find `rsplayer_*` file for your system and download
   - rename file to `rsplayer`
   - make it executable using `chmod +x rsplayer`
   - run using command `./rsplayer`
   - optionally if you need to run rsplayer automatically as a service use [this systemd service file](https://github.com/ljufa/rsplayer/blob/master/PKGS/debian/etc/systemd/system/rsplayer.service)
+
+### Desktop app (Flatpak and Snap)
+<p>
+  <a href="https://flathub.org/apps/io.github.ljufa.rsplayer"><img class="store-badge" height="56" alt="Get it on Flathub" src="https://flathub.org/api/badge?locale=en"></a>
+  <a href="https://snapcraft.io/rsplayer"><img class="store-badge" height="56" alt="Get it from the Snap Store" src="https://snapcraft.io/en/dark/install.svg"></a>
+</p>
+
+**Flatpak** (x86_64 and ARM64):
+
+```bash
+flatpak install flathub io.github.ljufa.rsplayer
+```
+
+Out of the box the Flatpak plays through PipeWire, has direct (bit-perfect) ALSA access to USB DACs, and can read music from `~/Music`, removable drives, and host mounts (`/media`, `/run/media`, `/mnt`). If these permissions were revoked (e.g. with Flatseal), re-enable them with:
+
+```bash
+# Music on host mounts, e.g. /mnt (read-only)
+flatpak override --user io.github.ljufa.rsplayer --filesystem=/mnt:ro
+# Direct ALSA (hw:) access for bit-perfect output to USB DACs
+flatpak override --user io.github.ljufa.rsplayer --device=all
+```
+
+Grant additional music folders with [Flatseal](https://flathub.org/apps/com.github.tchx84.Flatseal) or `flatpak override --user io.github.ljufa.rsplayer --filesystem=...`. Note that symlinks only resolve if the target path is also granted to the sandbox.
+
+**Snap** (x86_64):
+
+```bash
+sudo snap install rsplayer
+# Direct ALSA (hw:) access for bit-perfect output to USB DACs (not connected automatically)
+sudo snap connect rsplayer:alsa
+# Music on removable drives and host mounts (/media, /run/media, /mnt)
+sudo snap connect rsplayer:removable-media
+```
+
+Without `rsplayer:alsa` connected, playback still works through the virtual "Pipewire" output; connecting it makes hw: cards appear in Settings → Playback for bit-perfect output.
+
+?> In both sandboxes, network-share mounting and system power actions are unavailable — install the headless server package if you need them.
 
 ### macOS (experimental) quick run
 

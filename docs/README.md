@@ -110,7 +110,6 @@ See the [Configuration](configuration.md) page for hardware integration details.
 - **In-app upgrade**: Detect a new version and provide an upgrade button.
 - **Problem (bug) report with diagnostics**: Report problems directly from the app.
 - **Scheduled music library scans**: Define an automatic library scan interval (or cron).
-- **Platform-Aware Playback Defaults**: Sensible out-of-the-box output device and volume-control selection tuned per operating system (Windows, macOS, Linux), so playback works on first launch without visiting Settings.
 - **Desktop App File Logging**: Rolling log files for the desktop app, so users can capture and share diagnostics without running from a terminal.
 - **Homebrew Distribution**: Install and update RSPlayer on macOS through a Homebrew formula/cask.
 - **Android App**: A native Android build (with an optional kiosk mode for dedicated players), published to the Google Play Store.

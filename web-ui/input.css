@@ -100,13 +100,18 @@
 /* Album art background — fixed, covers the full viewport on all pages */
 .app-bg {
   position: fixed;
-  inset: 0;
+  /* Oversized so the blur's soft edges stay outside the viewport */
+  inset: -24px;
   z-index: -1;
   background-image: var(--bg-image);
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center;
   opacity: 0.45;
+  /* Blur the artwork here rather than backdrop-filter on `main` — a
+     backdrop-filter ancestor becomes the containing block for
+     position:fixed descendants and breaks modal viewport centering. */
+  filter: blur(12px);
   pointer-events: none;
 }
 

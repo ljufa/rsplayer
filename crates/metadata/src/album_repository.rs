@@ -258,7 +258,7 @@ impl AlbumRepository for FjallAlbumRepository {
         }
         if let Some(date) = song.date {
             if date.len() == 4
-                && let Ok(dt) = DateTime::parse_from_rfc3339(&format!("{}-01-01T00:00:00Z", &date))
+                && let Ok(dt) = DateTime::parse_from_rfc3339(&format!("{date}-01-01T00:00:00Z"))
             {
                 album.released = Some(dt.naive_utc().and_utc());
             }

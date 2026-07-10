@@ -1,5 +1,37 @@
 # Release Notes
 
+## v4.6.0 — 2026-07-10
+
+### Features
+
+#### Platform-Aware Playback Defaults
+
+Playback now works on first launch without visiting Settings. On a fresh install RSPlayer detects the platform and packaging environment (Windows, macOS, desktop Linux, Flatpak, Snap, headless systemd server) and picks a working output device and volume control:
+
+- **Windows / macOS**: the system default output device with `Software` volume control at a moderate initial level.
+- **Desktop Linux (including Flatpak and Snap)**: the PipeWire output with the `Pipewire` volume control — first launch **adopts** the current system volume instead of changing it (falls back to `Software` gain where no `wpctl`/`pactl` exists).
+- **Headless Linux (deb/rpm systemd service)**: the default ALSA device with `Software` volume control.
+
+Fixes along the way:
+
+- First launch with the `Pipewire` volume control no longer resets the system default sink to 0% (muting the whole desktop).
+- `Software` volume no longer starts silent at 0 on a fresh install.
+- The default volume step is now 5 instead of 0.
+
+Defaults apply only to fresh installs (or unreadable stored settings) — existing configurations are never touched.
+
+### UI Improvements & Fixes
+
+- The **welcome dialog** reflects the new out-of-the-box experience: a "Ready to Play" notice replaces the "Required Setup" warning, the music library is the first step, and picking a DAC directly is recommended for best quality.
+- **Confirmation dialogs on the Settings page could render off-screen** depending on screen resolution and scroll position (the buttons became unreachable). Dialogs are now always centered in the viewport. Root cause: a `backdrop-filter` on the page container hijacked `position: fixed` positioning; the background blur moved to the artwork layer itself.
+- **Desktop app**: the restart confirmation now explains that the app will close and will not restart automatically — you need to start it again yourself (there is no systemd to bring it back).
+
+### Documentation & Packaging
+
+- The README now has **"Get it on Flathub" and "Get it from the Snap Store" buttons** for the desktop app, replacing the desktop install script instructions.
+- New installation docs section for **desktop app sandbox permissions**: `snap connect rsplayer:alsa` / `rsplayer:removable-media`, and `flatpak override` flags for `/mnt` access and direct ALSA output.
+- New documentation banner.
+
 ## v4.5.2 — 2026-07-09
 
 > **No update required.** This is a packaging-only release that adds a Snap of the desktop app — it contains no playback, server, or UI changes that affect existing installations. If you already run RSPlayer, there is nothing to gain by upgrading.

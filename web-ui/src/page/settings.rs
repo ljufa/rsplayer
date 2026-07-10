@@ -1017,6 +1017,9 @@ pub fn SettingsPage() -> Element {
                             Some(ConfirmAction::FullRescan) => {
                                 "Perform a full rescan of the music library? This may take a while."
                             }
+                            Some(ConfirmAction::RestartPlayer) if settings.read().desktop_mode => {
+                                "Restart RSPlayer? The app will close and will NOT restart automatically — you need to start it again yourself."
+                            }
                             Some(ConfirmAction::RestartPlayer) => "Restart RSPlayer service?",
                             Some(ConfirmAction::RestartSystem) => "Restart the system?",
                             Some(ConfirmAction::ShutdownSystem) => "Shut down the system?",
