@@ -62,14 +62,16 @@ modules:
     sources:
       - type: git
         url: https://github.com/ljufa/rsplayer.git
-        tag: '4.5.1'
-        commit: 47f8b330d914cc776bcbcd7041e6ae187e092dc2
+        tag: '4.6.0'
+        commit: c18e59265a83f5781402f5123e87e8e99d0c0592
       # Vendored crate sources for the offline build. Regenerate on every
       # Cargo.lock change — see PKGS/flatpak/README.md.
       - cargo-sources.json
       # Pre-built web UI (Dioxus/WASM), embedded into the server binary via
       # RustEmbed at compile time. Published by the "Full release" workflow.
       - type: archive
-        url: https://github.com/ljufa/rsplayer/releases/download/4.5.1/web-ui-dist-4.5.1.tar.gz
-        sha256: 5d6f63fb06cc2704effa468ca1b54dfa17e734103b8fc673e40de147e1860f77
+        url: https://github.com/ljufa/rsplayer/releases/download/4.6.0/web-ui-dist-4.6.0.tar.gz
+        # TODO: fill after the 4.6.0 release publishes the asset:
+        #   curl -sL https://github.com/ljufa/rsplayer/releases/download/4.6.0/web-ui-dist-4.6.0.tar.gz | sha256sum
+        sha256: FILL_AFTER_RELEASE
         dest: dist/web-ui
