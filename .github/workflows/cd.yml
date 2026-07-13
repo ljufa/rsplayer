@@ -241,38 +241,10 @@ jobs:
           path: pkg/*
           if-no-files-found: error
 
-      # Pushes the updated OSTree repo to the ljufa/rsplayer-flatpak repo,
-      # served by GitHub Pages — the flatpak remote users install from.
-      # Requires the FLATPAK_REPO_TOKEN secret (fine-grained PAT with
-      # contents read/write on ljufa/rsplayer-flatpak). The result is
-      # force-pushed as a single fresh commit so the Pages repo's git
-      # history does not grow with binary churn. See PKGS/flatpak/README.md.
-      # Publishes on release tags, or when dispatched with target=flatpak
-      # (deliberate flatpak-only re-publish from the chosen ref).
-      - name: Publish to self-hosted flatpak repo (GitHub Pages)
-        if: ${{ startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.target == 'flatpak') }}
-        env:
-          TOKEN: ${{ secrets.FLATPAK_REPO_TOKEN }}
-        run: |
-          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
-          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/ljufa/rsplayer-flatpak.git" pages
-          if [ -d pages/repo ]; then
-            flatpak build-commit-from --src-repo=target/flatpak/repo pages/repo app/io.github.ljufa.rsplayer/x86_64/master
-          else
-            cp -a target/flatpak/repo pages/repo
-          fi
-          # Regenerate the appstream branch and static deltas; prune to the
-          # last two releases to keep the Pages repo within size limits.
-          flatpak build-update-repo --generate-static-deltas --prune --prune-depth=1 pages/repo
-          cp PKGS/flatpak/rsplayer.flatpakrepo pages/rsplayer.flatpakrepo
-          cp PKGS/flatpak/io.github.ljufa.rsplayer.flatpakref pages/io.github.ljufa.rsplayer.flatpakref
-          cp PKGS/flatpak/pages-index.html pages/index.html
-          touch pages/.nojekyll
-          cd pages
-          git checkout --orphan "release-${version}"
-          git add -A
-          git -c user.name=github-actions -c user.email=github-actions@github.com commit -m "flatpak repo: ${version}"
-          git push --force origin HEAD:main
+      # Publishing to the self-hosted flatpak repo happens later, when the
+      # (draft, pre-release) GitHub release is promoted to a full release —
+      # see .github/workflows/flatpak-repo.yml, which imports the bundle
+      # uploaded above.
 
   build_desktop_macos:
     needs: build_ui

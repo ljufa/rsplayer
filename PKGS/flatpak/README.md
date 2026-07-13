@@ -142,18 +142,25 @@ One-time setup, already assumed by the workflow:
    fine-grained PAT with **Contents: read and write** on
    `ljufa/rsplayer-flatpak`.
 
-On every release tag the `build_flatpak` job then:
+Publishing is two-staged, gated on the release actually going public:
 
-1. builds the flatpak (x86_64) from the checked-out tag with the pre-built
-   web UI artifact,
-2. clones `ljufa/rsplayer-flatpak`, imports the build with
-   `flatpak build-commit-from`, and refreshes appstream/static deltas with
-   `flatpak build-update-repo` (pruned to the last two releases to keep the
-   Pages repo small),
-3. copies in `rsplayer.flatpakrepo`, the `.flatpakref` and the landing page,
-   and force-pushes the result as a single fresh commit (so the git history
-   of the Pages repo does not grow with binary churn),
-4. uploads a single-file `.flatpak` bundle as a release asset.
+1. **On every release tag** the `build_flatpak` job in `cd.yml` builds the
+   flatpak (x86_64) from the checked-out tag with the pre-built web UI
+   artifact and uploads a single-file `.flatpak` bundle to the (draft,
+   pre-release) GitHub release.
+2. **When the release is promoted to a full release** (the `released` event —
+   pre-releases don't count, same gate as the Docker image), the "Publish
+   flatpak repo" workflow (`flatpak-repo.yml`) downloads that bundle, imports
+   it into the Pages repo with `flatpak build-import-bundle`, refreshes
+   appstream/static deltas with `flatpak build-update-repo` (pruned to the
+   last two releases to keep the Pages repo small), copies in
+   `rsplayer.flatpakrepo`, the `.flatpakref` and the landing page, and
+   force-pushes the result as a single fresh commit (so the git history of
+   the Pages repo does not grow with binary churn).
+
+`flatpak-repo.yml` can also be dispatched manually with a tag to (re-)publish
+that release's bundle, e.g. to seed the repo from an already-published
+release.
 
 The repo is served unsigned over HTTPS (no GPG key baked into the
 `.flatpakrepo`); flatpak configures the remote with `gpg-verify=false` in that

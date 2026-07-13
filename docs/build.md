@@ -228,9 +228,10 @@ Notes:
 
 ## Flatpak (desktop app)
 
-The desktop app is packaged as a Flatpak from `PKGS/flatpak/` and published to
-the self-hosted repo at <https://ljufa.github.io/rsplayer-flatpak> by the
-`build_flatpak` job of the "Full release" workflow — see
+The desktop app is packaged as a Flatpak from `PKGS/flatpak/` (built by the
+`build_flatpak` job of the "Full release" workflow) and published to the
+self-hosted repo at <https://ljufa.github.io/rsplayer-flatpak> when the
+GitHub release is promoted to a full release (`flatpak-repo.yml`) — see
 [`PKGS/flatpak/README.md`](https://github.com/ljufa/rsplayer/blob/master/PKGS/flatpak/README.md)
 for regenerating `cargo-sources.json`, building locally with `flatpak-builder`,
 and the release checklist. The manifest builds a staged copy of the workspace

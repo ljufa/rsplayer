@@ -1,7 +1,10 @@
 name: Publish docker image
 on:
+  # "released" (unlike "published") does not fire for pre-releases — the
+  # image is built only when a release is published as, or promoted to,
+  # a full release.
   release:
-    types: [published]
+    types: [released]
   push:
     branches:
       - 'docker/**'

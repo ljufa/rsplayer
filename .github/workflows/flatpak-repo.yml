@@ -1,0 +1,72 @@
+name: Publish flatpak repo
+
+# Publishes the desktop app to the self-hosted flatpak repo served by GitHub
+# Pages (https://ljufa.github.io/rsplayer-flatpak) by importing the .flatpak
+# bundle asset that the "Full release" workflow attached to the release.
+#
+# Triggered on "released" (unlike "published" it does not fire for
+# pre-releases), so the flatpak goes live only when the draft/pre-release
+# created by cd.yml is promoted to a full release — same gate as the Docker
+# image. Can also be dispatched manually with a tag to (re-)publish that
+# release's bundle.
+#
+# Requires the FLATPAK_REPO_TOKEN secret (fine-grained PAT with contents
+# read/write on ljufa/rsplayer-flatpak). See PKGS/flatpak/README.md.
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag whose .flatpak bundle to publish"
+        required: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  publish:
+    name: Publish to flatpak repo
+    runs-on: ubuntu-latest
+    steps:
+      # Only needed for the static PKGS/flatpak files copied into the repo.
+      - uses: actions/checkout@v7
+
+      - name: Download .flatpak bundle from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ github.event.release.tag_name || inputs.tag }}"
+          echo "TAG=${tag}" >> "$GITHUB_ENV"
+          gh release download "$tag" -R ${{ github.repository }} \
+            --pattern '*.flatpak' --output app.flatpak
+
+      - name: Install flatpak and ostree
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak ostree
+
+      # The updated OSTree repo is force-pushed as a single fresh commit so
+      # the Pages repo's git history does not grow with binary churn.
+      - name: Import bundle and push to ljufa/rsplayer-flatpak
+        env:
+          TOKEN: ${{ secrets.FLATPAK_REPO_TOKEN }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/ljufa/rsplayer-flatpak.git" pages
+          if [ ! -f pages/repo/config ]; then
+            ostree init --repo=pages/repo --mode=archive-z2
+          fi
+          flatpak build-import-bundle --update-appstream pages/repo app.flatpak
+          # Static deltas for efficient updates; prune to the last two
+          # releases to keep the Pages repo within size limits.
+          flatpak build-update-repo --generate-static-deltas --prune --prune-depth=1 pages/repo
+          cp PKGS/flatpak/rsplayer.flatpakrepo pages/rsplayer.flatpakrepo
+          cp PKGS/flatpak/io.github.ljufa.rsplayer.flatpakref pages/io.github.ljufa.rsplayer.flatpakref
+          cp PKGS/flatpak/pages-index.html pages/index.html
+          touch pages/.nojekyll
+          cd pages
+          git checkout --orphan "release-${TAG}"
+          git add -A
+          git -c user.name=github-actions -c user.email=github-actions@github.com commit -m "flatpak repo: ${TAG}"
+          git push --force origin HEAD:main
