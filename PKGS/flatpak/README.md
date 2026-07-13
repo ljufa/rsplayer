@@ -162,11 +162,23 @@ Publishing is two-staged, gated on the release actually going public:
 that release's bundle, e.g. to seed the repo from an already-published
 release.
 
-The repo is served unsigned over HTTPS (no GPG key baked into the
-`.flatpakrepo`); flatpak configures the remote with `gpg-verify=false` in that
-case. GPG signing can be added later by generating a key, signing in
-`build-commit-from`/`build-update-repo`, and embedding the public key in the
-`.flatpakrepo`/`.flatpakref` files.
+### GPG signing
+
+The repo is GPG-signed — flatpak refuses default (system-wide) installs from
+non-GPG-verified remotes ("Can't pull from untrusted non-gpg verified
+remote"). A dedicated signing key (`RSPlayer Flatpak Repo`, fingerprint
+`AB004521B57A4B72F2AB2F86284128987382EB95`) lives in:
+
+- GNUPG homedir `~/.local/share/rsplayer-flatpak-gpg` on the dev machine
+  (**back this up** — losing it means re-keying and every user re-adding the
+  remote),
+- the `FLATPAK_GPG_PRIVATE_KEY` Actions secret (armored export) used by
+  `flatpak-repo.yml` to sign commits and the repo summary,
+- as `GPGKey=` (base64 public key) inside `rsplayer.flatpakrepo` and the
+  `.flatpakref`, so clients verify automatically.
+
+To rotate the key: generate a new one, update the secret, the `GPGKey=` lines
+and the fingerprint in `flatpak-repo.yml`, then re-publish.
 
 ## Release checklist
 

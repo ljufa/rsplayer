@@ -10,8 +10,13 @@ name: Publish flatpak repo
 # image. Can also be dispatched manually with a tag to (re-)publish that
 # release's bundle.
 #
-# Requires the FLATPAK_REPO_TOKEN secret (fine-grained PAT with contents
-# read/write on ljufa/rsplayer-flatpak). See PKGS/flatpak/README.md.
+# Required secrets (see PKGS/flatpak/README.md):
+# - FLATPAK_REPO_TOKEN: fine-grained PAT with contents read/write on
+#   ljufa/rsplayer-flatpak.
+# - FLATPAK_GPG_PRIVATE_KEY: armored private key that signs commits and the
+#   repo summary; its public half is embedded as GPGKey= in
+#   PKGS/flatpak/rsplayer.flatpakrepo and the .flatpakref (flatpak refuses
+#   system-wide installs from non-GPG-verified remotes).
 
 on:
   release:
@@ -47,6 +52,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y flatpak ostree
 
+      - name: Import GPG signing key
+        env:
+          GPG_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+        run: |
+          mkdir -p -m 700 gpghome
+          echo "$GPG_KEY" | gpg --homedir gpghome --batch --import
+
       # The updated OSTree repo is force-pushed as a single fresh commit so
       # the Pages repo's git history does not grow with binary churn.
       - name: Import bundle and push to ljufa/rsplayer-flatpak
@@ -57,10 +69,17 @@ jobs:
           if [ ! -f pages/repo/config ]; then
             ostree init --repo=pages/repo --mode=archive-z2
           fi
-          flatpak build-import-bundle --update-appstream pages/repo app.flatpak
+          # git does not track empty directories — restore OSTree repo layout
+          # dirs lost in the round-trip through git (delta generation fails
+          # without refs/remotes).
+          mkdir -p pages/repo/refs/remotes pages/repo/refs/mirrors pages/repo/state pages/repo/tmp/cache
+          # Key fingerprint of FLATPAK_GPG_PRIVATE_KEY (public half embedded
+          # in the .flatpakrepo/.flatpakref files).
+          GPG_ARGS="--gpg-sign=AB004521B57A4B72F2AB2F86284128987382EB95 --gpg-homedir=$PWD/gpghome"
+          flatpak build-import-bundle --update-appstream $GPG_ARGS pages/repo app.flatpak
           # Static deltas for efficient updates; prune to the last two
           # releases to keep the Pages repo within size limits.
-          flatpak build-update-repo --generate-static-deltas --prune --prune-depth=1 pages/repo
+          flatpak build-update-repo $GPG_ARGS --generate-static-deltas --prune --prune-depth=1 pages/repo
           cp PKGS/flatpak/rsplayer.flatpakrepo pages/rsplayer.flatpakrepo
           cp PKGS/flatpak/io.github.ljufa.rsplayer.flatpakref pages/io.github.ljufa.rsplayer.flatpakref
           cp PKGS/flatpak/pages-index.html pages/index.html
