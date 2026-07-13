@@ -57,10 +57,14 @@ bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.s
 
 ### Desktop app (flatpak or snap)
 <p>
-  <a href="https://flathub.org/apps/io.github.ljufa.rsplayer"><img height="56" alt="Get it on Flathub" src="https://flathub.org/api/badge?locale=en"></a>
-  &nbsp;&nbsp;&nbsp;&nbsp;
   <a href="https://snapcraft.io/rsplayer"><img height="56" alt="Get it from the Snap Store" src="https://snapcraft.io/en/dark/install.svg"></a>
 </p>
+
+Flatpak, from the [RSPlayer flatpak repo](https://ljufa.github.io/rsplayer-flatpak) (updates arrive via `flatpak update`):
+
+```bash
+flatpak install https://ljufa.github.io/rsplayer-flatpak/io.github.ljufa.rsplayer.flatpakref
+```
 
 Playback works out of the box. To enable bit-perfect direct ALSA output to USB DACs and music on host mounts like `/mnt`, see [desktop app sandbox permissions](https://ljufa.github.io/rsplayer/#/installation?id=desktop-app-flatpak-and-snap).
 

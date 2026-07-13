@@ -260,8 +260,9 @@ script = [
 # ── Flatpak (local build & run) ───────────
 # Builds the desktop app as a flatpak from the *local working tree*
 # (including uncommitted changes) and installs it into the user flatpak
-# installation. The canonical Flathub manifest in PKGS/flatpak builds from
-# the GitHub release tag instead; see PKGS/flatpak/README.md.
+# installation. Releases are built the same way by the build_flatpak job in
+# .github/workflows/cd.yml and published to the self-hosted repo at
+# https://ljufa.github.io/rsplayer-flatpak; see PKGS/flatpak/README.md.
 
 [tasks.flatpak_cargo_sources]
 description = "Generate PKGS/flatpak/cargo-sources.json from Cargo.lock (skipped when up to date)"
@@ -282,15 +283,9 @@ description = "Build the desktop app flatpak from the working tree and install i
 dependencies = ["flatpak_cargo_sources"]
 script = [
     "set -e",
-    "test -f dist/web-ui/public/index.html || { echo 'dist/web-ui is missing — run: cargo make build_ui_release'; exit 1; }",
     "# Stage tracked + untracked (non-ignored) files plus the gitignored web UI dist",
-    "rm -rf target/flatpak/src",
-    "mkdir -p target/flatpak/src",
-    "git ls-files -co --exclude-standard -z | tar --null -T - -cf - | tar -xf - -C target/flatpak/src",
-    "cp -r dist target/flatpak/src/dist",
-    "# Derive a local-source manifest from the canonical one: git+archive sources -> staged dir",
-    "sed -e 's|^      - type: git$|      - type: dir\\n        path: src|' -e '/^        url: https:\\/\\/github.com\\/ljufa\\/rsplayer.git$/d' -e '/^        tag: /d' -e '/^        commit: /d' -e '/^      - type: archive$/,/^        dest: dist\\/web-ui$/d' PKGS/flatpak/io.github.ljufa.rsplayer.yml > target/flatpak/io.github.ljufa.rsplayer.yml",
-    "cp PKGS/flatpak/cargo-sources.json target/flatpak/",
+    "bash PKGS/flatpak/stage-sources.sh target/flatpak/src",
+    "cp PKGS/flatpak/io.github.ljufa.rsplayer.yml PKGS/flatpak/cargo-sources.json target/flatpak/",
     "# Use native flatpak-builder when present, else the org.flatpak.Builder flatpak.",
     "# FLATPAK_USER_DIR works around the sandboxed builder not finding user-installed SDKs.",
     "if command -v flatpak-builder >/dev/null 2>&1; then BUILDER='flatpak-builder'; else BUILDER=\"flatpak run --env=FLATPAK_USER_DIR=$HOME/.local/share/flatpak --command=flatpak-builder org.flatpak.Builder\"; fi",

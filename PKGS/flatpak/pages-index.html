@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RSPlayer flatpak repository</title>
+  <style>
+    body { font-family: sans-serif; max-width: 42rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5; }
+    pre { background: #f0f0f0; padding: .75rem 1rem; overflow-x: auto; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #1b1b1b; color: #ddd; }
+      pre { background: #2a2a2a; }
+      a { color: #7bc4ff; }
+    }
+  </style>
+</head>
+<body>
+  <h1>RSPlayer flatpak repository</h1>
+  <p>Flatpak repository for the <a href="https://ljufa.github.io/rsplayer/">RSPlayer</a> desktop app.</p>
+  <p>Install (adds the <code>rsplayer</code> remote automatically):</p>
+  <pre>flatpak install https://ljufa.github.io/rsplayer-flatpak/io.github.ljufa.rsplayer.flatpakref</pre>
+  <p>Or add the remote first:</p>
+  <pre>flatpak remote-add --if-not-exists rsplayer https://ljufa.github.io/rsplayer-flatpak/rsplayer.flatpakrepo
+flatpak install rsplayer io.github.ljufa.rsplayer</pre>
+  <p>Updates arrive through <code>flatpak update</code>.</p>
+</body>
+</html>

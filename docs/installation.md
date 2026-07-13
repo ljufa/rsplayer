@@ -98,15 +98,16 @@ The latest packages can be downloaded from [this page](https://github.com/ljufa/
 
 ### Desktop app (Flatpak and Snap)
 <p>
-  <a href="https://flathub.org/apps/io.github.ljufa.rsplayer"><img class="store-badge" height="56" alt="Get it on Flathub" src="https://flathub.org/api/badge?locale=en"></a>
   <a href="https://snapcraft.io/rsplayer"><img class="store-badge" height="56" alt="Get it from the Snap Store" src="https://snapcraft.io/en/dark/install.svg"></a>
 </p>
 
-**Flatpak** (x86_64 and ARM64):
+**Flatpak** (x86_64), from the [RSPlayer flatpak repo](https://ljufa.github.io/rsplayer-flatpak):
 
 ```bash
-flatpak install flathub io.github.ljufa.rsplayer
+flatpak install https://ljufa.github.io/rsplayer-flatpak/io.github.ljufa.rsplayer.flatpakref
 ```
+
+This adds the `rsplayer` flatpak remote, so updates arrive through the regular `flatpak update` (runtime dependencies are fetched from Flathub's repo as usual). A single-file `.flatpak` bundle is also attached to every [GitHub release](https://github.com/ljufa/rsplayer/releases/latest) for offline installs.
 
 Out of the box the Flatpak plays through PipeWire, has direct (bit-perfect) ALSA access to USB DACs, and can read music from `~/Music`, removable drives, and host mounts (`/media`, `/run/media`, `/mnt`). If these permissions were revoked (e.g. with Flatseal), re-enable them with:
 

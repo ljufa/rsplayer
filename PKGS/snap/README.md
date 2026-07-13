@@ -134,6 +134,6 @@ snapcraft release rsplayer <revision> stable
 `stable` later if this proves reliable.
 
 Version is read from the workspace `Cargo.toml` at build time — nothing to
-bump here. Unlike Flathub there is no external repo or PR review to keep in
-sync; the store listing (icon, description, screenshots) is managed with
+bump here. There is no external repo or PR review to keep in sync; the
+store listing (icon, description, screenshots) is managed with
 `snapcraft` metadata plus the dashboard at <https://snapcraft.io/rsplayer>.

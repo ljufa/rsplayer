@@ -47,19 +47,19 @@
   </branding>
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/ljufa/rsplayer/main/docs/_assets/flathub/player_main.png</image>
+      <image>https://raw.githubusercontent.com/ljufa/rsplayer/main/docs/_assets/flatpak/player_main.png</image>
       <caption>Now Playing with real-time visualizer and multiroom control</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/ljufa/rsplayer/main/docs/_assets/flathub/queue.png</image>
+      <image>https://raw.githubusercontent.com/ljufa/rsplayer/main/docs/_assets/flatpak/queue.png</image>
       <caption>Play queue with search and drag-and-drop reordering</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/ljufa/rsplayer/main/docs/_assets/flathub/library.png</image>
+      <image>https://raw.githubusercontent.com/ljufa/rsplayer/main/docs/_assets/flatpak/library.png</image>
       <caption>Music library browser</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/ljufa/rsplayer/main/docs/_assets/flathub/settings.png</image>
+      <image>https://raw.githubusercontent.com/ljufa/rsplayer/main/docs/_assets/flatpak/settings.png</image>
       <caption>Settings: playback, DSP equalizer, multiroom and library</caption>
     </screenshot>
   </screenshots>
@@ -76,7 +76,7 @@
     </release>
     <release version="4.5.1" date="2026-07-08">
       <description>
-        <p>Multiroom synchronized playback (beta), Windows ASIO output and first Flathub release.</p>
+        <p>Multiroom synchronized playback (beta), Windows ASIO output and first Flatpak release.</p>
       </description>
     </release>
   </releases>

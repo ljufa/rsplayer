@@ -28,7 +28,7 @@ Defaults apply only to fresh installs (or unreadable stored settings) — existi
 
 ### Documentation & Packaging
 
-- The README now has **"Get it on Flathub" and "Get it from the Snap Store" buttons** for the desktop app, replacing the desktop install script instructions.
+- The README now has a **"Get it from the Snap Store" button and Flatpak install instructions** for the desktop app, replacing the desktop install script instructions.
 - New installation docs section for **desktop app sandbox permissions**: `snap connect rsplayer:alsa` / `rsplayer:removable-media`, and `flatpak override` flags for `/mnt` access and direct ALSA output.
 - New documentation banner.
 
@@ -54,16 +54,16 @@ sudo snap connect rsplayer:removable-media  # music on external/removable drives
 
 ## v4.5.1 — 2026-07-08
 
-> **No update required.** This is a packaging-only release for Flatpak/Flathub support — it contains no playback, server, or UI changes that affect existing installations. If you run v4.5.0, there is nothing to gain by upgrading.
+> **No update required.** This is a packaging-only release for Flatpak support — it contains no playback, server, or UI changes that affect existing installations. If you run v4.5.0, there is nothing to gain by upgrading.
 
-### Flatpak / Flathub Support (desktop app)
+### Flatpak Support (desktop app)
 
-The desktop app is now packaged as a Flatpak under the ID `io.github.ljufa.rsplayer` (submission to Flathub in progress; packaging lives in `PKGS/flatpak/`).
+The desktop app is now packaged as a Flatpak under the ID `io.github.ljufa.rsplayer` (packaging lives in `PKGS/flatpak/`).
 
-- **App identifier** changed from `com.rsplayer.desktop` to `io.github.ljufa.rsplayer` (Flathub requires a verifiable ID). The MPRIS bus name is now `org.mpris.MediaPlayer2.rsplayer`.
+- **App identifier** changed from `com.rsplayer.desktop` to `io.github.ljufa.rsplayer` (a GitHub-verifiable ID). The MPRIS bus name is now `org.mpris.MediaPlayer2.rsplayer`.
 - **Sandbox-aware behavior**: inside the Flatpak sandbox, network-share mounting and system power actions are hidden (they need privileges the sandbox never grants). Music is readable from `~/Music` and removable drives/mounts (`/media`, `/run/media`, `/mnt`); other folders can be granted with Flatseal. Note that symlinks only resolve if their target is also granted.
 - **PipeWire in the sandbox**: the PipeWire playback device is offered via the runtime's PulseAudio compatibility layer, and the PipeWire volume control falls back to `pactl` where WirePlumber's `wpctl` is unavailable (native installs are unchanged and still prefer `wpctl`). Bit-perfect exclusive ALSA output to USB DACs works normally.
-- **Release workflow** now publishes a `web-ui-dist-<version>.tar.gz` asset, consumed by the offline Flathub build.
+- **Release workflow** now pre-builds the web UI once and feeds it to the offline Flatpak build.
 - New cargo-make tasks for local packaging work: `build_flatpak` (build + install from the working tree), `run_flatpak`, `flatpak_bundle` (single-file bundle for testing on other machines), and `flatpak_cargo_sources`.
 
 ## v4.5.0 — 2026-07-05

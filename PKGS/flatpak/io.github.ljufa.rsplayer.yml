@@ -1,7 +1,9 @@
 # Flatpak manifest for the RSPlayer desktop app (Tauri wrapper around the
-# embedded server). This file is the source of truth for the Flathub
-# submission — after acceptance it lives in the flathub/io.github.ljufa.rsplayer
-# repo and this copy should be kept in sync.
+# embedded server). Built from a staged copy of the source tree (`src/` next
+# to this manifest — see stage-sources.sh): locally via `cargo make
+# build_flatpak`, and on release by the `build_flatpak` job in
+# .github/workflows/cd.yml, which publishes the result to the self-hosted
+# flatpak repo at https://ljufa.github.io/rsplayer-flatpak.
 #
 # See PKGS/flatpak/README.md for how to regenerate cargo-sources.json and
 # build/test locally.
@@ -21,7 +23,6 @@ finish-args:
   # Regular playback through the PipeWire/PulseAudio socket.
   - --socket=pulseaudio
   # Direct ALSA (hw:) access for bit-perfect / exclusive output to USB DACs.
-  # Same approach as other players with ALSA output on Flathub (e.g. Strawberry).
   - --device=all
   # The webview talks to the embedded server on localhost; network is also
   # needed for internet radio, streaming metadata and multiroom (QUIC + LAN
@@ -60,18 +61,10 @@ modules:
       - install -Dm644 'crates/desktop/icons/128x128@2x.png' /app/share/icons/hicolor/256x256/apps/io.github.ljufa.rsplayer.png
       - install -Dm644 crates/desktop/icons/128x128.png /app/share/icons/hicolor/128x128/apps/io.github.ljufa.rsplayer.png
     sources:
-      - type: git
-        url: https://github.com/ljufa/rsplayer.git
-        tag: '4.6.0'
-        commit: c18e59265a83f5781402f5123e87e8e99d0c0592
+      # Staged source tree (tracked files + the pre-built dist/web-ui),
+      # produced by PKGS/flatpak/stage-sources.sh next to this manifest.
+      - type: dir
+        path: src
       # Vendored crate sources for the offline build. Regenerate on every
       # Cargo.lock change — see PKGS/flatpak/README.md.
       - cargo-sources.json
-      # Pre-built web UI (Dioxus/WASM), embedded into the server binary via
-      # RustEmbed at compile time. Published by the "Full release" workflow.
-      - type: archive
-        url: https://github.com/ljufa/rsplayer/releases/download/4.6.0/web-ui-dist-4.6.0.tar.gz
-        # TODO: fill after the 4.6.0 release publishes the asset:
-        #   curl -sL https://github.com/ljufa/rsplayer/releases/download/4.6.0/web-ui-dist-4.6.0.tar.gz | sha256sum
-        sha256: FILL_AFTER_RELEASE
-        dest: dist/web-ui

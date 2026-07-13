@@ -1,0 +1,9 @@
+[Flatpak Ref]
+Name=io.github.ljufa.rsplayer
+Branch=master
+Title=RSPlayer
+IsRuntime=false
+Url=https://ljufa.github.io/rsplayer-flatpak/repo/
+SuggestRemoteName=rsplayer
+Homepage=https://ljufa.github.io/rsplayer/
+RuntimeRepo=https://dl.flathub.org/repo/flathub.flatpakrepo

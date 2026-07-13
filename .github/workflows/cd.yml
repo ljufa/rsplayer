@@ -57,21 +57,6 @@ jobs:
           name: web_ui
           path: dist/web-ui
 
-      # Published as a release asset (pkg-* artifacts are merged by the
-      # publish job). Consumed by the Flathub manifest (PKGS/flatpak) as an
-      # offline source for building the desktop app.
-      - name: Package web UI dist for Flathub
-        run: |
-          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
-          tar -czf web-ui-dist-${version}.tar.gz -C dist web-ui
-
-      - name: Upload web UI dist asset
-        uses: actions/upload-artifact@v7
-        with:
-          name: pkg-web-ui
-          path: web-ui-dist-*.tar.gz
-          if-no-files-found: error
-
   build_backend:
     needs: build_ui
     name: Release Backend
@@ -198,6 +183,93 @@ jobs:
         with:
           snap: ${{ steps.snapcraft.outputs.snap }}
           release: candidate
+
+  build_flatpak:
+    needs: build_ui
+    name: Build Flatpak
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'x86_64-unknown-linux-gnu' }}
+    # GitHub-hosted runner: flatpak-builder needs bwrap/user namespaces,
+    # which are not available inside the self-hosted builder container.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Same pre-seeding as the snap: the web UI is not built inside the
+      # flatpak; the staged source tree carries dist/web-ui pre-built.
+      - name: Download web_ui
+        uses: actions/download-artifact@v8
+        with:
+          name: web_ui
+          path: dist/web-ui
+
+      - name: Install flatpak-builder and runtimes
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive flathub \
+            org.gnome.Platform//50 org.gnome.Sdk//50 \
+            org.freedesktop.Sdk.Extension.rust-stable//25.08
+
+      # The flatpak build is offline; vendor all crates from Cargo.lock
+      # (same as `cargo make flatpak_cargo_sources` locally).
+      - name: Generate cargo-sources.json
+        run: |
+          curl -sfLo flatpak-cargo-generator.py https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
+          python3 -m venv venv
+          venv/bin/pip -q install aiohttp toml tomlkit
+          venv/bin/python3 flatpak-cargo-generator.py Cargo.lock -o PKGS/flatpak/cargo-sources.json
+
+      - name: Build flatpak
+        run: |
+          bash PKGS/flatpak/stage-sources.sh target/flatpak/src
+          cp PKGS/flatpak/io.github.ljufa.rsplayer.yml PKGS/flatpak/cargo-sources.json target/flatpak/
+          cd target/flatpak
+          flatpak-builder --user --force-clean --disable-rofiles-fuse --repo=repo build-dir io.github.ljufa.rsplayer.yml
+
+      - name: Bundle single-file .flatpak release asset
+        run: |
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          mkdir -p pkg
+          flatpak build-bundle target/flatpak/repo pkg/rsplayer-desktop_${version}_amd64.flatpak io.github.ljufa.rsplayer master
+
+      - name: Upload flatpak bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: pkg-flatpak
+          path: pkg/*
+          if-no-files-found: error
+
+      # Pushes the updated OSTree repo to the ljufa/rsplayer-flatpak repo,
+      # served by GitHub Pages — the flatpak remote users install from.
+      # Requires the FLATPAK_REPO_TOKEN secret (fine-grained PAT with
+      # contents read/write on ljufa/rsplayer-flatpak). The result is
+      # force-pushed as a single fresh commit so the Pages repo's git
+      # history does not grow with binary churn. See PKGS/flatpak/README.md.
+      - name: Publish to self-hosted flatpak repo (GitHub Pages)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TOKEN: ${{ secrets.FLATPAK_REPO_TOKEN }}
+        run: |
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/ljufa/rsplayer-flatpak.git" pages
+          if [ -d pages/repo ]; then
+            flatpak build-commit-from --src-repo=target/flatpak/repo pages/repo app/io.github.ljufa.rsplayer/x86_64/master
+          else
+            cp -a target/flatpak/repo pages/repo
+          fi
+          # Regenerate the appstream branch and static deltas; prune to the
+          # last two releases to keep the Pages repo within size limits.
+          flatpak build-update-repo --generate-static-deltas --prune --prune-depth=1 pages/repo
+          cp PKGS/flatpak/rsplayer.flatpakrepo pages/rsplayer.flatpakrepo
+          cp PKGS/flatpak/io.github.ljufa.rsplayer.flatpakref pages/io.github.ljufa.rsplayer.flatpakref
+          cp PKGS/flatpak/pages-index.html pages/index.html
+          touch pages/.nojekyll
+          cd pages
+          git checkout --orphan "release-${version}"
+          git add -A
+          git -c user.name=github-actions -c user.email=github-actions@github.com commit -m "flatpak repo: ${version}"
+          git push --force origin HEAD:main
 
   build_desktop_macos:
     needs: build_ui
@@ -348,7 +420,7 @@ jobs:
 
   publish:
     if: ${{ always() }}
-    needs: [build_backend, build_desktop_macos, build_desktop_linux, build_desktop_windows, build_snap]
+    needs: [build_backend, build_desktop_macos, build_desktop_linux, build_desktop_windows, build_snap, build_flatpak]
     name: Create release
     runs-on: [self-hosted, linux, x64]
     steps:
