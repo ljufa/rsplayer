@@ -77,6 +77,16 @@ jobs:
           # in the .flatpakrepo/.flatpakref files).
           GPG_ARGS="--gpg-sign=AB004521B57A4B72F2AB2F86284128987382EB95 --gpg-homedir=$PWD/gpghome"
           flatpak build-import-bundle --update-appstream $GPG_ARGS pages/repo app.flatpak
+          # Regenerate ALL static deltas and the appstream branch from
+          # scratch, AFTER signing: --generate-static-deltas skips deltas
+          # that already exist, and a delta generated from a then-unsigned
+          # commit embeds no signature — clients pulling via that delta fail
+          # with "GPG verification enabled, but no signatures found".
+          # Likewise the appstream branch is only recommitted (and thus
+          # signed) when its content changes, so drop its refs to force a
+          # fresh signed commit.
+          rm -rf pages/repo/deltas pages/repo/delta-indexes
+          rm -f pages/repo/refs/heads/appstream/x86_64 pages/repo/refs/heads/appstream2/x86_64
           # Static deltas for efficient updates; prune to the last two
           # releases to keep the Pages repo within size limits.
           flatpak build-update-repo $GPG_ARGS --generate-static-deltas --prune --prune-depth=1 pages/repo
