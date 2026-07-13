@@ -74,14 +74,31 @@ The following platforms are not currently supported but may be considered in the
 - FreeBSD
 
 ## Install or upgrade
-RSPlayer can be installed using one of two methods:
+RSPlayer can be installed using one of these methods:
 * Using installation script (automatically detects your distribution and architecture)
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)
 ```
-The installation script detects your Linux distribution (Debian/Ubuntu, Fedora/RHEL/CentOS, Arch/Manjaro) and installs the appropriate package type (.deb, .rpm, or .tgz tarball).
+The installation script detects your Linux distribution (Debian/Ubuntu, Fedora/RHEL/CentOS, Arch/Manjaro). On deb/rpm distributions it adds the [RSPlayer package repository](https://ljufa.github.io/rsplayer-pkg) and installs from it, so future updates arrive through regular `apt upgrade` / `dnf upgrade`; on Arch it installs the .tgz tarball directly.
 
 ?> macOS does not use the Linux package install script. See the [macOS section](#macos-experimental) for server and desktop download instructions.
+
+* Add the [package repository](https://ljufa.github.io/rsplayer-pkg) yourself (what the script does) — GPG-signed apt and dnf repos; updates then come with your regular system updates.
+
+  Debian/Ubuntu/Raspberry Pi OS (amd64, arm64, armhf, riscv64):
+```bash
+sudo curl -fsSL -o /usr/share/keyrings/rsplayer.gpg https://ljufa.github.io/rsplayer-pkg/rsplayer.gpg
+echo "deb [signed-by=/usr/share/keyrings/rsplayer.gpg] https://ljufa.github.io/rsplayer-pkg/deb stable main" | sudo tee /etc/apt/sources.list.d/rsplayer.list
+sudo apt update && sudo apt install rsplayer
+```
+  Fedora/RHEL/openSUSE (x86_64, aarch64, armv6hl, armv7hl, riscv64):
+```bash
+sudo curl -fsSL -o /etc/yum.repos.d/rsplayer.repo https://ljufa.github.io/rsplayer-pkg/rpm/rsplayer.repo
+sudo dnf install rsplayer
+```
+  The desktop app is available from the same repos as `rsplayer-desktop` (x86_64/amd64 only).
+
+  !> The apt repository's `armhf` package is the ARMv6 build, which runs on every 32-bit Raspberry Pi including the Zero/1. If you specifically want the ARMv7-optimized build on a 32-bit OS, install the `rsplayer_*_armhfv7.deb` release asset manually.
 
 * Manually download and install package
 The latest packages can be downloaded from [this page](https://github.com/ljufa/rsplayer/releases/latest). Available package types:

@@ -102,6 +102,53 @@ fi
 
 echo "[INFO] Selected package type: $pkg_type (suffix=$pkg_suffix, ext=$pkg_ext)"
 
+REPO_URL="https://ljufa.github.io/rsplayer-pkg"
+
+# Add the RSPlayer apt repo and install from it. Every step is chained so any
+# failure returns non-zero and the caller falls back to a direct download.
+setup_apt_repo() {
+    echo "[INFO] Adding RSPlayer apt repository ($REPO_URL/deb)"
+    curl -fsSL "$REPO_URL/rsplayer.gpg" -o /tmp/rsplayer-keyring.gpg &&
+        $SUDO install -D -m 644 /tmp/rsplayer-keyring.gpg /usr/share/keyrings/rsplayer.gpg &&
+        rm -f /tmp/rsplayer-keyring.gpg &&
+        echo "deb [signed-by=/usr/share/keyrings/rsplayer.gpg] $REPO_URL/deb stable main" | $SUDO tee /etc/apt/sources.list.d/rsplayer.list >/dev/null &&
+        $SUDO apt-get update &&
+        $SUDO apt-get install -y rsplayer
+}
+
+setup_dnf_repo() {
+    echo "[INFO] Adding RSPlayer dnf repository ($REPO_URL/rpm)"
+    curl -fsSL "$REPO_URL/rpm/rsplayer.repo" -o /tmp/rsplayer.repo &&
+        $SUDO install -m 644 /tmp/rsplayer.repo /etc/yum.repos.d/rsplayer.repo &&
+        rm -f /tmp/rsplayer.repo &&
+        $SUDO dnf install -y rsplayer
+}
+
+# Prefer the package repository: after the one-time setup, updates arrive via
+# regular apt/dnf upgrade. Pre-release installs and Arch/unknown distros use
+# the direct-download path below (also the fallback if the repo fails).
+repo_install_done=false
+if [ "$PRE_RELEASE" = false ]; then
+    case $pkg_type in
+        deb)
+            if setup_apt_repo; then
+                repo_install_done=true
+            else
+                echo "[WARN] Repo-based install failed, removing repo entry and falling back to direct package download"
+                $SUDO rm -f /etc/apt/sources.list.d/rsplayer.list
+            fi
+            ;;
+        rpm)
+            if setup_dnf_repo; then
+                repo_install_done=true
+            else
+                echo "[WARN] Repo-based install failed, removing repo entry and falling back to direct package download"
+                $SUDO rm -f /etc/yum.repos.d/rsplayer.repo
+            fi
+            ;;
+    esac
+fi
+
 # Function to attempt download
 try_download() {
     local type=$1
@@ -135,6 +182,9 @@ try_download() {
         return 1
     fi
 }
+
+# Direct-download install (pre-releases, Arch, unknown distros, repo fallback)
+if [ "$repo_install_done" = false ]; then
 
 # Try primary package type
 echo "[INFO] Attempting primary package type: $pkg_type"
@@ -197,6 +247,8 @@ case $pkg_type in
 esac
 
 rm "${pkg_file_name}"
+
+fi # repo_install_done
 
 # Ensure /opt/rsplayer is owned by rsplayer regardless of package type
 echo "[INFO] Ensuring /opt/rsplayer ownership..."

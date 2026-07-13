@@ -1,0 +1,74 @@
+name: Publish deb/rpm repo
+
+# Publishes the release's .deb/.rpm packages to the self-hosted apt + dnf
+# repos served by GitHub Pages (https://ljufa.github.io/rsplayer-pkg) so users
+# get updates through regular `apt upgrade` / `dnf upgrade`.
+#
+# Triggered on "released" (unlike "published" it does not fire for
+# pre-releases), so packages go live only when the draft/pre-release created
+# by cd.yml is promoted to a full release — same gate as the flatpak repo and
+# the Docker image. Can also be dispatched manually with a tag to (re-)publish
+# that release's packages.
+#
+# Required secrets (see PKGS/pkg-repo/README.md):
+# - PKG_REPO_TOKEN: fine-grained PAT with contents read/write on
+#   ljufa/rsplayer-pkg.
+# - FLATPAK_GPG_PRIVATE_KEY: the project signing key (shared with the flatpak
+#   repo); signs the apt Release file, every rpm, and the rpm repo metadata.
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag whose .deb/.rpm packages to publish"
+        required: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  publish:
+    name: Publish to deb/rpm repo
+    runs-on: ubuntu-latest
+    steps:
+      # Only needed for the static PKGS/pkg-repo files and update-repo.sh.
+      - uses: actions/checkout@v7
+
+      - name: Download packages from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ github.event.release.tag_name || inputs.tag }}"
+          echo "TAG=${tag}" >> "$GITHUB_ENV"
+          gh release download "$tag" -R ${{ github.repository }} \
+            --pattern '*.deb' --pattern '*.rpm' --dir assets
+
+      - name: Install repo tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-utils createrepo-c rpm gnupg
+
+      - name: Import GPG signing key
+        env:
+          GPG_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+        run: |
+          mkdir -p -m 700 gpghome
+          echo "$GPG_KEY" | gpg --homedir gpghome --batch --import
+
+      # The updated repos are force-pushed as a single fresh orphan commit so
+      # the Pages repo's git history does not grow with binary churn; the
+      # previous versions kept for rollback come from the cloned working tree.
+      - name: Update repos and push to ljufa/rsplayer-pkg
+        env:
+          TOKEN: ${{ secrets.PKG_REPO_TOKEN }}
+          GPG_HOMEDIR: ${{ github.workspace }}/gpghome
+        run: |
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/ljufa/rsplayer-pkg.git" pages
+          bash PKGS/pkg-repo/update-repo.sh assets pages
+          cd pages
+          git checkout --orphan "release-${TAG}"
+          git add -A
+          git -c user.name=github-actions -c user.email=github-actions@github.com commit -m "pkg repo: ${TAG}"
+          git push --force origin HEAD:main

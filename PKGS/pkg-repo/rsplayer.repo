@@ -1,0 +1,8 @@
+[rsplayer]
+name=RSPlayer
+baseurl=https://ljufa.github.io/rsplayer-pkg/rpm
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://ljufa.github.io/rsplayer-pkg/rsplayer.gpg
+skip_if_unavailable=1

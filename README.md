@@ -50,9 +50,24 @@ See the [full feature list](https://ljufa.github.io/rsplayer/#/?id=features) and
 ## Linux
 
 ### Headless server
-Requires `curl`. The script auto-detects your distribution (Debian/Ubuntu, Fedora/RHEL, Arch/Manjaro) and architecture (x86_64, ARM64/ARMv7/ARMv6, RISC-V 64), then installs and starts the systemd service.
+Requires `curl`. The script auto-detects your distribution (Debian/Ubuntu, Fedora/RHEL, Arch/Manjaro) and architecture (x86_64, ARM64/ARMv7/ARMv6, RISC-V 64), adds the [RSPlayer package repository](https://ljufa.github.io/rsplayer-pkg) on deb/rpm distros (so updates arrive via regular `apt`/`dnf` upgrade), then installs and starts the systemd service.
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)
+```
+
+Or add the repository yourself — Debian/Ubuntu/Raspberry Pi OS:
+
+```bash
+sudo curl -fsSL -o /usr/share/keyrings/rsplayer.gpg https://ljufa.github.io/rsplayer-pkg/rsplayer.gpg
+echo "deb [signed-by=/usr/share/keyrings/rsplayer.gpg] https://ljufa.github.io/rsplayer-pkg/deb stable main" | sudo tee /etc/apt/sources.list.d/rsplayer.list
+sudo apt update && sudo apt install rsplayer
+```
+
+Fedora/RHEL/openSUSE:
+
+```bash
+sudo curl -fsSL -o /etc/yum.repos.d/rsplayer.repo https://ljufa.github.io/rsplayer-pkg/rpm/rsplayer.repo
+sudo dnf install rsplayer
 ```
 
 ### Desktop app (flatpak or snap)
