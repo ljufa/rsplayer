@@ -12,9 +12,9 @@ RSPlayer now tells you when a new version is out. On app load the web UI checks 
 - The banner and the Settings page footer show the **exact update command for your install**: the server detects how it was installed (apt/deb, dnf/rpm, Flatpak, Snap, desktop app) and the UI offers the matching one-liner — e.g. `sudo dnf update rsplayer` or `flatpak update io.github.ljufa.rsplayer` — with a copy button. Snap users are reminded that snaps update automatically.
 - The Settings page now always shows the **running version**, with an "update available" badge when applicable.
 
-This closes the "In-app upgrade detection" and (together with the v4.6.x package repositories) the "Automatic Linux Updates" roadmap items.
+This closes the "In-app upgrade detection" and (together with the new package repositories below) the "Automatic Linux Updates" roadmap items.
 
-#### Network Mounts from the Desktop App (deb/rpm/arch)
+#### Network Mounts from the Desktop App (deb/rpm/arch) ([#27](https://github.com/ljufa/rsplayer/issues/27))
 
 Adding SMB/NFS network mounts from the **desktop app** previously failed with *"Mount failed: Failed to create mount point: Permission denied"* — the desktop app runs as an unprivileged user-session process, and mounting a filesystem on Linux requires privileges that no user or group membership can grant (the headless server gets them from its systemd unit).
 
@@ -24,6 +24,42 @@ The desktop deb, rpm, and arch packages now ship a small privileged helper (`/us
 - **Narrow by design**: the helper is the only privileged part and it only mounts/unmounts under `/mnt/rsplayer/`, only accepts the cifs/nfs filesystem types, validates share names and mount options against a whitelist, and receives credentials via stdin so they never appear in the process list.
 - Works for both **SMB and NFS**, including shares previously saved from the "Detected Network Mounts" list.
 - **Unchanged elsewhere**: the headless server keeps its existing direct mount path, and the sandboxed Flatpak/Snap desktop builds still cannot manage mounts — mount via the system (e.g. `/etc/fstab`) there and the share appears under Detected Network Mounts.
+
+#### Desktop App — "Restart RSPlayer" Actually Restarts ([#26](https://github.com/ljufa/rsplayer/issues/26))
+
+**Settings → Restart RSPlayer** now relaunches the desktop app: the embedded backend shuts down gracefully first (database persisted, port released), then the application starts itself again. Previously the app just closed and had to be started again by hand (on the headless server nothing changes — it exits and systemd respawns it, as before).
+
+### Installation & Updates
+
+#### apt and dnf Package Repositories
+
+RSPlayer's Linux packages are now served from a self-hosted, GPG-signed package repository at [ljufa.github.io/rsplayer-pkg](https://ljufa.github.io/rsplayer-pkg) — an apt repo for Debian/Ubuntu/Raspberry Pi OS and a dnf/yum repo for Fedora & friends, covering both the headless server (`rsplayer`, all architectures) and the desktop app (`rsplayer-desktop`, x86_64).
+
+- `install.sh` and `install_desktop.sh` now add the repository and install through the system package manager, so after a one-time install **updates arrive with regular system updates** — `sudo apt upgrade` / `sudo dnf update` — no more re-running the install script for every release.
+- **Existing installations** keep working as-is; re-run the install script once to switch to the repository.
+- Direct package download remains as the fallback and is still used for pre-releases, Arch, and distros without apt/dnf.
+
+#### Flatpak — Self-Hosted Repository
+
+The desktop Flatpak is now published in RSPlayer's own GPG-signed Flatpak repository at [ljufa.github.io/rsplayer-flatpak](https://ljufa.github.io/rsplayer-flatpak) (the planned Flathub distribution has been dropped). One command installs it and registers the remote:
+
+```bash
+flatpak install https://ljufa.github.io/rsplayer-flatpak/io.github.ljufa.rsplayer.flatpakref
+```
+
+- Updates arrive through the normal `flatpak update` flow, with static deltas generated for fast delta downloads and AppStream metadata so the app shows up properly in software centers.
+- Free of Flathub's sandbox-policy constraints, the Flatpak now grants **direct ALSA device access out of the box** (`--device=all` — bit-perfect exclusive output to USB DACs with no `flatpak override` needed) plus read-only access to `/media`, `/run/media`, and `/mnt` for music on external drives and host mounts.
+- The repository is rebuilt and re-signed automatically on every release by a dedicated workflow.
+
+### Fixes
+
+#### Correct Start Menu Entry for the deb/rpm/arch Desktop Packages
+
+The deb, rpm, and Arch tgz desktop packages installed an auto-generated menu entry that showed up as "rsplayer-desktop" with a generic "System — RSPlayer Desktop" description, filed outside the audio category. All native packages now ship the same entry as the Flatpak and Snap: **RSPlayer** — *Hi-fi music player with bit-perfect playback*, in the Multimedia/Audio menu group, with sensible search keywords (music, hifi, dac, flac, dsd, multiroom). Applies on new installs and upgrades.
+
+### Documentation
+
+- The documentation site now follows the system color scheme — dark docsify theme and a dark banner variant when the browser prefers dark mode.
 
 ## v4.6.0 — 2026-07-10
 
