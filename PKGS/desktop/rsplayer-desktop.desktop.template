@@ -1,9 +1,9 @@
 [Desktop Entry]
 Name=RSPlayer
 Comment=Hi-fi music player with bit-perfect playback
-Exec=rsplayer-desktop
-StartupWMClass=rsplayer-desktop
-Icon=rsplayer-desktop
+Exec={{exec}}
+StartupWMClass={{exec}}
+Icon={{icon}}
 Terminal=false
 Type=Application
 Categories=AudioVideo;Audio;Player;

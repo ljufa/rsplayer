@@ -16,12 +16,14 @@
     },
     "linux": {
       "deb": {
+        "desktopTemplate": "../../PKGS/desktop/rsplayer-desktop.desktop.template",
         "files": {
           "/usr/libexec/rsplayer-mount-helper": "target/release/rsplayer-mount-helper",
           "/usr/share/polkit-1/actions/io.github.ljufa.rsplayer.policy": "../../PKGS/desktop/io.github.ljufa.rsplayer.policy"
         }
       },
       "rpm": {
+        "desktopTemplate": "../../PKGS/desktop/rsplayer-desktop.desktop.template",
         "files": {
           "/usr/libexec/rsplayer-mount-helper": "target/release/rsplayer-mount-helper",
           "/usr/share/polkit-1/actions/io.github.ljufa.rsplayer.policy": "../../PKGS/desktop/io.github.ljufa.rsplayer.policy"
