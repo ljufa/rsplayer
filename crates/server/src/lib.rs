@@ -39,7 +39,11 @@ use config::{ArcConfiguration, Configuration};
 
 use env_logger::Env;
 
-pub async fn run_backend(shutdown_rx: Option<Receiver<()>>, command_sender_out: Option<Sender<mpsc::Sender<UserCommand>>>) {
+pub async fn run_backend(
+    shutdown_rx: Option<Receiver<()>>,
+    command_sender_out: Option<Sender<mpsc::Sender<UserCommand>>>,
+    restart_tx: Option<mpsc::Sender<()>>,
+) {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("failed to install rustls crypto provider");
@@ -84,7 +88,7 @@ pub async fn run_backend(shutdown_rx: Option<Receiver<()>>, command_sender_out: 
         }
     };
 
-    run(container, shutdown_rx, command_sender_out, &config, &shared_db).await;
+    run(container, shutdown_rx, command_sender_out, restart_tx, &config, &shared_db).await;
 
     info!("RSPlayer shutdown completed.");
 }
@@ -94,6 +98,7 @@ async fn run(
     container: Box<AppContainer>,
     shutdown_rx: Option<Receiver<()>>,
     command_sender_out: Option<Sender<mpsc::Sender<UserCommand>>>,
+    restart_tx: Option<mpsc::Sender<()>>,
     config: &ArcConfiguration,
     shared_db: &Arc<fjall::Database>,
 ) {
@@ -223,7 +228,8 @@ async fn run(
                 usb_service.clone(),
                 config.clone(),
                 system_commands_rx,
-                state_changes_tx.clone()))
+                state_changes_tx.clone(),
+                restart_tx))
             => {
                 error!("Exit from command handler thread.");
             }

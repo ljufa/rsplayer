@@ -109,8 +109,9 @@ pub async fn handle_system_commands(
     config: config::ArcConfiguration,
     mut input_commands_rx: Receiver<api_models::common::SystemCommand>,
     state_changes_sender: Sender<StateChangeEvent>,
+    restart_sender: Option<tokio::sync::mpsc::Sender<()>>,
 ) {
-    let ctx = SystemCommandContext::new(ai_service, usb_service, config, state_changes_sender);
+    let ctx = SystemCommandContext::new(ai_service, usb_service, config, state_changes_sender, restart_sender);
 
     while let Some(cmd) = input_commands_rx.recv().await {
         debug!("Received system command {cmd:?}");

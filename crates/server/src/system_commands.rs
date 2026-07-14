@@ -1,6 +1,7 @@
 //! System commands: volume (through the hardware audio service), mute,
-//! power-off/restart (disabled in demo and desktop modes) and front-panel
-//! firmware power.
+//! power-off/reboot (disabled in demo and desktop modes), RSPlayer restart
+//! (exit for systemd headless, restart signal to the desktop wrapper) and
+//! front-panel firmware power.
 
 use std::process::exit;
 
@@ -18,6 +19,7 @@ fn system_actions_allowed(ctx: &SystemCommandContext) -> bool {
     true
 }
 
+#[allow(clippy::too_many_lines)]
 pub async fn handle_system_command(cmd: SystemCommand, ctx: &SystemCommandContext) {
     match cmd {
         SystemCommand::SetFirmwarePower(val) => {
@@ -111,7 +113,13 @@ pub async fn handle_system_command(cmd: SystemCommand, ctx: &SystemCommandContex
         }
         RestartRSPlayer => {
             info!("Restarting RSPlayer");
-            exit(1);
+            if let Some(tx) = &ctx.restart_sender {
+                // Desktop app: hand the restart over to the Tauri wrapper.
+                let _ = tx.try_send(());
+            } else {
+                // Headless: exit non-zero so systemd restarts the service.
+                exit(1);
+            }
         }
         SystemCommand::QueryCurrentVolume => {
             let vol = ctx.audio_service.get_volume();

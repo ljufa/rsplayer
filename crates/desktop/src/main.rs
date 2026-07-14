@@ -49,13 +49,18 @@ async fn main() {
     };
 
     // Channel to signal the backend to shut down gracefully when the
-    // desktop window is closed. Wrapped in a Mutex so it can be shared
-    // between the backend spawn (setup) and the window close handler.
+    // desktop window is closed. Wrapped in Arc<Mutex> so it can be shared
+    // between the restart handler (setup) and the window close handler.
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-    let shutdown_tx = Mutex::new(Some(shutdown_tx));
+    let shutdown_tx = Arc::new(Mutex::new(Some(shutdown_tx)));
 
     // Oneshot to receive the player command sender once the backend starts.
     let (cmd_sender_tx, cmd_sender_rx) = oneshot::channel::<mpsc::Sender<UserCommand>>();
+
+    // Channel the backend signals when the user hits "Restart RSPlayer" in
+    // the settings UI — headless installs exit and let systemd respawn
+    // them, but here we relaunch the whole desktop app via Tauri instead.
+    let (restart_tx, mut restart_rx) = mpsc::channel::<()>(1);
 
     // Shared slot — starts None, filled once the backend hands us the sender.
     // The souvlaki media event thread reads from this to dispatch commands.
@@ -64,8 +69,8 @@ async fn main() {
     // Start the backend as a tokio task (multi-thread runtime, so Tauri
     // can block the main thread with its event loop while the backend
     // runs on a worker thread — same approach as the headless server).
-    tokio::spawn(async move {
-        rsplayer::run_backend(Some(shutdown_rx), Some(cmd_sender_tx)).await;
+    let backend_handle = tokio::spawn(async move {
+        rsplayer::run_backend(Some(shutdown_rx), Some(cmd_sender_tx), Some(restart_tx)).await;
     });
 
     // Dedicated thread for souvlaki MPRIS2 / MediaRemote integration.
@@ -123,8 +128,26 @@ async fn main() {
         }
     });
 
+    let shutdown_tx_restart = Arc::clone(&shutdown_tx);
     tauri::Builder::default()
         .setup(move |app| {
+            // Relaunch the whole desktop app when the backend reports a
+            // restart request: shut the backend down gracefully first so
+            // the database is persisted and the port is released, then
+            // let Tauri spawn a fresh instance of this executable.
+            let app_handle = app.handle().clone();
+            tokio::spawn(async move {
+                if restart_rx.recv().await.is_some() {
+                    info!("Restart requested — relaunching desktop app");
+                    if let Some(tx) = shutdown_tx_restart.lock().ok().and_then(|mut g| g.take()) {
+                        let _ = tx.send(());
+                    }
+                    if tokio::time::timeout(Duration::from_secs(5), backend_handle).await.is_err() {
+                        warn!("Backend did not shut down within 5s, restarting anyway");
+                    }
+                    app_handle.restart();
+                }
+            });
             // Create the window pointing at loading.html from the frontend
             // dist (tauri.conf.json "windows" is empty — no auto-create).
             // The loading page shows "Starting server, please wait…" with a

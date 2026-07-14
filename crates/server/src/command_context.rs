@@ -83,6 +83,10 @@ pub struct SystemCommandContext {
     pub usb_service: Option<ArcUsbService>,
     pub config: ArcConfiguration,
     pub state_changes_sender: Sender<StateChangeEvent>,
+    /// Present when running inside the desktop app: `RestartRSPlayer`
+    /// signals here so the wrapper can relaunch the whole process,
+    /// instead of `exit(1)` which relies on systemd to bring us back.
+    pub restart_sender: Option<tokio::sync::mpsc::Sender<()>>,
 }
 
 impl SystemCommandContext {
@@ -91,12 +95,14 @@ impl SystemCommandContext {
         usb_service: Option<ArcUsbService>,
         config: ArcConfiguration,
         state_changes_sender: Sender<StateChangeEvent>,
+        restart_sender: Option<tokio::sync::mpsc::Sender<()>>,
     ) -> Self {
         Self {
             audio_service,
             usb_service,
             config,
             state_changes_sender,
+            restart_sender,
         }
     }
 
