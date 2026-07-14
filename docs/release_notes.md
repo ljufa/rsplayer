@@ -1,5 +1,30 @@
 # Release Notes
 
+## v4.7.0 — 2026-07-14
+
+### Features
+
+#### Update Available Notifications
+
+RSPlayer now tells you when a new version is out. On app load the web UI checks the GitHub releases page (directly from the browser, once per load) and, if a newer version exists:
+
+- A **notification banner** appears with the new version number and a link to the release page. Dismissing it hides the banner for that version — it returns only when the next release ships.
+- The banner and the Settings page footer show the **exact update command for your install**: the server detects how it was installed (apt/deb, dnf/rpm, Flatpak, Snap, desktop app) and the UI offers the matching one-liner — e.g. `sudo dnf update rsplayer` or `flatpak update io.github.ljufa.rsplayer` — with a copy button. Snap users are reminded that snaps update automatically.
+- The Settings page now always shows the **running version**, with an "update available" badge when applicable.
+
+This closes the "In-app upgrade detection" and (together with the v4.6.x package repositories) the "Automatic Linux Updates" roadmap items.
+
+#### Network Mounts from the Desktop App (deb/rpm/arch)
+
+Adding SMB/NFS network mounts from the **desktop app** previously failed with *"Mount failed: Failed to create mount point: Permission denied"* — the desktop app runs as an unprivileged user-session process, and mounting a filesystem on Linux requires privileges that no user or group membership can grant (the headless server gets them from its systemd unit).
+
+The desktop deb, rpm, and arch packages now ship a small privileged helper (`/usr/libexec/rsplayer-mount-helper`) that the app invokes through **pkexec/polkit** when mounting or unmounting:
+
+- **No password prompts**: the bundled polkit policy authorizes users with an active local session automatically — the same model udisks uses for removable media. Mount, unmount, and the automatic re-mount of saved shares at app startup all just work.
+- **Narrow by design**: the helper is the only privileged part and it only mounts/unmounts under `/mnt/rsplayer/`, only accepts the cifs/nfs filesystem types, validates share names and mount options against a whitelist, and receives credentials via stdin so they never appear in the process list.
+- Works for both **SMB and NFS**, including shares previously saved from the "Detected Network Mounts" list.
+- **Unchanged elsewhere**: the headless server keeps its existing direct mount path, and the sandboxed Flatpak/Snap desktop builds still cannot manage mounts — mount via the system (e.g. `/etc/fstab`) there and the share appears under Detected Network Mounts.
+
 ## v4.6.0 — 2026-07-10
 
 ### Features
