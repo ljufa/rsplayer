@@ -9,6 +9,7 @@ members = [
     "crates/playback",
     "crates/sync",
     "crates/wire",
+    "crates/mount_helper",
     "web-ui", "crates/desktop",
 ]
 default-members = [
@@ -22,6 +23,7 @@ default-members = [
     "crates/playback",
     "crates/sync",
     "crates/wire",
+    "crates/mount_helper",
 ]
 resolver = "2"
 

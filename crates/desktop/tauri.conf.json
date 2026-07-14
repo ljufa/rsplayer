@@ -14,6 +14,20 @@
     "macOS": {
       "minimumSystemVersion": "12.0"
     },
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/libexec/rsplayer-mount-helper": "target/release/rsplayer-mount-helper",
+          "/usr/share/polkit-1/actions/io.github.ljufa.rsplayer.policy": "../../PKGS/desktop/io.github.ljufa.rsplayer.policy"
+        }
+      },
+      "rpm": {
+        "files": {
+          "/usr/libexec/rsplayer-mount-helper": "target/release/rsplayer-mount-helper",
+          "/usr/share/polkit-1/actions/io.github.ljufa.rsplayer.policy": "../../PKGS/desktop/io.github.ljufa.rsplayer.policy"
+        }
+      }
+    },
     "active": true
   },
   "app": {

@@ -1,0 +1,15 @@
+[package]
+name = "rsplayer-mount-helper"
+version.workspace = true
+authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
+edition = "2021"
+license-file = "../../LICENSE"
+repository = "https://github.com/ljufa/rsplayer"
+description = "Privileged SMB/NFS mount helper for the RSPlayer desktop app (invoked via pkexec)"
+
+[[bin]]
+name = "rsplayer-mount-helper"
+path = "src/main.rs"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+nix = { version = "0.31", features = ["mount"] }

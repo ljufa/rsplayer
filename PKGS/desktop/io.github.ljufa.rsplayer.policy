@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+  <vendor>RSPlayer</vendor>
+  <vendor_url>https://github.com/ljufa/rsplayer</vendor_url>
+
+  <!-- Lets the RSPlayer desktop app mount/unmount network music shares under
+       /mnt/rsplayer via the narrow rsplayer-mount-helper binary. allow_active=yes
+       means users with an active local session are authorized silently (no
+       password prompt), matching how udisks authorizes removable-media mounts. -->
+  <action id="io.github.ljufa.rsplayer.mount-helper">
+    <description>Mount or unmount a network music share for RSPlayer</description>
+    <message>Authentication is required to mount a network music share</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/rsplayer-mount-helper</annotate>
+  </action>
+</policyconfig>

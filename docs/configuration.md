@@ -111,6 +111,8 @@ The Network Mounts section (collapsible) lets you mount remote SMB/CIFS or NFS s
 
 ?> Network mount management is available only on Linux builds. On non-Linux builds the Network Mounts UI is hidden.
 
+?> **Desktop app:** the desktop deb/rpm/arch packages ship a small privileged helper (`rsplayer-mount-helper`) so mounting works from the unprivileged desktop app. Authorization is handled by polkit — users with an active local session are authorized automatically, no password prompt. The Flatpak and Snap desktop builds are sandboxed and cannot manage mounts; mount shares via the system (e.g. `/etc/fstab`) instead and they will appear under Detected Network Mounts.
+
 ## Multiroom
 
 Synchronized playback across multiple RSPlayer devices on the same network. See the dedicated [Multiroom Playback](multiroom.md) page for setup, usage, and how it works.

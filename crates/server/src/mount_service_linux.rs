@@ -3,10 +3,15 @@
 //!
 //! Mounts under `/mnt/rsplayer/<name>` via nix `mount(2)` — requires the
 //! binary to run with the needed privileges — with reachability pre-checks
-//! and read-only fallbacks.
+//! and read-only fallbacks. In desktop mode (`RSPLAYER_DESKTOP` set) the app
+//! runs unprivileged, so mount/umount syscalls are delegated to the
+//! `rsplayer-mount-helper` binary through `pkexec` (polkit action
+//! `io.github.ljufa.rsplayer.mount-helper`, shipped by the desktop packages).
 
 use std::fs;
+use std::io::Write;
 use std::net::{TcpStream, ToSocketAddrs};
+use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use api_models::settings::{MetadataStoreSettings, NetworkMountConfig, NetworkMountType, NetworkStorageSettings};
@@ -16,6 +21,7 @@ use nix::mount::{mount, umount, MsFlags};
 use nix::unistd::{Gid, Uid};
 
 const MOUNT_BASE: &str = "/mnt/rsplayer";
+const MOUNT_HELPER_PATH: &str = "/usr/libexec/rsplayer-mount-helper";
 const NFS_IO_TIMEOUT_DECISECONDS: u32 = 50;
 const NFS_RETRIES: u32 = 2;
 const SMB_PORT: u16 = 445;
@@ -30,7 +36,9 @@ impl MountService {
             .clone()
             .unwrap_or_else(|| format!("{MOUNT_BASE}/{}", config.name));
 
-        if config.mount_point.is_none() {
+        // In helper mode the mount point is created by the (root) helper —
+        // an unprivileged desktop process cannot mkdir under /mnt.
+        if config.mount_point.is_none() && !Self::use_privileged_helper() {
             fs::create_dir_all(&mount_point).map_err(|e| format!("Failed to create mount point: {e}"))?;
         }
 
@@ -71,6 +79,12 @@ impl MountService {
             .as_deref()
             .map_or_else(|| options.clone(), |u| format!("username={u},password=***,..."));
         info!("Mount: {source} with options: {safe_log}");
+
+        if Self::helper_applies(config) {
+            Self::helper_mount(&config.name, "smb", &source, &options)?;
+            info!("SMB share {source} mounted at {mount_point} (via helper)");
+            return Ok(());
+        }
 
         match mount(
             Some(source.as_str()),
@@ -122,6 +136,13 @@ impl MountService {
 
         info!("Mount: {source} with options: {options}");
 
+        if Self::helper_applies(config) {
+            // The helper does the nfs4 -> nfs fallback internally.
+            Self::helper_mount(&config.name, "nfs", &source, &options)?;
+            info!("NFS share {source} mounted at {mount_point} (via helper)");
+            return Ok(());
+        }
+
         let nfs4_result = mount(
             Some(source.as_str()),
             mount_point,
@@ -160,14 +181,92 @@ impl MountService {
     pub fn unmount_share(name: &str, ext_mount: Option<&str>) -> Result<(), String> {
         let mount_point = ext_mount.map_or_else(|| format!("{MOUNT_BASE}/{name}"), std::string::ToString::to_string);
 
-        let result = umount(mount_point.as_str());
-        match result {
-            Ok(()) => {}
-            Err(e) => return Err(format!("Unmount failed: {e}")),
+        // The helper only manages mounts at /mnt/rsplayer/<name>; external
+        // mount points elsewhere go through the direct syscall.
+        let helper_manageable = ext_mount.is_none_or(|mp| mp == format!("{MOUNT_BASE}/{name}"));
+        if helper_manageable && Self::use_privileged_helper() {
+            Self::helper_umount(name)?;
+        } else if let Err(e) = umount(mount_point.as_str()) {
+            return Err(format!("Unmount failed: {e}"));
         }
 
         info!("Unmounted {mount_point}");
         Ok(())
+    }
+
+    /// Whether mount/umount syscalls should be delegated to the privileged
+    /// `pkexec` helper: only in desktop mode (unprivileged user-session
+    /// process) and only when the desktop package installed the helper.
+    /// Server installs keep the direct syscall path (systemd grants
+    /// `CAP_SYS_ADMIN`), as do dev runs and sandboxed (flatpak/snap) builds
+    /// where the helper is absent.
+    fn use_privileged_helper() -> bool {
+        std::env::var("RSPLAYER_DESKTOP").is_ok() && std::path::Path::new(MOUNT_HELPER_PATH).exists()
+    }
+
+    /// The helper only mounts at `/mnt/rsplayer/<name>`. That covers configs
+    /// without an explicit mount point, but also saved "detected external
+    /// mounts" whose mount point happens to be exactly `/mnt/rsplayer/<name>`
+    /// (e.g. re-saved from a server instance's managed mounts). Anything
+    /// pointing elsewhere keeps the direct syscall path.
+    fn helper_applies(config: &NetworkMountConfig) -> bool {
+        Self::use_privileged_helper()
+            && config
+                .mount_point
+                .as_deref()
+                .is_none_or(|mp| mp == format!("{MOUNT_BASE}/{}", config.name))
+    }
+
+    fn helper_mount(name: &str, fstype: &str, source: &str, options: &str) -> Result<(), String> {
+        let mut child = Command::new("pkexec")
+            .args([MOUNT_HELPER_PATH, "mount", name, fstype, source])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to run pkexec: {e}"))?;
+
+        // Options carry the SMB password — passed on stdin so they never
+        // appear in the process list.
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(options.as_bytes())
+                .map_err(|e| format!("Failed to send mount options to helper: {e}"))?;
+        }
+
+        let output = child
+            .wait_with_output()
+            .map_err(|e| format!("Mount helper did not finish: {e}"))?;
+        Self::helper_result(&output, "Mount")
+    }
+
+    fn helper_umount(name: &str) -> Result<(), String> {
+        let output = Command::new("pkexec")
+            .args([MOUNT_HELPER_PATH, "umount", name])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| format!("Failed to run pkexec: {e}"))?;
+        Self::helper_result(&output, "Unmount")
+    }
+
+    fn helper_result(output: &std::process::Output, action: &str) -> Result<(), String> {
+        if output.status.success() {
+            return Ok(());
+        }
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        // pkexec itself exits 126 when the auth dialog is dismissed and 127
+        // when authorization is denied; anything else is the helper's error.
+        match output.status.code() {
+            Some(126) => Err(format!("{action} cancelled: authorization dialog was dismissed")),
+            Some(127) => Err(format!("{action} not authorized by system policy: {stderr}")),
+            _ => Err(if stderr.is_empty() {
+                format!("{action} helper failed")
+            } else {
+                stderr
+            }),
+        }
     }
 
     pub fn query_mount_status(settings: &NetworkStorageSettings) -> Vec<MountStatus> {
