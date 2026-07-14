@@ -53,6 +53,21 @@ pub struct Settings {
     #[serde(default)]
     #[validate(nested)]
     pub multiroom_settings: MultiroomSettings,
+    #[serde(default)]
+    pub install_method: InstallMethod,
+}
+
+/// How this rsplayer instance was installed — detected by the server at runtime
+/// and used by the UI to suggest the matching update command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum InstallMethod {
+    Flatpak,
+    Snap,
+    Rpm,
+    Deb,
+    Desktop,
+    #[default]
+    Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
@@ -499,6 +514,7 @@ impl Default for Settings {
             remote_access_url: None,
             ui_preferences: UiPreferences::default(),
             multiroom_settings: MultiroomSettings::default(),
+            install_method: InstallMethod::default(),
         }
     }
 }

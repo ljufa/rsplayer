@@ -222,6 +222,7 @@ async fn get_settings(State(state): State<AppState>, Query(query): Query<HashMap
     settings.version = env!("CARGO_PKG_VERSION").to_string();
     settings.demo_mode = env::var("DEMO_MODE").is_ok();
     settings.desktop_mode = env::var("RSPLAYER_DESKTOP").is_ok();
+    settings.install_method = hardware::platform::detect_install_method();
     if settings.desktop_mode {
         let port = env::var("PORT").unwrap_or_else(|_| "8000".to_string());
         settings.remote_access_url = local_ip().map(|ip| format!("http://{ip}:{port}"));

@@ -15,11 +15,12 @@ mod hooks;
 pub mod lyrics;
 mod page;
 mod state;
+mod update;
 pub mod vumeter;
 
 use api_models::{
     common::{dur_to_string, MetadataCommand, PlayerCommand, PlaylistCommand, QueueCommand, SystemRequest, UserCommand},
-    settings::Settings,
+    settings::{InstallMethod, Settings},
     state::{CurrentQueueQuery, PlayerState, StateChangeEvent},
 };
 use dioxus::prelude::*;
@@ -233,6 +234,10 @@ fn App() -> Element {
                         }
                         *gs.global_settings.write() = Some(settings.clone());
                         *gs.local_browser_playback.write() = settings.local_browser_playback;
+                        if let Some(latest) = update::check_for_update(&settings.version).await {
+                            gs.update_banner_dismissed.set(update::is_dismissed(&latest));
+                            gs.update_available.set(Some(latest));
+                        }
                     }
                 }
             });
@@ -1235,6 +1240,70 @@ fn Notifications() -> Element {
                     },
                     _ => rsx! {},
                 }
+            }
+        }
+        UpdateAvailableBanner {}
+    }
+}
+
+/// Persistent (until dismissed) banner shown when a newer release exists on GitHub.
+#[component]
+fn UpdateAvailableBanner() -> Element {
+    let state = use_context::<AppState>();
+    let mut dismissed = state.update_banner_dismissed;
+    let Some(latest) = state.update_available.read().clone() else {
+        return rsx! {};
+    };
+    if *dismissed.read() {
+        return rsx! {};
+    }
+    let latest_dismiss = latest.clone();
+    let method = state
+        .global_settings
+        .read()
+        .as_ref()
+        .map(|s| s.install_method)
+        .unwrap_or_default();
+    let command = update::update_command(method);
+
+    rsx! {
+        div { class: "alert alert-info shadow-lg fixed bottom-20 right-4 z-50 max-w-sm transform-gpu",
+            i { class: "material-icons", "system_update" }
+            div {
+                p { class: "font-semibold", "Update available" }
+                p { class: "text-sm", "RSPlayer {latest} has been released." }
+                if method == InstallMethod::Snap {
+                    p { class: "text-xs opacity-70", "Snap updates install automatically — or update now:" }
+                }
+                if let Some(cmd) = command {
+                    div { class: "flex items-center gap-1 mt-1",
+                        code { class: "text-xs bg-base-300 text-base-content rounded px-1.5 py-0.5 select-all", "{cmd}" }
+                        button {
+                            class: "btn btn-ghost btn-xs",
+                            title: "Copy command",
+                            onclick: move |_| {
+                                let _ = js_sys::eval(&format!("navigator.clipboard.writeText('{cmd}')"));
+                            },
+                            i { class: "material-icons text-sm", "content_copy" }
+                        }
+                    }
+                }
+            }
+            a {
+                class: "btn btn-sm btn-primary",
+                href: update::RELEASES_PAGE,
+                target: "_blank",
+                rel: "noopener",
+                "View"
+            }
+            button {
+                class: "btn btn-sm btn-circle btn-ghost",
+                title: "Dismiss for this version",
+                onclick: move |_| {
+                    update::dismiss(&latest_dismiss);
+                    dismissed.set(true);
+                },
+                "✕"
             }
         }
     }

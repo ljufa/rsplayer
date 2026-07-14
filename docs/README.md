@@ -107,15 +107,12 @@ See the [Configuration](configuration.md) page for hardware integration details.
 - **Subsonic protocol support**: Compatibility with Subsonic clients.
 - **Community plugin framework**: Extensible architecture for third-party plugins.
 - **Improved playlist management**: Create/modify/delete items and playlists from everywhere.
-- **In-app upgrade**: Detect a new version and provide an upgrade button.
-- **Problem (bug) report with diagnostics**: Report problems directly from the app.
 - **Scheduled music library scans**: Define an automatic library scan interval (or cron).
+- **Problem (bug) report with diagnostics**: Report problems directly from the app.
 - **Desktop App File Logging**: Rolling log files for the desktop app, so users can capture and share diagnostics without running from a terminal.
 - **Homebrew Distribution**: Install and update RSPlayer on macOS through a Homebrew formula/cask.
 - **Android App**: A native Android build (with an optional kiosk mode for dedicated players), published to the Google Play Store.
-- **Automatic Linux Updates**: A hosted apt/dnf package repository — or an in-app self-update — so Linux installs receive new versions without re-running the install script.
 - **AUR Package**: An official Arch User Repository package for Arch Linux and derivatives.
-
 
 ## Contributing
 

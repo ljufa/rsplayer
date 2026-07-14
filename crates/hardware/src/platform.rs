@@ -11,7 +11,7 @@
 //! cpal-only builds (Windows/macOS).
 
 use api_models::common::{PcmOutputDevice, VolumeCrtlType};
-use api_models::settings::Settings;
+use api_models::settings::{InstallMethod, Settings};
 
 use crate::audio_device::pipewire;
 
@@ -137,6 +137,57 @@ pub fn detect_sandbox() -> Sandbox {
 /// True when running inside a Flatpak or Snap sandbox.
 pub fn is_sandboxed() -> bool {
     detect_sandbox() != Sandbox::None
+}
+
+/// Detect how this instance was installed, for the UI's update-command hint.
+/// Cached — the answer cannot change while the process runs.
+pub fn detect_install_method() -> InstallMethod {
+    static METHOD: std::sync::OnceLock<InstallMethod> = std::sync::OnceLock::new();
+    *METHOD.get_or_init(|| {
+        // Flatpak/Snap take precedence over desktop mode: the sandboxed
+        // desktop app sets RSPLAYER_DESKTOP too, but its updates arrive
+        // through the sandbox store, not the releases page.
+        match detect_sandbox() {
+            Sandbox::Flatpak => InstallMethod::Flatpak,
+            Sandbox::Snap => InstallMethod::Snap,
+            Sandbox::None => {
+                if std::env::var("RSPLAYER_DESKTOP").is_ok() {
+                    InstallMethod::Desktop
+                } else {
+                    system_package_method().unwrap_or(InstallMethod::Unknown)
+                }
+            }
+        }
+    })
+}
+
+/// `Rpm`/`Deb` when the running binary sits at /usr/bin/rsplayer (only the
+/// system packages install it there — manual builds run from elsewhere),
+/// with os-release deciding the package family. `None` otherwise.
+fn system_package_method() -> Option<InstallMethod> {
+    let exe = std::fs::canonicalize(std::env::current_exe().ok()?).ok()?;
+    if exe != std::path::Path::new("/usr/bin/rsplayer") {
+        return None;
+    }
+    let os_release = std::fs::read_to_string("/etc/os-release")
+        .or_else(|_| std::fs::read_to_string("/usr/lib/os-release"))
+        .ok()?;
+    let ids: Vec<String> = os_release
+        .lines()
+        .filter_map(|line| line.strip_prefix("ID=").or_else(|| line.strip_prefix("ID_LIKE=")))
+        .flat_map(|value| value.trim_matches('"').split_whitespace())
+        .map(str::to_lowercase)
+        .collect();
+    if ids.iter().any(|id| id == "debian" || id == "ubuntu") {
+        Some(InstallMethod::Deb)
+    } else if ids
+        .iter()
+        .any(|id| matches!(id.as_str(), "fedora" | "rhel" | "centos" | "suse" | "opensuse"))
+    {
+        Some(InstallMethod::Rpm)
+    } else {
+        None
+    }
 }
 
 /// True when the sandbox exposes a `PulseAudio` compatibility socket.

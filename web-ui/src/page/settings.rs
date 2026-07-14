@@ -117,7 +117,7 @@ const fn filter_type_of(f: &DspFilter) -> DspFilterType {
 
 #[component]
 pub fn SettingsPage() -> Element {
-    let _state = use_context::<AppState>();
+    let state = use_context::<AppState>();
     let ws = use_context::<Signal<Option<WebSocket>>>();
 
     let mut settings: Signal<Settings> = use_signal(Settings::default);
@@ -985,7 +985,32 @@ pub fn SettingsPage() -> Element {
                 }
             }
 
-            p { class: "text-xs text-base-content/40 mt-2 px-1", "Version: {settings.read().version}" }
+            div { class: "flex flex-wrap items-center gap-2 mt-2 px-1",
+                p { class: "text-xs text-base-content/40", "Version: {settings.read().version}" }
+                if let Some(latest) = state.update_available.read().clone() {
+                    a {
+                        class: "badge badge-info badge-sm gap-1",
+                        href: crate::update::RELEASES_PAGE,
+                        target: "_blank",
+                        rel: "noopener",
+                        i { class: "material-icons text-xs", "system_update" }
+                        "{latest} available"
+                    }
+                    if let Some(cmd) = crate::update::update_command(settings.read().install_method) {
+                        div { class: "flex items-center gap-1",
+                            code { class: "text-xs bg-base-200 rounded px-1.5 py-0.5 select-all", "{cmd}" }
+                            button {
+                                class: "btn btn-ghost btn-xs",
+                                title: "Copy command",
+                                onclick: move |_| {
+                                    let _ = js_sys::eval(&format!("navigator.clipboard.writeText('{cmd}')"));
+                                },
+                                i { class: "material-icons text-sm", "content_copy" }
+                            }
+                        }
+                    }
+                }
+            }
             if let Some(url) = settings.read().remote_access_url.clone() {
                 div { class: "flex items-center gap-2 mt-1 px-1",
                     p { class: "text-xs text-base-content/40",

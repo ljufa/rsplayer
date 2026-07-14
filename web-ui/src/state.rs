@@ -60,6 +60,10 @@ pub struct AppState {
     pub multiroom_peers: Signal<Vec<MultiroomPeer>>,
     /// This instance's multiroom role and group membership.
     pub multiroom_group: Signal<MultiroomGroupState>,
+    /// Newer released version available on GitHub (None = up to date or not checked).
+    pub update_available: Signal<Option<String>>,
+    /// Whether the user dismissed the update notification banner for the available version.
+    pub update_banner_dismissed: Signal<bool>,
 }
 
 impl AppState {
@@ -98,6 +102,8 @@ impl AppState {
             show_bg_image: Signal::new(true),
             multiroom_peers: Signal::new(Vec::new()),
             multiroom_group: Signal::new(MultiroomGroupState::default()),
+            update_available: Signal::new(None),
+            update_banner_dismissed: Signal::new(false),
         }
     }
 
