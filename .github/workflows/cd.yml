@@ -340,7 +340,7 @@ jobs:
       # binaries is permitted. asio-sys reads CPAL_ASIO_DIR to locate it.
       - name: Cache ASIO SDK
         id: cache-asio
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: asiosdk
           key: asio-sdk-2.3.3
