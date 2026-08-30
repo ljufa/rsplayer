@@ -104,6 +104,30 @@ journalctl -u rsplayer.service -f -n 300
 - Lower the **Player thread priority** if you notice the system becoming unresponsive.
 - Avoid high-resolution files (e.g., 24-bit/192kHz) if your device struggles — standard 16-bit/44.1kHz is much less demanding.
 
+## Audio won't play while another player (e.g. Squeezelite) is running
+
+If RSPlayer refuses to play anything after a reboot, but starts working again as soon as you stop another audio service (Squeezelite, MPD, etc.), the two applications are fighting over the same exclusive ALSA hardware device.
+
+ALSA only allows **one** process at a time to hold a `hw:X` device open. RSPlayer's Settings page recommends `hw:` devices (labeled "hw, recommended") because they give the best audio quality by bypassing software mixing — but that also means the device cannot be shared with any other player that opens it directly. Squeezelite in particular keeps its output device open continuously once started, so it never releases it on its own, and RSPlayer's automatic retry (5 attempts, 1 second apart) isn't long enough to outlast that.
+
+**Diagnose:**
+```bash
+journalctl -u rsplayer.service -f -n 300
+```
+Look for an "audio output stream open error" mentioning the device being busy when you try to play something.
+
+**Fix — pick one:**
+
+- **Free the device** — stop or disable the conflicting service if you don't need it running all the time:
+  ```bash
+  sudo systemctl stop squeezelite
+  sudo systemctl disable squeezelite
+  ```
+- **Share the device** — point RSPlayer and/or the other player at a shared PCM device instead of the raw `hw:X` card, so ALSA software-mixes the two streams:
+  - Define a `dmix` device for your card in `/etc/asound.conf` (or `~/.asoundrc`), then pick it from RSPlayer's **Settings → Audio output device** dropdown instead of the "hw, recommended" entry.
+  - Point Squeezelite at the same `dmix` device via its `-a` option.
+- **Give the other player an idle timeout** — e.g. Squeezelite's `-C <seconds>` flag closes its output device after that many seconds of inactivity, freeing it for RSPlayer between uses. This only helps if RSPlayer happens to retry during that window, so prefer one of the two fixes above for a permanent solution.
+
 ## Windows-specific issues
 
 ### Web UI shows a blank page in Microsoft Edge
