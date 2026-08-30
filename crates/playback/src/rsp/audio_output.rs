@@ -22,7 +22,7 @@ use anyhow::{Error, Result};
 use api_models::settings::RsPlayerSettings;
 use log::info;
 use rubato::audioadapter_buffers::direct::SequentialSliceOfVecs;
-use rubato::{Fft, FixedSync, Resampler};
+use rubato::{Fft, FixedSync, Resampler, WindowFunction};
 use std::sync::Arc;
 use symphonia::core::audio::{AudioSpec, GenericAudioBufferRef};
 
@@ -637,7 +637,7 @@ impl AudioOutput {
                         Error::from(e)
                     })?;
                 let writer: Box<dyn AudioWriter> = if let Some(dev_rate) = device_rate {
-                    let resampler = Fft::<f32>::new(
+                    let resampler = Fft::<f32>::new_custom(
                         #[allow(clippy::cast_possible_truncation)]
                         {
                             spec.rate() as usize
@@ -652,6 +652,7 @@ impl AudioOutput {
                         },
                         2,
                         source_channels,
+                        WindowFunction::BlackmanHarris2,
                         FixedSync::Input,
                     )
                     .map_err(|e| Error::msg(format!("failed to create resampler: {e}")))?;
