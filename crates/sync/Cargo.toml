@@ -16,5 +16,5 @@ log.workspace = true
 serde.workspace = true
 tokio.workspace = true
 iroh = "1"
-iroh-mdns-address-lookup = "0.4"
+iroh-mdns-address-lookup = "0.5"
 postcard = { version = "1", features = ["use-std"] }
