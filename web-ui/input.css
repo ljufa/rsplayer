@@ -219,6 +219,71 @@
   gap: 0.25rem;
 }
 
+/* ── Artists A–Z jump rail ──────────────────────────────────── */
+/* Fixed to the viewport (not sticky) so it never moves under a finger that
+   is scrubbing it. Sits below the nav + library sub-nav + search row and
+   above the footer mini-player; horizontally pinned to the right edge of
+   the centred .app-shell column. */
+.artist-jump {
+  position: fixed;
+  top: 10rem;
+  right: max(0.15rem, calc((100% - 768px) / 2 + 0.15rem));
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  /* Fill the available height so the letters spread out and each one gets
+     the largest possible touch target; the flex children share it evenly. */
+  height: calc(100dvh - 15rem);
+  min-height: 14rem;
+  padding: 0.25rem 0.1rem;
+  border-radius: 9999px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+}
+.artist-jump__letter {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  font-size: 0.65rem;
+  line-height: 1;
+  font-weight: 600;
+  border-radius: 9999px;
+  color: var(--color-primary);
+}
+.artist-jump__letter.is-empty {
+  color: color-mix(in srgb, var(--color-base-content) 25%, transparent);
+  font-weight: 400;
+}
+.artist-jump__letter.is-active {
+  background: var(--color-primary);
+  color: var(--color-primary-content);
+}
+/* Large letter shown in the middle of the screen while scrubbing the rail */
+.artist-jump__bubble {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  width: 4.5rem;
+  height: 4.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  font-size: 2.5rem;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--color-primary) 90%, transparent);
+  color: var(--color-primary-content);
+  pointer-events: none;
+}
+
 /* ── Footer mini-player ─────────────────────────────────────── */
 .player-footer {
   position: sticky;

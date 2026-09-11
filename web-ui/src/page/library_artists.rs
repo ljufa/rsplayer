@@ -1,9 +1,79 @@
 use api_models::common::{MetadataCommand, MetadataLibraryItem, QueueCommand, UserCommand};
 use dioxus::prelude::*;
 use indextree::{Arena, NodeId};
+use unicode_normalization::UnicodeNormalization;
 use web_sys::WebSocket;
 
 use crate::{hooks::ws_send, state::AppState};
+
+/// Letters shown on the A–Z jump rail, in list order. `#` collects every
+/// artist whose name does not start with an ASCII letter.
+const JUMP_LETTERS: [char; 27] = [
+    '#', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
+    'W', 'X', 'Y', 'Z',
+];
+
+/// Minimum number of top-level artists before the jump rail is shown.
+const JUMP_RAIL_MIN_ITEMS: usize = 20;
+
+/// Bucket an artist name onto the jump rail. Mirrors the server's sort key
+/// (NFD, combining marks stripped, case-folded, leading whitespace ignored)
+/// so that jumping to a letter lands on the first artist sorted under it.
+fn jump_bucket(name: &str) -> char {
+    name.nfd()
+        .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
+        .find(|c| !c.is_whitespace())
+        .map_or('#', |c| if c.is_ascii_alphabetic() { c.to_ascii_uppercase() } else { '#' })
+}
+
+fn jump_index(letter: char) -> usize {
+    JUMP_LETTERS.iter().position(|&l| l == letter).unwrap_or(0)
+}
+
+fn jump_anchor_id(letter: char) -> String {
+    if letter == '#' {
+        "artist-jump-hash".to_string()
+    } else {
+        format!("artist-jump-{letter}")
+    }
+}
+
+/// Map a pointer's client Y coordinate over the rail to the nearest letter
+/// that actually has artists. `None` when the rail is not in the DOM.
+fn jump_letter_at(client_y: f64, present: &[bool; JUMP_LETTERS.len()]) -> Option<char> {
+    let rail = web_sys::window()?.document()?.get_element_by_id("artist-jump-rail")?;
+    let rect = rail.get_bounding_client_rect();
+    if rect.height() <= 0.0 {
+        return None;
+    }
+    let n = JUMP_LETTERS.len();
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+    let idx = (((client_y - rect.top()) / rect.height()) * n as f64).floor().clamp(0.0, (n - 1) as f64) as usize;
+    (0..n).find_map(|d| {
+        if idx + d < n && present[idx + d] {
+            Some(JUMP_LETTERS[idx + d])
+        } else if idx >= d && present[idx - d] {
+            Some(JUMP_LETTERS[idx - d])
+        } else {
+            None
+        }
+    })
+}
+
+/// Scroll the window so the first artist under `letter` sits just below the
+/// sticky nav bar. The page (not the list) is the scroll container.
+fn jump_to(letter: char) {
+    let Some(win) = web_sys::window() else { return };
+    let Some(doc) = win.document() else { return };
+    let Some(el) = doc.get_element_by_id(&jump_anchor_id(letter)) else { return };
+    let nav_height = doc
+        .query_selector(".app-nav")
+        .ok()
+        .flatten()
+        .map_or(0.0, |nav| nav.get_bounding_client_rect().height());
+    let y = el.get_bounding_client_rect().top() + win.scroll_y().unwrap_or(0.0) - nav_height - 4.0;
+    win.scroll_to_with_x_and_y(0.0, y.max(0.0));
+}
 
 struct Tree {
     arena: Arena<MetadataLibraryItem>,
@@ -55,6 +125,8 @@ pub fn LibraryArtistsPage() -> Element {
     let mut tree: Signal<Tree> = use_signal(Tree::new);
     let mut loading = use_signal(|| true);
     let mut search = use_signal(String::new);
+    // Letter currently under the pointer while scrubbing the A–Z rail.
+    let jump_active: Signal<Option<char>> = use_signal(|| None);
 
     let route_search = use_hook(|| {
         web_sys::window()
@@ -139,12 +211,23 @@ pub fn LibraryArtistsPage() -> Element {
                 }
             } else {
                 {
-                    let top_nodes: Vec<(NodeId, MetadataLibraryItem)> = {
+                    let (top_nodes, present) = {
                         let t = tree.read();
-                        t.root.children(&t.arena)
-                            .map(|id| (id, t.arena.get(id).unwrap().get().clone()))
-                            .collect()
+                        let mut seen = [false; JUMP_LETTERS.len()];
+                        let nodes: Vec<(NodeId, MetadataLibraryItem, Option<String>)> = t
+                            .root
+                            .children(&t.arena)
+                            .map(|id| {
+                                let item = t.arena.get(id).unwrap().get().clone();
+                                let bucket = jump_bucket(&item.get_title());
+                                let slot = &mut seen[jump_index(bucket)];
+                                let anchor = if *slot { None } else { *slot = true; Some(jump_anchor_id(bucket)) };
+                                (id, item, anchor)
+                            })
+                            .collect();
+                        (nodes, seen)
                     };
+                    let show_rail = top_nodes.len() >= JUMP_RAIL_MIN_ITEMS;
                     if !search().is_empty() && top_nodes.is_empty() {
                         rsx! {
                             div { class: "flex flex-col items-center justify-center gap-2 p-8 text-base-content/60",
@@ -155,19 +238,26 @@ pub fn LibraryArtistsPage() -> Element {
                         }
                     } else {
                         rsx! {
-                            div { class: "overflow-y-auto",
-                                {
-                                    top_nodes.into_iter().map(|(node_id, item)| {
-                                        rsx! {
-                                            ArtistNode {
-                                                key: "{node_id:?}",
-                                                item,
-                                                node_id,
-                                                ws,
-                                                tree,
+                            div { class: "flex items-start",
+                                // Right padding keeps rows clear of the fixed-position rail.
+                                div { class: if show_rail { "flex-1 min-w-0 overflow-y-auto pr-7" } else { "flex-1 min-w-0 overflow-y-auto" },
+                                    {
+                                        top_nodes.into_iter().map(|(node_id, item, anchor)| {
+                                            rsx! {
+                                                ArtistNode {
+                                                    key: "{node_id:?}",
+                                                    item,
+                                                    node_id,
+                                                    ws,
+                                                    tree,
+                                                    anchor,
+                                                }
                                             }
-                                        }
-                                    })
+                                        })
+                                    }
+                                }
+                                if show_rail {
+                                    JumpRail { present, active: jump_active }
                                 }
                             }
                         }
@@ -178,8 +268,74 @@ pub fn LibraryArtistsPage() -> Element {
     }
 }
 
+/// Vertical A–Z index next to the artist list. Tap a letter, or press and
+/// drag along the rail, to scroll the list to the first artist under it.
 #[component]
-fn ArtistNode(item: MetadataLibraryItem, node_id: NodeId, ws: Signal<Option<WebSocket>>, tree: Signal<Tree>) -> Element {
+fn JumpRail(present: [bool; JUMP_LETTERS.len()], active: Signal<Option<char>>) -> Element {
+    let mut scrub = move |client_y: f64| {
+        if let Some(letter) = jump_letter_at(client_y, &present) {
+            if active() != Some(letter) {
+                active.set(Some(letter));
+                jump_to(letter);
+            }
+        }
+    };
+    let mut release = move || active.set(None);
+
+    rsx! {
+        div {
+            id: "artist-jump-rail",
+            class: "artist-jump",
+            role: "navigation",
+            aria_label: "Jump to letter",
+            onpointerdown: move |e: PointerEvent| {
+                e.prevent_default();
+                // Keep receiving pointer events while dragging outside the rail.
+                if let Some(rail) = web_sys::window()
+                    .and_then(|w| w.document())
+                    .and_then(|d| d.get_element_by_id("artist-jump-rail"))
+                {
+                    let _ = rail.set_pointer_capture(e.data().pointer_id());
+                }
+                scrub(e.data().client_coordinates().y);
+            },
+            onpointermove: move |e: PointerEvent| {
+                if active().is_some() {
+                    scrub(e.data().client_coordinates().y);
+                }
+            },
+            onpointerup: move |_| release(),
+            onpointercancel: move |_| release(),
+            for (i , letter) in JUMP_LETTERS.iter().enumerate() {
+                span {
+                    key: "{letter}",
+                    class: if active() == Some(*letter) {
+                        "artist-jump__letter is-active"
+                    } else if present[i] {
+                        "artist-jump__letter"
+                    } else {
+                        "artist-jump__letter is-empty"
+                    },
+                    "{letter}"
+                }
+            }
+        }
+        if let Some(letter) = active() {
+            div { class: "artist-jump__bubble", aria_hidden: "true", "{letter}" }
+        }
+    }
+}
+
+#[component]
+fn ArtistNode(
+    item: MetadataLibraryItem,
+    node_id: NodeId,
+    ws: Signal<Option<WebSocket>>,
+    tree: Signal<Tree>,
+    /// DOM id set on the first artist of each jump-rail letter (top level only).
+    #[props(default)]
+    anchor: Option<String>,
+) -> Element {
     let label = item.get_title();
     let is_song = matches!(item, MetadataLibraryItem::SongItem(_));
     let has_children = node_id.children(&tree.read().arena).count() > 0;
@@ -191,7 +347,7 @@ fn ArtistNode(item: MetadataLibraryItem, node_id: NodeId, ws: Signal<Option<WebS
     };
 
     rsx! {
-        div { class: "library-node",
+        div { class: "library-node", id: anchor,
             div {
                 class: "library-node__row flex items-center gap-1 pl-3 pr-2 py-1.5 hover:bg-base-200 group",
                 onclick: {
@@ -347,4 +503,34 @@ fn send_queue_cmd(item: &MetadataLibraryItem, ws: &Signal<Option<WebSocket>>, ac
         _ => return,
     };
     ws_send(ws, &UserCommand::Queue(cmd));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{jump_anchor_id, jump_bucket, jump_index, JUMP_LETTERS};
+
+    #[test]
+    fn buckets_follow_server_sort_key() {
+        assert_eq!(jump_bucket("Yello"), 'Y');
+        assert_eq!(jump_bucket("zz top"), 'Z');
+        assert_eq!(jump_bucket("  Air"), 'A');
+        assert_eq!(jump_bucket("Émilie Simon"), 'E');
+        assert_eq!(jump_bucket("Ólafur Arnalds"), 'O');
+    }
+
+    #[test]
+    fn non_letters_go_to_hash() {
+        assert_eq!(jump_bucket("10cc"), '#');
+        assert_eq!(jump_bucket("!!!"), '#');
+        assert_eq!(jump_bucket(""), '#');
+        assert_eq!(jump_bucket("Ørsted"), '#');
+    }
+
+    #[test]
+    fn anchor_ids_are_unique_per_letter() {
+        let ids: std::collections::HashSet<String> = JUMP_LETTERS.iter().map(|&l| jump_anchor_id(l)).collect();
+        assert_eq!(ids.len(), JUMP_LETTERS.len());
+        assert_eq!(jump_index('#'), 0);
+        assert_eq!(jump_index('Z'), JUMP_LETTERS.len() - 1);
+    }
 }

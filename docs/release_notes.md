@@ -1,5 +1,27 @@
 # Release Notes
 
+## v4.7.5 — 2026-08-30
+
+Dependency updates, a fix for a break one of those updates introduced, and a small library navigation feature.
+
+### Features
+
+- **A–Z jump index in Library → Artists** ([#34](https://github.com/ljufa/rsplayer/issues/34)). Large libraries needed a lot of scrolling to reach artists late in the alphabet. The artists list now has a letter rail along its right edge: tap a letter to jump to the first artist under it, or press and slide along the rail to scrub through the list with a large letter indicator, the way phone contact lists work. Letters with no artists are dimmed, `#` collects names starting with digits or symbols, and accented names are bucketed the same way the server sorts them (Émilie under E). The rail appears once the list has 20 or more artists, including filtered search results.
+
+### Fixes
+
+- **Resampler broke after the `rubato` 4.0 bump.** The dependency update below pulled in `rubato` 4.0, which collapsed the `sub_chunks` parameter out of `Fft::new()`. Switched to `Fft::new_custom()` with the same `sub_chunks=2` and `BlackmanHarris2` window used before, so resampled playback behaves exactly as it did on 4.7.0.
+
+### Dependencies
+
+- Bumped all Rust dependencies to their latest semver-compatible versions (`cargo update`), including `quinn-proto` 0.11.14 → 0.11.16, `serde_with` 3.20.0 → 3.21.0, and 15 more via Dependabot's grouped update.
+- Bumped web UI frontend dependencies (`tailwindcss`, `daisyui`) to latest; Now Playing and Settings pages verified in a real browser after the rebuild.
+- Bumped `actions/cache` from 4 to 6 in CI workflows.
+
+### Documentation
+
+- Added a troubleshooting entry for **"Audio won't play while another player (e.g. Squeezelite) is running"** — covers the ALSA exclusive-device conflict, how to diagnose it via `journalctl`, and three fixes (free the device, share it via `dmix`, or use the other player's idle timeout).
+
 ## v4.7.0 — 2026-07-14
 
 ### Features

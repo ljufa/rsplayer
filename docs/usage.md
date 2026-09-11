@@ -174,6 +174,7 @@ Browse by artist name.
 ![Library Artists](/_assets/library_artists.png)
 
 - Alphabetical artist listing
+- A–Z index on the right edge: tap a letter, or press and slide along it, to jump straight to that part of the list (shown once the list has 20+ artists)
 - Click artist to see their albums and songs
 - Quick add to queue options
 
