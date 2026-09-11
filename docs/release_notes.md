@@ -1,6 +1,8 @@
 # Release Notes
 
-## v4.8.0 — unreleased
+## v4.8.0 — 2026-09-11
+
+Podcast support, seekable HTTP audio, and an A–Z jump index for the artists list.
 
 ### Features
 
@@ -19,17 +21,19 @@ Settings → Podcasts holds the directory choice, Podcast Index credentials, ref
 
 Any `http(s)://` URL added through the queue's "Add URL" dialog that points at a file on a host supporting byte ranges is now seekable and shows its real duration. Live radio streams behave as before. As part of this the HTTP stream reader also reconnects at the current byte offset if the connection drops mid-track instead of restarting from the beginning, and it no longer carries a global timeout that also bounded body reads.
 
+#### A–Z jump index in Library → Artists ([#34](https://github.com/ljufa/rsplayer/issues/34))
+
+Large libraries needed a lot of scrolling to reach artists late in the alphabet. The artists list now has a letter rail along its right edge: tap a letter to jump to the first artist under it, or press and slide along the rail to scrub through the list with a large letter indicator, the way phone contact lists work. Letters with no artists are dimmed, `#` collects names starting with digits or symbols, and accented names are bucketed the same way the server sorts them (Émilie under E). The rail appears once the list has 20 or more artists, including filtered search results.
+
 ### Fixes
 
 - **Non-ICY HTTP URLs no longer lose their queue metadata.** A direct file URL used to be treated like a radio stream: the (empty) station metadata replaced the queued title and the reported sample rate/bit depth came from absent ICY headers. Only responses that actually carry `icy-*` headers are treated as radio now.
 
+**Full Changelog**: https://github.com/ljufa/rsplayer/compare/4.7.5...4.8.0
+
 ## v4.7.5 — 2026-08-30
 
-Dependency updates, a fix for a break one of those updates introduced, and a small library navigation feature.
-
-### Features
-
-- **A–Z jump index in Library → Artists** ([#34](https://github.com/ljufa/rsplayer/issues/34)). Large libraries needed a lot of scrolling to reach artists late in the alphabet. The artists list now has a letter rail along its right edge: tap a letter to jump to the first artist under it, or press and slide along the rail to scrub through the list with a large letter indicator, the way phone contact lists work. Letters with no artists are dimmed, `#` collects names starting with digits or symbols, and accented names are bucketed the same way the server sorts them (Émilie under E). The rail appears once the list has 20 or more artists, including filtered search results.
+Maintenance release: dependency updates plus a fix for a break one of those updates introduced.
 
 ### Fixes
 
@@ -44,6 +48,8 @@ Dependency updates, a fix for a break one of those updates introduced, and a sma
 ### Documentation
 
 - Added a troubleshooting entry for **"Audio won't play while another player (e.g. Squeezelite) is running"** — covers the ALSA exclusive-device conflict, how to diagnose it via `journalctl`, and three fixes (free the device, share it via `dmix`, or use the other player's idle timeout).
+
+**Full Changelog**: https://github.com/ljufa/rsplayer/compare/4.7.0...4.7.5
 
 ## v4.7.0 — 2026-07-14
 
