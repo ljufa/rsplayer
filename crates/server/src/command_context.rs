@@ -18,12 +18,14 @@ use metadata::ports::{
 };
 use metadata::queue_service::QueueService;
 use playback::rsp::player_service::PlayerService;
+use podcast::PodcastService;
 
 pub struct CommandContext {
     pub player_service: Arc<PlayerService>,
     pub metadata_service: Arc<MetadataService>,
     pub playlist_service: Arc<PlaylistService>,
     pub queue_service: Arc<QueueService>,
+    pub podcast_service: Arc<PodcastService>,
     pub album_repository: ArcAlbumRepository,
     pub song_repository: ArcSongRepository,
     pub loudness_repository: ArcLoudnessRepository,
@@ -40,6 +42,7 @@ impl CommandContext {
         metadata_service: Arc<MetadataService>,
         playlist_service: Arc<PlaylistService>,
         queue_service: Arc<QueueService>,
+        podcast_service: Arc<PodcastService>,
         album_repository: ArcAlbumRepository,
         song_repository: ArcSongRepository,
         loudness_repository: ArcLoudnessRepository,
@@ -52,6 +55,7 @@ impl CommandContext {
             metadata_service,
             playlist_service,
             queue_service,
+            podcast_service,
             album_repository,
             song_repository,
             loudness_repository,

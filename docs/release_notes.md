@@ -1,5 +1,28 @@
 # Release Notes
 
+## v4.8.0 — unreleased
+
+### Features
+
+#### Podcasts
+
+RSPlayer is now a podcast client. A new **Library → Podcasts** tab (keyboard shortcut `O`) lets you:
+
+- **Find shows** by name through the Apple Podcasts directory (no account needed), or through [Podcast Index](https://podcastindex.org) when you enter a free API key in Settings → Podcasts. Pasting an RSS feed URL into the same search box subscribes directly.
+- **Subscribe** and browse each show's episodes newest-first, with artwork, publish date, duration, and the show notes one tap away. Feeds are refreshed in the background (hourly by default, conditional requests so unchanged feeds cost one small round trip) and a refresh button is there when you can't wait.
+- **Play, play next, or add to queue** any episode. Episodes enter the regular queue with proper title/show/artwork metadata, so the Now Playing page, the footer player, multiroom and the queue all just work.
+- **Seek and resume.** Episodes are seekable like local files — the progress bar shows the real length and dragging it works. RSPlayer remembers where you stopped in every episode (across restarts and whichever way you start it again), shows a progress bar and "12m left" in the episode list, and marks an episode played once you have heard 95 % of it (threshold configurable). Played episodes are dimmed and can be toggled back to unplayed; an unplayed-count badge sits on each show's card.
+
+Settings → Podcasts holds the directory choice, Podcast Index credentials, refresh interval, how many episodes to keep per show, and the played threshold. Resume positions are tracked when RSPlayer plays the audio itself; the optional browser-playback mode does not report positions yet.
+
+#### Seeking works for direct HTTP audio URLs
+
+Any `http(s)://` URL added through the queue's "Add URL" dialog that points at a file on a host supporting byte ranges is now seekable and shows its real duration. Live radio streams behave as before. As part of this the HTTP stream reader also reconnects at the current byte offset if the connection drops mid-track instead of restarting from the beginning, and it no longer carries a global timeout that also bounded body reads.
+
+### Fixes
+
+- **Non-ICY HTTP URLs no longer lose their queue metadata.** A direct file URL used to be treated like a radio stream: the (empty) station metadata replaced the queued title and the reported sample rate/bit depth came from absent ICY headers. Only responses that actually carry `icy-*` headers are treated as radio now.
+
 ## v4.7.5 — 2026-08-30
 
 Dependency updates, a fix for a break one of those updates introduced, and a small library navigation feature.

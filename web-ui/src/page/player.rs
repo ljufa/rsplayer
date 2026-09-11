@@ -276,18 +276,23 @@ fn TrackInfo(song: Option<Song>, player_info: Option<PlayerInfo>) -> Element {
                 });
             let artist = ps.artist.clone();
             let album = ps.album.clone();
+            // Podcast episodes link to their show instead of the artist search.
+            let artist_href = ps.podcast_id().map_or_else(
+                || artist.as_ref().map(|a| format!("/library/artists?search={a}")),
+                |id| Some(format!("/library/podcasts?podcast={id}")),
+            );
             rsx! {
                 div { class: "track-info text-center",
                     h1 { class: "font-bold text-base-content {title_class} mb-1", "{title}" }
-                    if let Some(ref artist) = artist {
+                    if let (Some(ref artist), Some(href)) = (artist.as_ref(), artist_href) {
                         a {
                             class: "text-xl text-base-content/80 hover:underline block cursor-pointer",
-                            href: "/library/artists?search={artist}",
+                            href: "{href}",
                             onclick: {
-                                let artist = artist.clone();
+                                let href = href.clone();
                                 move |e: Event<MouseData>| {
                                     e.prevent_default();
-                                    navigate(path, &format!("/library/artists?search={artist}"));
+                                    navigate(path, &href);
                                 }
                             },
                             "{artist}"

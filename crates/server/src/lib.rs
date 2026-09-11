@@ -19,6 +19,7 @@ pub mod metadata_commands;
 pub mod mount_service;
 pub mod player_commands;
 pub mod playlist_commands;
+pub mod podcast_commands;
 pub mod queue_commands;
 pub mod server;
 pub mod storage_commands;
@@ -110,6 +111,7 @@ async fn run(
         playlist_service,
         queue_service,
         player_service,
+        podcast_service,
         audio_service,
         usb_service,
         state_changes_tx,
@@ -206,6 +208,7 @@ async fn run(
                     metadata_service,
                     playlist_service,
                     queue_service,
+                    podcast_service,
                     album_repository,
                     song_repository,
                     loudness_repository,

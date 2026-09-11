@@ -27,6 +27,9 @@ pub struct PlaybackContext {
     pub vu_meter: Option<VUMeter>,
     /// Multiroom PCM tee — `Some` when multiroom is enabled in settings.
     pub sync_tee: Option<SyncTee>,
+    /// Track length known from metadata (e.g. a podcast episode's feed
+    /// duration), reported as `total_time` when the demuxer cannot tell.
+    pub fallback_duration: Option<std::time::Duration>,
 }
 
 impl PlaybackContext {
@@ -53,6 +56,7 @@ impl PlaybackContext {
             dsp_handle,
             vu_meter,
             sync_tee,
+            fallback_duration: None,
         }
     }
 

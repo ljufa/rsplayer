@@ -139,6 +139,7 @@ config = { path = "../config" }
 playback = { path = "../playback" }
 hardware = { path = "../hardware" }
 sync = { path = "../sync" }
+podcast = { path = "../podcast" }
 cpal.workspace = true
 
 #logging

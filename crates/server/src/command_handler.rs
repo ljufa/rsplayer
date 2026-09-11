@@ -17,17 +17,19 @@ use metadata::ports::loudness_repository::ArcLoudnessRepository;
 use metadata::ports::song_repository::ArcSongRepository;
 use metadata::queue_service::QueueService;
 use playback::rsp::player_service::PlayerService;
+use podcast::PodcastService;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::mpsc::{self, Receiver};
 
 use api_models::common::SystemCommand;
-use api_models::common::UserCommand::{self, Metadata, Multiroom, Player, Playlist, Queue, Storage, System, UpdateDsp};
+use api_models::common::UserCommand::{self, Metadata, Multiroom, Player, Playlist, Podcast, Queue, Storage, System, UpdateDsp};
 use api_models::state::StateChangeEvent;
 
 use crate::command_context::{CommandContext, SystemCommandContext};
 use crate::metadata_commands::handle_metadata_command;
 use crate::player_commands::handle_player_command;
 use crate::playlist_commands::handle_playlist_command;
+use crate::podcast_commands::handle_podcast_command;
 use crate::queue_commands::handle_queue_command;
 use crate::storage_commands::handle_storage_command;
 use crate::system_commands::handle_system_command;
@@ -38,6 +40,7 @@ pub async fn handle_user_commands(
     metadata_service: Arc<MetadataService>,
     playlist_service: Arc<PlaylistService>,
     queue_service: Arc<QueueService>,
+    podcast_service: Arc<PodcastService>,
     album_repository: ArcAlbumRepository,
     song_repository: ArcSongRepository,
     loudness_repository: ArcLoudnessRepository,
@@ -53,6 +56,7 @@ pub async fn handle_user_commands(
         metadata_service,
         playlist_service,
         queue_service,
+        podcast_service,
         album_repository,
         song_repository,
         loudness_repository,
@@ -98,6 +102,9 @@ pub async fn handle_user_commands(
                 if let Err(e) = multiroom_commands_tx.send(multiroom_cmd).await {
                     debug!("Multiroom command dropped (multiroom disabled?): {e}");
                 }
+            }
+            Podcast(podcast_cmd) => {
+                handle_podcast_command(podcast_cmd, &ctx);
             }
         }
     }

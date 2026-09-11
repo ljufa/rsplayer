@@ -15,6 +15,7 @@ carries the per-file detail — this page is the map.
 | `crates/config` | `Settings` persistence (one JSON blob in fjall) with in-memory cache and schema migrations; first launch persists platform-aware defaults supplied by the server (from `hardware::platform`) |
 | `crates/playback` | The audio engine: Symphonia decode loop, cpal output (`AudioOutput`), DSD path, VU, multiroom tee/sink |
 | `crates/metadata` | Library scanner, fjall repositories (songs/albums/stats/loudness), queue, playlists, radio metadata, APE/DSF/SACD Symphonia plugins |
+| `crates/podcast` | Podcast subscriptions: directory search (iTunes / Podcast Index), RSS/Atom feed refresh (`feed-rs`), episode cache in fjall, per-episode resume position and played state |
 | `crates/dsp` | Parametric EQ (biquads, CamillaDSP-derived) with a lock-free config handoff to the audio thread |
 | `crates/sync` | Multiroom leader/follower over iroh QUIC — see the dedicated doc |
 | `crates/hardware` | Volume-control devices (ALSA/PipeWire/software/firmware), USB front-panel link, LIRC remote, platform/sandbox detection with first-launch playback defaults |
@@ -22,7 +23,7 @@ carries the per-file detail — this page is the map.
 | `crates/desktop` | Tauri wrapper: embeds the backend in-process, webview UI, OS media keys |
 | `web-ui` | Dioxus web frontend (not covered here) |
 
-Dependency direction (roughly): `server → {sync, playback, metadata, hardware, config, dsp} → api_models`. `playback` depends on `metadata` (probe/codec registries, loudness) and `dsp`; `sync` depends on `playback` (tee, sink); `hardware` depends on `wire`.
+Dependency direction (roughly): `server → {sync, playback, metadata, podcast, hardware, config, dsp} → api_models`. `playback` depends on `metadata` (probe/codec registries, loudness) and `dsp`; `sync` depends on `playback` (tee, sink); `hardware` depends on `wire`. `podcast` depends only on `api_models` and `config`; the server adapts it to playback's `ResumePositionProvider` so the two never depend on each other.
 
 ## Process Shape
 
@@ -92,8 +93,21 @@ Key points:
   path for every platform and both local + multiroom-sink playback. The name
   `alsa_output.rs` was retired in 2026-07 — it is pure cpal.
 - **Source resolution** (`audio_source.rs`): local paths against the music
-  dirs; HTTP with ICY metadata for radio; APE and SACD-ISO virtual tracks
-  (`…#SACD_<n>`) via the custom readers in the metadata crate.
+  dirs; APE and SACD-ISO virtual tracks (`…#SACD_<n>`) via the custom readers
+  in the metadata crate. HTTP URLs are fetched once with `Icy-Metadata: 1`
+  and `Range: bytes=0-`: a response carrying `icy-*` headers is a live radio
+  stream (ICY title updates flow out as events, not seekable); a host that
+  honours byte ranges (podcast episodes, direct file links) becomes an
+  `HttpRangeSource` — a seekable `MediaSource` that re-requests from the new
+  offset on seek and reconnects at the current offset on dropped
+  connections, so Symphonia reports a real duration and user seeks work;
+  anything else plays as a plain non-seekable stream. Stream agents carry no
+  global timeout (it would also bound body reads and cut long tracks).
+- **Resume hook**: before each track starts, `PlayerService` asks an optional
+  `ResumePositionProvider` (the podcast service, wired in the composition
+  root) for a start offset and arms `skip_to_time` with it. This is how a
+  half-heard episode continues from any entry path (play button, next/prev,
+  queue click) without the player knowing what a podcast is.
 - **Sample-format negotiation**: the device is opened at the source rate if
   it supports it, otherwise the resampler targets an integer multiple
   (cleanest ratio) or the closest supported rate; retry ladders handle
@@ -127,6 +141,9 @@ concern:
 | `queue`, `queue_status`, `queue_random_history` | Queue items (insertion-ordered ids), current position/mode, random-mode history |
 | `playlist`, `playlist_list` | Saved playlist items (`{name}_{index}`) and headers |
 | `player_state` | Pause flag + last position for resume-on-restart |
+| `podcasts` | Subscribed feeds (`Podcast` JSON keyed by feed-URL hash) incl. refresh validators (`ETag`/`Last-Modified`) |
+| `podcast_episodes` | `Episode` JSON keyed `{podcast_id}/{inverted publish ts}/{episode_id}` — a prefix scan is newest-first; carries `position_secs`/`played` |
+| `podcast_episode_index` | `id:{episode_id}` and `url:{audio_url}` → episode key, for lookups from playback events |
 | `multiroom` | The iroh endpoint secret key |
 
 The settings blob round-trips **whole** through `GET/POST /api/settings`;

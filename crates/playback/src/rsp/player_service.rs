@@ -9,6 +9,10 @@
 //! `DspProcessor` (settings changes rebuild the EQ from here). Control in:
 //! atomics (`stop_signal`, `skip_to_time`); results out:
 //! `StateChangeEvent`s.
+//!
+//! Before each track starts, an optional [`ResumePositionProvider`] (the
+//! podcast service) can arm `skip_to_time` so episodes continue where the
+//! listener left off, whatever path (play, next, queue click) started them.
 
 use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 use log::{debug, error, info, trace, warn};
@@ -21,6 +25,7 @@ use thread_priority::{ThreadBuilder, ThreadPriority};
 use tokio::sync::broadcast::{Sender, error::RecvError};
 
 use api_models::{
+    player::Song,
     settings::{DspSettings, RsPlayerSettings, Settings},
     state::{PlayerInfo, PlayerState, StateChangeEvent},
 };
@@ -34,6 +39,12 @@ use super::symphonia::PlaybackResult;
 use crate::rsp::playback_config::PlaybackConfig;
 use crate::rsp::playback_context::PlaybackContext;
 use crate::rsp::tee::SyncTee;
+
+/// Supplies a per-song start offset (seconds) consulted right before a
+/// track begins playing; `None` means start from the beginning.
+pub trait ResumePositionProvider: Send + Sync {
+    fn resume_position(&self, song: &Song) -> Option<u16>;
+}
 
 pub struct PlayerService {
     state_db: Keyspace,
@@ -53,6 +64,7 @@ pub struct PlayerService {
     loudness_service: Arc<LoudnessService>,
     last_player_info: Arc<Mutex<Option<PlayerInfo>>>,
     sync_tee: Option<SyncTee>,
+    resume_provider: Option<Arc<dyn ResumePositionProvider>>,
 }
 
 const LAST_SONG_PAUSED_KEY: &str = "last_song_paused";
@@ -70,6 +82,7 @@ impl PlayerService {
         state_changes_tx: Sender<StateChangeEvent>,
         loudness_service: Arc<LoudnessService>,
         sync_tee: Option<SyncTee>,
+        resume_provider: Option<Arc<dyn ResumePositionProvider>>,
     ) -> Arc<Self> {
         let state_db = db
             .keyspace("player_state", KeyspaceCreateOptions::default)
@@ -184,6 +197,7 @@ impl PlayerService {
             loudness_service,
             last_player_info,
             sync_tee,
+            resume_provider,
         };
         let last_played_song_progress = ps.get_last_played_song_time();
         if last_played_song_progress > 0 {
@@ -310,6 +324,7 @@ impl PlayerService {
         let is_multi_core_platform = core_affinity::get_core_ids().is_some_and(|ids| ids.len() > 1);
         let local_browser_playback = self.local_browser_playback;
         let sync_tee = self.sync_tee.clone();
+        let resume_provider = self.resume_provider.clone();
         // Use the configured priority on single-core platforms too: with
         // ThreadPriority::Min the audio thread on an RPi Zero was starved by
         // web-UI/library requests sharing the one core, breaking playback.
@@ -341,6 +356,12 @@ impl PlayerService {
 
                     if skip_to_time.load(Ordering::Relaxed) == 0 {
                         metadata_service.increase_play_count(&song.file);
+                        if let Some(resume_at) = resume_provider.as_ref().and_then(|p| p.resume_position(&song))
+                            && resume_at > 0
+                        {
+                            info!("Resuming '{}' at {resume_at}s", song.file);
+                            skip_to_time.store(resume_at, Ordering::Relaxed);
+                        }
                     }
 
                     if let Err(e) = changes_tx.send(StateChangeEvent::CurrentSongEvent(song.clone())) {
@@ -420,6 +441,7 @@ impl PlayerService {
                         vu_meter_enabled,
                         sync_tee.clone(),
                     );
+                    context.fallback_duration = song.time;
 
                     let play_result = if local_browser_playback {
                         loop {

@@ -3,6 +3,7 @@ use api_models::{
     common::{MetadataLibraryItem, PlaybackMode, Volume},
     player::Song,
     playlist::{Album, PlaylistPage, Playlists},
+    podcast::{Episode, EpisodePage, Podcast, PodcastSearchResult},
     settings::Settings,
     stat::LibraryStats,
     state::{
@@ -64,6 +65,14 @@ pub struct AppState {
     pub update_available: Signal<Option<String>>,
     /// Whether the user dismissed the update notification banner for the available version.
     pub update_banner_dismissed: Signal<bool>,
+    /// Podcast subscriptions (sorted by title, refreshed by the server on every change).
+    pub podcasts: Signal<Vec<Podcast>>,
+    /// Results of the last podcast directory search.
+    pub podcast_search_results: Signal<Vec<PodcastSearchResult>>,
+    /// Loaded episode pages keyed by podcast id (accumulated across "load more").
+    pub podcast_episodes: Signal<HashMap<String, EpisodePage>>,
+    /// True while the server's podcast worker runs a search/subscribe/refresh.
+    pub podcast_busy: Signal<bool>,
 }
 
 impl AppState {
@@ -104,6 +113,34 @@ impl AppState {
             multiroom_group: Signal::new(MultiroomGroupState::default()),
             update_available: Signal::new(None),
             update_banner_dismissed: Signal::new(false),
+            podcasts: Signal::new(Vec::new()),
+            podcast_search_results: Signal::new(Vec::new()),
+            podcast_episodes: Signal::new(HashMap::new()),
+            podcast_busy: Signal::new(false),
+        }
+    }
+
+    /// A page at offset 0 replaces what is cached for that podcast; later
+    /// pages are appended (the "load more" flow).
+    fn merge_episode_page(&mut self, page: EpisodePage) {
+        let mut cache = self.podcast_episodes.write();
+        match cache.get_mut(&page.podcast_id) {
+            Some(existing) if page.offset > 0 && page.offset == existing.episodes.len() => {
+                existing.total = page.total;
+                existing.episodes.extend(page.episodes);
+            }
+            _ => {
+                cache.insert(page.podcast_id.clone(), page);
+            }
+        }
+    }
+
+    fn patch_episode(&mut self, episode: &Episode) {
+        let mut cache = self.podcast_episodes.write();
+        if let Some(page) = cache.get_mut(&episode.podcast_id) {
+            if let Some(slot) = page.episodes.iter_mut().find(|e| e.id == episode.id) {
+                *slot = episode.clone();
+            }
         }
     }
 
@@ -195,6 +232,21 @@ impl AppState {
             }
             StateChangeEvent::MultiroomGroupEvent(group) => {
                 *self.multiroom_group.write() = group;
+            }
+            StateChangeEvent::PodcastsEvent(podcasts) => {
+                *self.podcasts.write() = podcasts;
+            }
+            StateChangeEvent::PodcastSearchResultsEvent(results) => {
+                *self.podcast_search_results.write() = results;
+            }
+            StateChangeEvent::PodcastEpisodesEvent(page) => {
+                self.merge_episode_page(page);
+            }
+            StateChangeEvent::PodcastEpisodeUpdatedEvent(episode) => {
+                self.patch_episode(&episode);
+            }
+            StateChangeEvent::PodcastBusyEvent(busy) => {
+                *self.podcast_busy.write() = busy;
             }
             _ => {}
         }

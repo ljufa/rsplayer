@@ -29,8 +29,9 @@ use metadata::ports::{
 };
 use metadata::queue_service::QueueService;
 use metadata::song_repository::FjallSongRepository;
-use playback::rsp::player_service::PlayerService;
+use playback::rsp::player_service::{PlayerService, ResumePositionProvider};
 use playback::rsp::tee::{SyncTee, TeeEvent};
+use podcast::PodcastService;
 
 pub struct ChannelPair<T> {
     pub tx: mpsc::Sender<T>,
@@ -57,6 +58,7 @@ pub struct AppContainer {
     pub playlist_service: Arc<PlaylistService>,
     pub queue_service: Arc<QueueService>,
     pub player_service: Arc<PlayerService>,
+    pub podcast_service: Arc<PodcastService>,
 
     pub audio_service: ArcAudioInterfaceSvc,
     pub usb_service: Option<ArcUsbService>,
@@ -70,6 +72,15 @@ pub struct AppContainer {
     pub multiroom_follower_active: Arc<AtomicBool>,
     /// Audio-side multiroom plumbing — `Some` when multiroom is enabled.
     pub multiroom: Option<MultiroomParts>,
+}
+
+/// Lets the player start podcast episodes where the listener left off.
+struct PodcastResume(Arc<PodcastService>);
+
+impl ResumePositionProvider for PodcastResume {
+    fn resume_position(&self, song: &api_models::player::Song) -> Option<u16> {
+        self.0.resume_position(song).map(|secs| u16::try_from(secs).unwrap_or(u16::MAX))
+    }
 }
 
 /// Everything the sync service needs beyond the command/event channels.
@@ -159,6 +170,10 @@ pub fn build_app_container(config: &ArcConfiguration, shared_db: &Arc<fjall::Dat
         (None, None)
     };
 
+    let podcast_service = PodcastService::new(shared_db, config.clone(), state_changes_tx.clone());
+    podcast_service.start();
+    info!("Podcast service successfully created.");
+
     let player_service = PlayerService::new(
         shared_db,
         &settings,
@@ -168,6 +183,7 @@ pub fn build_app_container(config: &ArcConfiguration, shared_db: &Arc<fjall::Dat
         state_changes_tx.clone(),
         loudness_service,
         sync_tee.clone(),
+        Some(Arc::new(PodcastResume(podcast_service.clone()))),
     );
     info!("Player service successfully created.");
 
@@ -200,6 +216,7 @@ pub fn build_app_container(config: &ArcConfiguration, shared_db: &Arc<fjall::Dat
         playlist_service,
         queue_service,
         player_service,
+        podcast_service,
         audio_service,
         usb_service,
         state_changes_tx,

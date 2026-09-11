@@ -26,7 +26,7 @@ Press **?** anywhere to show the keyboard shortcuts help:
 | 2 | Queue |
 | 3 | Library (Playlists) |
 | 4 | Settings |
-| F / A / P / R / T | Library sub-pages: Files / Artists / Playlists / Radio / Stats |
+| F / A / P / R / O / T | Library sub-pages: Files / Artists / Playlists / Radio / Podcasts / Stats |
 | / | Focus search field |
 | ? | Show/hide keyboard shortcuts |
 
@@ -88,7 +88,7 @@ The top section displays information about the currently playing track:
 | S | Shuffle / Repeat mode |
 | V | Cycle visualizer mode |
 | 1-4 | Navigate: Player / Queue / Library / Settings |
-| F / A / P / R / T | Library: Files / Artists / Playlists / Radio / Stats |
+| F / A / P / R / O / T | Library: Files / Artists / Playlists / Radio / Podcasts / Stats |
 | / | Focus search field |
 | ? | Show keyboard shortcuts help |
 | Esc | Close modal |
@@ -188,6 +188,22 @@ Manage internet radio streams.
 - Organize favorite stations
 - Play radio streams directly
 
+### Podcasts View
+
+Subscribe to podcasts and listen to episodes; RSPlayer remembers where you stopped.
+
+**Subscriptions** shows your shows as a grid, with a badge for unplayed episodes. Open a show to see its episodes newest-first with date, length and time left. Tap a title to expand the show notes. Each episode offers:
+
+- **Play** (resumes a started episode where you left off)
+- **Play next** / **Add to queue**
+- **Mark played / unplayed** — episodes are marked played automatically once 95 % has been heard (configurable), and are shown dimmed
+
+The show header has **Refresh** (re-fetch the feed now) and **Unsubscribe** (tap twice to confirm). Feeds are refreshed in the background, hourly by default.
+
+**Search** finds shows by name in the Apple Podcasts directory, or in Podcast Index when you have entered an API key under Settings → Podcasts. Paste an RSS feed URL into the same box to subscribe to a feed that is not listed.
+
+Episodes are seekable like local files, and the Now Playing page links the show name back to its episode list. Positions are tracked when RSPlayer plays the audio itself, not in browser playback mode.
+
 ### Stats View
 
 View library statistics and loudness analysis progress.
@@ -227,6 +243,7 @@ Configure RSPlayer settings. For detailed configuration options, see the [Config
 | DSP Equalizer | Parametric EQ, presets, CamillaDSP import |
 | Music Library | Music directories, network storage |
 | Multiroom | Synchronized playback across devices |
+| Podcasts | Search directory (Apple Podcasts / Podcast Index + API key), feed refresh interval, episodes kept per show, played threshold |
 | Hardware | USB command channel, power control |
 | System | Restart, shutdown |
 

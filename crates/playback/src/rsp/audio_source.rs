@@ -1,9 +1,12 @@
 //! Source resolution: turns a queue item's key into a probed media source.
 //!
 //! Local paths are resolved against the configured music directories;
-//! HTTP(S) URLs are fetched with `Icy-Metadata: 1` and wrapped in
-//! [`IcyMetadataReader`] so radio title updates flow out as events; APE and
-//! SACD-ISO keys (`…#SACD_<n>`) get their special readers.
+//! HTTP(S) URLs are fetched with `Icy-Metadata: 1` and `Range: bytes=0-`:
+//! genuine ICY radio streams are wrapped in [`IcyMetadataReader`] so title
+//! updates flow out as events, hosts that honour byte ranges (podcast
+//! episodes, direct file links) become a seekable [`HttpRangeSource`], and
+//! anything else is a plain non-seekable stream. APE and SACD-ISO keys
+//! (`…#SACD_<n>`) get their special readers.
 
 use std::path::{Path, PathBuf};
 
@@ -17,23 +20,34 @@ use log::info;
 use metadata::icy_reader::IcyMetadataReader;
 use metadata::radio_meta::{self, RadioMeta};
 
+use crate::rsp::http_range_source::HttpRangeSource;
+
+/// HTTP agent for long-lived audio bodies: bounded connect/response-header
+/// waits, but no global or per-call deadline — those also cover body reads
+/// and would cut a stream after the configured time.
+pub fn build_stream_agent() -> ureq::Agent {
+    use std::time::Duration;
+    ureq::Agent::config_builder()
+        .timeout_connect(Some(Duration::from_secs(5)))
+        .timeout_recv_response(Some(Duration::from_secs(10)))
+        .build()
+        .into()
+}
+
+/// Opens `url` and returns the media source plus, for genuine ICY radio
+/// streams only, the station metadata parsed from the response headers.
 pub fn probe_http_source(
     url: &str,
     hint: &mut Hint,
     changes_tx: &Sender<StateChangeEvent>,
 ) -> Result<(Box<dyn MediaSource>, Option<RadioMeta>)> {
-    use std::time::Duration;
-
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_connect(Some(Duration::from_secs(3)))
-        .timeout_global(Some(Duration::from_secs(30)))
-        .build()
-        .into();
+    let agent = build_stream_agent();
 
     let resp = agent
         .get(url)
         .header("accept", "*/*")
         .header("Icy-Metadata", "1")
+        .header("Range", "bytes=0-")
         .call()
         .map_err(|e| format_err!("Failed to get url {url}: {e}"))?;
 
@@ -46,7 +60,13 @@ pub fn probe_http_source(
         .iter()
         .for_each(|(name, value)| info!("{name} = {:?}", value.to_str().unwrap_or("")));
 
-    let radio_meta = radio_meta::get_external_radio_meta(&agent, &resp);
+    let header_present = |name: &str| resp.headers().contains_key(name);
+    let is_icy_stream = header_present("icy-metaint") || header_present("icy-name");
+    let radio_meta = if is_icy_stream {
+        radio_meta::get_external_radio_meta(&agent, &resp)
+    } else {
+        None
+    };
 
     let ct_str = resp
         .headers()
@@ -54,20 +74,20 @@ pub fn probe_http_source(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_string();
-    let ext = match ct_str.as_str() {
-        "audio/mpeg" => Some("mp3"),
+    let ext = match ct_str.split(';').next().unwrap_or("").trim() {
+        "audio/mpeg" | "audio/mp3" => Some("mp3"),
         "audio/aac" | "audio/aacp" | "audio/x-aac" => Some("aac"),
         "audio/ogg" | "application/ogg" => Some("ogg"),
         "audio/flac" | "audio/x-flac" => Some("flac"),
         "audio/wav" | "audio/x-wav" => Some("wav"),
-        "audio/mp4" | "audio/x-m4a" => Some("m4a"),
+        "audio/mp4" | "audio/x-m4a" | "audio/m4a" => Some("m4a"),
         _ => None,
     };
     if let Some(ext) = ext {
         hint.with_extension(ext);
     }
 
-    if status != 200 {
+    if status != 200 && status != 206 {
         return Err(format_err!("Invalid streaming url {url}"));
     }
 
@@ -82,8 +102,19 @@ pub fn probe_http_source(
         let reader = resp.into_body().into_reader();
         let icy_reader = IcyMetadataReader::new(reader, metaint_val, changes_tx.clone(), rm);
         Box::new(ReadOnlySource::new(Box::new(icy_reader)))
-    } else {
+    } else if is_icy_stream {
         Box::new(ReadOnlySource::new(resp.into_body().into_reader()))
+    } else {
+        match HttpRangeSource::try_from_response(agent, url, resp) {
+            Ok(range_source) => {
+                info!("Seekable HTTP source ({} bytes)", range_source.byte_len().unwrap_or(0));
+                Box::new(range_source)
+            }
+            Err(resp) => {
+                info!("HTTP source without range support, playing as a stream");
+                Box::new(ReadOnlySource::new((*resp).into_body().into_reader()))
+            }
+        }
     };
 
     Ok((media_source, radio_meta))

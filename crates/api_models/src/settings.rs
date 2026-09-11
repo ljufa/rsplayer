@@ -12,6 +12,7 @@ use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 use validator::Validate;
 
 use crate::common::{AudioCard, CardMixer, PcmOutputDevice, VolumeCrtlType};
+use crate::podcast::PodcastDirectory;
 
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
@@ -55,6 +56,9 @@ pub struct Settings {
     pub multiroom_settings: MultiroomSettings,
     #[serde(default)]
     pub install_method: InstallMethod,
+    #[serde(default)]
+    #[validate(nested)]
+    pub podcast_settings: PodcastSettings,
 }
 
 /// How this rsplayer instance was installed — detected by the server at runtime
@@ -105,6 +109,56 @@ impl Default for MultiroomSettings {
             room_name: default_room_name(),
             buffer_ms: default_multiroom_buffer_ms(),
             output_latency_offset_ms: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Validate)]
+pub struct PodcastSettings {
+    /// Directory used for `PodcastCommand::Search`.
+    #[serde(default)]
+    pub directory: PodcastDirectory,
+    /// Podcast Index credentials (<https://api.podcastindex.org>); only needed
+    /// when `directory` is `PodcastIndex`.
+    #[serde(default)]
+    pub podcast_index_api_key: String,
+    #[serde(default)]
+    pub podcast_index_api_secret: String,
+    /// How often subscribed feeds are re-fetched in the background.
+    #[serde(default = "default_podcast_refresh_minutes")]
+    #[validate(range(min = 5, max = 1440))]
+    pub refresh_interval_minutes: u32,
+    /// Newest episodes kept per feed; older ones are pruned unless started.
+    #[serde(default = "default_max_episodes_per_feed")]
+    #[validate(range(min = 10, max = 5000))]
+    pub max_episodes_per_feed: u32,
+    /// An episode counts as played once this share of it has been heard.
+    #[serde(default = "default_played_threshold_percent")]
+    #[validate(range(min = 50, max = 100))]
+    pub played_threshold_percent: u8,
+}
+
+const fn default_podcast_refresh_minutes() -> u32 {
+    60
+}
+
+const fn default_max_episodes_per_feed() -> u32 {
+    500
+}
+
+const fn default_played_threshold_percent() -> u8 {
+    95
+}
+
+impl Default for PodcastSettings {
+    fn default() -> Self {
+        Self {
+            directory: PodcastDirectory::default(),
+            podcast_index_api_key: String::new(),
+            podcast_index_api_secret: String::new(),
+            refresh_interval_minutes: default_podcast_refresh_minutes(),
+            max_episodes_per_feed: default_max_episodes_per_feed(),
+            played_threshold_percent: default_played_threshold_percent(),
         }
     }
 }
@@ -515,6 +569,7 @@ impl Default for Settings {
             ui_preferences: UiPreferences::default(),
             multiroom_settings: MultiroomSettings::default(),
             install_method: InstallMethod::default(),
+            podcast_settings: PodcastSettings::default(),
         }
     }
 }

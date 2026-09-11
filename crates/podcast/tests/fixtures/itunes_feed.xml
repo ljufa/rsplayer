@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>The Example Show</title>
+    <link>https://example.com/show</link>
+    <atom:link href="https://example.com/feed.xml" rel="self" type="application/rss+xml"/>
+    <language>en-us</language>
+    <description><![CDATA[<p>A weekly show about <em>audio</em> software.</p>]]></description>
+    <itunes:author>Example Media</itunes:author>
+    <itunes:summary>A weekly show about audio software.</itunes:summary>
+    <itunes:image href="https://cdn.example.com/show.jpg"/>
+    <itunes:category text="Technology">
+      <itunes:category text="Tech News"/>
+    </itunes:category>
+    <itunes:explicit>false</itunes:explicit>
+    <item>
+      <title>Episode 42: Range requests</title>
+      <guid isPermaLink="false">tag:example.com,2026:ep42</guid>
+      <pubDate>Tue, 01 Sep 2026 10:00:00 +0000</pubDate>
+      <description><![CDATA[We talk about HTTP byte ranges &amp; seeking.<br><br>Second paragraph with a <a href="https://example.com">link</a>.]]></description>
+      <content:encoded><![CDATA[<p>Long form show notes.</p>]]></content:encoded>
+      <enclosure url="https://cdn.example.com/ep42.mp3" length="52428800" type="audio/mpeg"/>
+      <itunes:duration>01:02:03</itunes:duration>
+      <itunes:image href="https://cdn.example.com/ep42.jpg"/>
+      <itunes:episode>42</itunes:episode>
+    </item>
+    <item>
+      <title>Episode 41</title>
+      <guid>tag:example.com,2026:ep41</guid>
+      <pubDate>Tue, 25 Aug 2026 10:00:00 +0000</pubDate>
+      <enclosure url="https://cdn.example.com/ep41.mp3" length="1000" type="audio/mpeg"/>
+      <itunes:duration>1800</itunes:duration>
+    </item>
+    <item>
+      <title>Episode 40</title>
+      <guid>tag:example.com,2026:ep40</guid>
+      <pubDate>Tue, 18 Aug 2026 10:00:00 +0000</pubDate>
+      <description>Plain description.</description>
+      <enclosure url="https://cdn.example.com/ep40.jpg" length="10" type="image/jpeg"/>
+      <enclosure url="https://cdn.example.com/ep40.m4a" length="2000" type="audio/x-m4a"/>
+      <itunes:duration>00:30:00</itunes:duration>
+    </item>
+    <item>
+      <title>Blog post without audio</title>
+      <guid>tag:example.com,2026:post</guid>
+      <pubDate>Mon, 17 Aug 2026 10:00:00 +0000</pubDate>
+      <description>Just text.</description>
+    </item>
+  </channel>
+</rss>

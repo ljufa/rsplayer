@@ -10,6 +10,7 @@ members = [
     "crates/sync",
     "crates/wire",
     "crates/mount_helper",
+    "crates/podcast",
     "web-ui", "crates/desktop",
 ]
 default-members = [
@@ -24,6 +25,7 @@ default-members = [
     "crates/sync",
     "crates/wire",
     "crates/mount_helper",
+    "crates/podcast",
 ]
 resolver = "2"
 
@@ -41,6 +43,8 @@ fjall = "3"
 serde_json = "1"
 tokio-stream = "0.1"
 ureq = "3"
+feed-rs = "2"
+sha1 = "0.10"
 
 [workspace.dependencies.chrono]
 version = "0.4"

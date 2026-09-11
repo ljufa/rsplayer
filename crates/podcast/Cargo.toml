@@ -1,0 +1,23 @@
+[package]
+name = "podcast"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+api_models = { path = "../api_models" }
+config = { path = "../config" }
+
+log.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+fjall.workspace = true
+chrono.workspace = true
+ureq.workspace = true
+feed-rs.workspace = true
+sha1.workspace = true
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"

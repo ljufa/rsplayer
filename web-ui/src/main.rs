@@ -35,7 +35,8 @@ use web_sys::WebSocket;
 
 use page::{
     home::HomePage, library_artists::LibraryArtistsPage, library_files::LibraryFilesPage, library_playlists::LibraryPlaylistsPage,
-    library_radio::LibraryRadioPage, library_stats::LibraryStatsPage, not_found::NotFoundPage, player::BrowserAudioPlayback,
+    library_podcasts::LibraryPodcastsPage, library_radio::LibraryRadioPage, library_stats::LibraryStatsPage,
+    not_found::NotFoundPage, player::BrowserAudioPlayback,
     player::PlayerPage, queue::QueuePage, settings::SettingsPage,
 };
 
@@ -348,6 +349,9 @@ fn App() -> Element {
                                     "/library/radio" => rsx! {
                                         LibraryRadioPage {}
                                     },
+                                    "/library/podcasts" => rsx! {
+                                        LibraryPodcastsPage {}
+                                    },
                                     "/library/playlists" => rsx! {
                                         LibraryPlaylistsPage {}
                                     },
@@ -409,6 +413,7 @@ fn setup_keyboard_shortcuts(path: Signal<String>, ws: Signal<Option<WebSocket>>,
                 "f" | "F" => navigate(path, "/library/files"),
                 "a" | "A" => navigate(path, "/library/artists"),
                 "r" | "R" => navigate(path, "/library/radio"),
+                "o" | "O" => navigate(path, "/library/podcasts"),
                 "t" | "T" => navigate(path, "/library/stats"),
                 "?" => {
                     let open = *ui.shortcuts_open.peek();
@@ -647,8 +652,8 @@ fn KeyboardShortcutsModal() -> Element {
                             description: "Now Playing / Queue / Library / Settings",
                         }
                         ShortcutRow {
-                            key_label: "P / F / A / R / T",
-                            description: "Playlists / Files / Artists / Radio / Stats",
+                            key_label: "P / F / A / R / O / T",
+                            description: "Playlists / Files / Artists / Radio / Podcasts / Stats",
                         }
                         ShortcutRow {
                             key_label: "?",
@@ -1071,6 +1076,7 @@ fn LibrarySubNav() -> Element {
                 ("Files", "/library/files"),
                 ("Artists", "/library/artists"),
                 ("Radio", "/library/radio"),
+                ("Podcasts", "/library/podcasts"),
                 ("Stats", "/library/stats"),
             ]
             {

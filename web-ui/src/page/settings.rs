@@ -1,3 +1,4 @@
+use api_models::podcast::PodcastDirectory;
 use api_models::{
     common::{MetadataCommand, StorageCommand, SystemRequest, UserCommand, VolumeCrtlType},
     settings::{DspFilter, FilterConfig, NetworkMountConfig, NetworkMountType, NormalizationSource, Settings},
@@ -724,6 +725,117 @@ pub fn SettingsPage() -> Element {
                             p { class: "text-xs opacity-60",
                                 "Instances with multiroom enabled discover each other automatically on the local network. Group rooms from the player page. Changes take effect after a restart. Multiroom is in beta — if sync misbehaves on your hardware or network, please report it on GitHub."
                             }
+                        }
+                    }
+                },
+            }
+
+            // ── Podcasts section ──────────────────────────────────────────────
+            SettingsSection {
+                title: "Podcasts",
+                icon: "podcasts",
+                content: rsx! {
+                    div { class: "space-y-3",
+                        div { class: "form-control",
+                            label { class: "label",
+                                span { class: "label-text font-medium", "Search directory" }
+                            }
+                            select {
+                                class: "select select-bordered select-sm w-full",
+                                onchange: move |e: Event<FormData>| {
+                                    let dir = if e.value() == "podcast_index" {
+                                        PodcastDirectory::PodcastIndex
+                                    } else {
+                                        PodcastDirectory::Itunes
+                                    };
+                                    settings.write().podcast_settings.directory = dir;
+                                    auto_save();
+                                },
+                                option {
+                                    value: "itunes",
+                                    selected: settings.read().podcast_settings.directory == PodcastDirectory::Itunes,
+                                    "Apple Podcasts (iTunes Search, no account needed)"
+                                }
+                                option {
+                                    value: "podcast_index",
+                                    selected: settings.read().podcast_settings.directory == PodcastDirectory::PodcastIndex,
+                                    "Podcast Index (needs API key)"
+                                }
+                            }
+                        }
+                        if settings.read().podcast_settings.directory == PodcastDirectory::PodcastIndex {
+                            div { class: "grid grid-cols-1 sm:grid-cols-2 gap-2",
+                                div { class: "form-control",
+                                    label { class: "label py-0.5",
+                                        span { class: "label-text text-sm", "Podcast Index API key" }
+                                    }
+                                    input {
+                                        class: "input input-sm input-bordered w-full",
+                                        r#type: "text",
+                                        value: "{settings.read().podcast_settings.podcast_index_api_key}",
+                                        onchange: move |e: Event<FormData>| {
+                                            settings.write().podcast_settings.podcast_index_api_key = e.value().trim().to_string();
+                                            auto_save();
+                                        },
+                                    }
+                                }
+                                div { class: "form-control",
+                                    label { class: "label py-0.5",
+                                        span { class: "label-text text-sm", "Podcast Index API secret" }
+                                    }
+                                    input {
+                                        class: "input input-sm input-bordered w-full",
+                                        r#type: "password",
+                                        value: "{settings.read().podcast_settings.podcast_index_api_secret}",
+                                        onchange: move |e: Event<FormData>| {
+                                            settings.write().podcast_settings.podcast_index_api_secret = e.value().trim().to_string();
+                                            auto_save();
+                                        },
+                                    }
+                                }
+                            }
+                            p { class: "text-xs opacity-60",
+                                "Free keys are issued at api.podcastindex.org. Without a key, searches fall back to Apple Podcasts."
+                            }
+                        }
+                        NumberInput {
+                            label: "Refresh feeds every (minutes)",
+                            value: settings.read().podcast_settings.refresh_interval_minutes.to_string(),
+                            min: "5",
+                            max: "1440",
+                            onchange: move |v: String| {
+                                if let Ok(n) = v.parse::<u32>() {
+                                    settings.write().podcast_settings.refresh_interval_minutes = n.clamp(5, 1440);
+                                    auto_save();
+                                }
+                            },
+                        }
+                        NumberInput {
+                            label: "Episodes kept per podcast",
+                            value: settings.read().podcast_settings.max_episodes_per_feed.to_string(),
+                            min: "10",
+                            max: "5000",
+                            onchange: move |v: String| {
+                                if let Ok(n) = v.parse::<u32>() {
+                                    settings.write().podcast_settings.max_episodes_per_feed = n.clamp(10, 5000);
+                                    auto_save();
+                                }
+                            },
+                        }
+                        NumberInput {
+                            label: "Mark played after (% listened)",
+                            value: settings.read().podcast_settings.played_threshold_percent.to_string(),
+                            min: "50",
+                            max: "100",
+                            onchange: move |v: String| {
+                                if let Ok(n) = v.parse::<u8>() {
+                                    settings.write().podcast_settings.played_threshold_percent = n.clamp(50, 100);
+                                    auto_save();
+                                }
+                            },
+                        }
+                        p { class: "text-xs opacity-60",
+                            "Episodes resume where you stopped. Positions are tracked when RSPlayer plays the audio itself, not in browser playback mode."
                         }
                     }
                 },

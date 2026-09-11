@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<rss version="2.0">
+  <channel>
+    <title>Sparse</title>
+    <item>
+      <title>Only an enclosure</title>
+      <enclosure url="https://cdn.example.com/sparse.mp3"/>
+    </item>
+  </channel>
+</rss>

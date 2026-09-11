@@ -1,7 +1,8 @@
 //! The decode loop — [`play_file`] runs one track start to finish on the
 //! playback thread.
 //!
-//! Probes the source (local file, HTTP/ICY radio, APE, SACD ISO track),
+//! Probes the source (local file, HTTP/ICY radio, seekable HTTP file, APE,
+//! SACD ISO track),
 //! opens the matching [`AudioOutput`] (PCM at source rate, or the DSD path),
 //! then packet-by-packet: decode → multiroom tee → write. Handles seeks
 //! (`skip_to_time`), mid-track format changes (rate/channel switch reopens
@@ -60,7 +61,9 @@ pub fn play_file(
     debug!("Playing file {path_str}");
     let mut hint = Hint::new();
 
-    let is_seekable = !is_http_stream(path_str);
+    // HTTP sources decide seekability themselves (range-capable hosts are
+    // seekable, live streams are not); everything local is seekable.
+    let mut is_seekable = !is_http_stream(path_str);
 
     // For APE files: open the file directly and construct ApeReader without
     // reading the entire file into memory. Only headers + seek table are read
@@ -101,7 +104,11 @@ pub fn play_file(
             probe_local_file(path_str, &config.music_dirs, &mut hint)?
         };
         radio_meta = rm;
+        is_seekable = source.is_seekable();
 
+        // Genuine ICY radio only: the station name replaces the (empty)
+        // queue entry. Podcast episodes and direct links keep their queue
+        // metadata.
         if let Some(rm) = &radio_meta {
             context
                 .changes_tx
@@ -141,6 +148,10 @@ pub fn play_file(
         .num_frames
         .map_or(1, |frames| track.start_ts.get().unsigned_abs().saturating_add(frames));
     let dur = tb.calc_time(Timestamp::new(dur_ts.cast_signed())).unwrap_or(Time::ZERO);
+    let total_time = match context.fallback_duration {
+        Some(fallback) if dur.as_secs() == 0 => fallback,
+        _ => Duration::from_secs(dur.as_secs().unsigned_abs()),
+    };
 
     let Some(CodecParameters::Audio(audio_params)) = track.codec_params.as_ref() else {
         return Err(format_err!("Invalid track codec params"));
@@ -226,7 +237,7 @@ pub fn play_file(
         if current_time != last_current_time {
             last_current_time = current_time;
             let _ = context.changes_tx.send(StateChangeEvent::SongTimeEvent(SongProgress {
-                total_time: Duration::from_secs(dur.as_secs().unsigned_abs()),
+                total_time,
                 current_time: Duration::from_secs(current_time),
             }));
         }

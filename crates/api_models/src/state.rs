@@ -14,6 +14,7 @@ use core::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use crate::podcast::{Episode, EpisodePage, Podcast, PodcastSearchResult};
 use crate::common::MetadataLibraryItem;
 use crate::{
     common::{PlaybackMode, Volume},
@@ -89,6 +90,14 @@ pub enum StateChangeEvent {
     ExternalMountsEvent(Vec<ExternalMount>),
     MultiroomPeersEvent(Vec<MultiroomPeer>),
     MultiroomGroupEvent(MultiroomGroupState),
+    /// All subscriptions, sent after any change and on `QueryPodcasts`.
+    PodcastsEvent(Vec<Podcast>),
+    PodcastSearchResultsEvent(Vec<PodcastSearchResult>),
+    PodcastEpisodesEvent(EpisodePage),
+    /// Progress/played state of one episode changed.
+    PodcastEpisodeUpdatedEvent(Episode),
+    /// The podcast worker is busy with a search/subscribe/refresh job.
+    PodcastBusyEvent(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

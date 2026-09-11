@@ -132,6 +132,7 @@ pub enum UserCommand {
     Storage(StorageCommand),
     System(SystemRequest),
     Multiroom(MultiroomCommand),
+    Podcast(crate::podcast::PodcastCommand),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
