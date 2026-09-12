@@ -9,17 +9,26 @@ on:
         default: "all"
         type: choice
         options:
+          # all = every build below (same as a tag push); any other option runs exactly one build job
           - all
+          # Headless server (deb/rpm/tgz/binary) for one target
           - arm-unknown-linux-gnueabihf
           - armv7-unknown-linux-gnueabihf
           - aarch64-unknown-linux-gnu
           - x86_64-unknown-linux-gnu
           - riscv64gc-unknown-linux-gnu
-          - macos
-          - windows
-          - flatpak
-          # Only the arm64 Linux desktop packages (deb/rpm/tgz) — no server, snap or flatpak
+          # Linux desktop app packages (deb/rpm/tgz)
+          - desktop-x86_64
           - desktop-aarch64
+          # Sandboxed Linux desktop app
+          - snap-amd64
+          - snap-arm64
+          - flatpak-amd64
+          - flatpak-arm64
+          # macOS (server binary + desktop DMG) per CPU, Windows (server exe + installer)
+          - macos-aarch64
+          - macos-x86_64
+          - windows
   push:
     tags:
       - "*.*.*"
@@ -63,7 +72,7 @@ jobs:
   build_backend:
     needs: build_ui
     name: Release Backend
-    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.target != 'macos' && inputs.target != 'windows' && inputs.target != 'flatpak' && inputs.target != 'desktop-aarch64') }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || contains(fromJSON('["arm-unknown-linux-gnueabihf","armv7-unknown-linux-gnueabihf","aarch64-unknown-linux-gnu","x86_64-unknown-linux-gnu","riscv64gc-unknown-linux-gnu"]'), inputs.target) }}
     runs-on: [self-hosted, linux, x64]
     container:
       image: ghcr.io/${{ github.repository_owner }}/rsplayer-builder:latest
@@ -80,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.target != 'all' && inputs.target != 'macos' && format('["{0}"]', inputs.target)) || '["arm-unknown-linux-gnueabihf","armv7-unknown-linux-gnueabihf","aarch64-unknown-linux-gnu","x86_64-unknown-linux-gnu","riscv64gc-unknown-linux-gnu"]') }}
+        target: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.target != 'all' && format('["{0}"]', inputs.target)) || '["arm-unknown-linux-gnueabihf","armv7-unknown-linux-gnueabihf","aarch64-unknown-linux-gnu","x86_64-unknown-linux-gnu","riscv64gc-unknown-linux-gnu"]') }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -122,7 +131,7 @@ jobs:
   build_desktop_linux:
     needs: build_ui
     name: Build Desktop (deb+rpm+arch tgz)
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'x86_64-unknown-linux-gnu' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'desktop-x86_64' }}
     runs-on: [self-hosted, linux, x64]
     container:
       image: ghcr.io/${{ github.repository_owner }}/rsplayer-builder:latest
@@ -157,7 +166,7 @@ jobs:
   build_desktop_linux_arm64:
     needs: build_ui
     name: Build Desktop arm64 (deb+rpm+arch tgz)
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'aarch64-unknown-linux-gnu' || inputs.target == 'desktop-aarch64' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'desktop-aarch64' }}
     # Raspberry Pi 4/5 and other ARM64 desktops. Cross-built like the aarch64
     # server: cross compiles in the rsplayer-cross-aarch64 image (which also
     # carries the arm64 WebKitGTK dev libs), then tauri bundles the binaries
@@ -204,7 +213,7 @@ jobs:
   build_snap:
     needs: build_ui
     name: Build Snap (${{ matrix.arch }})
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'x86_64-unknown-linux-gnu' || inputs.target == 'aarch64-unknown-linux-gnu' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'snap-amd64' || inputs.target == 'snap-arm64' }}
     # GitHub-hosted runners: snapcore/action-build needs snapd + LXD, which
     # are not available inside the self-hosted builder container. snapcraft
     # builds for the runner's own architecture, so arm64 uses a native runner.
@@ -212,7 +221,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.target == 'x86_64-unknown-linux-gnu' && '[{"runner":"ubuntu-latest","arch":"amd64"}]') || (github.event_name == 'workflow_dispatch' && inputs.target == 'aarch64-unknown-linux-gnu' && '[{"runner":"ubuntu-24.04-arm","arch":"arm64"}]') || '[{"runner":"ubuntu-latest","arch":"amd64"},{"runner":"ubuntu-24.04-arm","arch":"arm64"}]') }}
+        include: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.target == 'snap-amd64' && '[{"runner":"ubuntu-latest","arch":"amd64"}]') || (github.event_name == 'workflow_dispatch' && inputs.target == 'snap-arm64' && '[{"runner":"ubuntu-24.04-arm","arch":"arm64"}]') || '[{"runner":"ubuntu-latest","arch":"amd64"},{"runner":"ubuntu-24.04-arm","arch":"arm64"}]') }}
     steps:
       - uses: actions/checkout@v7
 
@@ -250,7 +259,7 @@ jobs:
   build_flatpak:
     needs: build_ui
     name: Build Flatpak (${{ matrix.arch }})
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'x86_64-unknown-linux-gnu' || inputs.target == 'aarch64-unknown-linux-gnu' || inputs.target == 'flatpak' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'flatpak-amd64' || inputs.target == 'flatpak-arm64' }}
     # GitHub-hosted runners: flatpak-builder needs bwrap/user namespaces,
     # which are not available inside the self-hosted builder container.
     # flatpak-builder builds for the runner's own architecture (emulating
@@ -259,7 +268,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.target == 'x86_64-unknown-linux-gnu' && '[{"runner":"ubuntu-latest","arch":"amd64"}]') || (github.event_name == 'workflow_dispatch' && inputs.target == 'aarch64-unknown-linux-gnu' && '[{"runner":"ubuntu-24.04-arm","arch":"arm64"}]') || '[{"runner":"ubuntu-latest","arch":"amd64"},{"runner":"ubuntu-24.04-arm","arch":"arm64"}]') }}
+        include: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.target == 'flatpak-amd64' && '[{"runner":"ubuntu-latest","arch":"amd64"}]') || (github.event_name == 'workflow_dispatch' && inputs.target == 'flatpak-arm64' && '[{"runner":"ubuntu-24.04-arm","arch":"arm64"}]') || '[{"runner":"ubuntu-latest","arch":"amd64"},{"runner":"ubuntu-24.04-arm","arch":"arm64"}]') }}
     steps:
       - uses: actions/checkout@v7
 
@@ -317,17 +326,12 @@ jobs:
   build_desktop_macos:
     needs: build_ui
     name: Build macOS (DMG + server binary)
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'macos' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'macos-aarch64' || inputs.target == 'macos-x86_64' }}
     strategy:
-          fail-fast: false
-          matrix:
-            include:
-            - platform: macos-14
-              rust_target: aarch64-apple-darwin
-              bin_suffix: darwin_arm64
-            - platform: macos-15-intel
-              rust_target: x86_64-apple-darwin
-              bin_suffix: darwin_amd64
+      fail-fast: false
+      matrix:
+        # Apple Silicon (macos-14) and Intel (macos-15-intel); a single-target dispatch builds one of them
+        include: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.target == 'macos-aarch64' && '[{"platform":"macos-14","rust_target":"aarch64-apple-darwin","bin_suffix":"darwin_arm64"}]') || (github.event_name == 'workflow_dispatch' && inputs.target == 'macos-x86_64' && '[{"platform":"macos-15-intel","rust_target":"x86_64-apple-darwin","bin_suffix":"darwin_amd64"}]') || '[{"platform":"macos-14","rust_target":"aarch64-apple-darwin","bin_suffix":"darwin_arm64"},{"platform":"macos-15-intel","rust_target":"x86_64-apple-darwin","bin_suffix":"darwin_amd64"}]') }}
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -462,7 +466,9 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: ${{ always() }}
+    # Collects every build's artifacts (and creates the draft release on tag pushes) —
+    # only meaningful for a full run, so single-build dispatches skip it.
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.target == 'all') }}
     needs: [build_backend, build_desktop_macos, build_desktop_linux, build_desktop_linux_arm64, build_desktop_windows, build_snap, build_flatpak]
     name: Create release
     runs-on: [self-hosted, linux, x64]
