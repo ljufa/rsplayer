@@ -16,6 +16,7 @@ on:
         options:
           - all
           - builder
+          - builder-desktop-arm64
           - cross-linux
           - cross-armv6
           - cross-armv7
@@ -55,7 +56,35 @@ jobs:
           cache-from: type=gha,scope=rsplayer-builder
           cache-to: type=gha,mode=max,scope=rsplayer-builder
 
-  
+  builder-desktop-arm64:
+    name: Build desktop builder image (arm64)
+    # Native arm64 runner: the image is arm64-only (used by the
+    # build_desktop_linux_arm64 job in cd.yml), and installing the Rust tools
+    # under QEMU emulation would take far longer.
+    runs-on: ubuntu-24.04-arm
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.image == 'all' || github.event.inputs.image == 'builder-desktop-arm64' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile.builder-desktop-arm64
+          platforms: linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/rsplayer-builder-desktop-arm64:latest
+          cache-from: type=gha,scope=rsplayer-builder-desktop-arm64
+          cache-to: type=gha,mode=max,scope=rsplayer-builder-desktop-arm64
+
+
   cross-armv6:
     name: Cross image armv6
     runs-on: ubuntu-latest

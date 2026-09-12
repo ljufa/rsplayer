@@ -1,0 +1,22 @@
+# Native arm64 builder for the Linux desktop app (deb + rpm + Arch tgz), used by
+# the build_desktop_linux_arm64 job in .github/workflows/cd.yml on GitHub's
+# ubuntu-24.04-arm runners. Built natively on an arm64 runner by
+# .github/workflows/build-images.yml.
+#
+# Debian bookworm (glibc 2.36) — same baseline as Dockerfile.builder (amd64) and
+# Raspberry Pi OS bookworm, so the packages also install on trixie.
+FROM rust:1-slim-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git pkg-config ca-certificates curl file \
+    libwebkit2gtk-4.1-dev \
+    libsoup-3.0-dev \
+    libjavascriptcoregtk-4.1-dev \
+    libasound2-dev \
+    libdbus-1-dev \
+    librsvg2-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash \
+    && cargo binstall -y --locked tauri-cli cargo-make

@@ -149,12 +149,15 @@ jobs:
     name: Build Desktop arm64 (deb+rpm+arch tgz)
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'aarch64-unknown-linux-gnu' }}
     # Native build on GitHub's arm64 runner (Raspberry Pi 4/5 and other ARM64
-    # desktops). The builder image is amd64-only, so use plain Debian bookworm
-    # (glibc 2.36 — same baseline as the x86_64 desktop packages and
-    # Raspberry Pi OS bookworm).
+    # desktops) in the arm64 desktop builder image — Debian bookworm with the
+    # webkit/alsa dev libs, tauri-cli and cargo-make preinstalled
+    # (docker/Dockerfile.builder-desktop-arm64, built by build-images.yml).
     runs-on: ubuntu-24.04-arm
     container:
-      image: rust:1-bookworm
+      image: ghcr.io/${{ github.repository_owner }}/rsplayer-builder-desktop-arm64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v7
 
@@ -163,16 +166,6 @@ jobs:
         with:
           name: web_ui
           path: dist/web-ui
-
-      - name: Install build dependencies
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            pkg-config file libwebkit2gtk-4.1-dev libsoup-3.0-dev \
-            libjavascriptcoregtk-4.1-dev libasound2-dev libdbus-1-dev \
-            librsvg2-dev libssl-dev
-          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-          cargo binstall -y --locked tauri-cli cargo-make
 
       - name: Build Desktop (deb+rpm)
         run: cargo make bundle_desktop_release
