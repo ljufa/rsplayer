@@ -148,18 +148,25 @@ jobs:
     needs: build_ui
     name: Build Desktop arm64 (deb+rpm+arch tgz)
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'aarch64-unknown-linux-gnu' }}
-    # Native build on GitHub's arm64 runner (Raspberry Pi 4/5 and other ARM64
-    # desktops) in the arm64 desktop builder image — Debian bookworm with the
-    # webkit/alsa dev libs, tauri-cli and cargo-make preinstalled
-    # (docker/Dockerfile.builder-desktop-arm64, built by build-images.yml).
-    runs-on: ubuntu-24.04-arm
+    # Raspberry Pi 4/5 and other ARM64 desktops. Cross-built like the aarch64
+    # server: cross compiles in the rsplayer-cross-aarch64 image (which also
+    # carries the arm64 WebKitGTK dev libs), then tauri bundles the binaries
+    # into deb/rpm here in the builder container.
+    runs-on: [self-hosted, linux, x64]
     container:
-      image: ghcr.io/${{ github.repository_owner }}/rsplayer-builder-desktop-arm64:latest
+      image: ghcr.io/${{ github.repository_owner }}/rsplayer-builder:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      # Mount host Docker socket so cross can launch its build container
+      options: -v /var/run/docker.sock:/var/run/docker.sock
+    env:
+      # Same as build_backend: cross runs inside this container
+      CROSS_CONTAINER_IN_CONTAINER: "true"
     steps:
       - uses: actions/checkout@v7
+        with:
+          clean: true
 
       - name: Download web_ui
         uses: actions/download-artifact@v8
@@ -167,14 +174,14 @@ jobs:
           name: web_ui
           path: dist/web-ui
 
-      - name: Build Desktop (deb+rpm)
-        run: cargo make bundle_desktop_release
+      - name: Build Desktop (deb+rpm+arch tgz)
+        run: cargo make bundle_desktop_release_aarch64
 
       - name: Upload desktop packages
         uses: actions/upload-artifact@v7
         with:
           name: pkg-desktop-linux-aarch64
-          path: target/cross/aarch64-unknown-linux-gnu/pkg/*
+          path: target/aarch64-unknown-linux-gnu/pkg/rsplayer-desktop*
           if-no-files-found: error
 
   build_snap:

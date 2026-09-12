@@ -94,24 +94,46 @@ script = [
     "echo 'Arch desktop PKGBUILD ready at ${ARCH_DIR}/PKGBUILD'",
 ]
 
-[tasks.bundle_desktop_aarch64_deb]
-description = "Cross-build the desktop deb for aarch64 (RPi 4/5) in a bookworm container. Needs dist/web-ui (build_ui_release)."
+[tasks.bundle_desktop_release_aarch64]
+description = "Cross-build the desktop app for aarch64 (RPi 4/5) with cross (same rsplayer-cross-aarch64 image as the server) and bundle deb+rpm+Arch tgz. Needs dist/web-ui (build_ui_release)."
 script = [
     "set -e",
-    "IMAGE=rsplayer-desktop-cross-aarch64",
     "T=aarch64-unknown-linux-gnu",
-    "docker image inspect ${IMAGE} >/dev/null 2>&1 || docker build -t ${IMAGE} -f docker/Dockerfile.desktop-aarch64 docker",
+    "case \"${CARGO_TARGET_DIR}\" in /*) OUT=\"${CARGO_TARGET_DIR}\" ;; *) OUT=\"$(pwd)/${CARGO_TARGET_DIR}\" ;; esac",
+    "REL=${OUT}/${T}/release",
+    "# Tauri embeds the frontend dist (incl. loading.html) at compile time",
     "cp crates/desktop/loading.html dist/web-ui/loading.html",
-    "# CARGO_HOME must be user-writable (lock files); pre-create mountpoints so docker doesn't create them as root",
-    "mkdir -p target/desktop-aarch64/cargo-home/registry target/desktop-aarch64/cargo-home/git ${HOME}/.cargo/registry ${HOME}/.cargo/git",
-    "# tauri.conf.json points the bundled mount helper at the host target dir; override for the cross target",
-    "OVERRIDE='{\"bundle\":{\"linux\":{\"deb\":{\"files\":{\"/usr/libexec/rsplayer-mount-helper\":\"/work/target/desktop-aarch64/'${T}'/release/rsplayer-mount-helper\"}}}}}'",
-    "docker run --rm -u $(id -u):$(id -g) -v $(pwd):/work -v ${HOME}/.cargo/registry:/work/target/desktop-aarch64/cargo-home/registry -v ${HOME}/.cargo/git:/work/target/desktop-aarch64/cargo-home/git -e CARGO_HOME=/work/target/desktop-aarch64/cargo-home -e CARGO_TARGET_DIR=/work/target/desktop-aarch64 -w /work/crates/desktop ${IMAGE} sh -c \"cargo build --release --target ${T} --package rsplayer-mount-helper && cargo tauri build --target ${T} --bundles deb --ci -c '${OVERRIDE}'\"",
-    "PKG_DIR=target/cross/${T}/pkg",
+    "cross build --target ${T} --release --package rsplayer-desktop --package rsplayer-mount-helper --features rsplayer-desktop/custom-protocol",
+    "# Package the cross-built binaries without recompiling; tauri.conf.json points the bundled mount helper at the host build, so override it",
+    "OVERRIDE='{\"bundle\":{\"linux\":{\"deb\":{\"files\":{\"/usr/libexec/rsplayer-mount-helper\":\"'${REL}'/rsplayer-mount-helper\"}},\"rpm\":{\"files\":{\"/usr/libexec/rsplayer-mount-helper\":\"'${REL}'/rsplayer-mount-helper\"}}}}}'",
+    "(cd crates/desktop && CARGO_TARGET_DIR=${OUT} cargo tauri bundle --target ${T} --bundles deb,rpm --ci -c \"${OVERRIDE}\")",
+    "PKG_DIR=${OUT}/${T}/pkg",
+    "ARCH_DIR=${OUT}/${T}/arch-desktop",
     "mkdir -p ${PKG_DIR}",
-    "cp target/desktop-aarch64/${T}/release/bundle/deb/rsplayer-desktop_*_arm64.deb ${PKG_DIR}/",
-    "ls -la ${PKG_DIR}/rsplayer-desktop_*_arm64.deb",
+    "mv ${REL}/bundle/deb/rsplayer-desktop_*_arm64.deb ${PKG_DIR}/",
+    "mv ${REL}/bundle/rpm/rsplayer-desktop-*.aarch64.rpm ${PKG_DIR}/",
+    "# Arch Linux tgz (same layout as bundle_desktop_release)",
+    "mkdir -p ${ARCH_DIR}/rootfs/usr/bin ${ARCH_DIR}/rootfs/usr/libexec ${ARCH_DIR}/rootfs/usr/share/applications ${ARCH_DIR}/rootfs/usr/share/polkit-1/actions",
+    "mkdir -p ${ARCH_DIR}/rootfs/usr/share/icons/hicolor/32x32/apps ${ARCH_DIR}/rootfs/usr/share/icons/hicolor/128x128/apps ${ARCH_DIR}/rootfs/usr/share/icons/hicolor/256x256/apps",
+    "cp ${REL}/rsplayer-desktop ${ARCH_DIR}/rootfs/usr/bin/rsplayer-desktop",
+    "cp ${REL}/rsplayer-mount-helper ${ARCH_DIR}/rootfs/usr/libexec/rsplayer-mount-helper",
+    "cp PKGS/desktop/io.github.ljufa.rsplayer.policy ${ARCH_DIR}/rootfs/usr/share/polkit-1/actions/io.github.ljufa.rsplayer.policy",
+    "cp PKGS/arch/desktop/rsplayer-desktop.desktop ${ARCH_DIR}/rootfs/usr/share/applications/rsplayer-desktop.desktop",
+    "cp crates/desktop/icons/32x32.png ${ARCH_DIR}/rootfs/usr/share/icons/hicolor/32x32/apps/rsplayer-desktop.png",
+    "cp crates/desktop/icons/128x128.png ${ARCH_DIR}/rootfs/usr/share/icons/hicolor/128x128/apps/rsplayer-desktop.png",
+    "cp crates/desktop/icons/128x128@2x.png ${ARCH_DIR}/rootfs/usr/share/icons/hicolor/256x256/apps/rsplayer-desktop.png",
+    "RELEASE_VERSION=$(grep -m1 '^version' Cargo.toml | cut -d'\"' -f2)",
+    "(cd ${ARCH_DIR}/rootfs && tar -czf ${PKG_DIR}/rsplayer-desktop_${RELEASE_VERSION}_arm64.tgz .)",
+    "rm -rf ${ARCH_DIR}/rootfs",
+    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" -e \"s/@ARCH@/aarch64/g\" PKGS/arch/desktop/PKGBUILD.in > ${ARCH_DIR}/PKGBUILD",
+    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" PKGS/arch/desktop/rsplayer-desktop.install.in > ${ARCH_DIR}/rsplayer-desktop.install",
+    "ls -la ${PKG_DIR}/rsplayer-desktop*",
 ]
+
+[tasks.bundle_desktop_release_aarch64.env]
+CARGO_TARGET_DIR = { value = "target/cross", condition = { env_not_set = ["CI"] } }
+RUST_SYSROOT_LIB = { script = ["echo $(rustc --print sysroot)/lib"] }
+CROSS_CONTAINER_OPTS = "-e LD_LIBRARY_PATH=${RUST_SYSROOT_LIB} -v ${RUST_SYSROOT_LIB}:${RUST_SYSROOT_LIB}"
 
 [tasks.build_release]
 script = [
