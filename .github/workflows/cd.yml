@@ -18,6 +18,8 @@ on:
           - macos
           - windows
           - flatpak
+          # Only the arm64 Linux desktop packages (deb/rpm/tgz) — no server, snap or flatpak
+          - desktop-aarch64
   push:
     tags:
       - "*.*.*"
@@ -61,7 +63,7 @@ jobs:
   build_backend:
     needs: build_ui
     name: Release Backend
-    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.target != 'macos' && inputs.target != 'windows' && inputs.target != 'flatpak') }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.target != 'macos' && inputs.target != 'windows' && inputs.target != 'flatpak' && inputs.target != 'desktop-aarch64') }}
     runs-on: [self-hosted, linux, x64]
     container:
       image: ghcr.io/${{ github.repository_owner }}/rsplayer-builder:latest
@@ -93,6 +95,14 @@ jobs:
         with:
           name: web_ui
           path: dist/web-ui
+
+      # cross only pulls its image when it is missing, so a self-hosted runner
+      # keeps building in a stale cached :latest after build-images.yml
+      # pushes a new one. Pull the image Cross.toml names for this target.
+      - name: Pull latest cross image
+        run: |
+          image=$(grep -A1 '^\[target.${{ matrix.target }}\]' Cross.toml | grep image | cut -d'"' -f2)
+          docker pull "$image"
 
       - name: Build release binary
         run: cargo make --env TARGET=${{ matrix.target }} build_release
@@ -147,7 +157,7 @@ jobs:
   build_desktop_linux_arm64:
     needs: build_ui
     name: Build Desktop arm64 (deb+rpm+arch tgz)
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'aarch64-unknown-linux-gnu' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'aarch64-unknown-linux-gnu' || inputs.target == 'desktop-aarch64' }}
     # Raspberry Pi 4/5 and other ARM64 desktops. Cross-built like the aarch64
     # server: cross compiles in the rsplayer-cross-aarch64 image (which also
     # carries the arm64 WebKitGTK dev libs), then tauri bundles the binaries
@@ -173,6 +183,13 @@ jobs:
         with:
           name: web_ui
           path: dist/web-ui
+
+      # Same as build_backend: make sure cross uses the current image (with the
+      # arm64 WebKitGTK libs), not a stale cached :latest on the runner.
+      - name: Pull latest cross image
+        run: |
+          image=$(grep -A1 '^\[target.aarch64-unknown-linux-gnu\]' Cross.toml | grep image | cut -d'"' -f2)
+          docker pull "$image"
 
       - name: Build Desktop (deb+rpm+arch tgz)
         run: cargo make bundle_desktop_release_aarch64
