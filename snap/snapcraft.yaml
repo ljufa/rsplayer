@@ -188,7 +188,16 @@ parts:
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | sh -s -- -y --default-toolchain stable --profile minimal
       export PATH="$HOME/.cargo/bin:$PATH"
-      cargo build --release --locked --package rsplayer-desktop --features custom-protocol
+      # Compile and link against the Ubuntu archive only (build-packages), not
+      # the gnome SDK snap the extension puts first on PATH (its ld/cc) and on
+      # PKG_CONFIG_PATH. Mixing the two fails to link on arm64 — the SDK's
+      # libpangoft2/libsecret need newer pango/glib symbols than the archive's —
+      # and a binary linked against the SDK can need symbols the (older) arm64
+      # gnome runtime snap lacks. The archive libs are the safe baseline.
+      env -u LD_LIBRARY_PATH \
+        PATH="$HOME/.cargo/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH" \
+        PKG_CONFIG_PATH="/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/pkgconfig:/usr/share/pkgconfig" \
+        cargo build --release --locked --package rsplayer-desktop --features custom-protocol
       install -Dm755 target/release/rsplayer-desktop "$CRAFT_PART_INSTALL/usr/bin/rsplayer-desktop"
       install -Dm644 PKGS/snap/io.github.ljufa.rsplayer.desktop \
         "$CRAFT_PART_INSTALL/usr/share/applications/io.github.ljufa.rsplayer.desktop"
