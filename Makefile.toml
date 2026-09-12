@@ -52,17 +52,20 @@ dependencies = ["build_ui_release"]
 run_task = "bundle_desktop_release"
 
 [tasks.bundle_desktop_release]
-description = "Build desktop release bundle (deb+rpm+arch tgz on Linux via Tauri)."
+description = "Build desktop release bundle (deb+rpm+arch tgz on Linux via Tauri). Native build: output follows the host arch (x86_64 or aarch64)."
 script = [
     "set -e",
+    "# Package dir and arch suffix follow the host (not ${TARGET}, which defaults to aarch64 for Pi deploys)",
+    "HOST_ARCH=$(uname -m)",
+    "case ${HOST_ARCH} in aarch64) ARCH_SUFFIX=arm64 ;; *) ARCH_SUFFIX=amd64 ;; esac",
     "cd crates/desktop",
     "# Copy loading.html to frontend dist (Tauri expects it alongside the WASM app)",
     "cp loading.html ../../dist/web-ui/loading.html",
     "# Build the pkexec mount helper first — tauri.conf.json bundles it into deb/rpm",
     "cargo build --release --package rsplayer-mount-helper",
     "cargo tauri build --bundles deb,rpm --ci",
-    "PKG_DIR=$(pwd)/../../target/cross/x86_64-unknown-linux-gnu/pkg",
-    "ARCH_DIR=$(pwd)/../../target/cross/x86_64-unknown-linux-gnu/arch-desktop",
+    "PKG_DIR=$(pwd)/../../target/cross/${HOST_ARCH}-unknown-linux-gnu/pkg",
+    "ARCH_DIR=$(pwd)/../../target/cross/${HOST_ARCH}-unknown-linux-gnu/arch-desktop",
     "mkdir -p ${PKG_DIR}",
     "mv target/release/bundle/deb/rsplayer-desktop_*.deb ${PKG_DIR}/",
     "mv target/release/bundle/rpm/rsplayer-desktop-*.rpm ${PKG_DIR}/",
@@ -82,13 +85,32 @@ script = [
     "cp ../../crates/desktop/icons/128x128.png ${ARCH_DIR}/rootfs/usr/share/icons/hicolor/128x128/apps/rsplayer-desktop.png",
     "cp ../../crates/desktop/icons/128x128@2x.png ${ARCH_DIR}/rootfs/usr/share/icons/hicolor/256x256/apps/rsplayer-desktop.png",
     "RELEASE_VERSION=$(grep -m1 '^version' ../../Cargo.toml | cut -d'\"' -f2)",
-    "(cd ${ARCH_DIR}/rootfs && tar -czf ${PKG_DIR}/rsplayer-desktop_${RELEASE_VERSION}_amd64.tgz .)",
+    "(cd ${ARCH_DIR}/rootfs && tar -czf ${PKG_DIR}/rsplayer-desktop_${RELEASE_VERSION}_${ARCH_SUFFIX}.tgz .)",
     "rm -rf ${ARCH_DIR}/rootfs",
-    "echo 'Arch desktop package: ${PKG_DIR}/rsplayer-desktop_${RELEASE_VERSION}_amd64.tgz'",
+    "echo \"Arch desktop package: ${PKG_DIR}/rsplayer-desktop_${RELEASE_VERSION}_${ARCH_SUFFIX}.tgz\"",
     "# Also copy PKGBUILD and install script alongside for source-based installs",
-    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" -e \"s/@ARCH@/amd64/g\" ../../PKGS/arch/desktop/PKGBUILD.in > ${ARCH_DIR}/PKGBUILD",
+    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" -e \"s/@ARCH@/${HOST_ARCH}/g\" ../../PKGS/arch/desktop/PKGBUILD.in > ${ARCH_DIR}/PKGBUILD",
     "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" ../../PKGS/arch/desktop/rsplayer-desktop.install.in > ${ARCH_DIR}/rsplayer-desktop.install",
     "echo 'Arch desktop PKGBUILD ready at ${ARCH_DIR}/PKGBUILD'",
+]
+
+[tasks.bundle_desktop_aarch64_deb]
+description = "Cross-build the desktop deb for aarch64 (RPi 4/5) in a bookworm container. Needs dist/web-ui (build_ui_release)."
+script = [
+    "set -e",
+    "IMAGE=rsplayer-desktop-cross-aarch64",
+    "T=aarch64-unknown-linux-gnu",
+    "docker image inspect ${IMAGE} >/dev/null 2>&1 || docker build -t ${IMAGE} -f docker/Dockerfile.desktop-aarch64 docker",
+    "cp crates/desktop/loading.html dist/web-ui/loading.html",
+    "# CARGO_HOME must be user-writable (lock files); pre-create mountpoints so docker doesn't create them as root",
+    "mkdir -p target/desktop-aarch64/cargo-home/registry target/desktop-aarch64/cargo-home/git ${HOME}/.cargo/registry ${HOME}/.cargo/git",
+    "# tauri.conf.json points the bundled mount helper at the host target dir; override for the cross target",
+    "OVERRIDE='{\"bundle\":{\"linux\":{\"deb\":{\"files\":{\"/usr/libexec/rsplayer-mount-helper\":\"/work/target/desktop-aarch64/'${T}'/release/rsplayer-mount-helper\"}}}}}'",
+    "docker run --rm -u $(id -u):$(id -g) -v $(pwd):/work -v ${HOME}/.cargo/registry:/work/target/desktop-aarch64/cargo-home/registry -v ${HOME}/.cargo/git:/work/target/desktop-aarch64/cargo-home/git -e CARGO_HOME=/work/target/desktop-aarch64/cargo-home -e CARGO_TARGET_DIR=/work/target/desktop-aarch64 -w /work/crates/desktop ${IMAGE} sh -c \"cargo build --release --target ${T} --package rsplayer-mount-helper && cargo tauri build --target ${T} --bundles deb --ci -c '${OVERRIDE}'\"",
+    "PKG_DIR=target/cross/${T}/pkg",
+    "mkdir -p ${PKG_DIR}",
+    "cp target/desktop-aarch64/${T}/release/bundle/deb/rsplayer-desktop_*_arm64.deb ${PKG_DIR}/",
+    "ls -la ${PKG_DIR}/rsplayer-desktop_*_arm64.deb",
 ]
 
 [tasks.build_release]

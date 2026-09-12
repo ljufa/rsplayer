@@ -21,6 +21,7 @@
       <li>Gapless playback, ReplayGain/loudness analysis and a parametric DSP chain</li>
       <li>Bit-perfect exclusive output to USB DACs, including DSD</li>
       <li>Internet radio and streaming metadata</li>
+      <li>Podcasts: search, subscribe and resume episodes where you stopped</li>
       <li>Multiroom: group RSPlayer instances on your LAN for synchronized playback</li>
       <li>Media key / MPRIS integration</li>
     </ul>

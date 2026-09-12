@@ -144,13 +144,58 @@ jobs:
           path: target/cross/x86_64-unknown-linux-gnu/pkg/*
           if-no-files-found: error
 
+  build_desktop_linux_arm64:
+    needs: build_ui
+    name: Build Desktop arm64 (deb+rpm+arch tgz)
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'aarch64-unknown-linux-gnu' }}
+    # Native build on GitHub's arm64 runner (Raspberry Pi 4/5 and other ARM64
+    # desktops). The builder image is amd64-only, so use plain Debian bookworm
+    # (glibc 2.36 — same baseline as the x86_64 desktop packages and
+    # Raspberry Pi OS bookworm).
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: rust:1-bookworm
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download web_ui
+        uses: actions/download-artifact@v8
+        with:
+          name: web_ui
+          path: dist/web-ui
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            pkg-config file libwebkit2gtk-4.1-dev libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev libasound2-dev libdbus-1-dev \
+            librsvg2-dev libssl-dev
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall -y --locked tauri-cli cargo-make
+
+      - name: Build Desktop (deb+rpm)
+        run: cargo make bundle_desktop_release
+
+      - name: Upload desktop packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: pkg-desktop-linux-aarch64
+          path: target/cross/aarch64-unknown-linux-gnu/pkg/*
+          if-no-files-found: error
+
   build_snap:
     needs: build_ui
-    name: Build Snap
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'x86_64-unknown-linux-gnu' }}
-    # GitHub-hosted runner: snapcore/action-build needs snapd + LXD, which
-    # are not available inside the self-hosted builder container.
-    runs-on: ubuntu-latest
+    name: Build Snap (${{ matrix.arch }})
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'x86_64-unknown-linux-gnu' || inputs.target == 'aarch64-unknown-linux-gnu' }}
+    # GitHub-hosted runners: snapcore/action-build needs snapd + LXD, which
+    # are not available inside the self-hosted builder container. snapcraft
+    # builds for the runner's own architecture, so arm64 uses a native runner.
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.target == 'x86_64-unknown-linux-gnu' && '[{"runner":"ubuntu-latest","arch":"amd64"}]') || (github.event_name == 'workflow_dispatch' && inputs.target == 'aarch64-unknown-linux-gnu' && '[{"runner":"ubuntu-24.04-arm","arch":"arm64"}]') || '[{"runner":"ubuntu-latest","arch":"amd64"},{"runner":"ubuntu-24.04-arm","arch":"arm64"}]') }}
     steps:
       - uses: actions/checkout@v7
 
@@ -169,7 +214,7 @@ jobs:
       - name: Upload snap package
         uses: actions/upload-artifact@v7
         with:
-          name: pkg-snap
+          name: pkg-snap-${{ matrix.arch }}
           path: ${{ steps.snapcraft.outputs.snap }}
           if-no-files-found: error
 
@@ -187,11 +232,17 @@ jobs:
 
   build_flatpak:
     needs: build_ui
-    name: Build Flatpak
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'x86_64-unknown-linux-gnu' || inputs.target == 'flatpak' }}
-    # GitHub-hosted runner: flatpak-builder needs bwrap/user namespaces,
+    name: Build Flatpak (${{ matrix.arch }})
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'x86_64-unknown-linux-gnu' || inputs.target == 'aarch64-unknown-linux-gnu' || inputs.target == 'flatpak' }}
+    # GitHub-hosted runners: flatpak-builder needs bwrap/user namespaces,
     # which are not available inside the self-hosted builder container.
-    runs-on: ubuntu-latest
+    # flatpak-builder builds for the runner's own architecture (emulating
+    # aarch64 would take hours for the Rust build), so arm64 uses a native runner.
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.target == 'x86_64-unknown-linux-gnu' && '[{"runner":"ubuntu-latest","arch":"amd64"}]') || (github.event_name == 'workflow_dispatch' && inputs.target == 'aarch64-unknown-linux-gnu' && '[{"runner":"ubuntu-24.04-arm","arch":"arm64"}]') || '[{"runner":"ubuntu-latest","arch":"amd64"},{"runner":"ubuntu-24.04-arm","arch":"arm64"}]') }}
     steps:
       - uses: actions/checkout@v7
 
@@ -232,12 +283,12 @@ jobs:
         run: |
           version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
           mkdir -p pkg
-          flatpak build-bundle target/flatpak/repo pkg/rsplayer-desktop_${version}_amd64.flatpak io.github.ljufa.rsplayer master
+          flatpak build-bundle target/flatpak/repo pkg/rsplayer-desktop_${version}_${{ matrix.arch }}.flatpak io.github.ljufa.rsplayer master
 
       - name: Upload flatpak bundle
         uses: actions/upload-artifact@v7
         with:
-          name: pkg-flatpak
+          name: pkg-flatpak-${{ matrix.arch }}
           path: pkg/*
           if-no-files-found: error
 
@@ -395,7 +446,7 @@ jobs:
 
   publish:
     if: ${{ always() }}
-    needs: [build_backend, build_desktop_macos, build_desktop_linux, build_desktop_windows, build_snap, build_flatpak]
+    needs: [build_backend, build_desktop_macos, build_desktop_linux, build_desktop_linux_arm64, build_desktop_windows, build_snap, build_flatpak]
     name: Create release
     runs-on: [self-hosted, linux, x64]
     steps:

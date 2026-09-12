@@ -1,0 +1,35 @@
+# Cross-build image for the Tauri desktop app targeting aarch64 (Raspberry Pi 4/5).
+# Ubuntu 22.04 base (glibc 2.35) so the resulting deb runs on RPi OS bookworm and trixie.
+# (Debian bookworm multiarch can't co-install libwebkit2gtk-4.1-dev:arm64 — gobject-introspection:arm64 conflict.)
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN sed -i 's/^deb /deb [arch=amd64] /g' /etc/apt/sources.list && \
+    dpkg --add-architecture arm64 && \
+    for s in jammy jammy-updates jammy-security; do \
+      echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $s main restricted universe multiverse" >> /etc/apt/sources.list; \
+    done && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    build-essential git pkg-config ca-certificates curl file \
+    gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross \
+    libwebkit2gtk-4.1-dev:arm64 \
+    libsoup-3.0-dev:arm64 \
+    libjavascriptcoregtk-4.1-dev:arm64 \
+    libasound2-dev:arm64 \
+    libdbus-1-dev:arm64 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable \
+    && rustup target add aarch64-unknown-linux-gnu \
+    && chmod -R a+rwX /usr/local/rustup /usr/local/cargo
+RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash \
+    && cargo binstall -y --locked tauri-cli
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
+    CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc \
+    CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++ \
+    PKG_CONFIG_ALLOW_CROSS=1 \
+    PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig

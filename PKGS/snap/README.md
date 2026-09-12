@@ -120,14 +120,17 @@ plugs auto-connect.
 ## Release flow
 
 The `build_snap` job in `.github/workflows/cd.yml` builds the snap on every
-full release and, on tag builds, uploads it to the **candidate** channel.
-The `.snap` file is also attached to the GitHub release. After smoke-testing
-the candidate:
+full release — once for amd64 and once for arm64, each on a native GitHub
+runner — and, on tag builds, uploads both to the **candidate** channel.
+The `.snap` files are also attached to the GitHub release. Each architecture
+gets its own store revision; after smoke-testing the candidate, promote both:
 
 ```bash
 sudo snap install rsplayer --channel=candidate
 # ...test...
-snapcraft release rsplayer <revision> stable
+snapcraft status rsplayer                      # shows the amd64 and arm64 revisions
+snapcraft release rsplayer <amd64-revision> stable
+snapcraft release rsplayer <arm64-revision> stable
 ```
 
 (or promote via the store dashboard). Flip the CI `release:` input to

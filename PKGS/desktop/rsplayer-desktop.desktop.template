@@ -7,5 +7,5 @@ Icon={{icon}}
 Terminal=false
 Type=Application
 Categories=AudioVideo;Audio;Player;
-Keywords=music;audio;player;hifi;dac;flac;dsd;multiroom;
+Keywords=music;audio;player;hifi;dac;flac;dsd;multiroom;radio;podcast;
 StartupNotify=true

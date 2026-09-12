@@ -120,10 +120,10 @@ setup_dnf_repo() {
 }
 
 # Prefer the package repository (updates via apt/dnf upgrade). Desktop
-# packages exist for x86_64 only; other arches use the direct download below.
+# packages exist for x86_64 and aarch64; other arches use the direct download below.
 # The repo entry is kept on failure — it may already serve the server package.
 repo_install_done=false
-if [ "$PRE_RELEASE" = false ] && [ "$device_arch" = "x86_64" ]; then
+if [ "$PRE_RELEASE" = false ] && { [ "$device_arch" = "x86_64" ] || [ "$device_arch" = "aarch64" ]; }; then
     case $pkg_type in
         deb)
             if setup_apt_repo; then
@@ -174,7 +174,7 @@ try_download() {
     fi
 }
 
-# Direct-download install (pre-releases, non-x86_64, Arch, repo fallback)
+# Direct-download install (pre-releases, other arches, Arch, repo fallback)
 if [ "$repo_install_done" = false ]; then
 
 echo "[INFO] Attempting primary package type: $pkg_type"

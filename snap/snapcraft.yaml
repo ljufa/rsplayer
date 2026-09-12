@@ -31,6 +31,7 @@ description: |
   - Gapless playback, ReplayGain/loudness analysis and a parametric DSP chain
   - Bit-perfect exclusive output to USB DACs, including DSD
   - Internet radio and streaming metadata
+  - Podcasts: search, subscribe and resume episodes where you stopped
   - Multiroom: group RSPlayer instances on your LAN for synchronized playback
   - Media key / MPRIS integration
 
@@ -52,6 +53,8 @@ description: |
 
 platforms:
   amd64:
+  # Raspberry Pi 4/5 and other ARM64 desktops; built on a native arm64 runner in CI.
+  arm64:
 
 layout:
   # WebKitGTK spawns its helper processes (WebKitNetworkProcess,

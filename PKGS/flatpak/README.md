@@ -145,7 +145,7 @@ One-time setup, already assumed by the workflow:
 Publishing is two-staged, gated on the release actually going public:
 
 1. **On every release tag** the `build_flatpak` job in `cd.yml` builds the
-   flatpak (x86_64) from the checked-out tag with the pre-built web UI
+   flatpak (x86_64 and aarch64, each on a native runner) from the checked-out tag with the pre-built web UI
    artifact and uploads a single-file `.flatpak` bundle to the (draft,
    pre-release) GitHub release.
 2. **When the release is promoted to a full release** (the `released` event —

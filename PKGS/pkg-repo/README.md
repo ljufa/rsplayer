@@ -19,7 +19,7 @@ deb/
   dists/stable/               InRelease, Release, Release.gpg,
                               main/binary-{amd64,arm64,armhf,riscv64}/Packages{,.gz}
   pool/main/r/rsplayer/       server debs
-  pool/main/r/rsplayer-desktop/  desktop debs (amd64)
+  pool/main/r/rsplayer-desktop/  desktop debs (amd64, arm64)
 rpm/
   rsplayer.repo               dnf repo file (gpgcheck=1, repo_gpgcheck=1)
   repodata/                   createrepo_c metadata + repomd.xml.asc

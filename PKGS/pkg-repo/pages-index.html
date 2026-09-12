@@ -25,13 +25,13 @@
 echo "deb [signed-by=/usr/share/keyrings/rsplayer.gpg] https://ljufa.github.io/rsplayer-pkg/deb stable main" | sudo tee /etc/apt/sources.list.d/rsplayer.list
 sudo apt update &amp;&amp; sudo apt install rsplayer</pre>
   <p>Architectures: amd64, arm64, armhf (armv6, runs on all 32-bit Raspberry Pis), riscv64.
-    The desktop app is available as <code>rsplayer-desktop</code> (amd64).</p>
+    The desktop app is available as <code>rsplayer-desktop</code> (amd64, arm64).</p>
 
   <h2>Fedora / RHEL / openSUSE</h2>
   <pre>sudo curl -fsSL -o /etc/yum.repos.d/rsplayer.repo https://ljufa.github.io/rsplayer-pkg/rpm/rsplayer.repo
 sudo dnf install rsplayer</pre>
   <p>Architectures: x86_64, aarch64, armv6hl, armv7hl, riscv64.
-    The desktop app is available as <code>rsplayer-desktop</code> (x86_64).</p>
+    The desktop app is available as <code>rsplayer-desktop</code> (x86_64, aarch64).</p>
 
   <p>After installing the server:</p>
   <pre>systemctl status rsplayer</pre>

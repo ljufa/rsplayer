@@ -1,143 +1,86 @@
 # Installation
 
-## Supported Platforms
+RSPlayer comes in two variants:
 
-RSPlayer is available in two variants:
+- **Server** — runs in the background (as a systemd service on Linux) and you control it from a browser or phone. Best for a Raspberry Pi, NAS or always-on audio PC. Available for every supported architecture.
+- **Desktop app** — a normal app window on the computer you're using. Available for Linux (x86_64 and ARM64), macOS and Windows.
 
-- **Server** — The headless music server daemon. Runs as a systemd service (Linux) or standalone binary (macOS/Windows), controlled from any web browser. Available for all supported architectures.
-- **Desktop** — A standalone desktop application with a native window, built with Tauri. Available for **x86_64 Linux**, **macOS**, and **Windows x86_64**.
+**Which one do I need?**
 
-### Linux
+| | Linux | macOS | Windows |
+|---|---|---|---|
+| **Server** | [Install script](?id=linux-server) | [Download](?id=macos-experimental) | [Download](?id=windows-experimental) |
+| **Desktop app** | [Snap / Flatpak](?id=desktop-app-flatpak-and-snap) or [native package](?id=desktop-app-native-package) | [Download](?id=macos-experimental) | [Download](?id=windows-experimental) |
+| **Docker** | [docker run](?id=docker) | — | — |
 
-| Architecture | Typical Devices | Debian / Ubuntu / Raspbian | Fedora / RHEL / openSUSE | Arch / Manjaro | Docker | Nix |
-|:---|:---|:---|:---|:---|:---:|:---:|
-| **x86_64** | Intel/AMD PCs, servers, NAS | `.deb` **S+D** | `.rpm` **S+D** | `.tgz` **S+D** | ✓ | ✓ |
-| **ARM64** (aarch64) | RPi 4, RPi 5, ARMv8 boards | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
-| **ARMv7** | RPi 2, RPi 3, 32-bit RPi 4 | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
-| **ARMv6** | RPi Zero, RPi Zero W, RPi 1 | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
-| **RISC-V 64** | RISC-V 64-bit boards | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
+## Linux server
 
-**S** = Server (headless daemon) — all architectures  
-**D** = Desktop (native GUI app) — x86_64 only; packages prefixed `rsplayer-desktop_` (`.deb`, `.rpm`, `.tgz`)
+Works on Debian, Ubuntu, Raspberry Pi OS, Fedora, openSUSE and Arch, on x86_64, ARM64, ARMv7, ARMv6 (every Raspberry Pi) and RISC-V 64:
 
-Release filename suffixes by architecture:
-
-| Architecture | `.deb` suffix | `.rpm` suffix | `.tgz` suffix |
-|:---|:---|:---|:---|
-| x86_64 | `amd64` | `x86_64` | `amd64` |
-| aarch64 | `arm64` | `aarch64` | `arm64` |
-| armv7 | `armhfv7` | `armv7hl` | `armhfv7` |
-| armv6 | `armhfv6` | `armv6hl` | `armhfv6` |
-| riscv64 | `riscv64` | `riscv64` | `riscv64` |
-
-Example release asset names: `rsplayer_<version>_amd64.deb` (server), `rsplayer-desktop_<version>_amd64.deb` (desktop deb), `rsplayer-desktop_<version>_amd64.tgz` (desktop Arch tarball).
-
-### macOS (experimental)
-
-| Architecture | Typical Devices | Server | Desktop |
-|:---|:---|:---|:---|
-| **Apple Silicon** (`aarch64-apple-darwin`) | M1/M2/M3/M4 Macs | raw binary (`rsplayer_darwin_arm64`) | DMG |
-| **Intel** (`x86_64-apple-darwin`) | Intel Macs | raw binary (`rsplayer_darwin_amd64`) | DMG |
-
-> Network mount management, Linux power actions, and firmware USB integration are unavailable on macOS.
-
-### Windows (experimental)
-
-| Architecture | Server | Desktop |
-|:---|:---|:---|
-| **x86_64** | `rsplayer_windows_amd64.exe` | `rsplayer-desktop_windows_amd64.exe` (NSIS installer) |
-
-Audio output uses WASAPI by default via `cpal`. Installed **ASIO** drivers are also selectable in Settings → Audio interface (shown as `… (ASIO)`) for exclusive, low-latency, bit-perfect playback — set the sample rate and buffer size in the driver's own control panel. The web UI is served at `http://localhost:8000`.
-
-> ASIO is a trademark and software of Steinberg Media Technologies GmbH.
-
-> Network mount management, Linux power actions, ALSA/PipeWire volume, IR remote, and firmware USB integration are unavailable on Windows.
-
-#### Windows quick start
-
-**Server (headless):**
-
-1. Download `rsplayer_windows_amd64.exe` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest).
-2. Run it from a terminal or double-click — no installation needed.
-3. Open `http://localhost:8000` in your browser.
-
-**Desktop app:**
-
-1. Download `rsplayer-desktop_windows_amd64.exe` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest).
-2. Run the installer. It will download [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) automatically if not already present (included with Windows 10/11 and Edge).
-
-### Unsupported Platforms
-
-The following platforms are not currently supported but may be considered in the future:
-
-- Android
-- FreeBSD
-
-## Install or upgrade
-RSPlayer can be installed using one of these methods:
-* Using installation script (automatically detects your distribution and architecture)
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)
+bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/main/install.sh)
 ```
-The installation script detects your Linux distribution (Debian/Ubuntu, Fedora/RHEL/CentOS, Arch/Manjaro). On deb/rpm distributions it adds the [RSPlayer package repository](https://ljufa.github.io/rsplayer-pkg) and installs from it, so future updates arrive through regular `apt upgrade` / `dnf upgrade`; on Arch it installs the .tgz tarball directly.
 
-?> macOS does not use the Linux package install script. See the [macOS section](#macos-experimental) for server and desktop download instructions.
+The script detects your distribution and architecture, installs RSPlayer and starts the service. At the end it prints the address to open in your browser — usually `http://<device-ip>`, for example `http://raspberrypi.local`.
 
-* Add the [package repository](https://ljufa.github.io/rsplayer-pkg) yourself (what the script does) — GPG-signed apt and dnf repos; updates then come with your regular system updates.
+On Debian/Ubuntu and Fedora/openSUSE it adds the [RSPlayer package repository](https://ljufa.github.io/rsplayer-pkg), so future updates arrive with your regular `apt upgrade` / `dnf upgrade`. On Arch it installs the release tarball. Run the same command again to upgrade on Arch, or add `--pre-release` to try the latest pre-release.
 
-  Debian/Ubuntu/Raspberry Pi OS (amd64, arm64, armhf, riscv64):
+If the page doesn't load:
+
+```bash
+sudo systemctl status rsplayer     # should say "active (running)"
+journalctl -u rsplayer -f -n 50    # recent logs
+```
+
+?> The HTTP/HTTPS ports and bind address are set in `/opt/rsplayer/env`: `PORT=80`, `TLS_PORT=443` and `BIND_ADDR=0.0.0.0` (all interfaces) by default. Restart the service after changing them. See [Troubleshooting](troubleshooting.md) for common problems.
+
+### Add the package repository manually
+
+This is what the install script does on deb and rpm distributions. The repositories are GPG-signed.
+
+Debian / Ubuntu / Raspberry Pi OS (amd64, arm64, armhf, riscv64):
+
 ```bash
 sudo curl -fsSL -o /usr/share/keyrings/rsplayer.gpg https://ljufa.github.io/rsplayer-pkg/rsplayer.gpg
 echo "deb [signed-by=/usr/share/keyrings/rsplayer.gpg] https://ljufa.github.io/rsplayer-pkg/deb stable main" | sudo tee /etc/apt/sources.list.d/rsplayer.list
 sudo apt update && sudo apt install rsplayer
 ```
-  Fedora/RHEL/openSUSE (x86_64, aarch64, armv6hl, armv7hl, riscv64):
+
+Fedora / RHEL / openSUSE (x86_64, aarch64, armv6hl, armv7hl, riscv64):
+
 ```bash
 sudo curl -fsSL -o /etc/yum.repos.d/rsplayer.repo https://ljufa.github.io/rsplayer-pkg/rpm/rsplayer.repo
 sudo dnf install rsplayer
 ```
-  The desktop app is available from the same repos as `rsplayer-desktop` (x86_64/amd64 only).
 
-  !> The apt repository's `armhf` package is the ARMv6 build, which runs on every 32-bit Raspberry Pi including the Zero/1. If you specifically want the ARMv7-optimized build on a 32-bit OS, install the `rsplayer_*_armhfv7.deb` release asset manually.
+!> The apt repository's `armhf` package is the ARMv6 build, which runs on every 32-bit Raspberry Pi including the Zero/1. If you want the ARMv7-optimized build on a 32-bit OS, install the `rsplayer_*_armhfv7.deb` release file manually.
 
-* Manually download and install package
-The latest packages can be downloaded from [this page](https://github.com/ljufa/rsplayer/releases/latest). Available package types:
-- **DEB packages**: For Debian, Ubuntu, Raspbian — `rsplayer_*_amd64.deb`, `rsplayer_*_arm64.deb`, `rsplayer_*_armhfv7.deb`, `rsplayer_*_armhfv6.deb`, `rsplayer_*_riscv64.deb`, and `rsplayer-desktop_*_amd64.deb`
-- **RPM packages**: For Fedora, RHEL, CentOS, openSUSE — `rsplayer_*_x86_64.rpm`, `rsplayer_*_aarch64.rpm`, `rsplayer_*_armv7hl.rpm`, `rsplayer_*_armv6hl.rpm`, `rsplayer_*_riscv64.rpm`, and `rsplayer-desktop-*.x86_64.rpm`
-- **Arch tarballs**: For Arch Linux, Manjaro — `rsplayer_*_amd64.tgz`, `rsplayer_*_arm64.tgz`, `rsplayer_*_armhfv7.tgz`, `rsplayer_*_armhfv6.tgz`, `rsplayer_*_riscv64.tgz` (server), and `rsplayer-desktop_*_amd64.tgz` (desktop)
+### Install a package file manually
 
-* Download and manually install binary file
-  - Under latest release page find `rsplayer_*` file for your system and download
-  - rename file to `rsplayer`
-  - make it executable using `chmod +x rsplayer`
-  - run using command `./rsplayer`
-  - optionally if you need to run rsplayer automatically as a service use [this systemd service file](https://github.com/ljufa/rsplayer/blob/master/PKGS/debian/etc/systemd/system/rsplayer.service)
+Download the file for your system from the [latest release](https://github.com/ljufa/rsplayer/releases/latest) — see [release file names](?id=release-file-names) — and install it:
+
+```bash
+sudo apt install ./rsplayer_*_arm64.deb     # Debian / Ubuntu / Raspberry Pi OS
+sudo dnf install ./rsplayer_*_x86_64.rpm    # Fedora / RHEL / openSUSE
+```
+
+On Arch, the `.tgz` is extracted to `/` — the install script handles the required users and groups for you.
+
+### Run the binary without installing
+
+1. Download the `rsplayer_*` binary for your architecture from the [latest release](https://github.com/ljufa/rsplayer/releases/latest) and rename it to `rsplayer`.
+2. Run it with `chmod +x rsplayer && ./rsplayer`, then open `http://localhost:8000`.
+3. To run it as a service, use [this systemd unit](https://github.com/ljufa/rsplayer/blob/main/PKGS/debian/etc/systemd/system/rsplayer.service).
+
+## Desktop app
 
 ### Desktop app (Flatpak and Snap)
+
 <p>
   <a href="https://snapcraft.io/rsplayer"><img class="store-badge" height="56" alt="Get it from the Snap Store" src="https://snapcraft.io/en/dark/install.svg"></a>
 </p>
 
-**Flatpak** (x86_64), from the [RSPlayer flatpak repo](https://ljufa.github.io/rsplayer-flatpak):
-
-```bash
-flatpak install https://ljufa.github.io/rsplayer-flatpak/io.github.ljufa.rsplayer.flatpakref
-```
-
-This adds the `rsplayer` flatpak remote, so updates arrive through the regular `flatpak update` (runtime dependencies are fetched from Flathub's repo as usual). A single-file `.flatpak` bundle is also attached to every [GitHub release](https://github.com/ljufa/rsplayer/releases/latest) for offline installs.
-
-Out of the box the Flatpak plays through PipeWire, has direct (bit-perfect) ALSA access to USB DACs, and can read music from `~/Music`, removable drives, and host mounts (`/media`, `/run/media`, `/mnt`). If these permissions were revoked (e.g. with Flatseal), re-enable them with:
-
-```bash
-# Music on host mounts, e.g. /mnt (read-only)
-flatpak override --user io.github.ljufa.rsplayer --filesystem=/mnt:ro
-# Direct ALSA (hw:) access for bit-perfect output to USB DACs
-flatpak override --user io.github.ljufa.rsplayer --device=all
-```
-
-Grant additional music folders with [Flatseal](https://flathub.org/apps/com.github.tchx84.Flatseal) or `flatpak override --user io.github.ljufa.rsplayer --filesystem=...`. Note that symlinks only resolve if the target path is also granted to the sandbox.
-
-**Snap** (x86_64):
+**Snap** (x86_64, ARM64):
 
 ```bash
 sudo snap install rsplayer
@@ -149,33 +92,98 @@ sudo snap connect rsplayer:removable-media
 
 Without `rsplayer:alsa` connected, playback still works through the virtual "Pipewire" output; connecting it makes hw: cards appear in Settings → Playback for bit-perfect output.
 
-?> In both sandboxes, network-share mounting and system power actions are unavailable — install the headless server package if you need them.
-
-### macOS (experimental) quick run
-
-**Option 1 — Server binary:**
-
-1. Download the binary from the [latest release](https://github.com/ljufa/rsplayer/releases/latest):
-   - `rsplayer_darwin_arm64` for Apple Silicon
-   - `rsplayer_darwin_amd64` for Intel
-2. Rename it to `rsplayer` and make it executable:
+**Flatpak** (x86_64, ARM64), from the [RSPlayer flatpak repo](https://ljufa.github.io/rsplayer-flatpak):
 
 ```bash
-chmod +x rsplayer
-./rsplayer
+flatpak install https://ljufa.github.io/rsplayer-flatpak/io.github.ljufa.rsplayer.flatpakref
 ```
 
-**Option 2 — Desktop app:**
+Updates arrive with `flatpak update`. A single-file `.flatpak` bundle is also attached to every [release](https://github.com/ljufa/rsplayer/releases/latest) for offline installs.
 
-1. Download the `.dmg` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest).
-2. Open the DMG and drag RSPlayer to your Applications folder.
+The Flatpak plays through PipeWire, has direct (bit-perfect) ALSA access to USB DACs, and can read music from `~/Music`, removable drives and host mounts (`/media`, `/run/media`, `/mnt`). If these permissions were revoked (for example with Flatseal), re-enable them:
 
-?> On macOS, network mount management, Linux power actions, and firmware USB integration are unavailable.
+```bash
+# Music on host mounts, e.g. /mnt (read-only)
+flatpak override --user io.github.ljufa.rsplayer --filesystem=/mnt:ro
+# Direct ALSA (hw:) access for bit-perfect output to USB DACs
+flatpak override --user io.github.ljufa.rsplayer --device=all
+```
 
-## Verify installation
-* Run systemd service by `sudo systemctl start rsplayer`
-* Check service status by `sudo systemctl status rsplayer` and if it shows active go to the next step
-* Open browser at http://your-machine-ip-address, e.g. http://raspberrypi.local.
+Grant other music folders with [Flatseal](https://flathub.org/apps/com.github.tchx84.Flatseal) or `flatpak override --user io.github.ljufa.rsplayer --filesystem=...`. Symlinks only resolve if the target path is also granted.
 
-?>TIP: The HTTP and HTTPS ports and bind address are configured in the `/opt/rsplayer/env` file. By default, `PORT` is set to 80, `TLS_PORT` is set to 443, and `BIND_ADDR` is set to `0.0.0.0` (all interfaces). You can edit this file to change the ports and bind address used by `rsplayer`.
-* If the page can not load or there is an error message at top of the page please see the [Troubleshooting](troubleshooting.md) section.
+?> Network-share mounting and system power actions are unavailable inside the Snap and Flatpak sandboxes. Use the native package below, or the server, if you need them.
+
+### Desktop app (native package)
+
+Installs the `.deb` / `.rpm` from the package repository (x86_64 and ARM64), or the release tarball on Arch:
+
+```bash
+bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/main/install_desktop.sh)
+```
+
+If you already added the [package repository](?id=add-the-package-repository-manually), you can also run `sudo apt install rsplayer-desktop` or `sudo dnf install rsplayer-desktop`. Launch RSPlayer from your application menu.
+
+## macOS (experimental)
+
+Download from the [latest release](https://github.com/ljufa/rsplayer/releases/latest):
+
+- **Desktop app:** open the `.dmg` and drag RSPlayer to Applications.
+- **Server:** download `rsplayer_darwin_arm64` (Apple Silicon) or `rsplayer_darwin_amd64` (Intel), rename it to `rsplayer`, then:
+
+  ```bash
+  chmod +x rsplayer
+  ./rsplayer
+  ```
+
+  Open `http://localhost:8000`.
+
+?> Network mount management, Linux power actions and firmware USB integration are unavailable on macOS.
+
+## Windows (experimental)
+
+Download from the [latest release](https://github.com/ljufa/rsplayer/releases/latest):
+
+- **Desktop app:** run the `rsplayer-desktop_windows_amd64.exe` installer. It downloads [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) automatically if it's missing (it's included with Windows 10/11).
+- **Server:** run `rsplayer_windows_amd64.exe` — no installation needed — then open `http://localhost:8000`.
+
+Audio uses WASAPI by default. Installed **ASIO** drivers can be selected in Settings → Audio interface (shown as `… (ASIO)`) for exclusive, low-latency, bit-perfect playback — set the sample rate and buffer size in the driver's own control panel.
+
+> ASIO is a trademark and software of Steinberg Media Technologies GmbH.
+
+?> Network mount management, Linux power actions, ALSA/PipeWire volume, IR remote and firmware USB integration are unavailable on Windows.
+
+## Docker
+
+```bash
+docker run -p 8000:80 -v ${MUSIC_DIR}:/music -v rsplayer_data:/opt/rsplayer --device /dev/snd -it --rm ljufa/rsplayer:latest
+```
+
+Then open `http://localhost:8000`. A ready-made [docker-compose.yaml](https://github.com/ljufa/rsplayer/blob/main/docker/docker-compose.yaml) is in the repository.
+
+## Reference
+
+### Supported platforms
+
+| Architecture | Typical devices | Debian / Ubuntu / Raspberry Pi OS | Fedora / RHEL / openSUSE | Arch / Manjaro | Docker | Nix |
+|:---|:---|:---|:---|:---|:---:|:---:|
+| **x86_64** | Intel/AMD PCs, servers, NAS | `.deb` **S+D** | `.rpm` **S+D** | `.tgz` **S+D** | ✓ | ✓ |
+| **ARM64** (aarch64) | RPi 4, RPi 5, ARMv8 boards | `.deb` **S+D** | `.rpm` **S+D** | `.tgz` **S+D** | — | ✓ |
+| **ARMv7** | RPi 2, RPi 3, 32-bit RPi 4 | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
+| **ARMv6** | RPi Zero, RPi Zero W, RPi 1 | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
+| **RISC-V 64** | RISC-V 64-bit boards | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
+
+**S** = server, **D** = desktop app. macOS (Apple Silicon and Intel) and Windows (x86_64) have both a server binary and a desktop app.
+
+Not supported yet: Android, FreeBSD.
+
+### Release file names
+
+| Architecture | `.deb` | `.rpm` | `.tgz` (Arch) |
+|:---|:---|:---|:---|
+| x86_64 | `amd64` | `x86_64` | `amd64` |
+| aarch64 | `arm64` | `aarch64` | `arm64` |
+| armv7 | `armhfv7` | `armv7hl` | `armhfv7` |
+| armv6 | `armhfv6` | `armv6hl` | `armhfv6` |
+| riscv64 | `riscv64` | `riscv64` | `riscv64` |
+
+Examples: `rsplayer_<version>_arm64.deb` (server), `rsplayer-desktop_<version>_amd64.deb` (desktop app), `rsplayer-desktop_<version>_amd64.tgz` (desktop app for Arch), `rsplayer_darwin_arm64` (macOS server binary).

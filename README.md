@@ -14,48 +14,48 @@
 
 # RSPlayer
 
-RSPlayer is an open-source, headless music server primarily for Linux, with experimental macOS and Windows builds — run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser. A native desktop app (Linux x86_64, macOS, Windows) is also available.
+RSPlayer is an open-source music player written in Rust. Run it as a **headless server** on a NAS, home server or Raspberry Pi and control it from any browser or phone — or install the **desktop app** on your computer.
 
-It runs as a systemd service and exposes a responsive web UI, making it a great fit for machines without a monitor or keyboard — but equally at home on a dedicated desktop audio PC. Under the hood it uses [Symphonia](https://github.com/pdeljanov/Symphonia) for decoding and [Cpal](https://github.com/rustaudio/cpal) for output, with a Rust-native pipeline for low-latency, high-performance playback.
-
-
-📖 **Full documentation:** https://ljufa.github.io/rsplayer/
-
-## See it in action
-
-🖥️ **Online demo:** https://rsplayer.dlj.freemyip.com/
-
-🎬 **One-minute video tour** — navigation, queue, library, and settings:
+🎧 **[Online demo](https://rsplayer.ljufa.iz.rs/)** · 📖 **[Documentation](https://ljufa.github.io/rsplayer/)** · ⬇️ **[Latest release](https://github.com/ljufa/rsplayer/releases/latest)**
 
 https://github.com/user-attachments/assets/88ba2a8e-a016-49e9-81f0-12ce53ce4ecb
 
 ## Highlights
 
-- Pure-Rust playback engine (Symphonia + cpal) — Linux, macOS, and Windows; also a native desktop app
-- Native multiroom (beta): synchronized playback across devices with automatic discovery and encrypted QUIC streaming
-- Low-latency ALSA / PipeWire output, plus local playback straight to your browser
-- Formats: FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE
-- Built-in DSP: parametric EQ, filters, and presets
-- EBU R128 per-song loudness normalization
-- Automatic high-quality resampling when the DAC can't match the source rate
-- Real-time music visualizer (12 styles) and synchronized lyrics (LRCLIB)
-- Library browsing, dynamic playlists, priority queue, drag-and-drop reordering
-- Network storage (SMB/CIFS, NFS) mount management from the settings page
-- Home Assistant integration and optional DIY hardware control
+- Pure-Rust playback engine ([Symphonia](https://github.com/pdeljanov/Symphonia) + [cpal](https://github.com/rustaudio/cpal)) with low-latency ALSA / PipeWire output, or play straight in your browser
+- FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE
+- Multiroom (beta): synchronized playback across devices with automatic discovery
+- Parametric EQ and DSP presets, EBU R128 loudness normalization, automatic resampling
+- Internet radio and a podcast client — subscribe to shows and resume episodes where you stopped
+- Visualizer, synchronized lyrics, library browsing, dynamic playlists
+- SMB/NFS network share mounting, Home Assistant integration, DIY hardware control
 
-See the [full feature list](https://ljufa.github.io/rsplayer/#/?id=features) and [feature comparison](https://ljufa.github.io/rsplayer/#/feature_parity) for details.
+See the [full feature list](https://ljufa.github.io/rsplayer/#/?id=features) and [feature comparison](https://ljufa.github.io/rsplayer/#/feature_parity).
 
-## Quick Start
+## Install
 
-## Linux
+**Which one do I need?**
 
-### Headless server
-Requires `curl`. The script auto-detects your distribution (Debian/Ubuntu, Fedora/RHEL, Arch/Manjaro) and architecture (x86_64, ARM64/ARMv7/ARMv6, RISC-V 64), adds the [RSPlayer package repository](https://ljufa.github.io/rsplayer-pkg) on deb/rpm distros (so updates arrive via regular `apt`/`dnf` upgrade), then installs and starts the systemd service.
+| | Linux | macOS · Windows *(experimental)* |
+|---|---|---|
+| **Server** — runs in the background, you control it from a browser or phone. Best for a Raspberry Pi, NAS or always-on audio PC. | [Install script](#linux-server) | [Download](#macos-and-windows) |
+| **Desktop app** — a normal app window on the computer you're using. | [Snap / Flatpak / script](#linux-desktop-app) | [Download](#macos-and-windows) |
+| **Docker** | [docker run](#docker) | — |
+
+### Linux server
+
+Works on Debian, Ubuntu, Raspberry Pi OS, Fedora and Arch, on x86_64, ARM (every Raspberry Pi) and RISC-V:
+
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install.sh)
+bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/main/install.sh)
 ```
 
-Or add the repository yourself — Debian/Ubuntu/Raspberry Pi OS:
+Then open **`http://<device-ip>`** (for example `http://raspberrypi.local`) in a browser. Updates come with your normal `apt upgrade` / `dnf upgrade`.
+
+<details>
+<summary>Prefer to add the package repository yourself?</summary>
+
+Debian / Ubuntu / Raspberry Pi OS:
 
 ```bash
 sudo curl -fsSL -o /usr/share/keyrings/rsplayer.gpg https://ljufa.github.io/rsplayer-pkg/rsplayer.gpg
@@ -63,51 +63,40 @@ echo "deb [signed-by=/usr/share/keyrings/rsplayer.gpg] https://ljufa.github.io/r
 sudo apt update && sudo apt install rsplayer
 ```
 
-Fedora/RHEL/openSUSE:
+Fedora / RHEL / openSUSE:
 
 ```bash
 sudo curl -fsSL -o /etc/yum.repos.d/rsplayer.repo https://ljufa.github.io/rsplayer-pkg/rpm/rsplayer.repo
 sudo dnf install rsplayer
 ```
 
-### Desktop app (flatpak or snap)
-<p>
-  <a href="https://snapcraft.io/rsplayer"><img height="56" alt="Get it from the Snap Store" src="https://snapcraft.io/en/dark/install.svg"></a>
-</p>
+`.deb`, `.rpm` and `.tgz` files for manual install are on the [release page](https://github.com/ljufa/rsplayer/releases/latest).
+</details>
 
-Flatpak, from the [RSPlayer flatpak repo](https://ljufa.github.io/rsplayer-flatpak) (updates arrive via `flatpak update`):
+### Linux desktop app
+
+<a href="https://snapcraft.io/rsplayer"><img height="48" alt="Get it from the Snap Store" src="https://snapcraft.io/en/dark/install.svg"></a>
 
 ```bash
+sudo snap install rsplayer
+# or
 flatpak install https://ljufa.github.io/rsplayer-flatpak/io.github.ljufa.rsplayer.flatpakref
+# or a native .deb/.rpm package
+bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/main/install_desktop.sh)
 ```
 
-Playback works out of the box. To enable bit-perfect direct ALSA output to USB DACs and music on host mounts like `/mnt`, see [desktop app sandbox permissions](https://ljufa.github.io/rsplayer/#/installation?id=desktop-app-flatpak-and-snap).
+The Snap and Flatpak are sandboxed. For bit-perfect output to USB DACs, see [sandbox permissions](https://ljufa.github.io/rsplayer/#/installation?id=desktop-app-flatpak-and-snap).
 
-or deb/rmp install using script
+### macOS and Windows
 
-```bash
-bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/master/install_desktop.sh)
-```
+Download from the [latest release](https://github.com/ljufa/rsplayer/releases/latest):
 
-Prefer to install a package manually (`.deb` / `.rpm` / `.tgz`) or run the raw binary? See the [Linux installation guide](https://ljufa.github.io/rsplayer/#/installation?id=linux).
+| | Server | Desktop app |
+|---|---|---|
+| **macOS** | `rsplayer_darwin_arm64` (Apple Silicon) or `rsplayer_darwin_amd64` (Intel) — `chmod +x` and run | `.dmg` |
+| **Windows** | `rsplayer_windows_amd64.exe` — just run it | `rsplayer-desktop_windows_amd64.exe` |
 
-### macOS (experimental)
-
-No install script — download directly from the [latest release](https://github.com/ljufa/rsplayer/releases/latest):
-
-- **Server binary**: `rsplayer_darwin_arm64` (Apple Silicon) or `rsplayer_darwin_amd64` (Intel), then `chmod +x rsplayer && ./rsplayer`
-- **Desktop app**: open the `.dmg` and drag RSPlayer to Applications
-
-Audio output uses CoreAudio via `cpal`. See the [macOS installation guide](https://ljufa.github.io/rsplayer/#/installation?id=macos-experimental).
-
-### Windows (experimental)
-
-Download directly from the [latest release](https://github.com/ljufa/rsplayer/releases/latest):
-
-- **Server**: `rsplayer_windows_amd64.exe` — run it directly, then open `http://localhost:8000`
-- **Desktop app**: run the `rsplayer-desktop_windows_amd64.exe` NSIS installer (fetches WebView2 automatically if needed)
-
-Audio output uses WASAPI by default via `cpal`, and installed **ASIO** drivers are selectable in Settings → Audio interface for exclusive, low-latency, bit-perfect playback. See the [Windows installation guide](https://ljufa.github.io/rsplayer/#/installation?id=windows-experimental).
+After starting the server, open `http://localhost:8000`. On Windows, installed ASIO drivers can be selected in Settings → Audio interface. More in the [macOS](https://ljufa.github.io/rsplayer/#/installation?id=macos-experimental) and [Windows](https://ljufa.github.io/rsplayer/#/installation?id=windows-experimental) guides.
 
 > ASIO is a trademark and software of Steinberg Media Technologies GmbH.
 
@@ -117,7 +106,10 @@ Audio output uses WASAPI by default via `cpal`, and installed **ASIO** drivers a
 docker run -p 8000:80 -v ${MUSIC_DIR}:/music -v rsplayer_data:/opt/rsplayer --device /dev/snd -it --rm ljufa/rsplayer:latest
 ```
 
-Or use [docker compose](docker/docker-compose.yaml):
+Then open `http://localhost:8000`.
+
+<details>
+<summary>docker compose</summary>
 
 ```yaml
 services:
@@ -135,31 +127,18 @@ volumes:
   rsplayer_volume:
     driver: local
 ```
+</details>
 
-### Open the UI
+**Next steps:** [configuration](https://ljufa.github.io/rsplayer/#/configuration) · [usage guide](https://ljufa.github.io/rsplayer/#/usage) · [troubleshooting](https://ljufa.github.io/rsplayer/#/troubleshooting)
 
-Navigate to `http://localhost` (or the IP of the machine running RSPlayer). For the Docker command above, the UI is at `http://localhost:8000`. For configuration, see the [documentation](https://ljufa.github.io/rsplayer/#/configuration).
+## Home Assistant & DIY hardware
 
-## Documentation
-
-| Topic | Link |
-|---|---|
-| Overview & full feature list | https://ljufa.github.io/rsplayer/ |
-| Installation | https://ljufa.github.io/rsplayer/#/installation |
-| Configuration | https://ljufa.github.io/rsplayer/#/configuration |
-| Usage guide | https://ljufa.github.io/rsplayer/#/usage |
-| Troubleshooting | https://ljufa.github.io/rsplayer/#/troubleshooting |
-| Building from source | https://ljufa.github.io/rsplayer/#/build |
-| Feature comparison | https://ljufa.github.io/rsplayer/#/feature_parity |
-
-## Home Assistant & DIY Hardware
-
-RSPlayer can be controlled from [Home Assistant](https://www.home-assistant.io/) via the [rsplayer_hacs_plugin](https://github.com/ljufa/rsplayer_hacs_plugin). For DIY builds, see [rsplayer_hardware](https://github.com/ljufa/rsplayer_hardware) and [rsplayer_firmware](https://github.com/ljufa/rsplayer_firmware).
+Control RSPlayer from [Home Assistant](https://www.home-assistant.io/) with the [rsplayer_hacs_plugin](https://github.com/ljufa/rsplayer_hacs_plugin). For DIY builds, see [rsplayer_hardware](https://github.com/ljufa/rsplayer_hardware) and [rsplayer_firmware](https://github.com/ljufa/rsplayer_firmware).
 
 ## Contributing
 
-Contributions are welcome — submit a pull request or open an issue. To build from source, see the [Building from Source](https://ljufa.github.io/rsplayer/#/build) documentation.
+Contributions are welcome — open an issue or a pull request. See [Building from source](https://ljufa.github.io/rsplayer/#/build).
 
 ## License
 
-RSPlayer is licensed under the MIT license. See the [LICENSE](LICENSE) file for more information.
+MIT — see [LICENSE](LICENSE).

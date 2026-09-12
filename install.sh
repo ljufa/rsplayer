@@ -259,12 +259,36 @@ else
     echo "[WARN] rsplayer user not found, skipping chown"
 fi
 
+# Work out the web UI address to show the user (port from the packaged env file)
+ui_port=$(grep -s '^PORT=' /opt/rsplayer/env | cut -d= -f2 | tr -d '"' || true)
+ui_port=${ui_port:-80}
+ui_host=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}' || true)
+[ -n "$ui_host" ] || ui_host=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
+ui_host=${ui_host:-localhost}
+if [ "$ui_port" = "80" ]; then
+    ui_url="http://${ui_host}"
+else
+    ui_url="http://${ui_host}:${ui_port}"
+fi
+
 echo "========================================"
 echo "[INFO] Installation complete!"
 echo "[INFO] Package type: $pkg_type"
 echo "[INFO] Architecture: $device_arch ($pkg_suffix)"
 echo "========================================"
-echo "[INFO] Useful commands:"
-echo "  systemctl status rsplayer"
-echo "  journalctl -u rsplayer -f -n 50"
+if systemctl is-active --quiet rsplayer 2>/dev/null; then
+    echo "  RSPlayer is running. Open it in your browser:"
+    echo ""
+    echo "      $ui_url"
+else
+    echo "[WARN] The rsplayer service is not running yet. Start it with:"
+    echo "      sudo systemctl start rsplayer"
+    echo "  then open it in your browser:"
+    echo ""
+    echo "      $ui_url"
+fi
+echo ""
+echo "  Useful commands:"
+echo "      systemctl status rsplayer"
+echo "      journalctl -u rsplayer -f -n 50"
 echo "========================================"

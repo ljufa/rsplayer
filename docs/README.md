@@ -1,12 +1,12 @@
 # RSPlayer — Rust-native music server
 
-RSPlayer is an open-source, headless music server primarily for Linux, with experimental macOS and Windows builds. Run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser. A native desktop app (Linux x86_64, macOS, Windows) is also available.
+RSPlayer is an open-source, headless music server primarily for Linux, with experimental macOS and Windows builds. Run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser. A native desktop app (Linux x86_64/ARM64, macOS, Windows) is also available.
 
 It runs as a systemd service and exposes a responsive web UI, making it a great fit for machines without a monitor or keyboard — but equally at home on a dedicated desktop audio PC. Hardware and DIY integrations (GPIO DAC control, custom firmware) are fully optional.
 
 Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia) for audio decoding and [Cpal](https://github.com/rustaudio/cpal) for output, with a Rust-native audio pipeline for low-latency, high-performance playback.
 
-**Online demo → https://rsplayer.dlj.freemyip.com/**
+**Online demo → https://rsplayer.ljufa.iz.rs/**
 
 ## Getting Started
 
@@ -30,6 +30,7 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 - **Flexible Volume Control**: Choose ALSA mixer, PipeWire, or software gain volume control, with hardware control also supported via RSPlayer firmware integration.
 - **Volume Persistence**: Volume level is saved on change and restored on restart, defaulting to 0 on first use to prevent hardware-max shock.
 - **Comprehensive Music Library Management**: Scan, search, and browse your music library and online radio stations with ease.
+- **Podcasts**: Find shows in the Apple Podcasts directory (or Podcast Index with a free API key), or paste an RSS feed URL, then subscribe and play episodes through the regular queue. Feeds refresh in the background, playback resumes where you stopped, and episodes are marked played automatically. See [Podcasts View](usage.md?id=podcasts-view).
 - **Dynamic Playlists**: Automatically create dynamic playlists for personalized listening experiences.
 - **Playlists by Genre, Year**: Browse and create playlists based on genre or year.
 - **Drag-and-Drop Queue Reordering**: Reorder queue items by dragging them directly in the queue view.
@@ -39,7 +40,7 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 - **Synchronized Lyrics**: Real-time synchronized lyrics support via LRCLIB integration.
 - **Library Statistics**: Dedicated statistics page showing song/album/artist counts, total duration, play history, top genres, albums by decade, and loudness analysis progress.
 - **Web UI Themes**: Support for customizable themes and dark/light modes (10+ built-in themes).
-- **Global Keyboard Shortcuts**: Full keyboard control for playback, navigation, and search (Space, arrows, M, L, Y, S, /, ?, 1-4, F/A/P/R/T).
+- **Global Keyboard Shortcuts**: Full keyboard control for playback, navigation, and search (Space, arrows, M, L, Y, S, /, ?, 1-4, F/A/P/R/O/T).
 - **Breadcrumb Navigation**: Clear navigation context on all library pages.
 - **Skeleton Loading & Empty States**: Visual feedback during loading and helpful empty state screens.
 - **Written in Rust**: Enjoy the benefits of minimal dependencies and high performance, thanks to the Rust-native implementation.
@@ -54,7 +55,7 @@ FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE (Monkey's Audio),
 - **DSD passthrough bypass**: DSP (parametric EQ, filters), loudness normalization, and resampling are all bypassed for DSD files (`.dsf`, `.dff`). DSD bitstreams are passed directly to the DAC without any signal processing.
 - **Radio streams**: Loudness normalization is not applied to internet radio streams — it requires pre-scanned file metadata. Seeking is not supported for streams.
 - **Unsupported formats**: Opus, WMA, WavPack, and TTA are not supported.
-- **Local Browser Playback**: In this mode the browser's native audio engine plays files directly. DSP, loudness normalization, resampling, visualization, and DSD playback are all unavailable — format support is limited to what the browser itself can decode.
+- **Local Browser Playback**: In this mode the browser's native audio engine plays files directly. DSP, loudness normalization, resampling, visualization, and DSD playback are all unavailable — format support is limited to what the browser itself can decode. Podcast resume positions are not saved in this mode.
 - **Non-Linux builds**: On macOS and Windows, network share mounting, ALSA/PipeWire volume, IR remote, system poweroff/reboot, and firmware USB integration are unavailable.
 
 ## How does RSPlayer compare?
@@ -70,7 +71,7 @@ FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE (Monkey's Audio),
 | Web UI | ✓ | ✓ | ✓ | 3rd party |
 | Local browser playback | ✓ | — | — | — |
 | Parametric EQ / DSP | ✓ built-in | paid tier | ✓ (CamillaDSP) | via plugins |
-| Multi-room | planned | paid tier | ✓ | via plugins |
+| Multi-room | ✓ (beta) | paid tier | ✓ | via plugins |
 | DSD playback | ✓ | ✓ | ✓ | ✓ |
 | Loudness normalization (EBU R128) | ✓ | — | — | — |
 | Synchronized lyrics | ✓ | — | — | — |
