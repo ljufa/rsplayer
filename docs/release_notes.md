@@ -1,5 +1,47 @@
 # Release Notes
 
+## v4.8.5 — 2026-09-14
+
+The desktop app now runs on ARM64 Linux, including the Raspberry Pi 4 and 5. This release also simplifies the install instructions and makes the installer tell you where to open RSPlayer. There are no changes to playback or the web UI.
+
+### Features
+
+#### Desktop app for ARM64 Linux (Raspberry Pi 4/5)
+
+The desktop app was previously x86_64-only on Linux. Every release now also ships it for ARM64, in all the same formats:
+
+- **Native packages:** `rsplayer-desktop_<version>_arm64.deb`, `rsplayer-desktop-<version>-1.aarch64.rpm` and an Arch tarball. They are published to the [package repository](https://ljufa.github.io/rsplayer-pkg) too, so `install_desktop.sh` and `sudo apt install rsplayer-desktop` work on a Raspberry Pi. The packages need glibc 2.34 or newer, so they install on Raspberry Pi OS bookworm and trixie.
+- **Snap:** `sudo snap install rsplayer` now installs on ARM64.
+- **Flatpak:** the [RSPlayer flatpak repo](https://ljufa.github.io/rsplayer-flatpak) carries both architectures, and the same install command picks the right one. A separate `rsplayer-desktop_<version>_arm64.flatpak` bundle is attached to the release.
+
+As on x86_64, the desktop app has no background service — it runs when you open it. You need a graphical desktop session (for example Raspberry Pi OS with desktop).
+
+#### Installer prints the web UI address
+
+When `install.sh` finishes, it now shows the address to open in your browser (for example `http://192.168.1.20`), using the machine's LAN address and the port from `/opt/rsplayer/env`. If the service didn't start, it prints the command to start it first.
+
+### Documentation
+
+- **Simpler install instructions.** The README and the [installation guide](https://ljufa.github.io/rsplayer/#/installation) start with a "Which one do I need?" table — server or desktop app, per platform — followed by one recommended command for each case. Manual repository setup, package files and the release file-name tables moved further down.
+- **Podcasts added to the feature lists** in the README, the documentation home page and the [feature comparison](https://ljufa.github.io/rsplayer/#/feature_parity), which gains a Podcasts row.
+- The documentation home page links to the new online demo address, <https://rsplayer.ljufa.iz.rs/>, and its comparison table now lists multiroom as available (beta) instead of planned.
+
+### Packaging
+
+- Snap and Flatpak store descriptions mention podcasts, and the desktop entries gain `radio` and `podcast` search keywords, so the app shows up when you search for them in your application menu.
+- Fixed the generated Arch desktop `PKGBUILD` declaring `arch=('amd64')`, which `makepkg` rejects. It now declares `x86_64` or `aarch64`.
+- **Fixed the desktop install script on Arch Linux.** `install_desktop.sh` asked pacman for `libappindicator-gtk3`, which is no longer in Arch's official repositories (nor in Arch Linux ARM), so the install stopped with "target not found" before installing anything. The app doesn't use it, so it was removed from the script and from the Arch `PKGBUILD` dependencies.
+
+### Build and CI
+
+- **Single-build test runs.** Every option of the manual `cd.yml` run now starts exactly one build: one server target, `desktop-x86_64`/`desktop-aarch64`, `snap-amd64`/`snap-arm64`, `flatpak-amd64`/`flatpak-arm64`, `macos-aarch64`/`macos-x86_64` or `windows`. `all` and tag pushes still build everything.
+- The ARM64 desktop packages are cross-built with the existing `rsplayer-cross-aarch64` image, which now includes the arm64 WebKitGTK development libraries. The ARM64 Snap and Flatpak build on GitHub's native arm64 runners.
+- Server and desktop cross builds now pull the latest cross image first. Before, a self-hosted runner kept using a stale cached image after the image was rebuilt.
+- The Snap now compiles and links against Ubuntu's own libraries instead of mixing them with the GNOME SDK snap's, which failed to link on ARM64.
+- Publishing to the flatpak repo imports every architecture's bundle.
+
+**Full Changelog**: https://github.com/ljufa/rsplayer/compare/4.8.0...4.8.5
+
 ## v4.8.0 — 2026-09-11
 
 Podcast support, seekable HTTP audio, and an A–Z jump index for the artists list.

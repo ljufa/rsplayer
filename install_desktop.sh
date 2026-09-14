@@ -203,7 +203,7 @@ case $pkg_type in
         ;;
     arch)
         echo "[INFO] Installing desktop dependencies..."
-        $SUDO pacman -S --needed webkit2gtk-4.1 gtk3 libappindicator-gtk3 librsvg alsa-lib
+        $SUDO pacman -S --needed webkit2gtk-4.1 gtk3 librsvg alsa-lib
         echo "[INFO] Extracting tarball to / (files go to /usr/bin, /usr/share)"
         $SUDO tar -xzvf "${pkg_file_name}" -C /
         echo "[INFO] Updating icon cache..."
