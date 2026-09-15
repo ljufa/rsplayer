@@ -11,7 +11,7 @@ use wasm_bindgen::JsCast;
 use web_sys::WebSocket;
 
 use crate::dsp::get_dsp_presets;
-use crate::{hooks::ws_send, state::AppState, ws_system};
+use crate::{hooks::ws_send, page::dir_picker::DirPicker, state::AppState, ws_system};
 
 const API_SETTINGS_PATH: &str = "/api/settings";
 
@@ -1206,6 +1206,7 @@ fn MusicLibraryContent(
     let mut mf_domain = use_signal(String::new);
     let mut network_mounts_open = use_signal(|| false);
     let mut new_dir = use_signal(String::new);
+    let mut picker_open = use_signal(|| false);
 
     let mount_statuses = state.mount_statuses.read().clone();
     let music_dir_statuses = state.music_dir_statuses.read().clone();
@@ -1235,6 +1236,16 @@ fn MusicLibraryContent(
             let _ = Request::post(API_SETTINGS_PATH).json(&s).expect("serialize settings").send().await;
             *saving.write() = false;
         });
+    };
+
+    // Add a music directory once, from the text field or the folder picker.
+    let mut add_dir = move |dir: String| {
+        let dir = dir.trim().to_string();
+        if dir.is_empty() || settings.read().metadata_settings.music_directories.contains(&dir) {
+            return;
+        }
+        settings.write().metadata_settings.music_directories.push(dir);
+        auto_save();
     };
 
     rsx! {
@@ -1365,29 +1376,41 @@ fn MusicLibraryContent(
                 })
         }
 
-        // Add Local Directory
+        // Add Local Directory: browse the server's folders, or type a path
         div { class: "mt-3 p-3 bg-base-200 rounded",
             p { class: "text-sm font-medium mb-2", "Add Local Directory" }
+            button {
+                class: "btn btn-sm btn-primary w-full sm:w-auto mb-2",
+                onclick: move |_| picker_open.set(true),
+                i { class: "material-icons text-sm", "folder_open" }
+                "Browse folders…"
+            }
             div { class: "flex gap-2",
                 input {
-                    class: "input input-sm input-bordered flex-1",
+                    class: "input input-sm input-bordered flex-1 min-w-0",
                     r#type: "text",
-                    placeholder: "/path/to/music",
+                    placeholder: "or type a path, e.g. /path/to/music",
                     oninput: move |e| new_dir.set(e.value()),
                     value: "{new_dir}",
                 }
                 button {
-                    class: "btn btn-sm btn-primary",
+                    class: "btn btn-sm",
                     onclick: move |_| {
-                        let dir = new_dir();
-                        if !dir.is_empty() {
-                            settings.write().metadata_settings.music_directories.push(dir);
-                            new_dir.set(String::new());
-                            auto_save();
-                        }
+                        add_dir(new_dir());
+                        new_dir.set(String::new());
                     },
                     "Add"
                 }
+            }
+        }
+        if picker_open() {
+            DirPicker {
+                ws,
+                on_select: move |dir: String| {
+                    add_dir(dir);
+                    picker_open.set(false);
+                },
+                on_close: move |_| picker_open.set(false),
             }
         }
 

@@ -186,6 +186,9 @@ pub enum StorageCommand {
     QueryMountStatus,
     QueryMusicDirStatus,
     SaveExternalMount(String),
+    /// List the sub-folders of a server-side directory for the settings
+    /// folder picker; an empty path lists the platform's library roots.
+    ListDirectories(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, EnumString, EnumIter, IntoStaticStr)]

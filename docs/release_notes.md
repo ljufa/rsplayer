@@ -16,6 +16,10 @@ RSPlayer runs on Android. The desktop app — the full player with the server in
 - **Multiroom** discovery works on Wi-Fi (beta), like on the desktop.
 - Not available on Android: network mounts (SMB/NFS), ALSA device selection, DSD output, and `.cue`/`.m3u`/`.lrc` sidecar files (Android hides non-media files from apps).
 
+#### Folder picker for the music library
+
+Settings → Music Library has a **Browse folders…** button, so adding a library no longer means typing a path. It opens a folder browser for the machine RSPlayer runs on, starting from your Music folder, removable drives and mounted shares (on Android: the shared Music folder, internal storage and SD cards), and shows how many sub-folders and audio files each folder holds. It works the same in a browser, the desktop app and the Android app. The desktop app also adds your Music folder to the library on first start. Folder browsing is disabled on the public demo.
+
 ### Build and CI
 
 - `crates/desktop` is now a library with a thin binary, as Tauri mobile requires; the Android Gradle project lives in `crates/desktop/gen/android` and is built with `cargo make build_android_dev` / `build_android_release` (see the [build guide](https://ljufa.github.io/rsplayer/#/build?id=android-desktop-app)).

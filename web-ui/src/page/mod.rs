@@ -1,3 +1,4 @@
+pub mod dir_picker;
 pub mod home;
 pub mod library_artists;
 pub mod library_files;

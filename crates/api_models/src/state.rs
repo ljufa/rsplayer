@@ -88,6 +88,8 @@ pub enum StateChangeEvent {
     MountStatusEvent(Vec<MountStatus>),
     MusicDirStatusEvent(Vec<MusicDirStatus>),
     ExternalMountsEvent(Vec<ExternalMount>),
+    /// Reply to `StorageCommand::ListDirectories`.
+    DirectoryListingEvent(DirectoryListing),
     MultiroomPeersEvent(Vec<MultiroomPeer>),
     MultiroomGroupEvent(MultiroomGroupState),
     /// All subscriptions, sent after any change and on `QueryPodcasts`.
@@ -151,6 +153,43 @@ pub struct ExternalMount {
     pub fs_type: String,
     pub readable: bool,
     pub writable: bool,
+}
+
+/// One level of server-side folders for the settings folder picker.
+///
+/// Broadcast like every event, so a client only uses the listing whose
+/// `path` matches the path it asked for.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct DirectoryListing {
+    /// The listed directory; empty for the library roots.
+    pub path: String,
+    /// Where "up" goes; `None` at a library root (back to the roots).
+    pub parent: Option<String>,
+    /// From the enclosing library root (or the filesystem root) down to `path`.
+    pub breadcrumbs: Vec<PathCrumb>,
+    pub entries: Vec<DirectoryEntry>,
+    /// More sub-folders exist than were returned.
+    pub truncated: bool,
+    /// Why `path` could not be listed (missing, no permission, disabled…).
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PathCrumb {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DirectoryEntry {
+    pub name: String,
+    pub path: String,
+    /// Set for library roots ("Music", "Internal storage", …).
+    pub label: Option<String>,
+    pub subdirs: u32,
+    pub audio_files: u32,
+    /// The folder's contents can be listed.
+    pub readable: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

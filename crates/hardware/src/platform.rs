@@ -30,6 +30,24 @@ pub enum TargetOs {
     Other,
 }
 
+impl TargetOs {
+    /// The OS this binary was built for.
+    #[must_use]
+    pub const fn current() -> Self {
+        if cfg!(target_os = "windows") {
+            Self::Windows
+        } else if cfg!(target_os = "macos") {
+            Self::MacOs
+        } else if cfg!(target_os = "android") {
+            Self::Android
+        } else if cfg!(target_os = "linux") {
+            Self::Linux
+        } else {
+            Self::Other
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sandbox {
     Flatpak,
@@ -61,17 +79,7 @@ pub struct PlatformProfile {
 impl PlatformProfile {
     /// Probe the runtime environment. Called once at startup.
     pub fn detect() -> Self {
-        let os = if cfg!(target_os = "windows") {
-            TargetOs::Windows
-        } else if cfg!(target_os = "macos") {
-            TargetOs::MacOs
-        } else if cfg!(target_os = "android") {
-            TargetOs::Android
-        } else if cfg!(target_os = "linux") {
-            TargetOs::Linux
-        } else {
-            TargetOs::Other
-        };
+        let os = TargetOs::current();
         Self {
             os,
             sandbox: detect_sandbox(),
@@ -135,15 +143,62 @@ impl PlatformProfile {
     }
 }
 
-/// The Android host passes the shared Music folder in
-/// `RSPLAYER_DEFAULT_MUSIC_DIR` (from `Environment.getExternalStoragePublicDirectory`);
-/// fall back to the conventional path if it didn't. Nothing on other platforms.
-fn default_music_dir(os: TargetOs) -> Option<String> {
+/// The music folder handed over by the app wrappers, if any.
+///
+/// `RSPLAYER_DEFAULT_MUSIC_DIR` carries the shared Music folder from the
+/// Android host and the user's Music folder from the desktop app. Android
+/// falls back to the conventional path; headless servers have none.
+#[must_use]
+pub fn default_music_dir(os: TargetOs) -> Option<String> {
     match std::env::var("RSPLAYER_DEFAULT_MUSIC_DIR") {
         Ok(dir) if !dir.is_empty() => Some(dir),
         _ if os == TargetOs::Android => Some("/storage/emulated/0/Music".to_string()),
         _ => None,
     }
+}
+
+/// A starting point offered by the settings folder picker.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryRoot {
+    pub path: String,
+    pub label: String,
+}
+
+/// Well-known folders the settings folder picker starts from.
+///
+/// Most useful first, without duplicates. Pure: the music folders are passed
+/// in, and the caller drops candidates that do not exist and adds the ones
+/// only discoverable at runtime (removable storage, drive letters, mounts).
+#[must_use]
+pub fn library_root_candidates(os: TargetOs, default_music_dir: Option<&str>, home_music_dir: Option<&str>) -> Vec<LibraryRoot> {
+    let mut roots: Vec<LibraryRoot> = Vec::new();
+    let mut push = |path: &str, label: &str| {
+        if !roots.iter().any(|r| r.path == path) {
+            roots.push(LibraryRoot {
+                path: path.to_string(),
+                label: label.to_string(),
+            });
+        }
+    };
+    for dir in [default_music_dir, home_music_dir].into_iter().flatten() {
+        push(dir, "Music");
+    }
+    let fixed: &[(&str, &str)] = match os {
+        TargetOs::Android => &[("/storage/emulated/0", "Internal storage")],
+        TargetOs::Linux => &[
+            ("/media", "Removable media"),
+            ("/run/media", "Removable media"),
+            ("/mnt", "Mounts"),
+            ("/", "File system"),
+        ],
+        TargetOs::MacOs => &[("/Volumes", "Volumes"), ("/", "File system")],
+        TargetOs::Windows => &[],
+        TargetOs::Other => &[("/", "File system")],
+    };
+    for (path, label) in fixed {
+        push(path, label);
+    }
+    roots
 }
 
 /// Flatpak is detected via `/.flatpak-info`, Snap via the `SNAP_NAME` env var.
@@ -308,6 +363,35 @@ mod tests {
         assert!(s.metadata_settings.music_directories.is_empty());
         let s = profile(TargetOs::MacOs, Sandbox::None, false, false, false).first_launch_settings();
         assert!(s.metadata_settings.music_directories.is_empty());
+    }
+
+    fn root_paths(roots: &[LibraryRoot]) -> Vec<&str> {
+        roots.iter().map(|r| r.path.as_str()).collect()
+    }
+
+    #[test]
+    fn android_roots_start_with_shared_music_then_internal_storage() {
+        let roots = library_root_candidates(TargetOs::Android, Some("/storage/emulated/0/Music"), None);
+        assert_eq!(root_paths(&roots), ["/storage/emulated/0/Music", "/storage/emulated/0"]);
+        assert_eq!(roots[0].label, "Music");
+    }
+
+    #[test]
+    fn linux_roots_offer_music_removable_media_mounts_and_filesystem() {
+        let roots = library_root_candidates(TargetOs::Linux, None, Some("/home/u/Music"));
+        assert_eq!(root_paths(&roots), ["/home/u/Music", "/media", "/run/media", "/mnt", "/"]);
+    }
+
+    #[test]
+    fn same_music_folder_is_offered_once() {
+        let roots = library_root_candidates(TargetOs::MacOs, Some("/Users/u/Music"), Some("/Users/u/Music"));
+        assert_eq!(root_paths(&roots), ["/Users/u/Music", "/Volumes", "/"]);
+    }
+
+    #[test]
+    fn windows_static_roots_are_only_the_music_folder() {
+        let roots = library_root_candidates(TargetOs::Windows, None, Some(r"C:\Users\u\Music"));
+        assert_eq!(root_paths(&roots), [r"C:\Users\u\Music"]);
     }
 
     #[test]

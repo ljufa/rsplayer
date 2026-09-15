@@ -18,6 +18,7 @@ extern crate log;
 pub mod command_context;
 pub mod command_handler;
 pub mod composition_root;
+pub mod directory_listing;
 pub mod metadata_commands;
 #[cfg_attr(target_os = "linux", path = "mount_service_linux.rs")]
 #[cfg_attr(not(target_os = "linux"), path = "mount_service_stub.rs")]

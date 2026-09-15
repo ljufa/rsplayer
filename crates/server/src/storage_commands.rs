@@ -1,11 +1,16 @@
-//! Storage commands: SMB/NFS mount/unmount via `MountService`, persisting
-//! successful mounts into settings and reporting mount/music-dir status.
+//! Storage commands.
+//!
+//! SMB/NFS mount/unmount via `MountService`, persisting successful mounts
+//! into settings, reporting mount/music-dir status, and server-side folder
+//! listings for the settings folder picker.
 
 use api_models::common::StorageCommand;
+use api_models::settings::MetadataStoreSettings;
 use api_models::state::StateChangeEvent;
 use log::error;
 
 use crate::command_context::CommandContext;
+use crate::directory_listing;
 
 #[allow(clippy::too_many_lines)]
 pub fn handle_storage_command(cmd: StorageCommand, ctx: &CommandContext) {
@@ -88,6 +93,27 @@ pub fn handle_storage_command(cmd: StorageCommand, ctx: &CommandContext) {
             let settings = ctx.config_store.get_settings();
             let dir_statuses = crate::mount_service::MountService::query_music_dir_status(&settings.metadata_settings);
             ctx.send_event(StateChangeEvent::MusicDirStatusEvent(dir_statuses));
+        }
+        StorageCommand::ListDirectories(path) => {
+            // The public demo must not expose the server's filesystem layout.
+            if std::env::var("DEMO_MODE").is_ok() {
+                ctx.send_event(StateChangeEvent::DirectoryListingEvent(directory_listing::refused(
+                    &path,
+                    "Folder browsing is disabled in the demo",
+                )));
+                return;
+            }
+            let settings = ctx.config_store.get_settings();
+            let sender = ctx.state_changes_sender.clone();
+            // Off the command loop: a slow disk or a hung network mount must
+            // not stall playback commands while the folder is read.
+            tokio::task::spawn_blocking(move || {
+                let external = crate::mount_service::MountService::discover_external_mounts(&settings.network_storage_settings);
+                let roots = directory_listing::library_roots(&external);
+                let extensions = MetadataStoreSettings::default().supported_extensions;
+                let listing = directory_listing::list(&path, &roots, &extensions);
+                let _ = sender.send(StateChangeEvent::DirectoryListingEvent(listing));
+            });
         }
         StorageCommand::SaveExternalMount(mount_point) => {
             let mut settings = ctx.config_store.get_settings();

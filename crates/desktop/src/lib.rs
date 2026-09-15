@@ -41,7 +41,9 @@ struct BackendRun {
     handle: tokio::task::JoinHandle<()>,
     /// Backend asks the wrapper to restart it ("Restart RSPlayer" in settings).
     restart_rx: mpsc::Receiver<()>,
-    /// Backend hands over its command sender once up (media keys use it).
+    /// Backend hands over its command sender once up (desktop media keys use
+    /// it; Android's media session talks to the backend over the WebSocket).
+    #[cfg_attr(target_os = "android", allow(dead_code))]
     cmd_rx: Option<oneshot::Receiver<mpsc::Sender<UserCommand>>>,
 }
 
@@ -83,6 +85,14 @@ async fn async_main() {
     unsafe {
         env::set_var("PORT", http_port.to_string());
         env::set_var("RSPLAYER_DESKTOP", "1");
+        // First launch seeds the library with the user's Music folder, the
+        // way the Android host seeds the shared Music folder.
+        #[cfg(not(target_os = "android"))]
+        if env::var_os("RSPLAYER_DEFAULT_MUSIC_DIR").is_none()
+            && let Some(music) = dirs::audio_dir().filter(|dir| dir.is_dir())
+        {
+            env::set_var("RSPLAYER_DEFAULT_MUSIC_DIR", music);
+        }
     };
     // The Kotlin media service reads the port from here (the port it
     // proposed via PORT may have been taken in the meantime).

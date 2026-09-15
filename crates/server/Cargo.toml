@@ -174,3 +174,8 @@ tempfile = "3"
 # work on a phone — embed at compile time for Android debug builds too.
 [target.'cfg(target_os = "android")'.dependencies]
 rust-embed = { version = "8", features = ["debug-embed"] }
+
+# The user's Music folder offered by the settings folder picker (Android hands
+# its shared Music folder over in RSPLAYER_DEFAULT_MUSIC_DIR instead).
+[target.'cfg(not(target_os = "android"))'.dependencies]
+dirs = "6"

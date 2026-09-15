@@ -96,7 +96,8 @@ Supported file extensions: `.flac`, `.wav`, `.aiff`, `.aif`, `.ape`, `.mp3`, `.m
 
 ### Local Directories
 
-- **Add Local Directory:** Enter the full path to a music directory and click "Add". The directory is added to the list of music sources.
+- **Add Local Directory:** Click **Browse folders…** to pick a folder on the machine RSPlayer runs on. The browser starts from the usual places (your Music folder, removable drives, mounted shares; on Android the shared Music folder, internal storage and SD cards) and shows how many sub-folders and audio files each folder holds. Open folders until you reach your library, then click **Use this folder**. You can still type a full path and click "Add".
+- The desktop and Android apps add your Music folder automatically on first start.
 - **Remove:** Remove a directory from the music sources. No files are deleted on disk.
 - After adding or removing directories, click **Update library** to scan for new tracks, or **Full rescan** to rebuild the entire library.
 

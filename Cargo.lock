@@ -6952,6 +6952,7 @@ dependencies = [
  "config",
  "console-subscriber",
  "cpal",
+ "dirs",
  "env_logger",
  "fjall",
  "futures",

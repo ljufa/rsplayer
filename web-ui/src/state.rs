@@ -7,7 +7,7 @@ use api_models::{
     settings::Settings,
     stat::LibraryStats,
     state::{
-        ExternalMount, MountStatus, MultiroomGroupState, MultiroomPeer, MusicDirStatus, PlayerInfo, PlayerState, SongProgress,
+        DirectoryListing, ExternalMount, MountStatus, MultiroomGroupState, MultiroomPeer, MusicDirStatus, PlayerInfo, PlayerState, SongProgress,
         StateChangeEvent,
     },
 };
@@ -39,6 +39,8 @@ pub struct AppState {
     pub mount_statuses: Signal<Vec<MountStatus>>,
     pub music_dir_statuses: Signal<Vec<MusicDirStatus>>,
     pub external_mounts: Signal<Vec<ExternalMount>>,
+    /// Last server folder listing (settings folder picker).
+    pub directory_listing: Signal<Option<DirectoryListing>>,
     // VU meter
     pub vu_left: Signal<u8>,
     pub vu_right: Signal<u8>,
@@ -99,6 +101,7 @@ impl AppState {
             mount_statuses: Signal::new(Vec::new()),
             music_dir_statuses: Signal::new(Vec::new()),
             external_mounts: Signal::new(Vec::new()),
+            directory_listing: Signal::new(None),
             vu_left: Signal::new(0),
             vu_right: Signal::new(0),
             vu_meter_enabled: Signal::new(false),
@@ -210,6 +213,9 @@ impl AppState {
             }
             StateChangeEvent::ExternalMountsEvent(mounts) => {
                 *self.external_mounts.write() = mounts;
+            }
+            StateChangeEvent::DirectoryListingEvent(listing) => {
+                *self.directory_listing.write() = Some(listing);
             }
             StateChangeEvent::GenreAlbumsEvent(genre, albums) => {
                 self.lazy_genre_albums.write().insert(genre, albums);
