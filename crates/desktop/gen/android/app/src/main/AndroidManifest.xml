@@ -10,6 +10,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- asked once: without the exemption Android stops the idle media service,
+         blocks background network (streams) and forbids starting the
+         foreground service when playback is started remotely -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- library scan of the shared Music folder (+ cover art) -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
@@ -38,6 +42,17 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- "Restart RSPlayer": kills the main process and relaunches the app
+             from a separate process (see RestartActivity) -->
+        <activity
+            android:name=".RestartActivity"
+            android:process=":restart"
+            android:taskAffinity="io.github.ljufa.rsplayer.restart"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:exported="false" />
 
         <service
             android:name=".PlaybackService"

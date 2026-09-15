@@ -1,6 +1,7 @@
 package io.github.ljufa.rsplayer
 
 import android.app.Application
+import android.os.Build
 
 /**
  * Process entry point. The Rust entry point is started by wry's process
@@ -11,6 +12,9 @@ import android.app.Application
 class RsplayerApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // The `:restart` process (RestartActivity) runs no backend; setting
+        // one up there would delete the port file of the relaunched app.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && getProcessName() != packageName) return
         BackendConfig.ensureInitialized(this)
     }
 }

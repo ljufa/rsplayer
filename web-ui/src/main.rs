@@ -282,22 +282,8 @@ fn App() -> Element {
         _ => String::new(),
     };
 
-    let connected = app_state_ctx.connected;
-
     rsx! {
         document::Stylesheet { href: asset!("/public/tw.css") }
-        // Show a full-screen "Connecting" overlay while the WebSocket is not connected.
-        // On desktop builds the backend starts asynchronously — this gives the user
-        // visible feedback instead of a dead-looking UI.
-        if !connected() {
-            div { class: "fixed inset-0 z-[100] flex flex-col items-center justify-center bg-base-300",
-                div { class: "text-center",
-                    h1 { class: "text-4xl font-bold mb-6", "RSPlayer" }
-                    span { class: "loading loading-spinner loading-lg text-primary mb-4" }
-                    p { class: "text-base-content/70", "Connecting to server…" }
-                }
-            }
-        }
         if (ui_state.welcome_open)() {
             WelcomeModal {}
         }
@@ -1199,17 +1185,43 @@ fn FooterPlayer() -> Element {
 
 // ─── Notifications ──────────────────────────────────────────────────────────
 
+/// How long the WebSocket must be down before the connection notice shows.
+const CONNECTION_NOTICE_DELAY_MS: u32 = 3_500;
+
 #[component]
 fn Notifications() -> Element {
     let state = use_context::<AppState>();
-    let connected = *state.connected.read();
+    let connected_signal = state.connected;
     let mut notification = state.notification;
-    let mut show_disconnected = use_signal(|| false);
+    let mut show_connection_notice = use_signal(|| false);
+    let mut ever_connected = use_signal(|| false);
+    let mut disconnect_epoch = use_signal(|| 0u32);
+    let mut was_connected: Signal<Option<bool>> = use_signal(|| None);
 
+    // The UI stays usable while the WebSocket (re)connects; a notice appears
+    // only if that takes longer than CONNECTION_NOTICE_DELAY_MS, so quick
+    // reconnects — e.g. the Android app returning from the background — are
+    // invisible.
     use_effect(move || {
+        let connected = connected_signal();
+        // React to transitions only, so repeated writes of the same value
+        // don't restart the delay.
+        if *was_connected.peek() == Some(connected) {
+            return;
+        }
+        was_connected.set(Some(connected));
+        if connected {
+            ever_connected.set(true);
+            show_connection_notice.set(false);
+            return;
+        }
+        let epoch = disconnect_epoch.peek().wrapping_add(1);
+        disconnect_epoch.set(epoch);
         spawn_local(async move {
-            gloo_timers::future::TimeoutFuture::new(3_000).await;
-            show_disconnected.set(true);
+            gloo_timers::future::TimeoutFuture::new(CONNECTION_NOTICE_DELAY_MS).await;
+            if *disconnect_epoch.peek() == epoch && !*connected_signal.peek() {
+                show_connection_notice.set(true);
+            }
         });
     });
 
@@ -1225,10 +1237,10 @@ fn Notifications() -> Element {
     });
 
     rsx! {
-        if !connected && show_disconnected() {
-            div { class: "alert alert-error fixed top-0 left-0 right-0 z-50 rounded-none justify-center py-1 transform-gpu",
-                i { class: "material-icons mr-2", "wifi_off" }
-                span { "Connection lost. Reconnecting..." }
+        if show_connection_notice() {
+            div { class: "alert alert-warning fixed top-0 left-0 right-0 z-50 rounded-none justify-center py-1 transform-gpu",
+                span { class: "loading loading-spinner loading-xs mr-2" }
+                span { if ever_connected() { "Reconnecting…" } else { "Connecting…" } }
             }
         }
         if let Some(notif) = notification.read().clone() {

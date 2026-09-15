@@ -10,9 +10,12 @@
 //! `ndk-context`, and the Kotlin `PlaybackService` provides the media session
 //! over the backend's WebSocket.
 //!
-//! "Restart RSPlayer" from the settings UI relaunches the whole executable
-//! on desktop; Android cannot relaunch its process, so the backend is
-//! shut down and started again in-process instead.
+//! "Restart RSPlayer" from the settings UI shuts the backend down and
+//! relaunches the whole app: via Tauri on desktop, via the Kotlin
+//! `RestartPlugin` on Android (a trampoline activity in a separate process
+//! kills this one and relaunches the app). An in-process backend restart is
+//! not enough — the old run's
+//! spawned tasks keep serving the port with the old settings.
 
 #[cfg(target_os = "android")]
 mod android;
@@ -28,6 +31,8 @@ use std::time::{Duration, Instant};
 
 use api_models::common::UserCommand;
 use log::{error, info, warn};
+#[cfg(target_os = "android")]
+use tauri::Manager;
 use tauri::{AppHandle, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent, generate_context};
 use tokio::sync::{mpsc, oneshot};
 
@@ -109,7 +114,10 @@ async fn async_main() {
     media_keys::start(backend.cmd_rx.take().expect("fresh backend run has a command receiver"));
 
     let shutdown_on_close = Arc::clone(&shutdown);
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(android_restart_plugin());
+    builder
         .setup(move |app| {
             // Create the window pointing at loading.html from the frontend
             // dist (tauri.conf.json "windows" is empty — no auto-create).
@@ -122,7 +130,7 @@ async fn async_main() {
                 .expect("failed to create window");
             redirect_when_ready(&window, http_port);
 
-            tokio::spawn(restart_loop(backend, shutdown, app.handle().clone(), window, http_port));
+            tokio::spawn(restart_loop(backend, shutdown, app.handle().clone()));
             Ok(())
         })
         .on_window_event(move |_window, event| {
@@ -205,27 +213,40 @@ async fn stop_backend(backend: &mut BackendRun, shutdown: &ShutdownSlot) {
     }
 }
 
-/// Desktop: relaunch the whole app via Tauri once the backend is down.
-#[cfg(not(target_os = "android"))]
-async fn restart_loop(mut backend: BackendRun, shutdown: ShutdownSlot, app_handle: AppHandle, _window: WebviewWindow, _http_port: u16) {
-    if backend.restart_rx.recv().await.is_some() {
-        info!("Restart requested — relaunching desktop app");
-        stop_backend(&mut backend, &shutdown).await;
-        app_handle.restart();
+/// Wait for a restart request, shut the backend down (database persisted)
+/// and relaunch the whole app.
+async fn restart_loop(mut backend: BackendRun, shutdown: ShutdownSlot, app_handle: AppHandle) {
+    if backend.restart_rx.recv().await.is_none() {
+        return;
+    }
+    info!("Restart requested — relaunching the app");
+    stop_backend(&mut backend, &shutdown).await;
+    #[cfg(not(target_os = "android"))]
+    app_handle.restart();
+    #[cfg(target_os = "android")]
+    {
+        let plugin = app_handle.state::<RestartPlugin>().0.clone();
+        if let Err(e) = plugin.run_mobile_plugin_async::<serde_json::Value>("restart", ()).await {
+            error!("Failed to restart the Android app: {e}");
+        }
     }
 }
 
-/// Android: the process cannot relaunch itself, so start a fresh backend in
-/// place and send the webview back through the loading redirect.
+/// Handle to the Kotlin `RestartPlugin` (`gen/android`).
 #[cfg(target_os = "android")]
-async fn restart_loop(mut backend: BackendRun, shutdown: ShutdownSlot, _app_handle: AppHandle, window: WebviewWindow, http_port: u16) {
-    while backend.restart_rx.recv().await.is_some() {
-        info!("Restart requested — restarting backend in-process");
-        stop_backend(&mut backend, &shutdown).await;
-        backend = spawn_backend(&shutdown);
-        let _ = window.eval("window.location.replace('loading.html')");
-        redirect_when_ready(&window, http_port);
-    }
+struct RestartPlugin(tauri::plugin::PluginHandle<tauri::Wry>);
+
+/// Android can't relaunch its executable the way `AppHandle::restart` does on
+/// desktop; the Kotlin side kills this process and relaunches the app.
+#[cfg(target_os = "android")]
+fn android_restart_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    tauri::plugin::Builder::new("rsplayer-restart")
+        .setup(|app, api| {
+            let handle = api.register_android_plugin("io.github.ljufa.rsplayer", "RestartPlugin")?;
+            app.manage(RestartPlugin(handle));
+            Ok(())
+        })
+        .build()
 }
 
 fn wait_for_backend(port: u16, timeout_secs: u64, poll_interval_ms: u64) -> bool {

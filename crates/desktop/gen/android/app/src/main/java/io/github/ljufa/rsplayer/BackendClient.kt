@@ -45,7 +45,7 @@ data class BackendState(
  * WebSocket client for the in-process backend. Commands are the same JSON
  * `UserCommand` frames the web UI sends; state comes back as
  * `StateChangeEvent` frames. Reconnects with backoff — the backend starts a
- * little after the process does, and restarts in place on "Restart RSPlayer".
+ * little after the process does.
  */
 class BackendClient(private val scope: CoroutineScope) {
     private val _state = MutableStateFlow(BackendState())

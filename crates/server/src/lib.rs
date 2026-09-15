@@ -10,9 +10,10 @@
 //! only, so the user can fix the device selection remotely.
 //!
 //! The desktop/Android wrapper (`crates/desktop`) calls [`run_backend`] as a
-//! library — possibly several times in one process on Android, where a
-//! "Restart `RSPlayer`" cannot relaunch the executable — so the process-global
-//! setup (crypto provider, logger) is idempotent.
+//! library and may have installed its own logger first (logcat on Android),
+//! so the process-global setup (crypto provider, logger) is idempotent.
+//! Shutdown only resolves the `select!` below — the spawned tasks are not
+//! aborted — so a "Restart `RSPlayer`" must restart the whole process.
 
 extern crate log;
 pub mod command_context;
@@ -51,9 +52,8 @@ pub async fn run_backend(
     command_sender_out: Option<Sender<mpsc::Sender<UserCommand>>>,
     restart_tx: Option<mpsc::Sender<()>>,
 ) {
-    // Both steps are process-global and `run_backend` may run more than once
-    // per process (the Android wrapper restarts the backend in place), and
-    // the wrapper may already have installed its own logger (logcat).
+    // Both steps are process-global and the wrapper may already have
+    // installed its own logger (logcat).
     if rustls::crypto::CryptoProvider::get_default().is_none() {
         let _ = rustls::crypto::ring::default_provider().install_default();
     }

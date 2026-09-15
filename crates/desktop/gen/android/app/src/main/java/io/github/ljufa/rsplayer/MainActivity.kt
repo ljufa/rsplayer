@@ -37,9 +37,20 @@ class MainActivity : TauriActivity() {
       view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
       WindowInsetsCompat.CONSUMED
     }
-    PermissionGate.request(this)
-    // Plain started service; media3 promotes it to a foreground service
-    // once playback starts (which happens with the app in the foreground).
+    // One dialog at a time: the battery exemption follows the permission
+    // dialog (see onRequestPermissionsResult) or comes right away.
+    if (!PermissionGate.request(this)) {
+      PermissionGate.requestBatteryExemption(this)
+    }
+  }
+
+  override fun onStart() {
+    super.onStart()
+    // Plain started service; media3 promotes it to a foreground service once
+    // playback starts. Started on every return to the screen, not just in
+    // onCreate: Android stops the idle service about a minute after the app
+    // leaves the screen, and playback started later would run unprotected
+    // (network blocked, process frozen). No-op while it is running.
     startService(Intent(this, PlaybackService::class.java))
   }
 
@@ -48,6 +59,9 @@ class MainActivity : TauriActivity() {
     if (PermissionGate.audioGranted(requestCode, permissions, grantResults)) {
       // The startup scan ran before we could read the Music folder.
       BackendClient.fireAndForget(BackendClient.RESCAN_METADATA)
+    }
+    if (requestCode == PermissionGate.REQUEST_CODE) {
+      PermissionGate.requestBatteryExemption(this)
     }
   }
 }
