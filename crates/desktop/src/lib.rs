@@ -125,9 +125,11 @@ async fn async_main() {
             // spinner — pure HTML/CSS, no WASM, visible instantly.
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(PathBuf::from("loading.html")))
                 .title("RSPlayer")
-                .inner_size(1200.0, 800.0)
+                .inner_size(WINDOW_WIDTH, WINDOW_HEIGHT)
                 .build()
                 .expect("failed to create window");
+            #[cfg(not(target_os = "android"))]
+            maximize_on_small_monitor(&window);
             redirect_when_ready(&window, http_port);
 
             tokio::spawn(restart_loop(backend, shutdown, app.handle().clone()));
@@ -142,6 +144,29 @@ async fn async_main() {
         })
         .run(generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Default desktop window size (logical pixels).
+const WINDOW_WIDTH: f64 = 1200.0;
+const WINDOW_HEIGHT: f64 = 800.0;
+
+/// The default window is larger than small screens (e.g. a Raspberry Pi 800×480
+/// DSI panel), so part of it ends up under the desktop panel. Maximize there
+/// instead and let the window manager fit it to the usable work area.
+#[cfg(not(target_os = "android"))]
+fn maximize_on_small_monitor(window: &WebviewWindow) {
+    let monitor = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| window.primary_monitor().ok().flatten());
+    let Some(monitor) = monitor else { return };
+    let size = monitor.size().to_logical::<f64>(monitor.scale_factor());
+    if (size.width < WINDOW_WIDTH || size.height < WINDOW_HEIGHT)
+        && let Err(e) = window.maximize()
+    {
+        warn!("Failed to maximize window on small monitor: {e}");
+    }
 }
 
 /// Where the databases and artwork cache live. Desktop: the per-user config

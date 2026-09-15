@@ -313,14 +313,14 @@ fn TrackInfo(song: Option<Song>, player_info: Option<PlayerInfo>) -> Element {
                         }
                     }
                     if let Some(genre) = &ps.genre {
-                        p { class: "text-sm text-base-content/50", "{genre}" }
+                        p { class: "track-info__meta text-sm text-base-content/50", "{genre}" }
                     }
                     if let Some(date) = &ps.date {
-                        p { class: "text-sm text-base-content/50", "{date}" }
+                        p { class: "track-info__meta text-sm text-base-content/50", "{date}" }
                     }
                     p { class: "text-sm text-base-content/50 mt-1", "{codec_info}" }
                     if let Some(l) = loudness {
-                        p { class: "text-xs text-base-content/40", "{l}" }
+                        p { class: "track-info__meta text-xs text-base-content/40", "{l}" }
                     }
                 }
             }

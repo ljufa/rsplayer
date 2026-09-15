@@ -109,6 +109,7 @@ See the [Configuration](configuration.md) page for hardware integration details.
 - **Community plugin framework**: Extensible architecture for third-party plugins.
 - **Improved playlist management**: Create/modify/delete items and playlists from everywhere.
 - **Scheduled music library scans**: Define an automatic library scan interval (or cron).
+- **Built-in NFS, SMB and S3 clients**: Scan and play a music library straight from network shares or S3-compatible storage, without mounting them in the OS — so remote libraries also work on Android, macOS, Windows, Snap and Flatpak.
 - **Problem (bug) report with diagnostics**: Report problems directly from the app.
 - **Desktop App File Logging**: Rolling log files for the desktop app, so users can capture and share diagnostics without running from a terminal.
 - **Homebrew Distribution**: Install and update RSPlayer on macOS through a Homebrew formula/cask.
