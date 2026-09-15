@@ -476,6 +476,18 @@ jobs:
     # rather than downloaded on every run.
     runs-on: [self-hosted, linux, x64, android]
     steps:
+      # This job runs on the host as the runner user, while container jobs that land on
+      # the same runner write the shared workspace as root. Hand such files back first,
+      # or checkout cannot clean the workspace ("Permission denied" on .git/index.lock).
+      - name: Reclaim workspace from container jobs
+        run: |
+          for dir in "$GITHUB_WORKSPACE" "$RUNNER_TEMP"; do
+            if [ -n "$(find "$dir" ! -user "$(id -u)" -print -quit 2>/dev/null)" ]; then
+              echo "Taking back root-owned files in $dir"
+              docker run --rm -v "$dir:/reclaim" alpine:3 chown -R "$(id -u):$(id -g)" /reclaim
+            fi
+          done
+
       - uses: actions/checkout@v7
         with:
           clean: true
