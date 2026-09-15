@@ -275,6 +275,29 @@ cargo make build_android_dev
 cargo make build_android_release
 ```
 
+### Android release builds (CI)
+
+The "Full release" workflow builds the universal APK in the `build_android` job and
+attaches `rsplayer-desktop_<version>_android.apk` to the draft release. The job runs
+on a self-hosted runner carrying the `android` label, which needs the SDK, NDK, JDK
+and rust targets listed above installed for the runner's user (`ANDROID_HOME`,
+`NDK_HOME` and `JAVA_HOME` default to `~/Android/Sdk`, the NDK version pinned in
+`app/build.gradle.kts`, and the `java` on the runner's PATH). Dispatch the workflow
+with target `android` to build only the APK.
+
+The APK is signed with the release key from three repository secrets; without them
+the job warns and signs with the runner's debug key. Create the key once and keep a
+backup of it — every future update must be signed with the same key:
+
+```bash
+keytool -genkey -v -keystore rsplayer-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias rsplayer
+base64 -w0 rsplayer-release.jks | gh secret set ANDROID_KEYSTORE_BASE64 --repo ljufa/rsplayer
+gh secret set ANDROID_KEYSTORE_PASSWORD --repo ljufa/rsplayer   # prompts for the keystore password entered above
+gh secret set ANDROID_KEY_ALIAS --body rsplayer --repo ljufa/rsplayer
+```
+
+Keep the `.jks` file outside the repository (keystores are git-ignored as a safety net).
+
 An emulator: `avdmanager create avd -n rsplayer36 -k "system-images;android-36;google_apis;x86_64" -d pixel_7`
 then `emulator -avd rsplayer36`. Logs: `adb logcat -s rsplayer RustStdoutStderr`
 (the Rust logger uses the `rsplayer` tag and honours `RUST_LOG`). The webview

@@ -29,6 +29,8 @@ on:
           - macos-aarch64
           - macos-x86_64
           - windows
+          # Android app (universal APK), built on the self-hosted runner labelled "android"
+          - android
   push:
     tags:
       - "*.*.*"
@@ -465,11 +467,91 @@ jobs:
           path: pkg/*
           if-no-files-found: error
 
+  build_android:
+    needs: build_ui
+    name: Build Android (APK)
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'android' }}
+    # The runner labelled "android" is the maintainer's workstation: the Android SDK/NDK,
+    # a JDK and the rust android targets are installed there (docs/build.md, Android)
+    # rather than downloaded on every run.
+    runs-on: [self-hosted, linux, x64, android]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+
+      # Runner services start without a login shell, so resolve the toolchain from the
+      # conventional locations; the NDK version comes from the Gradle project.
+      - name: Check Android toolchain
+        run: |
+          android_home="${ANDROID_HOME:-$HOME/Android/Sdk}"
+          ndk_version=$(sed -n 's/.*ndkVersion = "\(.*\)".*/\1/p' crates/desktop/gen/android/app/build.gradle.kts)
+          ndk_home="${NDK_HOME:-$android_home/ndk/$ndk_version}"
+          java_home="${JAVA_HOME:-$(java -XshowSettings:properties -version 2>&1 | sed -n 's/^ *java.home = //p')}"
+          missing=0
+          for dir in "$android_home/platforms" "$ndk_home" "$java_home"; do
+            if [ -z "$dir" ] || [ ! -d "$dir" ]; then
+              echo "::error::Missing '$dir' (see docs/build.md, Android)"
+              missing=1
+            fi
+          done
+          for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
+            if ! rustup target list --installed | grep -qx "$target"; then
+              echo "::error::Rust target $target is not installed"
+              missing=1
+            fi
+          done
+          [ "$missing" = 0 ] || exit 1
+          {
+            echo "ANDROID_HOME=$android_home"
+            echo "NDK_HOME=$ndk_home"
+            echo "JAVA_HOME=$java_home"
+          } >> "$GITHUB_ENV"
+
+      - name: Download web_ui
+        uses: actions/download-artifact@v8
+        with:
+          name: web_ui
+          path: dist/web-ui
+
+      # Release key from repository secrets. Without them the APK is signed with the
+      # runner's debug key: it installs, but switching keys later forces users to
+      # uninstall, so set the secrets before publishing a release.
+      - name: Configure release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set; the APK is signed with the runner's debug key"
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/rsplayer-release.jks"
+          printf 'storeFile=%s\npassword=%s\nkeyAlias=%s\n' \
+            "$RUNNER_TEMP/rsplayer-release.jks" "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" \
+            > crates/desktop/gen/android/keystore.properties
+
+      - name: Build Android APK
+        run: cargo make bundle_android_release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: pkg-android
+          path: target/android/pkg/*.apk
+          if-no-files-found: error
+
+      # Self-hosted workspace persists between runs: never leave the signing key behind.
+      - name: Remove signing key
+        if: always()
+        run: rm -f crates/desktop/gen/android/keystore.properties "$RUNNER_TEMP/rsplayer-release.jks"
+
   publish:
     # Collects every build's artifacts (and creates the draft release on tag pushes) —
     # only meaningful for a full run, so single-build dispatches skip it.
     if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.target == 'all') }}
-    needs: [build_backend, build_desktop_macos, build_desktop_linux, build_desktop_linux_arm64, build_desktop_windows, build_snap, build_flatpak]
+    needs: [build_backend, build_desktop_macos, build_desktop_linux, build_desktop_linux_arm64, build_desktop_windows, build_snap, build_flatpak, build_android]
     name: Create release
     runs-on: [self-hosted, linux, x64]
     steps:

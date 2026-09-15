@@ -334,8 +334,11 @@ script = [
 ]
 
 [tasks.build_android_release]
-description = "Release APK + AAB (signed when crates/desktop/gen/android/keystore.properties exists) into target/android/pkg"
-dependencies = ["build_ui_release"]
+description = "Build release UI + release APK and AAB for all ABIs into target/android/pkg"
+dependencies = ["build_ui_release", "bundle_android_release"]
+
+[tasks.bundle_android_release]
+description = "Release APK + AAB from the existing dist/web-ui (CI downloads it), signed when crates/desktop/gen/android/keystore.properties exists"
 script = [
     "set -e",
     "cp crates/desktop/loading.html dist/web-ui/loading.html",

@@ -24,6 +24,7 @@ Settings → Music Library has a **Browse folders…** button, so adding a libra
 
 - `crates/desktop` is now a library with a thin binary, as Tauri mobile requires; the Android Gradle project lives in `crates/desktop/gen/android` and is built with `cargo make build_android_dev` / `build_android_release` (see the [build guide](https://ljufa.github.io/rsplayer/#/build?id=android-desktop-app)).
 - The server's process-global setup is idempotent so the Android app can restart the backend in-process.
+- The "Full release" workflow builds the Android APK on a self-hosted runner labelled `android` and attaches it to the release.
 
 ## v4.8.5 — 2026-09-14
 
