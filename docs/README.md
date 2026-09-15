@@ -1,6 +1,6 @@
 # RSPlayer — Rust-native music server
 
-RSPlayer is an open-source, headless music server primarily for Linux, with experimental macOS and Windows builds. Run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser. A native desktop app (Linux x86_64/ARM64, macOS, Windows) is also available.
+RSPlayer is an open-source, headless music server primarily for Linux, with experimental macOS and Windows builds. Run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser. A native desktop app (Linux x86_64/ARM64, macOS, Windows) is also available, and as a beta on Android.
 
 It runs as a systemd service and exposes a responsive web UI, making it a great fit for machines without a monitor or keyboard — but equally at home on a dedicated desktop audio PC. Hardware and DIY integrations (GPIO DAC control, custom firmware) are fully optional.
 
@@ -66,8 +66,8 @@ FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE (Monkey's Audio),
 |---|---|---|---|---|
 | Language | Rust | Node.js | PHP/Bash | C |
 | Playback engine | Symphonia + cpal (pure rust) | MPD (plugin-based) | MPD (plugin-based) | plugin-based (FFmpeg, libFLAC, …) |
-| OS support | Linux, macOS, Windows | Linux | Linux (Pi) | Linux, macOS, Windows |
-| Native desktop app variant | Linux, macOS, Windows | — | — | — |
+| OS support | Linux, macOS, Windows, Android | Linux | Linux (Pi) | Linux, macOS, Windows |
+| Native desktop app variant | Linux, macOS, Windows, Android (beta) | — | — | — |
 | Web UI | ✓ | ✓ | ✓ | 3rd party |
 | Local browser playback | ✓ | — | — | — |
 | Parametric EQ / DSP | ✓ built-in | paid tier | ✓ (CamillaDSP) | via plugins |
@@ -112,7 +112,7 @@ See the [Configuration](configuration.md) page for hardware integration details.
 - **Problem (bug) report with diagnostics**: Report problems directly from the app.
 - **Desktop App File Logging**: Rolling log files for the desktop app, so users can capture and share diagnostics without running from a terminal.
 - **Homebrew Distribution**: Install and update RSPlayer on macOS through a Homebrew formula/cask.
-- **Android App**: A native Android build (with an optional kiosk mode for dedicated players), published to the Google Play Store.
+- **Android App on Google Play**: publish the Android app (shipped as an APK since v4.9.0) to the Play Store, and add an optional kiosk mode for dedicated players.
 - **AUR Package**: An official Arch User Repository package for Arch Linux and derivatives.
 
 ## Contributing

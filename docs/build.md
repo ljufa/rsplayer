@@ -237,6 +237,55 @@ for regenerating `cargo-sources.json`, building locally with `flatpak-builder`,
 and the release checklist. The manifest builds a staged copy of the workspace
 offline from vendored crates plus the pre-built `dist/web-ui`.
 
+## Android (desktop app)
+
+The Android app is the Tauri desktop crate built for Android (Tauri mobile):
+the backend runs in-process, the Kotlin host in `crates/desktop/gen/android`
+provides the media session. Requirements (no Android Studio needed):
+
+```bash
+# Command-line SDK under ~/Android/Sdk (download commandlinetools-linux-*_latest.zip
+# from https://developer.android.com/studio#command-line-tools-only and unzip it
+# to ~/Android/Sdk/cmdline-tools/latest), then:
+sdkmanager --licenses
+sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358" \
+           "emulator" "system-images;android-36;google_apis;x86_64"
+rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+
+# In your shell profile (JDK 17+ required):
+export ANDROID_HOME="$HOME/Android/Sdk"
+export NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
+export JAVA_HOME=...
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+```
+
+Then:
+
+```bash
+# Run on the connected phone (USB debugging) or a running emulator.
+# ANDROID_TARGET=aarch64 (default) | x86_64 (emulator) | armv7
+cargo make run_android_dev
+
+# Debug-signed universal APK (arm64 + x86_64) for `adb install`
+cargo make build_android_dev
+
+# Release APK + AAB for all ABIs into target/android/pkg/
+# (signed when crates/desktop/gen/android/keystore.properties exists — see
+# https://tauri.app/distribute/sign/android/)
+cargo make build_android_release
+```
+
+An emulator: `avdmanager create avd -n rsplayer36 -k "system-images;android-36;google_apis;x86_64" -d pixel_7`
+then `emulator -avd rsplayer36`. Logs: `adb logcat -s rsplayer RustStdoutStderr`
+(the Rust logger uses the `rsplayer` tag and honours `RUST_LOG`). The webview
+can be inspected from desktop Chrome at `chrome://inspect`.
+
+`cargo tauri android init` (`cargo make android_init`) regenerates the Gradle
+project; the manifest, `app/build.gradle.kts` and the Kotlin sources under
+`app/src/main/java/io/github/ljufa/rsplayer/` are hand-maintained and
+committed. The NDK version is pinned in `app/build.gradle.kts` (r28+ gives
+the 16 KB page alignment Google Play requires).
+
 ## Output
 
 After a successful build, Linux packages and binaries are located under the target output directories:

@@ -1,5 +1,26 @@
 # Release Notes
 
+## v4.9.0 — unreleased
+
+RSPlayer runs on Android. The desktop app — the full player with the server inside — now ships as an Android APK, so a phone or tablet plays music from its own storage, offline, through the device's audio output.
+
+### Features
+
+#### Android app (beta)
+
+`rsplayer-desktop_<version>_android.apk` is attached to the release (Android 8.0+, ARM64/ARMv7/x86_64 in one file; sideload it — a Google Play listing is planned). It is the same app as on the desktop, wrapped for Android:
+
+- **Local music**: on first start the app asks for the media permission and scans the shared **Music** folder. More folders can be added in Settings. Podcasts and internet radio work as before.
+- **Background playback**: playback continues with the screen off or another app in front. Play/pause, next/previous and seek are available from the lock screen, the notification and headset/Bluetooth buttons; the app pauses for calls and when headphones are unplugged.
+- **Audio output** through AAudio to the current system output (speaker, wired, Bluetooth), with software volume.
+- **Multiroom** discovery works on Wi-Fi (beta), like on the desktop.
+- Not available on Android: network mounts (SMB/NFS), ALSA device selection, DSD output, and `.cue`/`.m3u`/`.lrc` sidecar files (Android hides non-media files from apps).
+
+### Build and CI
+
+- `crates/desktop` is now a library with a thin binary, as Tauri mobile requires; the Android Gradle project lives in `crates/desktop/gen/android` and is built with `cargo make build_android_dev` / `build_android_release` (see the [build guide](https://ljufa.github.io/rsplayer/#/build?id=android-desktop-app)).
+- The server's process-global setup is idempotent so the Android app can restart the backend in-process.
+
 ## v4.8.5 — 2026-09-14
 
 The desktop app now runs on ARM64 Linux, including the Raspberry Pi 4 and 5. This release also simplifies the install instructions and makes the installer tell you where to open RSPlayer. There are no changes to playback or the web UI.

@@ -307,6 +307,45 @@ script = [
     "cd crates/desktop && cargo tauri dev",
 ]
 
+# ── Android (Tauri mobile) ────────────────
+# Needs ANDROID_HOME, NDK_HOME and JAVA_HOME plus the android rust targets —
+# see docs/build.md "Android". The generated Gradle project lives in
+# crates/desktop/gen/android and is committed (Kotlin media service, manifest).
+[tasks.android_init]
+description = "One-time: (re)generate crates/desktop/gen/android via cargo tauri android init"
+script = ["cd crates/desktop && cargo tauri android init"]
+
+[tasks.run_android_dev]
+description = "Build release UI + run the Android app on the connected device/emulator (ANDROID_TARGET=aarch64|x86_64|armv7)"
+dependencies = ["build_ui_release"]
+env = { "ANDROID_TARGET" = { value = "aarch64", condition = { env_not_set = ["ANDROID_TARGET"] } } }
+script = [
+    "cp crates/desktop/loading.html dist/web-ui/loading.html",
+    "(cd crates/desktop && cargo tauri android dev --target ${ANDROID_TARGET})",
+]
+
+[tasks.build_android_dev]
+description = "Debug-signed universal APK for sideloading (adb install), arm64 + x86_64"
+dependencies = ["build_ui_release"]
+script = [
+    "cp crates/desktop/loading.html dist/web-ui/loading.html",
+    "(cd crates/desktop && cargo tauri android build --debug --apk --target aarch64 --target x86_64)",
+    "ls -la crates/desktop/gen/android/app/build/outputs/apk/universal/debug/",
+]
+
+[tasks.build_android_release]
+description = "Release APK + AAB (signed when crates/desktop/gen/android/keystore.properties exists) into target/android/pkg"
+dependencies = ["build_ui_release"]
+script = [
+    "set -e",
+    "cp crates/desktop/loading.html dist/web-ui/loading.html",
+    "(cd crates/desktop && cargo tauri android build --apk --aab --target aarch64 --target armv7 --target x86_64 --ci)",
+    "PKG_DIR=target/android/pkg && rm -rf ${PKG_DIR} && mkdir -p ${PKG_DIR}",
+    "cp crates/desktop/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab ${PKG_DIR}/rsplayer-desktop_${RELEASE_VERSION}_android.aab",
+    "cp crates/desktop/gen/android/app/build/outputs/apk/universal/release/app-universal-release*.apk ${PKG_DIR}/rsplayer-desktop_${RELEASE_VERSION}_android.apk",
+    "ls -la ${PKG_DIR}",
+]
+
 # ── Flatpak (local build & run) ───────────
 # Builds the desktop app as a flatpak from the *local working tree*
 # (including uncommitted changes) and installs it into the user flatpak

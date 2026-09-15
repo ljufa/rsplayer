@@ -36,11 +36,11 @@ See the [full feature list](https://ljufa.github.io/rsplayer/#/?id=features) and
 
 **Which one do I need?**
 
-| | Linux | macOS · Windows *(experimental)* |
-|---|---|---|
-| **Server** — runs in the background, you control it from a browser or phone. Best for a Raspberry Pi, NAS or always-on audio PC. | [Install script](#linux-server) | [Download](#macos-and-windows) |
-| **Desktop app** — a normal app window on the computer you're using. | [Snap / Flatpak / script](#linux-desktop-app) | [Download](#macos-and-windows) |
-| **Docker** | [docker run](#docker) | — |
+| | Linux | macOS · Windows *(experimental)* | Android *(beta)* |
+|---|---|---|---|
+| **Server** — runs in the background, you control it from a browser or phone. Best for a Raspberry Pi, NAS or always-on audio PC. | [Install script](#linux-server) | [Download](#macos-and-windows) | — |
+| **Desktop app** — a normal app window on the computer you're using. | [Snap / Flatpak / script](#linux-desktop-app) | [Download](#macos-and-windows) | [APK](#android) |
+| **Docker** | [docker run](#docker) | — | — |
 
 ### Linux server
 
@@ -97,6 +97,10 @@ Download from the [latest release](https://github.com/ljufa/rsplayer/releases/la
 | **Windows** | `rsplayer_windows_amd64.exe` — just run it | `rsplayer-desktop_windows_amd64.exe` |
 
 After starting the server, open `http://localhost:8000`. On Windows, installed ASIO drivers can be selected in Settings → Audio interface. More in the [macOS](https://ljufa.github.io/rsplayer/#/installation?id=macos-experimental) and [Windows](https://ljufa.github.io/rsplayer/#/installation?id=windows-experimental) guides.
+
+### Android
+
+Download `rsplayer-desktop_<version>_android.apk` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest) and open it on the phone (Android 8.0+). The full player runs inside the app: put music in the shared **Music** folder, grant the media permission on first start, and playback works offline with lock-screen controls. Details in the [Android guide](https://ljufa.github.io/rsplayer/#/installation?id=android-beta).
 
 > ASIO is a trademark and software of Steinberg Media Technologies GmbH.
 

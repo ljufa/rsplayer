@@ -42,6 +42,32 @@ latency demands it:
 - **Multiroom sink thread** (grouped follower) — same priority rule as
   playback.
 
+### Desktop and Android wrapper
+
+`crates/desktop` is a Tauri 2 shell around the same backend, built as a
+library (`rsplayer_desktop_lib::run`) with a thin `main.rs` for desktop and
+the Tauri mobile entry point for Android:
+
+- It moves the cwd to a per-user data dir (`dirs::config_dir()/rsplayer` on
+  desktop, `RSPLAYER_DATA_DIR` handed over by the Kotlin `Application` on
+  Android), picks a free port, exports `PORT`/`RSPLAYER_DESKTOP`, and runs
+  `rsplayer::run_backend` as a tokio task while the webview shows
+  `loading.html` until the port opens, then loads `http://localhost:<port>`.
+- `run_backend` is idempotent about process-global setup (crypto provider,
+  logger) because "Restart RSPlayer" relaunches the executable on desktop but
+  restarts the backend **in-process** on Android.
+- Android: `android::early_init` installs a logcat logger and registers the
+  activity with `ndk-context` (cpal's AAudio host and iroh's interface
+  discovery need it). Media keys come from souvlaki on desktop; on Android
+  the Kotlin `PlaybackService` (media3 `MediaSessionService`, foreground
+  while playing) mirrors the backend over its WebSocket — the same JSON
+  `UserCommand`/`StateChangeEvent` frames the web UI uses — and handles
+  audio focus and the Wi-Fi multicast lock.
+- Android has no ALSA: the server is built with `--no-default-features`, the
+  platform profile is `TargetOs::Android` (cpal "System Default" device,
+  software volume, shared Music folder pre-seeded as the library) and the
+  output stream uses cpal's default buffer size.
+
 ## Command / Event Model
 
 The system is a unidirectional loop: **commands in → state changes out**.

@@ -418,9 +418,11 @@ impl AudioOutput {
         // If Fixed(4096) fails to open the stream (rare), fall back to Default.
         let buf_sizes: &[cpal::BufferSize] = if is_dsd || rsp_settings.alsa_buffer_size.is_some() {
             &[] // handled below via explicit_buf
-        } else if is_asio {
+        } else if is_asio || cfg!(target_os = "android") {
             // ASIO drivers dictate their own period; Fixed(4096) is rejected.
-            // Use the driver-preferred size.
+            // AAudio likewise sizes its buffer as a multiple of the device
+            // burst and may refuse a fixed request. Use the driver-preferred
+            // size.
             &[cpal::BufferSize::Default]
         } else {
             &[cpal::BufferSize::Fixed(4096), cpal::BufferSize::Default]
@@ -482,7 +484,7 @@ impl AudioOutput {
                     let dsp_channels = device_channels.map_or_else(|| spec_clone.channels().count(), |ch| ch as usize);
                     handle.rebuild(dsp_channels, fallback_rate as usize);
                 }
-                let buf_sizes_for_rate: &[cpal::BufferSize] = if is_asio {
+                let buf_sizes_for_rate: &[cpal::BufferSize] = if is_asio || cfg!(target_os = "android") {
                     &[cpal::BufferSize::Default]
                 } else if rsp_settings.alsa_buffer_size.is_none() && !is_dsd {
                     &[cpal::BufferSize::Fixed(4096), cpal::BufferSize::Default]

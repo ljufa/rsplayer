@@ -16,3 +16,6 @@ crates/desktop/target
 .codex
 dist
 *.snap
+# Android (Tauri mobile): signing secrets and cargo-mobile2's machine-specific linker config
+crates/desktop/gen/android/keystore.properties
+crates/desktop/.cargo/

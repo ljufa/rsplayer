@@ -14,6 +14,9 @@
     "macOS": {
       "minimumSystemVersion": "12.0"
     },
+    "android": {
+      "minSdkVersion": 26
+    },
     "linux": {
       "deb": {
         "desktopTemplate": "../../PKGS/desktop/rsplayer-desktop.desktop.template",

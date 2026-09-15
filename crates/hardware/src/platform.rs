@@ -8,7 +8,8 @@
 //! Settings. The chosen device entries mirror what the settings UI offers:
 //! the virtual "pipewire" card injected by `audio_device::alsa::get_all_cards`
 //! on ALSA builds, and the "System Default" card the server synthesizes for
-//! cpal-only builds (Windows/macOS).
+//! cpal-only builds (Windows/macOS/Android). Android additionally seeds the
+//! shared Music folder as the library directory.
 
 use api_models::common::{PcmOutputDevice, VolumeCrtlType};
 use api_models::settings::{InstallMethod, Settings};
@@ -25,6 +26,7 @@ pub enum TargetOs {
     Windows,
     MacOs,
     Linux,
+    Android,
     Other,
 }
 
@@ -38,7 +40,7 @@ pub enum Sandbox {
 /// Everything about the runtime environment that influences the playback
 /// defaults, captured as plain data so the mapping to [`Settings`] stays a
 /// pure, unit-testable function.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct PlatformProfile {
     pub os: TargetOs,
     pub sandbox: Sandbox,
@@ -50,6 +52,10 @@ pub struct PlatformProfile {
     /// Playback can reach `PipeWire` — mirrors the condition under which the
     /// virtual "pipewire" card is offered in the device list.
     pub pipewire_playback_available: bool,
+    /// Directory pre-seeded into `music_directories` on first launch. Only
+    /// Android has a well-known one (the shared Music folder, which the
+    /// media permission grants access to); desktop users pick their own.
+    pub default_music_dir: Option<String>,
 }
 
 impl PlatformProfile {
@@ -59,6 +65,8 @@ impl PlatformProfile {
             TargetOs::Windows
         } else if cfg!(target_os = "macos") {
             TargetOs::MacOs
+        } else if cfg!(target_os = "android") {
+            TargetOs::Android
         } else if cfg!(target_os = "linux") {
             TargetOs::Linux
         } else {
@@ -70,6 +78,7 @@ impl PlatformProfile {
             alsa_backend: cfg!(feature = "alsa"),
             pipewire_ctl_available: pipewire::is_volume_ctl_available(),
             pipewire_playback_available: pipewire::is_wpctl_available() || is_sandboxed_pipewire_available(),
+            default_music_dir: default_music_dir(os),
         }
     }
 
@@ -119,7 +128,21 @@ impl PlatformProfile {
             volume.ctrl_device = VolumeCrtlType::Software;
             volume.saved_volume = Some(DEFAULT_SOFTWARE_VOLUME);
         }
+        if let Some(dir) = &self.default_music_dir {
+            settings.metadata_settings.music_directories = vec![dir.clone()];
+        }
         settings
+    }
+}
+
+/// The Android host passes the shared Music folder in
+/// `RSPLAYER_DEFAULT_MUSIC_DIR` (from `Environment.getExternalStoragePublicDirectory`);
+/// fall back to the conventional path if it didn't. Nothing on other platforms.
+fn default_music_dir(os: TargetOs) -> Option<String> {
+    match std::env::var("RSPLAYER_DEFAULT_MUSIC_DIR") {
+        Ok(dir) if !dir.is_empty() => Some(dir),
+        _ if os == TargetOs::Android => Some("/storage/emulated/0/Music".to_string()),
+        _ => None,
     }
 }
 
@@ -216,6 +239,7 @@ mod tests {
             alsa_backend: alsa,
             pipewire_ctl_available: pw_ctl,
             pipewire_playback_available: pw_playback,
+            default_music_dir: None,
         }
     }
 
@@ -265,6 +289,25 @@ mod tests {
         assert_eq!(s.alsa_settings.output_device.card_id, "pipewire");
         assert_eq!(s.volume_ctrl_settings.ctrl_device, VolumeCrtlType::Pipewire);
         assert_eq!(s.volume_ctrl_settings.saved_volume, None);
+    }
+
+    #[test]
+    fn android_defaults_to_system_default_device_software_gain_and_music_dir() {
+        let mut p = profile(TargetOs::Android, Sandbox::None, false, false, false);
+        p.default_music_dir = Some("/storage/emulated/0/Music".to_string());
+        let s = p.first_launch_settings();
+        assert_eq!(s.alsa_settings.output_device.name, "default");
+        assert_eq!(s.alsa_settings.output_device.card_id, "default");
+        assert_software_50(&s);
+        assert_eq!(s.metadata_settings.music_directories, vec!["/storage/emulated/0/Music".to_string()]);
+    }
+
+    #[test]
+    fn default_music_dir_is_not_applied_on_desktop() {
+        let s = profile(TargetOs::Linux, Sandbox::None, true, false, false).first_launch_settings();
+        assert!(s.metadata_settings.music_directories.is_empty());
+        let s = profile(TargetOs::MacOs, Sandbox::None, false, false, false).first_launch_settings();
+        assert!(s.metadata_settings.music_directories.is_empty());
     }
 
     #[test]

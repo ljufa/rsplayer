@@ -169,3 +169,8 @@ nix = { version = "0.31", features = ["mount", "user"] }
 
 [dev-dependencies]
 tempfile = "3"
+
+# rust-embed only reads the UI folder from disk in debug builds, which cannot
+# work on a phone — embed at compile time for Android debug builds too.
+[target.'cfg(target_os = "android")'.dependencies]
+rust-embed = { version = "8", features = ["debug-embed"] }

@@ -8,6 +8,11 @@
 //! the database is persisted on the signal paths. If the audio device can't
 //! be opened at startup the server comes up in *degraded* mode: settings UI
 //! only, so the user can fix the device selection remotely.
+//!
+//! The desktop/Android wrapper (`crates/desktop`) calls [`run_backend`] as a
+//! library — possibly several times in one process on Android, where a
+//! "Restart `RSPlayer`" cannot relaunch the executable — so the process-global
+//! setup (crypto provider, logger) is idempotent.
 
 extern crate log;
 pub mod command_context;
@@ -45,11 +50,13 @@ pub async fn run_backend(
     command_sender_out: Option<Sender<mpsc::Sender<UserCommand>>>,
     restart_tx: Option<mpsc::Sender<()>>,
 ) {
-    rustls::crypto::ring::default_provider()
-        .install_default()
-        .expect("failed to install rustls crypto provider");
-
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    // Both steps are process-global and `run_backend` may run more than once
+    // per process (the Android wrapper restarts the backend in place), and
+    // the wrapper may already have installed its own logger (logcat).
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+    let _ = env_logger::Builder::from_env(Env::default().default_filter_or("info")).try_init();
     let version = env!("CARGO_PKG_VERSION");
     info!("Starting RSPlayer {version}.");
     info!(

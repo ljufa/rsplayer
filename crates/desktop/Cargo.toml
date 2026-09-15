@@ -22,19 +22,43 @@ icons = [
     "icons/128x128@2x.png"
 ]
 
+# Tauri mobile layout: the app lives in the library (loaded by the Android
+# host via `System.loadLibrary`), the desktop binary is a thin shim over it.
+[lib]
+name = "rsplayer_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "rsplayer-desktop"
+path = "src/main.rs"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mobile)', 'cfg(desktop)'] }
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-souvlaki = "0.8"
 api_models = { path = "../api_models" }
-dirs = "6"
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
+
+# OS media keys (MPRIS2 / MediaRemote / SMTC) and the per-user config dir —
+# neither applies on Android, where the Kotlin media session and the app's
+# private files dir take over.
+[target.'cfg(not(target_os = "android"))'.dependencies]
+souvlaki = "0.8"
+dirs = "6"
+
+# Android: logcat logger and the ndk-context registration that cpal's AAudio
+# host and iroh's interface discovery require.
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.15"
+ndk-context = "0.1"
 
 # ALSA only exists on Linux; on macOS the server is built without default features
 # (mirrors the headless server release builds for apple-darwin targets).
@@ -45,7 +69,8 @@ rsplayer = { path = "../server" }
 [target.'cfg(target_os = "windows")'.dependencies]
 rsplayer = { path = "../server", default-features = false, features = ["asio"] }
 
-# macOS (and any other non-Linux, non-Windows): no ALSA, no ASIO.
+# macOS and Android (and any other non-Linux, non-Windows): no ALSA, no ASIO —
+# cpal's CoreAudio / AAudio host with the "System Default" device.
 [target.'cfg(all(not(target_os = "linux"), not(target_os = "windows")))'.dependencies]
 rsplayer = { path = "../server", default-features = false }
 
