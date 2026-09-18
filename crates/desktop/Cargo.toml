@@ -52,7 +52,7 @@ env_logger = { workspace = true }
 # private files dir take over.
 [target.'cfg(not(target_os = "android"))'.dependencies]
 souvlaki = "0.8"
-dirs = "6"
+dirs = "7"
 
 # Android: logcat logger and the ndk-context registration that cpal's AAudio
 # host and iroh's interface discovery require.
