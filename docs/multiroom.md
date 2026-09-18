@@ -1,10 +1,10 @@
-# Multiroom Playback (beta)
+# Multiroom Playback
 
 RSPlayer can play the same music on several devices at once, synchronized to a few milliseconds — no external software (Snapcast, Roon, etc.) required. Every RSPlayer instance on your network can discover the others automatically, and any of them can stream its playback to the rest.
 
 Typical setup: a Raspberry Pi with a USB DAC in the living room, another in the kitchen, and a desktop in the office — group them from the web UI and they all play in sync.
 
-> **Beta status.** Multiroom works well on wired LANs and the hardware it has been developed against (desktop Linux with PipeWire, Raspberry Pi with USB DACs). Synchronization quality, however, depends on things outside RSPlayer's control — audio-driver latency reporting, Wi-Fi access points, device firewalls — and the variety out there is huge. If sync misbehaves on your setup, please [open an issue](https://github.com/ljufa/rsplayer/issues/new?template=multiroom_report.md) and include: your OS and audio stack (PipeWire / plain ALSA / direct `hw:` device), the DAC or output device, wired or Wi-Fi, and a log captured with `RUST_LOG=info,sync=debug,playback=debug` — the log contains the timing measurements needed to diagnose sync problems.
+> **Note.** Multiroom works well on wired LANs and the hardware it has been developed against (desktop Linux with PipeWire, Raspberry Pi with USB DACs). Synchronization quality, however, depends on things outside RSPlayer's control — audio-driver latency reporting, Wi-Fi access points, device firewalls — and the variety out there is huge. If sync misbehaves on your setup, please [open an issue](https://github.com/ljufa/rsplayer/issues/new?template=multiroom_report.md) and include: your OS and audio stack (PipeWire / plain ALSA / direct `hw:` device), the DAC or output device, wired or Wi-Fi, and a log captured with `RUST_LOG=info,sync=debug,playback=debug` — the log contains the timing measurements needed to diagnose sync problems.
 
 ## Requirements
 

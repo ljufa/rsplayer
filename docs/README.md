@@ -1,12 +1,12 @@
 # RSPlayer — Rust-native music server
 
-RSPlayer is an open-source, headless music server primarily for Linux, with experimental macOS and Windows builds. Run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser. A native desktop app (Linux x86_64/ARM64, macOS, Windows) is also available, and as a beta on Android.
+RSPlayer is an open-source, headless music server primarily for Linux. Run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser. A native desktop app (Linux x86_64/ARM64, macOS, Windows) is also available, and on Android.
 
 It runs as a systemd service and exposes a responsive web UI, making it a great fit for machines without a monitor or keyboard — but equally at home on a dedicated desktop audio PC. Hardware and DIY integrations (GPIO DAC control, custom firmware) are fully optional.
 
 Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia) for audio decoding and [Cpal](https://github.com/rustaudio/cpal) for output, with a Rust-native audio pipeline for low-latency, high-performance playback.
 
-**Online demo → https://rsplayer.ljufa.iz.rs/**
+**Online demo → https://demo.rsplayer.de**
 
 ## Getting Started
 
@@ -67,11 +67,11 @@ FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE (Monkey's Audio),
 | Language | Rust | Node.js | PHP/Bash | C |
 | Playback engine | Symphonia + cpal (pure rust) | MPD (plugin-based) | MPD (plugin-based) | plugin-based (FFmpeg, libFLAC, …) |
 | OS support | Linux, macOS, Windows, Android | Linux | Linux (Pi) | Linux, macOS, Windows |
-| Native desktop app variant | Linux, macOS, Windows, Android (beta) | — | — | — |
+| Native desktop app variant | Linux, macOS, Windows, Android | — | — | — |
 | Web UI | ✓ | ✓ | ✓ | 3rd party |
 | Local browser playback | ✓ | — | — | — |
 | Parametric EQ / DSP | ✓ built-in | paid tier | ✓ (CamillaDSP) | via plugins |
-| Multi-room | ✓ (beta) | paid tier | ✓ | via plugins |
+| Multi-room | ✓ | paid tier | ✓ | via plugins |
 | DSD playback | ✓ | ✓ | ✓ | ✓ |
 | Loudness normalization (EBU R128) | ✓ | — | — | — |
 | Synchronized lyrics | ✓ | — | — | — |

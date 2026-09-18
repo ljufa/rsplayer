@@ -16,7 +16,7 @@
 
 RSPlayer is an open-source music player written in Rust. Run it as a **headless server** on a NAS, home server or Raspberry Pi and control it from any browser or phone — or install the **desktop app** on your computer.
 
-🎧 **[Online demo](https://rsplayer.ljufa.iz.rs/)** · 📖 **[Documentation](https://ljufa.github.io/rsplayer/)** · ⬇️ **[Latest release](https://github.com/ljufa/rsplayer/releases/latest)**
+🎧 **[Online demo](https://demo.rsplayer.de)** · 📖 **[Documentation](https://ljufa.github.io/rsplayer/)** · ⬇️ **[Latest release](https://github.com/ljufa/rsplayer/releases/latest)**
 
 https://github.com/user-attachments/assets/88ba2a8e-a016-49e9-81f0-12ce53ce4ecb
 
@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/88ba2a8e-a016-49e9-81f0-12ce53ce4ecb
 
 - Pure-Rust playback engine ([Symphonia](https://github.com/pdeljanov/Symphonia) + [cpal](https://github.com/rustaudio/cpal)) with low-latency ALSA / PipeWire output, or play straight in your browser
 - FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE
-- Multiroom (beta): synchronized playback across devices with automatic discovery
+- Multiroom: synchronized playback across devices with automatic discovery
 - Parametric EQ and DSP presets, EBU R128 loudness normalization, automatic resampling
 - Internet radio and a podcast client — subscribe to shows and resume episodes where you stopped
 - Visualizer, synchronized lyrics, library browsing, dynamic playlists
@@ -36,7 +36,7 @@ See the [full feature list](https://ljufa.github.io/rsplayer/#/?id=features) and
 
 **Which one do I need?**
 
-| | Linux | macOS · Windows *(experimental)* | Android *(beta)* |
+| | Linux | macOS · Windows | Android |
 |---|---|---|---|
 | **Server** — runs in the background, you control it from a browser or phone. Best for a Raspberry Pi, NAS or always-on audio PC. | [Install script](#linux-server) | [Download](#macos-and-windows) | — |
 | **Desktop app** — a normal app window on the computer you're using. | [Snap / Flatpak / script](#linux-desktop-app) | [Download](#macos-and-windows) | [APK](#android) |
@@ -96,11 +96,11 @@ Download from the [latest release](https://github.com/ljufa/rsplayer/releases/la
 | **macOS** | `rsplayer_darwin_arm64` (Apple Silicon) or `rsplayer_darwin_amd64` (Intel) — `chmod +x` and run | `.dmg` |
 | **Windows** | `rsplayer_windows_amd64.exe` — just run it | `rsplayer-desktop_windows_amd64.exe` |
 
-After starting the server, open `http://localhost:8000`. On Windows, installed ASIO drivers can be selected in Settings → Audio interface. More in the [macOS](https://ljufa.github.io/rsplayer/#/installation?id=macos-experimental) and [Windows](https://ljufa.github.io/rsplayer/#/installation?id=windows-experimental) guides.
+After starting the server, open `http://localhost:8000`. On Windows, installed ASIO drivers can be selected in Settings → Audio interface. More in the [macOS](https://ljufa.github.io/rsplayer/#/installation?id=macos) and [Windows](https://ljufa.github.io/rsplayer/#/installation?id=windows) guides.
 
 ### Android
 
-Download `rsplayer-desktop_<version>_android.apk` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest) and open it on the phone (Android 8.0+). The full player runs inside the app: put music in the shared **Music** folder, grant the media permission on first start, and playback works offline with lock-screen controls. Details in the [Android guide](https://ljufa.github.io/rsplayer/#/installation?id=android-beta).
+Download `rsplayer-desktop_<version>_android.apk` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest) and open it on the phone (Android 8.0+). The full player runs inside the app: put music in the shared **Music** folder, grant the media permission on first start, and playback works offline with lock-screen controls. Details in the [Android guide](https://ljufa.github.io/rsplayer/#/installation?id=android).
 
 > ASIO is a trademark and software of Steinberg Media Technologies GmbH.
 

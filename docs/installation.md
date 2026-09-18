@@ -3,14 +3,14 @@
 RSPlayer comes in two variants:
 
 - **Server** — runs in the background (as a systemd service on Linux) and you control it from a browser or phone. Best for a Raspberry Pi, NAS or always-on audio PC. Available for every supported architecture.
-- **Desktop app** — a normal app window on the computer you're using. Available for Linux (x86_64 and ARM64), macOS, Windows and, as a beta, Android.
+- **Desktop app** — a normal app window on the computer you're using. Available for Linux (x86_64 and ARM64), macOS, Windows and Android.
 
 **Which one do I need?**
 
 | | Linux | macOS | Windows | Android |
 |---|---|---|---|---|
-| **Server** | [Install script](?id=linux-server) | [Download](?id=macos-experimental) | [Download](?id=windows-experimental) | — |
-| **Desktop app** | [Snap / Flatpak](?id=desktop-app-flatpak-and-snap) or [native package](?id=desktop-app-native-package) | [Download](?id=macos-experimental) | [Download](?id=windows-experimental) | [APK](?id=android-beta) |
+| **Server** | [Install script](?id=linux-server) | [Download](?id=macos) | [Download](?id=windows) | — |
+| **Desktop app** | [Snap / Flatpak](?id=desktop-app-flatpak-and-snap) or [native package](?id=desktop-app-native-package) | [Download](?id=macos) | [Download](?id=windows) | [APK](?id=android) |
 | **Docker** | [docker run](?id=docker) | — | — | — |
 
 ## Linux server
@@ -123,7 +123,7 @@ bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/main/install_des
 
 If you already added the [package repository](?id=add-the-package-repository-manually), you can also run `sudo apt install rsplayer-desktop` or `sudo dnf install rsplayer-desktop`. Launch RSPlayer from your application menu.
 
-## macOS (experimental)
+## macOS
 
 Download from the [latest release](https://github.com/ljufa/rsplayer/releases/latest):
 
@@ -139,7 +139,7 @@ Download from the [latest release](https://github.com/ljufa/rsplayer/releases/la
 
 ?> Network mount management, Linux power actions and firmware USB integration are unavailable on macOS.
 
-## Windows (experimental)
+## Windows
 
 Download from the [latest release](https://github.com/ljufa/rsplayer/releases/latest):
 
@@ -152,13 +152,13 @@ Audio uses WASAPI by default. Installed **ASIO** drivers can be selected in Sett
 
 ?> Network mount management, Linux power actions, ALSA/PipeWire volume, IR remote and firmware USB integration are unavailable on Windows.
 
-## Android (beta)
+## Android
 
 The Android app is the desktop app on a phone or tablet: the RSPlayer server runs inside the app and plays through the device's audio output (AAudio), so it works offline with music stored on the device. Download `rsplayer-desktop_<version>_android.apk` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest) and open it on the device (allow installs from unknown sources when asked). Android 8.0 or newer, 64-bit ARM or x86_64.
 
 On first start the app asks for **music and notification** permissions. Put your music in the shared **Music** folder (`/storage/emulated/0/Music`, what a computer shows as `Music` over USB) — it is scanned automatically once the permission is granted; more folders can be added in Settings → Music library. Playback keeps going with the screen off and is controllable from the lock screen, the notification and headset buttons.
 
-?> Android only lets the app see audio and image files in shared storage: `.cue`, `.m3u` and `.lrc` sidecar files next to the music are invisible, and SMB/NFS network mounts are unavailable. Podcasts and internet radio work as on the desktop. Multiroom peer discovery works on Wi-Fi (beta). A Google Play listing is planned.
+?> Android only lets the app see audio and image files in shared storage: `.cue`, `.m3u` and `.lrc` sidecar files next to the music are invisible, and SMB/NFS network mounts are unavailable. Podcasts and internet radio work as on the desktop. Multiroom peer discovery works on Wi-Fi. A Google Play listing is planned.
 
 ## Docker
 
@@ -180,7 +180,7 @@ Then open `http://localhost:8000`. A ready-made [docker-compose.yaml](https://gi
 | **ARMv6** | RPi Zero, RPi Zero W, RPi 1 | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
 | **RISC-V 64** | RISC-V 64-bit boards | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
 
-**S** = server, **D** = desktop app. macOS (Apple Silicon and Intel) and Windows (x86_64) have both a server binary and a desktop app. Android (ARM64, ARMv7 and x86_64, Android 8.0+) has the desktop app as an APK (beta).
+**S** = server, **D** = desktop app. macOS (Apple Silicon and Intel) and Windows (x86_64) have both a server binary and a desktop app. Android (ARM64, ARMv7 and x86_64, Android 8.0+) has the desktop app as an APK.
 
 Not supported yet: FreeBSD.
 
