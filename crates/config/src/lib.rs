@@ -8,10 +8,12 @@
 //! model. On first launch (or unreadable stored settings) the caller-provided
 //! platform-aware defaults are persisted instead of `Settings::default()`.
 
+pub mod db_maintenance;
+
 use std::sync::{Arc, RwLock};
 
 use api_models::settings::Settings;
-use fjall::{Database, Keyspace, KeyspaceCreateOptions};
+use fjall::{Database, Keyspace};
 
 const SETTINGS_KEY: &str = "settings";
 
@@ -29,7 +31,7 @@ impl Configuration {
     /// playback works before the user visits Settings.
     pub fn new(db: &Database, first_launch_settings: Settings) -> ArcConfiguration {
         let tree = db
-            .keyspace("configuration", KeyspaceCreateOptions::default)
+            .keyspace("configuration", db_maintenance::small_memtable_options)
             .expect("Failed to open configuration keyspace");
         let settings = if let Ok(Some(data)) = tree.get(SETTINGS_KEY) {
             match serde_json::from_slice::<Settings>(&data) {
@@ -94,6 +96,7 @@ impl Configuration {
 mod tests {
     use super::*;
     use api_models::common::VolumeCrtlType;
+    use fjall::KeyspaceCreateOptions;
 
     fn open_db(path: &std::path::Path) -> Database {
         Database::builder(path.join("test.db")).open().expect("open temp db")

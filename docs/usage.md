@@ -174,7 +174,10 @@ Browse by artist name.
 ![Library Artists](/_assets/library_artists.png)
 
 - Alphabetical artist listing
-- A–Z index on the right edge: tap a letter, or press and slide along it, to jump straight to that part of the list (shown once the list has 20+ artists)
+- A–Z jump rail on the right edge (shown once the list has 20+ artists):
+  - Tap a letter to jump straight to the first artist under it
+  - Press and drag up/down along the rail to scrub continuously — the list follows your finger, with a large letter bubble in the middle of the screen so you can see where you are
+  - Lift your finger to stop; letters with no artists are dimmed and skipped over automatically
 - Click artist to see their albums and songs
 - Quick add to queue options
 

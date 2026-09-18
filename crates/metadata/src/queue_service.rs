@@ -44,10 +44,10 @@ impl QueueService {
     #[must_use]
     pub fn new(db: &Database, song_repository: ArcSongRepository, statistics_repository: ArcPlayStatisticsRepository) -> Arc<Self> {
         let queue_db = db
-            .keyspace("queue", KeyspaceCreateOptions::default)
+            .keyspace("queue", || KeyspaceCreateOptions::default().max_memtable_size(2 * 1024 * 1024))
             .expect("Failed to open queue keyspace");
         let status_db = db
-            .keyspace("queue_status", KeyspaceCreateOptions::default)
+            .keyspace("queue_status", || KeyspaceCreateOptions::default().max_memtable_size(2 * 1024 * 1024))
             .expect("Failed to open queue_status keyspace");
         let random_history_db = db
             .keyspace("queue_random_history", KeyspaceCreateOptions::default)

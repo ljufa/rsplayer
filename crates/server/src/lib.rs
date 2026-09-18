@@ -81,6 +81,11 @@ pub async fn run_backend(
             .expect("Failed to open fjall database"),
     );
     info!("Shared database opened.");
+    config::db_maintenance::reset_bloated_keyspaces(&shared_db);
+    {
+        let db = shared_db.clone();
+        let _ = tokio::task::spawn_blocking(move || config::db_maintenance::flush_all(&db)).await;
+    }
 
     let platform_profile = hardware::platform::PlatformProfile::detect();
     info!("Detected platform profile: {platform_profile:?}");
@@ -277,6 +282,7 @@ async fn run(
 fn persist_db_on_shutdown(db: &fjall::Database) {
     info!("Persisting database to WAL...");
     let _ = db.persist(PersistMode::SyncAll);
+    config::db_maintenance::flush_all(db);
 }
 
 fn terminate_signal() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {

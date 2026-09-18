@@ -14,7 +14,7 @@
 //! podcast service) can arm `skip_to_time` so episodes continue where the
 //! listener left off, whatever path (play, next, queue click) started them.
 
-use fjall::{Database, Keyspace, KeyspaceCreateOptions};
+use fjall::{Database, Keyspace};
 use log::{debug, error, info, trace, warn};
 use std::sync::{
     Arc, Mutex,
@@ -85,7 +85,7 @@ impl PlayerService {
         resume_provider: Option<Arc<dyn ResumePositionProvider>>,
     ) -> Arc<Self> {
         let state_db = db
-            .keyspace("player_state", KeyspaceCreateOptions::default)
+            .keyspace("player_state", config::db_maintenance::small_memtable_options)
             .expect("Failed to open player_state keyspace");
         let state_db_async = state_db.clone();
         let mut rx = state_changes_tx.subscribe();

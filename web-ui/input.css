@@ -302,6 +302,17 @@
   pointer-events: none;
 }
 
+/* Short viewports (e.g. an 800×480 Pi DSI panel minus the desktop panel and
+   window title bar): the desktop offsets above (top: 10rem, min-height:
+   14rem) assume a much taller viewport, so left alone they squeeze all 27
+   letters into a ~240px band. Anchor to the (already tightened) nav and
+   footer instead, so the rail claims the rest of the screen and letters
+   stay legible/tappable. Must come after the base .artist-jump rule so it
+   wins the cascade despite equal specificity. */
+@media (max-height: 560px) {
+  .artist-jump { top: 3.4rem; height: calc(100dvh - 8rem); min-height: 8rem; }
+}
+
 /* ── Footer mini-player ─────────────────────────────────────── */
 .player-footer {
   position: sticky;

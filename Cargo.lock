@@ -243,8 +243,8 @@ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 
 [[package]]
 name = "asio-sys"
-version = "0.3.0"
-source = "git+https://github.com/ljufa/cpal.git?branch=v_0.18.1_patched#e0ea5cb10498c36e838aaf6bd94542d86b85cdf6"
+version = "0.4.0"
+source = "git+https://github.com/ljufa/cpal.git?branch=v_0.18.1_patched#117bc7953b7f39a46015e87ed4c668644a2c6227"
 dependencies = [
  "bindgen",
  "cc",
@@ -376,26 +376,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "audio-core"
-version = "0.2.1"
+name = "audio-codec-algorithms"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f93ebbf82d06013f4c41fe71303feb980cddd78496d904d06be627972de51a24"
+checksum = "1254ebf6529f3763c491acfb5ab6e960809e3c75a38584cc664f8c5667fb7107"
 
 [[package]]
 name = "audioadapter"
-version = "4.0.0"
+version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c75c3943c6c7279bb25a449a8d1727480730ab2efd7b6fd5d6ca51927096e6e4"
-dependencies = [
- "audio-core",
- "num-traits",
-]
+checksum = "d1292ef9edf681b7426ed089004b021a42896492f58bd0c909ad44e5faec9ac4"
 
 [[package]]
 name = "audioadapter-buffers"
-version = "4.0.0"
+version = "5.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ece3390b6eb40379094843a1da5aaccc34bc0d85a8cbf68d09fe092fee6de29e"
+checksum = "46289a81a3bfa26d0f8b2415f8ca9decde9a66308a150568af5c102381b3c8ce"
 dependencies = [
  "audioadapter",
  "audioadapter-sample",
@@ -404,11 +400,11 @@ dependencies = [
 
 [[package]]
 name = "audioadapter-sample"
-version = "4.0.0"
+version = "5.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1592f90413568e259413c21a41a3d571feb1774255c209e7966d98f9db708c90"
+checksum = "5258faecf4edbe35ec483bda9b1f7438e6b391891819269c6b5461aeaa0e8d7d"
 dependencies = [
- "audio-core",
+ "audio-codec-algorithms",
  "num-traits",
 ]
 
@@ -1341,8 +1337,8 @@ dependencies = [
 
 [[package]]
 name = "cpal"
-version = "0.18.1"
-source = "git+https://github.com/ljufa/cpal.git?branch=v_0.18.1_patched#e0ea5cb10498c36e838aaf6bd94542d86b85cdf6"
+version = "0.18.2"
+source = "git+https://github.com/ljufa/cpal.git?branch=v_0.18.1_patched#117bc7953b7f39a46015e87ed4c668644a2c6227"
 dependencies = [
  "alsa",
  "asio-sys",
@@ -4253,9 +4249,9 @@ dependencies = [
 
 [[package]]
 name = "iroh-mdns-address-lookup"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c1f941695731bc3999d8c13d7e94d50e229427da81ac957eec3818264f17559"
+checksum = "cad3dfcaddd5c3681bf0a42606498fc6e8891de793408dfbc46a9fbe76f370b3"
 dependencies = [
  "data-encoding",
  "derive_more",
@@ -5614,7 +5610,7 @@ version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "680998035259dcfcafe653688bf2aa6d3e2dc05e98be6ab46afb089dc84f1df8"
 dependencies = [
- "proc-macro-crate 3.5.0",
+ "proc-macro-crate 2.0.2",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -6431,15 +6427,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro-crate"
-version = "3.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e67ba7e9b2b56446f1d419b1d807906278ffa1a658a8a5d8a39dcb1f5a78614f"
-dependencies = [
- "toml_edit 0.25.13+spec-1.1.0",
-]
-
-[[package]]
 name = "proc-macro-error"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6942,7 +6929,7 @@ checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
 
 [[package]]
 name = "rsplayer"
-version = "4.9.0"
+version = "4.9.5"
 dependencies = [
  "anyhow",
  "api_models",
@@ -6977,7 +6964,7 @@ dependencies = [
 
 [[package]]
 name = "rsplayer-desktop"
-version = "4.9.0"
+version = "4.9.5"
 dependencies = [
  "android_logger",
  "api_models",
@@ -6996,7 +6983,7 @@ dependencies = [
 
 [[package]]
 name = "rsplayer-mount-helper"
-version = "4.9.0"
+version = "4.9.5"
 dependencies = [
  "nix 0.31.3",
 ]
@@ -7030,9 +7017,9 @@ dependencies = [
 
 [[package]]
 name = "rubato"
-version = "4.0.0"
+version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f57c655d11e929f05a8663b323ff553f8d9773be05dfdc087795955bedeb8d92"
+checksum = "a7cb1ffaf8738df50aab642a7f6465df81c6ba9e2818268053487165298114be"
 dependencies = [
  "audioadapter",
  "audioadapter-buffers",
@@ -8062,8 +8049,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "lazy_static",
  "symphonia-bundle-flac",
@@ -8084,8 +8071,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-bundle-flac"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "log",
  "symphonia-common",
@@ -8095,8 +8082,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-bundle-mp3"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "lazy_static",
  "log",
@@ -8105,8 +8092,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-aac"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "lazy_static",
  "log",
@@ -8116,8 +8103,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-adpcm"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "log",
  "symphonia-core",
@@ -8125,8 +8112,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-alac"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "log",
  "symphonia-common",
@@ -8135,8 +8122,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-pcm"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "log",
  "symphonia-core",
@@ -8144,8 +8131,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-codec-vorbis"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "log",
  "symphonia-common",
@@ -8154,8 +8141,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-common"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "log",
  "symphonia-core",
@@ -8164,8 +8151,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-core"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "bitflags 2.13.1",
  "bytemuck",
@@ -8178,8 +8165,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-format-caf"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "log",
  "symphonia-common",
@@ -8188,8 +8175,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-format-isomp4"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "log",
  "symphonia-common",
@@ -8199,8 +8186,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-format-mkv"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "lazy_static",
  "log",
@@ -8210,8 +8197,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-format-ogg"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "log",
  "symphonia-common",
@@ -8221,8 +8208,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-format-riff"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "extended",
  "log",
@@ -8232,8 +8219,8 @@ dependencies = [
 
 [[package]]
 name = "symphonia-metadata"
-version = "0.6.0"
-source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#3ca3f10f81bd9d6e5c532e499749bc976e34e236"
+version = "0.6.1"
+source = "git+https://github.com/ljufa/Symphonia.git?branch=break_infinite_loop#75b2fb6a1c0b5d01badeb64cba387cd199c1202b"
 dependencies = [
  "lazy_static",
  "log",
@@ -8962,18 +8949,6 @@ dependencies = [
  "serde_spanned 0.6.9",
  "toml_datetime 0.6.3",
  "winnow 0.5.40",
-]
-
-[[package]]
-name = "toml_edit"
-version = "0.25.13+spec-1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6975367e4d2ef766d86af01ffad14b622fecc8d4357a998fbc4deb6e9bacaf9b"
-dependencies = [
- "indexmap 2.14.1",
- "toml_datetime 1.1.1+spec-1.1.0",
- "toml_parser",
- "winnow 1.0.4",
 ]
 
 [[package]]
@@ -10338,9 +10313,6 @@ name = "winnow"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "winreg"

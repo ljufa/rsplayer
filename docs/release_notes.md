@@ -1,6 +1,31 @@
 # Release Notes
 
-## v4.9.0 — unreleased
+## v4.9.5 — 2026-09-18
+
+A fix for slow startup on Raspberry Pi and other small devices, a layout fix for the Artists page on small screens, and updates to the audio libraries.
+
+### Fixes
+
+#### Slow startup on Raspberry Pi
+
+On a long-running Raspberry Pi 4 the server could take 15–25 seconds between "Starting RSPlayer" and "Shared database opened", so the web UI stayed unreachable after every restart. The database keeps a write-ahead journal that is replayed on each start. Playback progress is saved about once a second, and the database only trims that journal once a table grows to 64 MiB, which took months. Over time the journal grew to about 67 MB and roughly 650,000 entries.
+
+- The database now opens in under a second. On a Raspberry Pi 4 that had the problem, the database directory dropped from 80 MB to 15 MB.
+- The database is flushed to disk at startup and on a graceful shutdown, so the journal stays small even after a restart from the UI, a crash or a power cut.
+- The busiest small tables (playback state, queue, queue status, play statistics and settings) now use a 2 MiB flush threshold on new installs.
+- **One-time reset:** the first start after upgrading recreates the playback-state table. The last played position and paused state are forgotten once, so the first resume after the upgrade starts from the beginning. Queue, playlists, library, statistics and settings are not touched.
+
+#### Artists page on 800×480 screens
+
+On short displays such as the 800×480 Raspberry Pi touch panel, the A–Z jump rail on the Artists page was squeezed into a band of about 240 px, so its 27 letters were hard to read and tap. On viewports up to 560 px tall the rail now stretches between the top bar and the footer player and uses the rest of the screen.
+
+### Dependencies
+
+- **cpal 0.18.2** (audio output), merged into the RSPlayer fork, which keeps its ALSA fix that recovers from EIO errors on plugin devices such as the PulseAudio route inside the Flatpak sandbox. Upstream's new suspend/resume check replaces the fork's older one.
+- **Symphonia 0.6.1** (decoding), merged into the RSPlayer fork, which keeps its fix for an infinite loop in radio streams.
+- **rubato 5** (sample-rate conversion) and **iroh-mdns-address-lookup 0.5** (multiroom discovery).
+
+## v4.9.0 — 2026-09-15
 
 RSPlayer runs on Android. The desktop app — the full player with the server inside — now ships as an Android APK, so a phone or tablet plays music from its own storage, offline, through the device's audio output.
 
