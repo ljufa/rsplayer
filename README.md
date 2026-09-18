@@ -18,7 +18,7 @@ RSPlayer is an open-source music player written in Rust. Run it as a **headless 
 
 🎧 **[Online demo](https://demo.rsplayer.de)** · 📖 **[Documentation](https://ljufa.github.io/rsplayer/)** · ⬇️ **[Latest release](https://github.com/ljufa/rsplayer/releases/latest)**
 
-https://github.com/user-attachments/assets/88ba2a8e-a016-49e9-81f0-12ce53ce4ecb
+https://github.com/user-attachments/assets/7cf6ef93-2251-4f85-a1cb-be5865a257d5
 
 ## Highlights
 

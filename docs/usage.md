@@ -192,10 +192,13 @@ Manage internet radio streams.
 - Play radio streams directly
 
 ### Podcasts View
-
 Subscribe to podcasts and listen to episodes; RSPlayer remembers where you stopped.
 
+![Subscriptions list](/_assets/podcasts_subscriptions.png)
+
 **Subscriptions** shows your shows as a grid, with a badge for unplayed episodes. Open a show to see its episodes newest-first with date, length and time left. Tap a title to expand the show notes. Each episode offers:
+
+![Episode list](/_assets/podcasts_episodes.png)
 
 - **Play** (resumes a started episode where you left off)
 - **Play next** / **Add to queue**
