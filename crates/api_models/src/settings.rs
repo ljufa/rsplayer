@@ -70,6 +70,8 @@ pub enum InstallMethod {
     Rpm,
     Deb,
     Desktop,
+    /// Android app: updated by the store it was installed from (F-Droid, GitHub APK).
+    Android,
     #[default]
     Unknown,
 }

@@ -47,7 +47,7 @@ pub const fn update_command(method: InstallMethod) -> Option<&'static str> {
         InstallMethod::Deb => Some("sudo apt update && sudo apt install rsplayer"),
         InstallMethod::Flatpak => Some("flatpak update io.github.ljufa.rsplayer"),
         InstallMethod::Snap => Some("sudo snap refresh rsplayer"),
-        InstallMethod::Desktop | InstallMethod::Unknown => None,
+        InstallMethod::Desktop | InstallMethod::Android | InstallMethod::Unknown => None,
     }
 }
 

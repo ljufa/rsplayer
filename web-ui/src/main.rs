@@ -235,6 +235,10 @@ fn App() -> Element {
                         }
                         *gs.global_settings.write() = Some(settings.clone());
                         *gs.local_browser_playback.write() = settings.local_browser_playback;
+                        // Android updates arrive through the store the app came from (F-Droid etc.)
+                        if settings.install_method == InstallMethod::Android {
+                            return;
+                        }
                         if let Some(latest) = update::check_for_update(&settings.version).await {
                             gs.update_banner_dismissed.set(update::is_dismissed(&latest));
                             gs.update_available.set(Some(latest));

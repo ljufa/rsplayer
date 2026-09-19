@@ -13,6 +13,15 @@ val tauriProperties = Properties().apply {
     }
 }
 
+// The Tauri CLI does not write tauri.properties here, so derive the version from the
+// workspace Cargo.toml the same way Tauri does: major * 1_000_000 + minor * 1_000 + patch.
+// F-Droid needs this to be deterministic and to match versionCode in its metadata.
+val workspaceVersion: String = rootProject.file("../../../../Cargo.toml").readLines()
+    .dropWhile { it.trim() != "[workspace.package]" }
+    .firstNotNullOf { Regex("""^version\s*=\s*"([^"]+)"""").find(it)?.groupValues?.get(1) }
+val workspaceVersionCode: Int = workspaceVersion.split("-")[0].split(".").map { it.toInt() }
+    .let { (major, minor, patch) -> major * 1_000_000 + minor * 1_000 + patch }
+
 // Upload key for Play / release: gen/android/keystore.properties (git-ignored) with
 // password, keyAlias, storeFile — see https://tauri.app/distribute/sign/android/.
 // Without it release builds are signed with the debug key so they still install.
@@ -34,8 +43,8 @@ android {
         applicationId = "io.github.ljufa.rsplayer"
         minSdk = 26
         targetSdk = 36
-        versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
-        versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+        versionCode = tauriProperties.getProperty("tauri.android.versionCode", workspaceVersionCode.toString()).toInt()
+        versionName = tauriProperties.getProperty("tauri.android.versionName", workspaceVersion)
     }
     signingConfigs {
         if (keystorePropertiesFile.exists()) {

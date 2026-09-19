@@ -222,6 +222,9 @@ pub fn is_sandboxed() -> bool {
 pub fn detect_install_method() -> InstallMethod {
     static METHOD: std::sync::OnceLock<InstallMethod> = std::sync::OnceLock::new();
     *METHOD.get_or_init(|| {
+        if cfg!(target_os = "android") {
+            return InstallMethod::Android;
+        }
         // Flatpak/Snap take precedence over desktop mode: the sandboxed
         // desktop app sets RSPLAYER_DESKTOP too, but its updates arrive
         // through the sandbox store, not the releases page.
