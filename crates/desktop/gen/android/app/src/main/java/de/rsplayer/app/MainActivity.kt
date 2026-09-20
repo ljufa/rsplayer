@@ -1,8 +1,9 @@
-package io.github.ljufa.rsplayer
+package de.rsplayer.app
 
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
@@ -51,7 +52,14 @@ class MainActivity : TauriActivity() {
     // onCreate: Android stops the idle service about a minute after the app
     // leaves the screen, and playback started later would run unprotected
     // (network blocked, process frozen). No-op while it is running.
-    startService(Intent(this, PlaybackService::class.java))
+    // Refused (BackgroundServiceStartNotAllowedException, an IllegalStateException)
+    // when the activity starts while the app still counts as background, e.g.
+    // launched onto a dozing or locked screen. The next foreground onStart retries.
+    try {
+      startService(Intent(this, PlaybackService::class.java))
+    } catch (e: IllegalStateException) {
+      Log.w("rsplayer", "PlaybackService start deferred: ${e.message}")
+    }
   }
 
   override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

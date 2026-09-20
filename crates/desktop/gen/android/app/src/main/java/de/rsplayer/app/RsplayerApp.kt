@@ -1,4 +1,4 @@
-package io.github.ljufa.rsplayer
+package de.rsplayer.app
 
 import android.app.Application
 import android.os.Build

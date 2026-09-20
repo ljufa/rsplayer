@@ -267,7 +267,7 @@ struct RestartPlugin(tauri::plugin::PluginHandle<tauri::Wry>);
 fn android_restart_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     tauri::plugin::Builder::new("rsplayer-restart")
         .setup(|app, api| {
-            let handle = api.register_android_plugin("io.github.ljufa.rsplayer", "RestartPlugin")?;
+            let handle = api.register_android_plugin("de.rsplayer.app", "RestartPlugin")?;
             app.manage(RestartPlugin(handle));
             Ok(())
         })

@@ -305,7 +305,7 @@ can be inspected from desktop Chrome at `chrome://inspect`.
 
 `cargo tauri android init` (`cargo make android_init`) regenerates the Gradle
 project; the manifest, `app/build.gradle.kts` and the Kotlin sources under
-`app/src/main/java/io/github/ljufa/rsplayer/` are hand-maintained and
+`app/src/main/java/de/rsplayer/app/` are hand-maintained and
 committed. The NDK version is pinned in `app/build.gradle.kts` (r28+ gives
 the 16 KB page alignment Google Play requires).
 

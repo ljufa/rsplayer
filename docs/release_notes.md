@@ -1,16 +1,21 @@
 # Release Notes
 
-## v4.9.6 — 2026-09-20
+## v4.9.7 — 2026-09-20
 
-Android app fixes and preparation for the F-Droid release.
+Android app fixes, a new Android application ID, and preparation for the F-Droid release.
 
-### Fixes
+### Changes
 
 #### Android
 
-- The Android app now reports its real version (4.9.6) and a proper version code. Earlier APKs were all built as version 1, so app stores could not tell newer builds from older ones.
+- **New application ID `de.rsplayer.app`** (was `io.github.ljufa.rsplayer`). The change applies to the Android app only; the desktop apps, Flatpak and Snap keep their IDs. Android treats this as a different app, so it installs next to an older APK and does not update it: uninstall the old one to avoid two copies.
+- The Android app now reports its real version (4.9.7) and a proper version code. Earlier APKs were all built as version 1, so app stores could not tell newer builds from older ones.
 - The update banner that checks GitHub for new releases is no longer shown in the Android app, because updates come from the store the app was installed from.
 - The app no longer registers an Android TV launcher entry. It is a phone and tablet app.
+
+### Fixes
+
+- Fixed a crash when the Android app is opened while the screen is locked or dozing. Android refuses to start the playback service from the background, and the app now retries the next time it is on screen.
 
 ## v4.9.5 — 2026-09-18
 

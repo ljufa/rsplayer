@@ -46,7 +46,7 @@
         <activity
             android:name=".RestartActivity"
             android:process=":restart"
-            android:taskAffinity="io.github.ljufa.rsplayer.restart"
+            android:taskAffinity="de.rsplayer.app.restart"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
             android:noHistory="true"

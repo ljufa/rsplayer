@@ -34,13 +34,13 @@ val keystoreProperties = Properties().apply {
 
 android {
     compileSdk = 36
-    namespace = "io.github.ljufa.rsplayer"
+    namespace = "de.rsplayer.app"
     // NDK r28+ produces 16 KB page-aligned libraries by default (Play requirement).
     ndkVersion = "28.2.13676358"
     defaultConfig {
         // The webview loads the in-process backend over http://localhost.
         manifestPlaceholders["usesCleartextTraffic"] = "true"
-        applicationId = "io.github.ljufa.rsplayer"
+        applicationId = "de.rsplayer.app"
         minSdk = 26
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", workspaceVersionCode.toString()).toInt()

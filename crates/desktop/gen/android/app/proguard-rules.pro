@@ -20,4 +20,4 @@
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
 # Our Kotlin host classes are referenced from the manifest / JNI by name.
--keep class io.github.ljufa.rsplayer.** { *; }
+-keep class de.rsplayer.app.** { *; }

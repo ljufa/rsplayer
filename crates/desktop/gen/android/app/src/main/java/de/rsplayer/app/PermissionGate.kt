@@ -1,4 +1,4 @@
-package io.github.ljufa.rsplayer
+package de.rsplayer.app
 
 import android.Manifest
 import android.annotation.SuppressLint

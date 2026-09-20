@@ -1,0 +1,52 @@
+Categories:
+  - Multimedia
+License: MIT
+AuthorName: Dragan Ljubojevic
+AuthorEmail: support@rsplayer.de
+WebSite: https://ljufa.github.io/rsplayer/
+SourceCode: https://github.com/ljufa/rsplayer
+IssueTracker: https://github.com/ljufa/rsplayer/issues
+Changelog: https://github.com/ljufa/rsplayer/releases
+
+AutoName: RSPlayer
+
+RepoType: git
+Repo: https://github.com/ljufa/rsplayer.git
+
+Builds:
+  - versionName: 4.9.7
+    versionCode: 4009007
+    commit: 4.9.7
+    subdir: crates/desktop/gen/android/app
+    sudo:
+      - apt-get update
+      - apt-get install -y build-essential pkg-config libclang-dev libssl-dev 
+        nodejs npm binaryen rustup openjdk-21-jdk-headless
+    output: build/outputs/apk/universal/release/app-universal-release.apk
+    rm:
+      - dist
+    build:
+      - rustup default 1.98.1
+      - export PATH="$HOME/.cargo/bin:$PATH"
+      - rustup target add aarch64-linux-android armv7-linux-androideabi 
+        x86_64-linux-android wasm32-unknown-unknown
+      - export NDK_HOME=$$NDK$$
+      - cargo install cargo-make@0.37.24 --locked
+      - cargo install dioxus-cli@0.7.10 --locked
+      - cargo install wasm-bindgen-cli@0.2.127 --locked
+      - cargo install tauri-cli@2.11.4 --locked
+      - export RELEASE_VERSION=$$VERSION$$
+      - cd ../../../../..
+      - cargo make build_ui_release
+      - printf '#!/bin/sh\nexec gradlew-fdroid "$@"\n' > 
+        crates/desktop/gen/android/gradlew
+      - chmod +x crates/desktop/gen/android/gradlew
+      - cp crates/desktop/loading.html dist/web-ui/loading.html
+      - cd crates/desktop && cargo tauri android build --apk --target aarch64 
+        --target armv7 --target x86_64 --ci
+    ndk: r28c
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^[0-9]+\.[0-9]+\.[0-9]+$
+CurrentVersion: 4.9.7
+CurrentVersionCode: 4009007
