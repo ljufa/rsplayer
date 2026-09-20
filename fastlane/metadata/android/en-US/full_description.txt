@@ -1,0 +1,14 @@
+RSPlayer is an open-source music player written in Rust, with a bit-perfect playback engine and no cloud accounts or tracking.
+
+<ul>
+<li>Plays FLAC, MP3, ALAC/M4A, OGG Vorbis, WAV and AIFF from your Music folder</li>
+<li>Library browsing of your Music folder, playlists and synchronized lyrics</li>
+<li>Internet radio and a podcast client that resumes episodes where you stopped</li>
+<li>Parametric EQ, loudness normalization and automatic resampling</li>
+<li>Multiroom: synchronized playback across RSPlayer devices on your network</li>
+<li>Media notification and lock screen controls, background playback</li>
+</ul>
+
+The app runs the player engine on the device itself. The same engine can also run as a headless server on a NAS or Raspberry Pi.
+
+Music access is limited to audio files in shared storage (permission to read audio and images). Optional battery optimization exemption keeps playback alive with the screen off.

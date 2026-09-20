@@ -1,5 +1,17 @@
 # Release Notes
 
+## v4.9.6 — 2026-09-20
+
+Android app fixes and preparation for the F-Droid release.
+
+### Fixes
+
+#### Android
+
+- The Android app now reports its real version (4.9.6) and a proper version code. Earlier APKs were all built as version 1, so app stores could not tell newer builds from older ones.
+- The update banner that checks GitHub for new releases is no longer shown in the Android app, because updates come from the store the app was installed from.
+- The app no longer registers an Android TV launcher entry. It is a phone and tablet app.
+
 ## v4.9.5 — 2026-09-18
 
 A fix for slow startup on Raspberry Pi and other small devices, a layout fix for the Artists page on small screens, and updates to the audio libraries.
