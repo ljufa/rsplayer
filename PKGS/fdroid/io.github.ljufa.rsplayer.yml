@@ -15,7 +15,7 @@ Repo: https://github.com/ljufa/rsplayer.git
 Builds:
   - versionName: 4.9.6
     versionCode: 4009006
-    commit: v4.9.6
+    commit: 4.9.6
     subdir: crates/desktop/gen/android/app
     sudo:
       - apt-get update
@@ -40,6 +40,6 @@ Builds:
     ndk: r28c
 
 AutoUpdateMode: Version
-UpdateCheckMode: Tags ^v[0-9.]+$
+UpdateCheckMode: Tags ^[0-9]+\.[0-9]+\.[0-9]+$
 CurrentVersion: 4.9.6
 CurrentVersionCode: 4009006
