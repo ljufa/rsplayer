@@ -39,6 +39,12 @@ android {
     namespace = "de.rsplayer.app"
     // NDK r28+ produces 16 KB page-aligned libraries by default (Play requirement).
     ndkVersion = "28.2.13676358"
+    // AGP otherwise embeds Google-encrypted dependency metadata in the APK signing block,
+    // which F-Droid's scanner rejects ("extra signing block 'Dependency metadata'").
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
     defaultConfig {
         // The webview loads the in-process backend over http://localhost.
         manifestPlaceholders["usesCleartextTraffic"] = "true"
