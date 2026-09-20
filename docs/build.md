@@ -309,6 +309,15 @@ project; the manifest, `app/build.gradle.kts` and the Kotlin sources under
 committed. The NDK version is pinned in `app/build.gradle.kts` (r28+ gives
 the 16 KB page alignment Google Play requires).
 
+### Releasing the Android app
+
+The Android version is set by hand in `app/build.gradle.kts` (`appVersionName`, `appVersionCode`
+and the two literals in `defaultConfig`), because F-Droid's update checker reads them with a
+regex. On every release bump them together with the workspace version in `Cargo.toml`:
+`versionCode = major * 1_000_000 + minor * 1_000 + patch` (4.9.7 is 4009007), and add
+`fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`. The Gradle build fails with a
+clear message if the values and `Cargo.toml` disagree.
+
 ## Output
 
 After a successful build, Linux packages and binaries are located under the target output directories:

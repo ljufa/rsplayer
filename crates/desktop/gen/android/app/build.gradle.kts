@@ -6,21 +6,23 @@ plugins {
     id("rust")
 }
 
-val tauriProperties = Properties().apply {
-    val propFile = file("tauri.properties")
-    if (propFile.exists()) {
-        propFile.inputStream().use { load(it) }
-    }
-}
+// Bumped by hand on every release, together with the workspace version in Cargo.toml and
+// a fastlane changelog named <versionCode>.txt. The values are literals on purpose:
+// F-Droid's update checker reads them with a regex and never runs Gradle code.
+// versionCode = major * 1_000_000 + minor * 1_000 + patch, the same scheme Tauri uses.
+val appVersionName = "4.9.7"
+val appVersionCode = 4009007
 
-// The Tauri CLI does not write tauri.properties here, so derive the version from the
-// workspace Cargo.toml the same way Tauri does: major * 1_000_000 + minor * 1_000 + patch.
-// F-Droid needs this to be deterministic and to match versionCode in its metadata.
+// Fail the build if the literals above drift from the workspace version.
 val workspaceVersion: String = rootProject.file("../../../../Cargo.toml").readLines()
     .dropWhile { it.trim() != "[workspace.package]" }
     .firstNotNullOf { Regex("""^version\s*=\s*"([^"]+)"""").find(it)?.groupValues?.get(1) }
 val workspaceVersionCode: Int = workspaceVersion.split("-")[0].split(".").map { it.toInt() }
     .let { (major, minor, patch) -> major * 1_000_000 + minor * 1_000 + patch }
+check(appVersionName == workspaceVersion && appVersionCode == workspaceVersionCode) {
+    "app/build.gradle.kts has $appVersionName ($appVersionCode) but Cargo.toml has " +
+        "$workspaceVersion ($workspaceVersionCode): update appVersionName/appVersionCode"
+}
 
 // Upload key for Play / release: gen/android/keystore.properties (git-ignored) with
 // password, keyAlias, storeFile — see https://tauri.app/distribute/sign/android/.
@@ -43,8 +45,8 @@ android {
         applicationId = "de.rsplayer.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = tauriProperties.getProperty("tauri.android.versionCode", workspaceVersionCode.toString()).toInt()
-        versionName = tauriProperties.getProperty("tauri.android.versionName", workspaceVersion)
+        versionCode = 4009007
+        versionName = "4.9.7"
     }
     signingConfigs {
         if (keystorePropertiesFile.exists()) {
