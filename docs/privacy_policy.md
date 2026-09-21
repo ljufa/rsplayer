@@ -56,6 +56,10 @@ Because no personal data is collected by the developer, none is shared, sold or 
 
 Data is kept in the app's private storage on your device. Connections to third-party services use HTTPS wherever the service supports it. Some internet radio stations only offer plain HTTP streams, which is outside the app's control.
 
+## License and disclaimer
+
+RSPlayer is released under the [MIT License](https://github.com/ljufa/rsplayer/blob/main/LICENSE). The software is provided "as is", without warranty of any kind, express or implied. To the maximum extent permitted by law, the developer is not liable for any claim, damages or other liability arising from the use of the software, including any damage to audio equipment, speakers, hearing or data. Please use sensible volume levels, especially when using DSP gain or with new hardware.
+
 ## Changes to this policy
 
 Changes will be published on this page and the "Last updated" date will be revised. Significant changes will also be noted in the [release notes](release_notes.md).
