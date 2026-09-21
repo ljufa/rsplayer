@@ -1,0 +1,5 @@
+# Overrides the repo root .dockerignore (which excludes docs/) for this image only
+*
+!docs/
+!docs/**
+!docker/docs-site/nginx.conf

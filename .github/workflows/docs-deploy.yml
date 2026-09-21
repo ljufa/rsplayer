@@ -1,0 +1,60 @@
+name: Deploy docs
+
+# Deploys the docsify site (docs/) to https://docs.rsplayer.de whenever main changes
+# it. The VPS runs it as an nginx container behind Traefik (docker/docs-site/).
+# Only the public repo's main triggers this, so the private remote is not involved.
+#
+# Deploy is a git push to a small bare repo on the VPS whose post-receive hook rebuilds the
+# container (same pattern as the other self-hosted sites, docker/docs-site/README.md).
+# Required secrets:
+# - DOCS_DEPLOY_SSH_KEY: private key, restricted on the VPS to `git push` to the docs repo.
+# - DOCS_DEPLOY_KNOWN_HOSTS: VPS host key line(s), from `ssh-keyscan -t ed25519 *****`.
+# - DOCS_DEPLOY_REPO: ssh:/*****/****/rsplayer-docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "docker/docs-site/**"
+  workflow_dispatch:
+
+concurrency:
+  group: docs-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          KEY: ${{ secrets.DOCS_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DOCS_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Push snapshot to the VPS (hook rebuilds the container)
+        env:
+          REPO: ${{ secrets.DOCS_DEPLOY_REPO }}
+          GIT_SSH_COMMAND: ssh -i ~/.ssh/id_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes
+        run: |
+          mkdir -p snapshot/docker
+          cp -r docs snapshot/docs
+          cp -r docker/docs-site snapshot/docker/docs-site
+          cd snapshot
+          git init -q -b main
+          git add -A
+          git -c user.name=ci -c user.email=ci@rsplayer.de commit -q -m "docs from ${GITHUB_SHA}"
+          git push --force "$REPO" main
+
+      - name: Smoke test
+        run: curl -fsS --retry 5 --retry-delay 5 https://docs.rsplayer.de/_sidebar.md > /dev/null

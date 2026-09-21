@@ -21,3 +21,5 @@ crates/desktop/gen/android/keystore.properties
 crates/desktop/.cargo/
 *.jks
 *.keystore
+docker/docs-site/post-receive
+docker/docs-site/ssh-gate.sh
