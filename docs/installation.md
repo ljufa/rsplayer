@@ -154,7 +154,7 @@ Audio uses WASAPI by default. Installed **ASIO** drivers can be selected in Sett
 
 ## Android
 
-The Android app is the desktop app on a phone or tablet: the RSPlayer server runs inside the app and plays through the device's audio output (AAudio), so it works offline with music stored on the device. Download `rsplayer-desktop_<version>_android.apk` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest) and open it on the device (allow installs from unknown sources when asked). Android 8.0 or newer, 64-bit ARM or x86_64.
+The Android app is the desktop app on a phone or tablet: the RSPlayer server runs inside the app and plays through the device's audio output (AAudio), so it works offline with music stored on the device. Download `rsplayer_<version>_android.apk` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest) and open it on the device (allow installs from unknown sources when asked). Android 8.0 or newer on an ARM phone or tablet (64-bit ARM, or 32-bit ARMv7 on older devices). There is no x86_64 build; to run it on an emulator or a Chromebook, build it from source (see the build guide).
 
 On first start the app asks for **music and notification** permissions. Put your music in the shared **Music** folder (`/storage/emulated/0/Music`, what a computer shows as `Music` over USB) — it is scanned automatically once the permission is granted; more folders can be added in Settings → Music library. Playback keeps going with the screen off and is controllable from the lock screen, the notification and headset buttons.
 
@@ -180,7 +180,7 @@ Then open `http://localhost:8000`. A ready-made [docker-compose.yaml](https://gi
 | **ARMv6** | RPi Zero, RPi Zero W, RPi 1 | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
 | **RISC-V 64** | RISC-V 64-bit boards | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
 
-**S** = server, **D** = desktop app. macOS (Apple Silicon and Intel) and Windows (x86_64) have both a server binary and a desktop app. Android (ARM64, ARMv7 and x86_64, Android 8.0+) has the desktop app as an APK.
+**S** = server, **D** = desktop app. macOS (Apple Silicon and Intel) and Windows (x86_64) have both a server binary and a desktop app. Android (ARM64 and ARMv7, Android 8.0+) has the desktop app as an APK.
 
 Not supported yet: FreeBSD.
 
@@ -194,4 +194,4 @@ Not supported yet: FreeBSD.
 | armv6 | `armhfv6` | `armv6hl` | `armhfv6` |
 | riscv64 | `riscv64` | `riscv64` | `riscv64` |
 
-Examples: `rsplayer_<version>_arm64.deb` (server), `rsplayer-desktop_<version>_amd64.deb` (desktop app), `rsplayer-desktop_<version>_amd64.tgz` (desktop app for Arch), `rsplayer_darwin_arm64` (macOS server binary), `rsplayer-desktop_<version>_android.apk` (Android app, all ABIs in one file).
+Examples: `rsplayer_<version>_arm64.deb` (server), `rsplayer-desktop_<version>_amd64.deb` (desktop app), `rsplayer-desktop_<version>_amd64.tgz` (desktop app for Arch), `rsplayer_darwin_arm64` (macOS server binary), `rsplayer_<version>_android.apk` (Android app, all ABIs in one file).

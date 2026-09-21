@@ -1,27 +1,22 @@
 # Release Notes
 
-## v4.9.8 — 2026-09-21
+## v4.9.9 — 2026-09-21
 
-Smaller Android downloads for F-Droid.
-
-### Changes
-
-#### Android
-
-- The F-Droid build is split per CPU architecture (armeabi-v7a and arm64-v8a), so each download is between a quarter and a third of the size of the universal APK (about 23 MB for armv7 and 31 MB for arm64, instead of 81 MB). The version code of each APK ends in a digit for its architecture (1 or 2), for example 40090082 for arm64.
-
-## v4.9.7 — 2026-09-20
-
-Android app fixes, a new Android application ID, and preparation for the F-Droid release.
+Android app fixes, a new Android application ID, and smaller, reproducible Android builds for the F-Droid release.
 
 ### Changes
 
 #### Android
 
 - **New application ID `de.rsplayer.app`** (was `io.github.ljufa.rsplayer`). The change applies to the Android app only; the desktop apps, Flatpak and Snap keep their IDs. Android treats this as a different app, so it installs next to an older APK and does not update it: uninstall the old one to avoid two copies.
-- The Android app now reports its real version (4.9.7) and a proper version code. Earlier APKs were all built as version 1, so app stores could not tell newer builds from older ones.
+- The Android app now reports its real version (4.9.9) and a proper version code. Earlier APKs were all built as version 1, so app stores could not tell newer builds from older ones.
 - The update banner that checks GitHub for new releases is no longer shown in the Android app, because updates come from the store the app was installed from.
 - The app no longer registers an Android TV launcher entry. It is a phone and tablet app.
+- The Android release file is now named `rsplayer_<version>_android.apk` (it was `rsplayer-desktop_<version>_android.apk`).
+- The release APK no longer contains an x86_64 build, so it is about a third smaller (ARM64 and ARMv7 only). x86_64 is only useful on emulators and some Chromebooks; build from source to get it (see the build guide).
+- The F-Droid build is split per CPU architecture (armeabi-v7a and arm64-v8a), so each download is between a quarter and a third of the size of the universal APK (about 23 MB for armv7 and 31 MB for arm64, instead of 81 MB). The version code of each APK ends in a digit for its architecture (1 or 2), for example 40090092 for arm64.
+- **Reproducible builds.** The Android release workflow now builds the web UI itself with pinned tool versions and publishes one signed APK per CPU architecture (`rsplayer_<version>_android_arm64-v8a.apk` and `rsplayer_<version>_android_armeabi-v7a.apk`) next to the universal one. F-Droid builds the app from source and checks that its result matches these files, so its copy carries our signature instead of its own. Two independent builds of the same version now produce byte-identical APKs.
+- The web UI's stylesheet is now loaded as `/tw.css?v=<version>`, so the build no longer depends on where it runs; the version in the address still refreshes the browser cache after an update.
 
 ### Fixes
 

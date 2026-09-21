@@ -1,3 +1,6 @@
 {
-  "identifier": "de.rsplayer.app"
+  "identifier": "de.rsplayer.app",
+  "bundle": {
+    "linux": null
+  }
 }

@@ -44,8 +44,8 @@ android {
         applicationId = "de.rsplayer.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4009008
-        versionName = "4.9.8"
+        versionCode = 4009009
+        versionName = "4.9.9"
     }
     signingConfigs {
         if (keystorePropertiesFile.exists()) {

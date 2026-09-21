@@ -335,20 +335,39 @@ script = [
     "ls -la crates/desktop/gen/android/app/build/outputs/apk/universal/debug/",
 ]
 
+[tasks.build_ui_android]
+description = "Release UI built with the Android reproducible-build environment (see crates/desktop/android-build-env.sh)"
+script = [". ./crates/desktop/android-build-env.sh && cargo make build_ui_release"]
+
 [tasks.build_android_release]
-description = "Build release UI + release APK and AAB for all ABIs into target/android/pkg"
-dependencies = ["build_ui_release", "bundle_android_release"]
+description = "Build release UI + universal APK/AAB + one APK per ABI (arm64 + armv7, no x86_64) into target/android/pkg"
+dependencies = ["build_ui_android", "bundle_android_release", "bundle_android_abi_release"]
 
 [tasks.bundle_android_release]
-description = "Release APK + AAB from the existing dist/web-ui (CI downloads it), signed when crates/desktop/gen/android/keystore.properties exists"
+description = "Release APK + AAB from the existing dist/web-ui (which must come from build_ui_android to be reproducible), signed when crates/desktop/gen/android/keystore.properties exists"
 script = [
     "set -e",
     "cp crates/desktop/loading.html dist/web-ui/loading.html",
-    "(cd crates/desktop && cargo tauri android build --apk --aab --target aarch64 --target armv7 --target x86_64 --ci)",
+    "(cd crates/desktop && . ./android-build-env.sh && cargo tauri android build --apk --aab --target aarch64 --target armv7 --ci)",
     "PKG_DIR=target/android/pkg && rm -rf ${PKG_DIR} && mkdir -p ${PKG_DIR}",
-    "cp crates/desktop/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab ${PKG_DIR}/rsplayer-desktop_${RELEASE_VERSION}_android.aab",
-    "cp crates/desktop/gen/android/app/build/outputs/apk/universal/release/app-universal-release*.apk ${PKG_DIR}/rsplayer-desktop_${RELEASE_VERSION}_android.apk",
+    "cp crates/desktop/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab ${PKG_DIR}/rsplayer_${RELEASE_VERSION}_android.aab",
+    "cp crates/desktop/gen/android/app/build/outputs/apk/universal/release/app-universal-release*.apk ${PKG_DIR}/rsplayer_${RELEASE_VERSION}_android.apk",
     "ls -la ${PKG_DIR}",
+]
+
+[tasks.bundle_android_abi_release]
+description = "One APK per ABI (the inputs F-Droid's reproducible-build check compares against); run after bundle_android_release, which recreates target/android/pkg"
+script = [
+    "set -e",
+    "cp crates/desktop/loading.html dist/web-ui/loading.html",
+    "mkdir -p target/android/pkg",
+    "# RSPLAYER_ABI_CODE (1 armv7, 2 arm64) is the last digit of the APK versionCode, see app/build.gradle.kts",
+    "for spec in aarch64:2:arm64-v8a armv7:1:armeabi-v7a; do",
+    "  target=${spec%%:*}; rest=${spec#*:}; code=${rest%%:*}; abi=${rest#*:}",
+    "  (cd crates/desktop && . ./android-build-env.sh && RSPLAYER_ABI_CODE=$code cargo tauri android build --apk --target $target --ci)",
+    "  cp crates/desktop/gen/android/app/build/outputs/apk/universal/release/app-universal-release*.apk target/android/pkg/rsplayer_${RELEASE_VERSION}_android_${abi}.apk",
+    "done",
+    "ls -la target/android/pkg",
 ]
 
 # ── Flatpak (local build & run) ───────────

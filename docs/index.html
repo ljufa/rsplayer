@@ -8,10 +8,7 @@
   <meta name="viewport"
     content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
   <link rel="icon" type="image/png" href="_assets/favicon.png">
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4.13.1/lib/themes/vue.css"
-    media="(prefers-color-scheme: light)" />
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4.13.1/lib/themes/dark.css"
-    media="(prefers-color-scheme: dark)" />
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4.13.1/lib/themes/vue.css" />
   <style>
     :root {
       --theme-color: #090240;
@@ -19,10 +16,68 @@
     @media (prefers-color-scheme: dark) {
       :root {
         --theme-color: #a5a0f0;
+        --bg: #14151a;
+        --bg-alt: #1b1d24;
+        --bg-code: #1e2028;
+        --border: #2c2f3a;
+        --text: #c9cdd6;
+        --text-strong: #eceef3;
+        --text-muted: #8b91a0;
+        color-scheme: dark;
       }
       .app-name-link img {
         content: url('_assets/banner-dark.svg');
       }
+      html, body, section.cover, .sidebar, .content, .app-nav, .sidebar-toggle {
+        background-color: var(--bg);
+        color: var(--text);
+      }
+      .sidebar, .sidebar-toggle { border-color: var(--border); }
+      .sidebar ul li a, .sidebar-nav > ul > li > a { color: var(--text); }
+      .sidebar ul li.active > a, .sidebar ul li a:hover { color: var(--theme-color); }
+      .sidebar-nav > ul > li > ul a { color: var(--text-muted); }
+      .sidebar::-webkit-scrollbar-thumb { background: var(--border); }
+      .sidebar-toggle span { background-color: var(--text); }
+      .markdown-section { color: var(--text); }
+      .markdown-section h1, .markdown-section h2, .markdown-section h3,
+      .markdown-section h4, .markdown-section h5, .markdown-section h6,
+      .markdown-section strong { color: var(--text-strong); }
+      .markdown-section h2 { border-bottom-color: var(--border); }
+      .markdown-section a { color: var(--theme-color); }
+      .markdown-section p.tip, .markdown-section blockquote {
+        background-color: var(--bg-alt);
+        color: var(--text-muted);
+        border-color: var(--theme-color);
+      }
+      .markdown-section code {
+        background-color: var(--bg-code);
+        color: #e5a3b8;
+      }
+      .markdown-section pre, .markdown-section pre > code {
+        background-color: var(--bg-code);
+        color: var(--text);
+      }
+      .markdown-section pre { border: 1px solid var(--border); }
+      .markdown-section table { border-collapse: collapse; }
+      .markdown-section th, .markdown-section td {
+        border: 1px solid var(--border);
+        color: var(--text);
+      }
+      .markdown-section th { background-color: var(--bg-alt); color: var(--text-strong); }
+      .markdown-section tr { background-color: var(--bg); border-top: 1px solid var(--border); }
+      .markdown-section tr:nth-child(2n) { background-color: var(--bg-alt); }
+      .markdown-section hr { border-bottom-color: var(--border); }
+      .markdown-section img { background: transparent; }
+      .search input { background-color: var(--bg-alt); color: var(--text); border-color: var(--border); }
+      .search, .search .results-panel, .search .matching-post { border-color: var(--border); }
+      .search a { color: var(--text); }
+      .search .matching-post h2 { color: var(--text-strong); }
+      .github-corner svg { fill: var(--theme-color); color: var(--bg); }
+      .token.comment, .token.prolog, .token.doctype, .token.cdata { color: #7f8797; }
+      .token.punctuation { color: var(--text); }
+      .token.string, .token.attr-value { color: #8fd19e; }
+      .token.function, .token.selector, .token.keyword { color: #8ab4f8; }
+      .token.number, .token.boolean, .token.property { color: #f0a86e; }
     }
     .app-name-link img {
       max-width: 180px;

@@ -468,7 +468,6 @@ jobs:
           if-no-files-found: error
 
   build_android:
-    needs: build_ui
     name: Build Android (APK)
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'android' }}
     # The runner labelled "android" is the maintainer's workstation: the Android SDK/NDK,
@@ -492,6 +491,15 @@ jobs:
         with:
           clean: true
 
+      # The APKs must match what F-Droid builds from source (the recipe pins the same
+      # versions), so use the toolchain pinned in android-build-env.sh, not whatever "stable"
+      # is today, and the commit time as build date like F-Droid does.
+      - name: Pin toolchain and build date
+        run: |
+          rust=$(sed -n 's/^ANDROID_RUST_VERSION=//p' crates/desktop/android-build-env.sh)
+          echo "RUSTUP_TOOLCHAIN=$rust" >> "$GITHUB_ENV"
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
       # Runner services start without a login shell, so resolve the toolchain from the
       # conventional locations; the NDK version comes from the Gradle project.
       - name: Check Android toolchain
@@ -507,7 +515,7 @@ jobs:
               missing=1
             fi
           done
-          for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
+          for target in aarch64-linux-android armv7-linux-androideabi; do
             if ! rustup target list --installed | grep -qx "$target"; then
               echo "::error::Rust target $target is not installed"
               missing=1
@@ -520,11 +528,8 @@ jobs:
             echo "JAVA_HOME=$java_home"
           } >> "$GITHUB_ENV"
 
-      - name: Download web_ui
-        uses: actions/download-artifact@v8
-        with:
-          name: web_ui
-          path: dist/web-ui
+      - name: Check pinned tool versions
+        run: sh crates/desktop/android-check-tools.sh
 
       # Release key from repository secrets. Without them the APK is signed with the
       # runner's debug key: it installs, but switching keys later forces users to
@@ -544,8 +549,11 @@ jobs:
             "$RUNNER_TEMP/rsplayer-release.jks" "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" \
             > crates/desktop/gen/android/keystore.properties
 
-      - name: Build Android APK
-        run: cargo make bundle_android_release
+      # Builds the release UI itself (build_ui_android): the shared web_ui artifact is built on
+      # another runner and would not match F-Droid's build byte for byte. Produces the universal
+      # APK/AAB plus one signed APK per ABI, which the F-Droid recipe points its `binary:` at.
+      - name: Build Android APKs
+        run: cargo make build_android_release
 
       - name: Upload APK
         uses: actions/upload-artifact@v7

@@ -17,20 +17,22 @@ RepoType: git
 Repo: https://github.com/ljufa/rsplayer.git
 
 Builds:
-  - versionName: 4.9.8
-    versionCode: 40090081
-    commit: 4.9.8
+  - versionName: 4.9.9
+    versionCode: 40090091
+    commit: 4.9.9
     subdir: crates/desktop/gen/android/app
     sudo:
       - apt-get update
       - apt-get install -y build-essential pkg-config libclang-dev libssl-dev
       - apt-get install -y nodejs npm binaryen rustup openjdk-21-jdk-headless
     output: build/outputs/apk/universal/release/app-universal-release.apk
+    binary: 
+      https://github.com/ljufa/rsplayer/releases/download/%v/rsplayer_%v_android_armeabi-v7a.apk
     build:
       - rustup default 1.98.1
       - export PATH="$HOME/.cargo/bin:$PATH"
       - rustup target add aarch64-linux-android armv7-linux-androideabi
-      - rustup target add x86_64-linux-android wasm32-unknown-unknown
+      - rustup target add wasm32-unknown-unknown
       - export NDK_HOME=$$NDK$$
       - cargo install cargo-make@0.37.24 --locked
       - cargo install dioxus-cli@0.7.10 --locked
@@ -38,8 +40,9 @@ Builds:
       - cargo install tauri-cli@2.11.4 --locked
       - export RELEASE_VERSION=$$VERSION$$
       - cd ../../../../..
-      - cargo make build_ui_release
+      - cargo make build_ui_android
       - cd crates/desktop
+      - . ./android-build-env.sh
       - printf '#!/bin/sh\nexec gradlew-fdroid "$@"\n' > gen/android/gradlew
       - chmod +x gen/android/gradlew
       - cp loading.html ../../dist/web-ui/loading.html
@@ -47,20 +50,22 @@ Builds:
       - cargo tauri android build --apk --ci --target armv7
     ndk: r28c
 
-  - versionName: 4.9.8
-    versionCode: 40090082
-    commit: 4.9.8
+  - versionName: 4.9.9
+    versionCode: 40090092
+    commit: 4.9.9
     subdir: crates/desktop/gen/android/app
     sudo:
       - apt-get update
       - apt-get install -y build-essential pkg-config libclang-dev libssl-dev
       - apt-get install -y nodejs npm binaryen rustup openjdk-21-jdk-headless
     output: build/outputs/apk/universal/release/app-universal-release.apk
+    binary: 
+      https://github.com/ljufa/rsplayer/releases/download/%v/rsplayer_%v_android_arm64-v8a.apk
     build:
       - rustup default 1.98.1
       - export PATH="$HOME/.cargo/bin:$PATH"
       - rustup target add aarch64-linux-android armv7-linux-androideabi
-      - rustup target add x86_64-linux-android wasm32-unknown-unknown
+      - rustup target add wasm32-unknown-unknown
       - export NDK_HOME=$$NDK$$
       - cargo install cargo-make@0.37.24 --locked
       - cargo install dioxus-cli@0.7.10 --locked
@@ -68,8 +73,9 @@ Builds:
       - cargo install tauri-cli@2.11.4 --locked
       - export RELEASE_VERSION=$$VERSION$$
       - cd ../../../../..
-      - cargo make build_ui_release
+      - cargo make build_ui_android
       - cd crates/desktop
+      - . ./android-build-env.sh
       - printf '#!/bin/sh\nexec gradlew-fdroid "$@"\n' > gen/android/gradlew
       - chmod +x gen/android/gradlew
       - cp loading.html ../../dist/web-ui/loading.html
@@ -77,10 +83,13 @@ Builds:
       - cargo tauri android build --apk --ci --target aarch64
     ndk: r28c
 
+AllowedAPKSigningKeys: 
+  5c186838243541dce7bd6e1dfc6e317bfb1cb7d75d381ba6ea469ee7c96a4195
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^[0-9]+\.[0-9]+\.[0-9]+$
 VercodeOperation:
   - 10 * %c + 1
   - 10 * %c + 2
-CurrentVersion: 4.9.8
-CurrentVersionCode: 40090082
+CurrentVersion: 4.9.9
+CurrentVersionCode: 40090092

@@ -250,7 +250,8 @@ provides the media session. Requirements (no Android Studio needed):
 sdkmanager --licenses
 sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358" \
            "emulator" "system-images;android-36;google_apis;x86_64"
-rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+rustup target add aarch64-linux-android armv7-linux-androideabi wasm32-unknown-unknown
+rustup target add x86_64-linux-android   # only for emulators (cargo make run_android_dev with ANDROID_TARGET=x86_64)
 
 # In your shell profile (JDK 17+ required):
 export ANDROID_HOME="$HOME/Android/Sdk"
@@ -269,7 +270,7 @@ cargo make run_android_dev
 # Debug-signed universal APK (arm64 + x86_64) for `adb install`
 cargo make build_android_dev
 
-# Release APK + AAB for all ABIs into target/android/pkg/
+# Release APK + AAB (arm64 + armv7; x86_64 is left out) into target/android/pkg/
 # (signed when crates/desktop/gen/android/keystore.properties exists — see
 # https://tauri.app/distribute/sign/android/)
 cargo make build_android_release
@@ -277,13 +278,35 @@ cargo make build_android_release
 
 ### Android release builds (CI)
 
-The "Full release" workflow builds the universal APK in the `build_android` job and
-attaches `rsplayer-desktop_<version>_android.apk` to the draft release. The job runs
-on a self-hosted runner carrying the `android` label, which needs the SDK, NDK, JDK
+The "Full release" workflow builds the Android app in the `build_android` job and attaches
+to the draft release the universal `rsplayer_<version>_android.apk`, plus one signed APK per
+ABI: `rsplayer_<version>_android_arm64-v8a.apk` and `rsplayer_<version>_android_armeabi-v7a.apk`.
+The job runs on a self-hosted runner carrying the `android` label, which needs the SDK, NDK, JDK
 and rust targets listed above installed for the runner's user (`ANDROID_HOME`,
 `NDK_HOME` and `JAVA_HOME` default to `~/Android/Sdk`, the NDK version pinned in
 `app/build.gradle.kts`, and the `java` on the runner's PATH). Dispatch the workflow
-with target `android` to build only the APK.
+with target `android` to build only the APKs.
+
+#### Reproducible builds (F-Droid)
+
+F-Droid builds the app from source and compares the result with the per-ABI APKs above (the
+`binary:` URLs in its recipe), then publishes our signed file. That only works if both builds
+are byte-identical, so the job:
+
+- builds the release UI itself (`cargo make build_ui_android`), never from the shared `web_ui`
+  artifact,
+- sources `crates/desktop/android-build-env.sh` before every Rust build. It maps machine-specific
+  paths (`~/.cargo`, `~/.rustup`, the Rust sources) to fixed names in the binaries and keeps
+  `--cfg tokio_unstable`, because setting `RUSTFLAGS` replaces `build.rustflags` from
+  `.cargo/config.toml`,
+- uses the tool versions pinned at the top of that script (rustc, `dx`, `tauri-cli`) and stops
+  in `android-check-tools.sh` if the runner differs, and sets `SOURCE_DATE_EPOCH` to the commit time.
+
+The runner therefore needs the pinned Rust toolchain (as a rustup toolchain named after the
+version, with the Android targets and `wasm32-unknown-unknown`), `dx` and `tauri-cli` at the pinned
+versions. When you change a pin, change the F-Droid recipe (`PKGS/fdroid`, and the copy in
+fdroiddata) in the same release. Do not use `asset!()` in the web UI: it embeds the absolute
+source path in the wasm.
 
 The APK is signed with the release key from three repository secrets; without them
 the job warns and signs with the runner's debug key. Create the key once and keep a
@@ -314,15 +337,15 @@ the 16 KB page alignment Google Play requires).
 The Android version is set by hand in `app/build.gradle.kts` (the `versionCode` and
 `versionName` literals in `defaultConfig`), because F-Droid's update checker reads them with a
 regex. On every release bump them together with the workspace version in `Cargo.toml`:
-`versionCode = major * 1_000_000 + minor * 1_000 + patch` (4.9.8 is 4009008). The Gradle build
+`versionCode = major * 1_000_000 + minor * 1_000 + patch` (4.9.9 is 4009009). The Gradle build
 fails with a clear message if the values and `Cargo.toml` disagree.
 
 The APK's own version code adds one digit for the ABI: `10 * versionCode + abi`. The F-Droid
 recipe builds one APK per ABI and sets `RSPLAYER_ABI_CODE` (armeabi-v7a 1, arm64-v8a 2, x86 3,
 x86_64 4; unset gives 0, e.g. the universal APK). F-Droid ships armeabi-v7a and arm64-v8a only,
-so 4.9.8 becomes 40090081 and 40090082. F-Droid takes the changelog from
+so 4.9.9 becomes 40090091 and 40090092. F-Droid takes the changelog from
 `fastlane/metadata/android/en-US/changelogs/` named after the highest of these
-(`40090082.txt`), so add a new file per release.
+(`40090092.txt`), so add a new file per release.
 
 ## Output
 

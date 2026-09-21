@@ -287,7 +287,10 @@ fn App() -> Element {
     };
 
     rsx! {
-        document::Stylesheet { href: asset!("/public/tw.css") }
+        // Not `asset!()`: it embeds the absolute source path in the wasm, which makes the build
+        // depend on where it runs (reproducible builds). The server caches static files for 3
+        // days, so the version in the query string busts the cache on upgrade.
+        document::Stylesheet { href: concat!("/tw.css?v=", env!("CARGO_PKG_VERSION")) }
         if (ui_state.welcome_open)() {
             WelcomeModal {}
         }

@@ -100,7 +100,7 @@ After starting the server, open `http://localhost:8000`. On Windows, installed A
 
 ### Android
 
-Download `rsplayer-desktop_<version>_android.apk` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest) and open it on the phone (Android 8.0+). The full player runs inside the app: put music in the shared **Music** folder, grant the media permission on first start, and playback works offline with lock-screen controls. Details in the [Android guide](https://docs.rsplayer.de/#/installation?id=android).
+Download `rsplayer_<version>_android.apk` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest) and open it on the phone (Android 8.0+). The full player runs inside the app: put music in the shared **Music** folder, grant the media permission on first start, and playback works offline with lock-screen controls. Details in the [Android guide](https://docs.rsplayer.de/#/installation?id=android).
 
 > ASIO is a trademark and software of Steinberg Media Technologies GmbH.
 
