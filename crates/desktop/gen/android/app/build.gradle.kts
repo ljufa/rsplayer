@@ -6,23 +6,16 @@ plugins {
     id("rust")
 }
 
-// Bumped by hand on every release, together with the workspace version in Cargo.toml and
-// a fastlane changelog named <versionCode>.txt. The values are literals on purpose:
-// F-Droid's update checker reads them with a regex and never runs Gradle code.
-// versionCode = major * 1_000_000 + minor * 1_000 + patch, the same scheme Tauri uses.
-val appVersionName = "4.9.7"
-val appVersionCode = 4009007
-
-// Fail the build if the literals above drift from the workspace version.
+// The version is bumped by hand on every release, together with the workspace version in
+// Cargo.toml and a fastlane changelog named <versionCode>.txt. The versionCode/versionName
+// literals in defaultConfig are literals on purpose: F-Droid's update checker reads them
+// with a regex and never runs Gradle code. versionCode is the base
+// major * 1_000_000 + minor * 1_000 + patch, the same scheme Tauri uses.
 val workspaceVersion: String = rootProject.file("../../../../Cargo.toml").readLines()
     .dropWhile { it.trim() != "[workspace.package]" }
     .firstNotNullOf { Regex("""^version\s*=\s*"([^"]+)"""").find(it)?.groupValues?.get(1) }
 val workspaceVersionCode: Int = workspaceVersion.split("-")[0].split(".").map { it.toInt() }
     .let { (major, minor, patch) -> major * 1_000_000 + minor * 1_000 + patch }
-check(appVersionName == workspaceVersion && appVersionCode == workspaceVersionCode) {
-    "app/build.gradle.kts has $appVersionName ($appVersionCode) but Cargo.toml has " +
-        "$workspaceVersion ($workspaceVersionCode): update appVersionName/appVersionCode"
-}
 
 // Upload key for Play / release: gen/android/keystore.properties (git-ignored) with
 // password, keyAlias, storeFile — see https://tauri.app/distribute/sign/android/.
@@ -51,8 +44,8 @@ android {
         applicationId = "de.rsplayer.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4009007
-        versionName = "4.9.7"
+        versionCode = 4009008
+        versionName = "4.9.8"
     }
     signingConfigs {
         if (keystorePropertiesFile.exists()) {
@@ -95,6 +88,27 @@ android {
     }
     buildFeatures {
         buildConfig = true
+    }
+}
+
+// Fail the build if the literals in defaultConfig drift from the workspace version.
+check(android.defaultConfig.versionName == workspaceVersion &&
+        android.defaultConfig.versionCode == workspaceVersionCode) {
+    "app/build.gradle.kts has ${android.defaultConfig.versionName} " +
+        "(${android.defaultConfig.versionCode}) but Cargo.toml has " +
+        "$workspaceVersion ($workspaceVersionCode): update versionName/versionCode"
+}
+
+// One APK per ABI for F-Droid: the recipe builds each ABI on its own and exports
+// RSPLAYER_ABI_CODE (armeabi-v7a=1, arm64-v8a=2, x86=3, x86_64=4). The APK versionCode is
+// then 10 * base + that digit, so a newer release always outranks every ABI of an older one
+// (https://f-droid.org/docs/Submitting_to_F-Droid_Quick_Start_Guide/#setup-abi-split).
+// Without the variable (universal APK, local builds) the digit is 0.
+androidComponents {
+    onVariants { variant ->
+        val abiCode = System.getenv("RSPLAYER_ABI_CODE")?.toInt() ?: 0
+        val base = android.defaultConfig.versionCode!!
+        variant.outputs.forEach { it.versionCode.set(base * 10 + abiCode) }
     }
 }
 

@@ -1,5 +1,15 @@
 # Release Notes
 
+## v4.9.8 — 2026-09-21
+
+Smaller Android downloads for F-Droid.
+
+### Changes
+
+#### Android
+
+- The F-Droid build is split per CPU architecture (armeabi-v7a and arm64-v8a), so each download is between a quarter and a third of the size of the universal APK (about 23 MB for armv7 and 31 MB for arm64, instead of 81 MB). The version code of each APK ends in a digit for its architecture (1 or 2), for example 40090082 for arm64.
+
 ## v4.9.7 — 2026-09-20
 
 Android app fixes, a new Android application ID, and preparation for the F-Droid release.

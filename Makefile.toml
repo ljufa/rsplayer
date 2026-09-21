@@ -37,6 +37,8 @@ description = "Build release WASM with Dioxus and copy to dist/"
 cwd = "web-ui"
 dependencies = ["build_css" ]
 script = [
+    "# dx never removes old hashed assets, and everything in dist/ ends up embedded in the binaries",
+    "rm -rf target/dx/rsplayer_web_ui/release",
     "dx build --platform web --release --debug-symbols false --package rsplayer_web_ui",
     "# Copy output outside target/ so cross Docker containers can see it",
     "rm -rf ../dist/web-ui",
