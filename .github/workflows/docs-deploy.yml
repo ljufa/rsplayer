@@ -38,4 +38,4 @@ jobs:
         run: docker-compose up -d --build
 
       - name: Smoke test
-        run: curl -fsS --retry 10 --retry-delay 5 https://docs.rsplayer.de/_sidebar.md > /dev/null
+        run: curl -fsS --retry 10 --retry-delay 5 --retry-all-errors https://docs.rsplayer.de/_sidebar.md > /dev/null
