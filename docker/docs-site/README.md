@@ -28,10 +28,8 @@ self-hosted runner labelled `rsplayer-docs`, checks out `docs/` and `docker/docs
 are involved, and the private `origin` remote is not part of it.
 
 Runner requirements: label `rsplayer-docs`, its user can run docker/docker-compose, and the
-external `proxy` docker network exists. The host and cert resolver are set in the workflow `env`.
+external `proxy` docker network exists. The host and cert resolver are hardcoded in `docker-compose.yaml`.
 
 ### Manual
 
-On the VPS, in a clone or copy of the repo:
-`cd docker/docs-site && docker-compose up -d --build`
-
+On the VPS, in a clone or copy of the repo: `cd docker/docs-site && docker-compose up -d --build`.

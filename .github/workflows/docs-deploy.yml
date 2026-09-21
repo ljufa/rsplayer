@@ -26,12 +26,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # own subfolder: cd.yml jobs on this runner leave root-owned files in the
+          # shared workspace root, which would make checkout's cleanup fail (EACCES)
+          path: docs-src
           sparse-checkout: |
             docs
             docker/docs-site
 
       - name: Rebuild and restart the container
-        working-directory: docker/docs-site
+        working-directory: docs-src/docker/docs-site
         run: docker-compose up -d --build
 
       - name: Smoke test
