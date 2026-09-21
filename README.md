@@ -145,4 +145,8 @@ Contributions are welcome — open an issue or a pull request. See [Building fro
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
+
+## Disclaimer
+
+The software is provided "as is", without warranty. Use sensible volume levels and follow your audio hardware's ratings. See the full [disclaimer](https://docs.rsplayer.de/#/disclaimer) and [privacy policy](https://docs.rsplayer.de/#/privacy_policy).

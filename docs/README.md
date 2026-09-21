@@ -122,4 +122,4 @@ Contributions are welcome — submit a pull request or open an issue on the [Git
 
 ## License
 
-RSPlayer is licensed under the MIT license. See the [LICENSE](https://github.com/ljufa/rsplayer/blob/master/LICENSE) file for more information.
+RSPlayer is licensed under the MIT license. See the [LICENSE](https://github.com/ljufa/rsplayer/blob/master/LICENSE) file for more information. See also the [Disclaimer](disclaimer.md) and [Privacy Policy](privacy_policy.md).

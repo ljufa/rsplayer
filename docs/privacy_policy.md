@@ -58,7 +58,7 @@ Data is kept in the app's private storage on your device. Connections to third-p
 
 ## License and disclaimer
 
-RSPlayer is released under the [MIT License](https://github.com/ljufa/rsplayer/blob/main/LICENSE). The software is provided "as is", without warranty of any kind, express or implied. To the maximum extent permitted by law, the developer is not liable for any claim, damages or other liability arising from the use of the software, including any damage to audio equipment, speakers, hearing or data. Please use sensible volume levels, especially when using DSP gain or with new hardware.
+RSPlayer is released under the [MIT License](https://github.com/ljufa/rsplayer/blob/main/LICENSE). The software is provided "as is", without warranty of any kind, express or implied. To the maximum extent permitted by law, the developer is not liable for any claim, damages or other liability arising from the use of the software, including any damage to audio equipment, speakers, hearing or data. See the full [Disclaimer](disclaimer.md).
 
 ## Changes to this policy
 

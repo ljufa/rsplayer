@@ -11,4 +11,5 @@
   - [Multiroom Architecture](multiroom_architecture.md)
   - [Release Notes](release_notes.md)
   - [Feature Parity](feature_parity.md)
+  - [Disclaimer](disclaimer.md)
   - [Privacy Policy](privacy_policy.md)

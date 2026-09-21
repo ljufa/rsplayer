@@ -168,6 +168,8 @@ docker run -p 8000:80 -v ${MUSIC_DIR}:/music -v rsplayer_data:/opt/rsplayer --de
 
 Then open `http://localhost:8000`. A ready-made [docker-compose.yaml](https://github.com/ljufa/rsplayer/blob/main/docker/docker-compose.yaml) is in the repository.
 
+> **Note:** RSPlayer controls audio output and volume. Start with a low volume and read the [Disclaimer](disclaimer.md) before connecting new audio hardware.
+
 ## Reference
 
 ### Supported platforms
