@@ -487,6 +487,12 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      # As root, not the image's own `vagrant` user: the workspace on this self-hosted runner is
+      # shared with the other container jobs, which run as root and leave root-owned files behind
+      # (dist/web-ui from build_ui), and checkout has to be able to clean those. Reproducibility
+      # is unaffected — it rides on CARGO_HOME/RUSTUP_HOME, which the image pins regardless of
+      # the user (see docker/Dockerfile.android).
+      options: --user root
     steps:
       - uses: actions/checkout@v7
         with:
