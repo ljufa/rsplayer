@@ -187,8 +187,9 @@ Manage internet radio streams.
 
 ![Library Radio](/_assets/library_radio.png)
 
-- Add streaming URLs
-- Organize favorite stations
+- **Favorites** lists your own stations and the ones you starred while browsing. It is the first tab, shown when the page opens.
+- **Add station** stores a stream by hand: enter a name, the stream URL and, if you like, a logo URL. The station stays in Favorites until you remove it, so clearing the queue no longer loses it. Hover (or tap) a station for **Add to queue**, **Play now**, **Edit** and **Remove**; removing asks for confirmation.
+- **Search**, **Countries**, **Languages** and **Tags** browse the [radio-browser.info](https://www.radio-browser.info) directory; the heart button keeps a station in Favorites.
 - Play radio streams directly
 
 ### Podcasts View

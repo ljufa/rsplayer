@@ -1,0 +1,3 @@
+Radio stations can be added by hand: Library > Radio > Favorites > Add station stores a name and a stream URL, so a station that is not in the radio-browser directory stays in Favorites instead of being lost with the queue.
+
+The cover rows in the library (Recently Added, New Releases, playlists, genres) have scroll arrows, so they can be browsed with a mouse or trackpad as well as by swiping.

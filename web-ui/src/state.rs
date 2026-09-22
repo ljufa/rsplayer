@@ -4,6 +4,7 @@ use api_models::{
     player::Song,
     playlist::{Album, PlaylistPage, Playlists},
     podcast::{Episode, EpisodePage, Podcast, PodcastSearchResult},
+    radio::RadioStation,
     settings::Settings,
     stat::LibraryStats,
     state::{
@@ -27,6 +28,8 @@ pub struct AppState {
     /// Raw items returned by the last Metadata query (files/artists tree).
     pub metadata_local_items: Signal<Vec<MetadataLibraryItem>>,
     pub favorite_radio_stations: Signal<Vec<String>>,
+    /// Radio stations the user added by hand (name + stream URL), stored by the server.
+    pub custom_radio_stations: Signal<Vec<RadioStation>>,
     pub playlists: Signal<Option<Playlists>>,
     pub library_stats: Signal<Option<LibraryStats>>,
     pub playlist_items: Signal<Vec<Song>>,
@@ -89,6 +92,7 @@ impl AppState {
             current_queue: Signal::new(None),
             metadata_local_items: Signal::new(Vec::new()),
             favorite_radio_stations: Signal::new(Vec::new()),
+            custom_radio_stations: Signal::new(Vec::new()),
             playlists: Signal::new(None),
             library_stats: Signal::new(None),
             playlist_items: Signal::new(Vec::new()),
@@ -195,6 +199,9 @@ impl AppState {
             }
             StateChangeEvent::FavoriteRadioStations(stations) => {
                 *self.favorite_radio_stations.write() = stations;
+            }
+            StateChangeEvent::CustomRadioStationsEvent(stations) => {
+                *self.custom_radio_stations.write() = stations;
             }
             StateChangeEvent::PlaylistsEvent(playlists) => {
                 *self.playlists.write() = Some(playlists);

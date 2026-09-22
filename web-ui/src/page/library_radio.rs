@@ -1,4 +1,9 @@
+//! Library → Radio: radio-browser discovery (countries/languages/tags/search),
+//! favourites kept as radio-browser uuids, and stations the user typed in by
+//! hand, which the server stores so they survive queue clears and restarts.
+
 use api_models::common::{MetadataCommand, QueueCommand, UserCommand};
+use api_models::radio::RadioStation;
 use dioxus::prelude::*;
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
@@ -61,17 +66,21 @@ pub fn LibraryRadioPage() -> Element {
     let state = use_context::<AppState>();
     let ws = use_context::<Signal<Option<WebSocket>>>();
 
+    let custom_stations = state.custom_radio_stations;
     let mut filter = use_signal(|| FilterType::Favorites);
     let mut loading = use_signal(|| *filter.read() == FilterType::Favorites);
     let mut browse_items: Signal<Vec<BrowseItem>> = use_signal(Vec::new);
     let mut stations: Signal<Vec<Station>> = use_signal(Vec::new);
     let mut showing_stations = use_signal(|| false);
     let mut search = use_signal(String::new);
+    // `Some` while the add/edit dialog is open; an empty id means a new station.
+    let mut editing: Signal<Option<RadioStation>> = use_signal(|| None);
 
     // Query favorites on mount
     use_effect(move || {
         if *filter.read() == FilterType::Favorites {
             ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryFavoriteRadioStations));
+            ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryCustomRadioStations));
         }
     });
 
@@ -100,6 +109,7 @@ pub fn LibraryRadioPage() -> Element {
         match new_filter {
             FilterType::Favorites => {
                 ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryFavoriteRadioStations));
+                ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryCustomRadioStations));
             }
             FilterType::Country => {
                 spawn(async move {
@@ -224,6 +234,21 @@ pub fn LibraryRadioPage() -> Element {
                 }
             }
 
+            // ── Add station (only for Favorites tab) ─────────────────────────
+            if *filter.read() == FilterType::Favorites {
+                div { class: "flex items-center gap-2 px-3 py-2 border-b border-base-300",
+                    button {
+                        class: "btn btn-sm btn-primary",
+                        onclick: move |_| editing.set(Some(RadioStation::default())),
+                        i { class: "material-icons text-base", "add" }
+                        "Add station"
+                    }
+                    span { class: "text-xs text-base-content/50 truncate",
+                        "Keep any stream URL here permanently"
+                    }
+                }
+            }
+
             // ── Content ────────────────────────────────────────────────────
             if loading() && *filter.read() != FilterType::Favorites {
                 div { class: "flex flex-col gap-1 p-3",
@@ -251,13 +276,13 @@ pub fn LibraryRadioPage() -> Element {
                 }
             } else if showing_stations() {
                 // Station list
-                if stations.read().is_empty() {
+                if stations.read().is_empty() && (*filter.read() != FilterType::Favorites || custom_stations.read().is_empty()) {
                     div { class: "flex flex-col items-center py-16 gap-3 text-base-content/40",
                         i { class: "material-icons text-5xl", "radio" }
                         if *filter.read() == FilterType::Favorites {
                             p { class: "text-center", "No favourite stations yet." }
                             p { class: "text-sm text-center",
-                                "Browse by Country, Language, or Tags to discover stations and add them here."
+                                "Add a stream URL with the button above, or browse by Country, Language or Tags."
                             }
                         } else if *filter.read() == FilterType::Search {
                             p { "No stations found. Try a different search term." }
@@ -267,6 +292,25 @@ pub fn LibraryRadioPage() -> Element {
                     }
                 } else {
                     div { class: "overflow-y-auto",
+                        // Hand-added stations come first, above the radio-browser favourites.
+                        if *filter.read() == FilterType::Favorites {
+                            {
+                                custom_stations
+                                    .read()
+                                    .iter()
+                                    .cloned()
+                                    .map(|st| {
+                                        let key = st.id.clone();
+                                        rsx! {
+                                            CustomStationRow {
+                                                key: "{key}",
+                                                station: st,
+                                                on_edit: move |s: RadioStation| editing.set(Some(s)),
+                                            }
+                                        }
+                                    })
+                            }
+                        }
                         {
                             let is_favorites = *filter.read() == FilterType::Favorites;
                             stations
@@ -408,6 +452,178 @@ pub fn LibraryRadioPage() -> Element {
                     }
                 }
             }
+
+            if let Some(station) = editing() {
+                CustomStationDialog { station, on_close: move |()| editing.set(None) }
+            }
+        }
+    }
+}
+
+/// One hand-added station: play/queue it, edit it, or drop it.
+#[component]
+fn CustomStationRow(station: RadioStation, on_edit: EventHandler<RadioStation>) -> Element {
+    let ws = use_context::<Signal<Option<WebSocket>>>();
+    let mut confirm_delete = use_signal(|| false);
+
+    let url_queue = station.url.clone();
+    let url_play = station.url.clone();
+    let station_edit = station.clone();
+    let id = station.id.clone();
+    let logo = station.image_url.clone().unwrap_or_default();
+
+    rsx! {
+        div { class: "flex items-center gap-3 px-3 py-2 hover:bg-base-200 group",
+            if logo.is_empty() {
+                span { class: "w-8 h-8 flex items-center justify-center rounded-full bg-base-300",
+                    i { class: "material-icons text-sm", "radio" }
+                }
+            } else {
+                img { class: "w-8 h-8 rounded-full object-cover", src: "{logo}" }
+            }
+            div { class: "flex-1 min-w-0",
+                p { class: "text-sm font-medium truncate", "{station.name}" }
+                p { class: "text-xs text-base-content/50 truncate", "{station.url}" }
+            }
+            if confirm_delete() {
+                div { class: "flex items-center gap-1",
+                    button {
+                        class: "btn btn-xs btn-error",
+                        onclick: move |_| {
+                            ws_send(
+                                &ws,
+                                &UserCommand::Metadata(MetadataCommand::DeleteCustomRadioStation(id.clone())),
+                            );
+                            confirm_delete.set(false);
+                        },
+                        "Remove"
+                    }
+                    button {
+                        class: "btn btn-xs btn-ghost",
+                        onclick: move |_| confirm_delete.set(false),
+                        "Cancel"
+                    }
+                }
+            } else {
+                div { class: "flex sm:hidden sm:group-hover:flex items-center gap-1",
+                    button {
+                        class: "btn btn-ghost btn-xs",
+                        title: "Add to queue",
+                        onclick: move |_| ws_send(
+                            &ws,
+                            &UserCommand::Queue(QueueCommand::AddSongToQueue(url_queue.clone())),
+                        ),
+                        i { class: "material-icons text-sm", "playlist_add" }
+                    }
+                    button {
+                        class: "btn btn-ghost btn-xs",
+                        title: "Play now",
+                        onclick: move |_| ws_send(
+                            &ws,
+                            &UserCommand::Queue(QueueCommand::AddSongAndPlay(url_play.clone())),
+                        ),
+                        i { class: "material-icons text-sm", "play_arrow" }
+                    }
+                    button {
+                        class: "btn btn-ghost btn-xs",
+                        title: "Edit station",
+                        onclick: move |_| on_edit.call(station_edit.clone()),
+                        i { class: "material-icons text-sm", "edit" }
+                    }
+                    button {
+                        class: "btn btn-ghost btn-xs text-error",
+                        title: "Remove station",
+                        onclick: move |_| confirm_delete.set(true),
+                        i { class: "material-icons text-sm", "delete" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Add/edit form for a hand-added station. An empty `station.id` means a new one.
+#[component]
+fn CustomStationDialog(station: RadioStation, on_close: EventHandler) -> Element {
+    let ws = use_context::<Signal<Option<WebSocket>>>();
+    let is_new = station.id.is_empty();
+
+    // Signals only: the closure below must stay `Copy` to be used by several handlers.
+    let id = use_signal(|| station.id.clone());
+    let added_at = use_signal(|| station.added_at);
+    let mut name = use_signal(|| station.name.clone());
+    let mut url = use_signal(|| station.url.clone());
+    let mut image_url = use_signal(|| station.image_url.clone().unwrap_or_default());
+    let mut error: Signal<Option<String>> = use_signal(|| None);
+
+    let mut save = move || {
+        let candidate = RadioStation {
+            id: id(),
+            name: name(),
+            url: url(),
+            image_url: Some(image_url()),
+            added_at: added_at(),
+        };
+        match candidate.validated() {
+            Ok(valid) => {
+                ws_send(&ws, &UserCommand::Metadata(MetadataCommand::SaveCustomRadioStation(valid)));
+                on_close.call(());
+            }
+            Err(msg) => error.set(Some(msg)),
+        }
+    };
+
+    rsx! {
+        div { class: "modal modal-open",
+            div { class: "modal-box max-w-md",
+                h3 { class: "font-bold text-lg mb-3",
+                    if is_new { "Add radio station" } else { "Edit radio station" }
+                }
+                div { class: "flex flex-col gap-3",
+                    label { class: "form-control w-full",
+                        div { class: "label", span { class: "label-text text-sm", "Station name" } }
+                        input {
+                            class: "input input-bordered input-sm w-full",
+                            r#type: "text",
+                            placeholder: "My favourite station",
+                            autofocus: true,
+                            value: "{name}",
+                            oninput: move |e| { name.set(e.value()); error.set(None); },
+                            onkeydown: move |e| if e.key() == Key::Enter { save() },
+                        }
+                    }
+                    label { class: "form-control w-full",
+                        div { class: "label", span { class: "label-text text-sm", "Stream URL" } }
+                        input {
+                            class: "input input-bordered input-sm w-full",
+                            r#type: "url",
+                            placeholder: "https://example.com/stream.mp3",
+                            value: "{url}",
+                            oninput: move |e| { url.set(e.value()); error.set(None); },
+                            onkeydown: move |e| if e.key() == Key::Enter { save() },
+                        }
+                    }
+                    label { class: "form-control w-full",
+                        div { class: "label", span { class: "label-text text-sm", "Logo URL (optional)" } }
+                        input {
+                            class: "input input-bordered input-sm w-full",
+                            r#type: "url",
+                            placeholder: "https://example.com/logo.png",
+                            value: "{image_url}",
+                            oninput: move |e| { image_url.set(e.value()); error.set(None); },
+                            onkeydown: move |e| if e.key() == Key::Enter { save() },
+                        }
+                    }
+                    if let Some(msg) = error() {
+                        div { class: "alert alert-error py-2 text-sm", "{msg}" }
+                    }
+                }
+                div { class: "modal-action",
+                    button { class: "btn btn-sm btn-ghost", onclick: move |_| on_close.call(()), "Cancel" }
+                    button { class: "btn btn-sm btn-primary", onclick: move |_| save(), "Save" }
+                }
+            }
+            div { class: "modal-backdrop", onclick: move |_| on_close.call(()) }
         }
     }
 }

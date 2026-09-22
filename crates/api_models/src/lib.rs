@@ -9,12 +9,14 @@
 //! `StateChangeEvent`, the one enum broadcast to every WebSocket client;
 //! [`settings`] — the persisted `Settings` tree edited in the UI; [`player`],
 //! [`playlist`], [`stat`] — songs, albums/playlists and library statistics;
-//! [`podcast`] — subscriptions, episodes and their commands.
+//! [`podcast`] — subscriptions, episodes and their commands; [`radio`] —
+//! hand-added radio stations.
 
 pub mod common;
 pub mod player;
 pub mod playlist;
 pub mod podcast;
+pub mod radio;
 pub mod settings;
 pub mod stat;
 pub mod state;

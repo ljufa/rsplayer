@@ -72,6 +72,7 @@ pub fn LibraryPlaylistsPage() -> Element {
                                 }
                                 if expanded.read().contains("recently-added-pl") {
                                     AlbumCarousel {
+                                        row_id: "row-recently-added",
                                         items: recently_added,
                                         on_open: move |(id, name): (String, String)| { ui.playlist_modal_id.set(Some(id.clone())); ui.playlist_modal_name.set(name); ui.playlist_modal_is_album.set(true); ui.playlist_modal_open.set(true); ws_send(&ws, &UserCommand::Playlist(PlaylistCommand::QueryAlbumItems(id, 0))); },
                                         on_load: move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadAlbumInQueue(id))),
@@ -88,6 +89,7 @@ pub fn LibraryPlaylistsPage() -> Element {
                                 }
                                 if expanded.read().contains("new-releases-pl") {
                                     AlbumCarousel {
+                                        row_id: "row-new-releases",
                                         items: new_releases,
                                         on_open: move |(id, name): (String, String)| { ui.playlist_modal_id.set(Some(id.clone())); ui.playlist_modal_name.set(name); ui.playlist_modal_is_album.set(true); ui.playlist_modal_open.set(true); ws_send(&ws, &UserCommand::Playlist(PlaylistCommand::QueryAlbumItems(id, 0))); },
                                         on_load: move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadAlbumInQueue(id))),
@@ -104,6 +106,7 @@ pub fn LibraryPlaylistsPage() -> Element {
                                 }
                                 if expanded.read().contains("saved-pl") {
                                     PlaylistCarousel {
+                                        row_id: "row-saved",
                                         items: saved,
                                         on_open: move |(id, name): (String, String)| { ui.playlist_modal_id.set(Some(id.clone())); ui.playlist_modal_name.set(name); ui.playlist_modal_is_album.set(false); ui.playlist_modal_open.set(true); ws_send(&ws, &UserCommand::Playlist(PlaylistCommand::QueryPlaylistItems(id, 0))); },
                                         on_load: move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadPlaylistInQueue(id))),
@@ -120,6 +123,7 @@ pub fn LibraryPlaylistsPage() -> Element {
                                 }
                                 if expanded.read().contains("favorites-pl") {
                                     PlaylistCarousel {
+                                        row_id: "row-favorites",
                                         items: favorites,
                                         on_open: move |(id, name): (String, String)| { ui.playlist_modal_id.set(Some(id.clone())); ui.playlist_modal_name.set(name); ui.playlist_modal_is_album.set(false); ui.playlist_modal_open.set(true); ws_send(&ws, &UserCommand::Playlist(PlaylistCommand::QueryPlaylistItems(id, 0))); },
                                         on_load: move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadPlaylistInQueue(id))),
@@ -149,7 +153,7 @@ pub fn LibraryPlaylistsPage() -> Element {
                                     if is_exp {
                                         if let Some(albums) = albums {
                                             RawAlbumCarousel {
-                                                key: "gc-{idx}-{section_id}", albums,
+                                                key: "gc-{idx}-{section_id}", row_id: "row-{section_id}", albums,
                                                 on_open: move |(id, name): (String, String)| { ui.playlist_modal_id.set(Some(id.clone())); ui.playlist_modal_name.set(name); ui.playlist_modal_is_album.set(true); ui.playlist_modal_open.set(true); ws_send(&ws, &UserCommand::Playlist(PlaylistCommand::QueryAlbumItems(id, 0))); },
                                                 on_load: move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadAlbumInQueue(id))),
                                                 on_add:  move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddAlbumToQueue(id))),
@@ -182,7 +186,7 @@ pub fn LibraryPlaylistsPage() -> Element {
                                     if is_exp {
                                         if let Some(albums) = albums {
                                             RawAlbumCarousel {
-                                                key: "dc-{idx}-{section_id}", albums,
+                                                key: "dc-{idx}-{section_id}", row_id: "row-{section_id}", albums,
                                                 on_open: move |(id, name): (String, String)| { ui.playlist_modal_id.set(Some(id.clone())); ui.playlist_modal_name.set(name); ui.playlist_modal_is_album.set(true); ui.playlist_modal_open.set(true); ws_send(&ws, &UserCommand::Playlist(PlaylistCommand::QueryAlbumItems(id, 0))); },
                                                 on_load: move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::LoadAlbumInQueue(id))),
                                                 on_add:  move |id: String| ws_send(&ws, &UserCommand::Queue(QueueCommand::AddAlbumToQueue(id))),
@@ -250,10 +254,81 @@ fn SectionHeaderWithActions(
     }
 }
 
+// ── Horizontally scrollable row ───────────────────────────────────────────────
+
+/// `(can_scroll_left, can_scroll_right)` of the row, `None` when it is not in
+/// the DOM (yet).
+fn scroll_state(id: &str) -> Option<(bool, bool)> {
+    let el = web_sys::window()?.document()?.get_element_by_id(id)?;
+    let left = el.scroll_left();
+    Some((left > 0, left + el.client_width() < el.scroll_width() - 1))
+}
+
+/// Scroll the row by most of its visible width; `factor` is -1 or 1.
+/// The smooth animation comes from daisyUI's `.carousel` CSS.
+fn scroll_row_by(id: &str, factor: f64) {
+    let Some(el) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id(id)) else {
+        return;
+    };
+    el.scroll_by_with_x_and_y(f64::from(el.client_width()) * 0.8 * factor, 0.0);
+}
+
+/// Wraps a cover row in a scroll container with prev/next buttons. Touch
+/// devices can swipe the row, but with a mouse there is no other way to reach
+/// the covers beyond the fold: daisyUI's `.carousel` hides the scrollbar.
+#[component]
+fn ScrollRow(id: String, children: Element) -> Element {
+    let mut can_left = use_signal(|| false);
+    let mut can_right = use_signal(|| false);
+
+    // A signal, not the `String` itself, so the closure below stays `Copy`.
+    let row_id = use_signal(|| id.clone());
+    let mut refresh = move || {
+        if let Some((left, right)) = scroll_state(row_id.read().as_str()) {
+            can_left.set(left);
+            can_right.set(right);
+        }
+    };
+    // Measure once the row (and any later items) are in the DOM.
+    use_effect(move || refresh());
+
+    let prev_id = id.clone();
+    let next_id = id.clone();
+    rsx! {
+        // `onmouseenter` re-measures after a window resize, which no scroll
+        // event would report.
+        div { class: "relative", onmouseenter: move |_| refresh(),
+            div {
+                id: "{id}",
+                class: "carousel carousel-center gap-3 w-full px-3 py-3",
+                onscroll: move |_| refresh(),
+                {children}
+            }
+            if can_left() {
+                button {
+                    class: "btn btn-circle btn-sm absolute left-1 top-1/2 -translate-y-1/2 bg-base-100/80 border-none shadow-md hidden sm:flex",
+                    title: "Scroll left",
+                    onclick: move |_| scroll_row_by(&prev_id, -1.0),
+                    i { class: "material-icons text-base", "chevron_left" }
+                }
+            }
+            if can_right() {
+                button {
+                    class: "btn btn-circle btn-sm absolute right-1 top-1/2 -translate-y-1/2 bg-base-100/80 border-none shadow-md hidden sm:flex",
+                    title: "Scroll right",
+                    onclick: move |_| scroll_row_by(&next_id, 1.0),
+                    i { class: "material-icons text-base", "chevron_right" }
+                }
+            }
+        }
+    }
+}
+
 // ── Album carousel (PlaylistType wrapper) ─────────────────────────────────────
 
 #[component]
 fn AlbumCarousel(
+    row_id: String,
     items: Vec<PlaylistType>,
     on_open: EventHandler<(String, String)>,
     on_load: EventHandler<String>,
@@ -266,20 +341,21 @@ fn AlbumCarousel(
             _ => None,
         })
         .collect();
-    rsx! { RawAlbumCarousel { albums, on_open, on_load, on_add } }
+    rsx! { RawAlbumCarousel { row_id, albums, on_open, on_load, on_add } }
 }
 
 // ── Raw album carousel ────────────────────────────────────────────────────────
 
 #[component]
 fn RawAlbumCarousel(
+    row_id: String,
     albums: Vec<Album>,
     on_open: EventHandler<(String, String)>,
     on_load: EventHandler<String>,
     on_add: EventHandler<String>,
 ) -> Element {
     rsx! {
-        div { class: "carousel carousel-center gap-3 w-full px-3 py-3",
+        ScrollRow { id: row_id,
             {albums.iter().map(|album| {
                 let id = album.id.clone(); let id2 = id.clone(); let id3 = id.clone();
                 let title = album.title.clone(); let title2 = title.clone();
@@ -314,13 +390,14 @@ fn RawAlbumCarousel(
 
 #[component]
 fn PlaylistCarousel(
+    row_id: String,
     items: Vec<PlaylistType>,
     on_open: EventHandler<(String, String)>,
     on_load: EventHandler<String>,
     on_add: EventHandler<String>,
 ) -> Element {
     rsx! {
-        div { class: "carousel carousel-center gap-3 w-full px-3 py-3",
+        ScrollRow { id: row_id,
             {items.iter().filter_map(|it| {
                 let (id, name, image_id) = match it {
                     PlaylistType::Saved(p) | PlaylistType::MostPlayed(p) | PlaylistType::Liked(p) | PlaylistType::Featured(p)

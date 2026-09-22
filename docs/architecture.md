@@ -14,7 +14,7 @@ carries the per-file detail — this page is the map.
 | `crates/server` | The `rsplayer` binary: composition root, axum HTTP/WS server, command dispatch, network mounts |
 | `crates/config` | `Settings` persistence (one JSON blob in fjall) with in-memory cache and schema migrations; first launch persists platform-aware defaults supplied by the server (from `hardware::platform`) |
 | `crates/playback` | The audio engine: Symphonia decode loop, cpal output (`AudioOutput`), DSD path, VU, multiroom tee/sink |
-| `crates/metadata` | Library scanner, fjall repositories (songs/albums/stats/loudness), queue, playlists, radio metadata, APE/DSF/SACD Symphonia plugins |
+| `crates/metadata` | Library scanner, fjall repositories (songs/albums/stats/loudness), queue, playlists, radio metadata and saved radio stations, APE/DSF/SACD Symphonia plugins |
 | `crates/podcast` | Podcast subscriptions: directory search (iTunes / Podcast Index), RSS/Atom feed refresh (`feed-rs`), episode cache in fjall, per-episode resume position and played state |
 | `crates/dsp` | Parametric EQ (biquads, CamillaDSP-derived) with a lock-free config handoff to the audio thread |
 | `crates/sync` | Multiroom leader/follower over iroh QUIC — see the dedicated doc |
@@ -162,7 +162,8 @@ concern:
 | `configuration` | `Settings` as one JSON value (see below) |
 | `songs` | `Song` JSON keyed by library-relative path |
 | `albums` | Albums keyed by normalized `artist\|album` |
-| `play_statistics` | Play/skip/like counters per song key |
+| `play_statistics` | Play/skip/like counters per song key; `radio_uuid_*` keys hold the liked radio-browser stations |
+| `radio_stations` | Stations added by hand in the UI (`RadioStation` JSON keyed by a generated uuid) |
 | `loudness` | Integrated LUFS per song key |
 | `queue`, `queue_status`, `queue_random_history` | Queue items (insertion-ordered ids), current position/mode, random-mode history |
 | `playlist`, `playlist_list` | Saved playlist items (`{name}_{index}`) and headers |

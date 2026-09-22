@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use crate::{
     player::Song,
+    radio::RadioStation,
     settings::{DspSettings, NetworkMountConfig},
     state::CurrentQueueQuery,
 };
@@ -227,6 +228,11 @@ pub enum MetadataCommand {
     LikeMediaItem(String),
     DislikeMediaItem(String),
     QueryFavoriteRadioStations,
+    /// All hand-added stations, answered with `CustomRadioStationsEvent`.
+    QueryCustomRadioStations,
+    /// Creates the station when `id` is empty, otherwise updates that one.
+    SaveCustomRadioStation(RadioStation),
+    DeleteCustomRadioStation(String),
     QueryLibraryStats,
 }
 

@@ -2,7 +2,7 @@
 //!
 //! Persistence is fjall (LSM key-value store), one `Database` shared by the
 //! whole process with one keyspace per concern (`songs`, `albums`, `queue`,
-//! `playlist`, `play_statistics`, `loudness`…). Songs are keyed by
+//! `playlist`, `play_statistics`, `radio_stations`, `loudness`…). Songs are keyed by
 //! library-relative file path; albums by normalized `artist|album`.
 //!
 //! Layout: `metadata_service` — scanner and library queries;

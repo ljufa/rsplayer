@@ -24,7 +24,7 @@ use std::{
 
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
-use fjall::{Database, KeyspaceCreateOptions, PersistMode};
+use fjall::{Database, Keyspace, KeyspaceCreateOptions, PersistMode};
 use log::{debug, info, warn};
 use symphonia::core::{
     formats::{FormatOptions, probe::Hint},
@@ -37,6 +37,7 @@ use walkdir::WalkDir;
 use api_models::{
     common::MetadataLibraryItem,
     player::Song,
+    radio::RadioStation,
     settings::MetadataStoreSettings,
     stat::{LibraryStats, PlayItemStatistics},
     state::StateChangeEvent,
@@ -57,6 +58,8 @@ pub struct MetadataService {
     album_repository: ArcAlbumRepository,
     statistic_repository: ArcPlayStatisticsRepository,
     db: Arc<Database>,
+    /// `station_id` -> [`RadioStation`] JSON, for stations entered by hand.
+    radio_stations: Keyspace,
 }
 
 impl MetadataService {
@@ -73,6 +76,10 @@ impl MetadataService {
 
         Self::run_migration_if_needed(&db, &song_repository, &album_repository);
 
+        let radio_stations = db
+            .keyspace("radio_stations", KeyspaceCreateOptions::default)
+            .expect("Failed to open radio_stations keyspace");
+
         Ok(Arc::new(Self {
             settings: RwLock::new(settings),
             scan_running: AtomicBool::new(false),
@@ -80,6 +87,7 @@ impl MetadataService {
             album_repository,
             statistic_repository,
             db,
+            radio_stations,
         }))
     }
 
@@ -123,6 +131,54 @@ impl MetadataService {
             .filter(|stat| stat.liked_count > 0)
             .map(|stat| stat.play_item_id.strip_prefix("radio_uuid_").unwrap_or_default().to_string())
             .collect()
+    }
+
+    /// Stations the listener typed in by hand, sorted by name.
+    pub fn get_custom_radio_stations(&self) -> Vec<RadioStation> {
+        let mut stations: Vec<RadioStation> = self
+            .radio_stations
+            .iter()
+            .filter_map(|guard| {
+                let value = guard.value().ok()?;
+                serde_json::from_slice::<RadioStation>(&value)
+                    .map_err(|e| warn!("Failed to decode stored radio station: {e}"))
+                    .ok()
+            })
+            .collect();
+        stations.sort_by_key(|a| a.name.to_lowercase());
+        stations
+    }
+
+    /// Stores a hand-added station, assigning an id and `added_at` when the
+    /// incoming `id` is empty. Returns the stored station.
+    ///
+    /// # Errors
+    /// When the station is invalid (see [`RadioStation::validated`]), when it
+    /// duplicates the stream URL of another station, or when the write fails.
+    pub fn save_custom_radio_station(&self, station: &RadioStation) -> Result<RadioStation> {
+        let mut station = station.validated().map_err(Error::msg)?;
+        let existing = self.get_custom_radio_stations();
+        if let Some(dup) = existing.iter().find(|s| s.url == station.url && s.id != station.id) {
+            return Err(Error::msg(format!("Stream URL is already saved as '{}'", dup.name)));
+        }
+        if station.id.is_empty() {
+            station.id = uuid::Uuid::new_v4().to_string();
+            station.added_at = Some(Utc::now());
+        } else if station.added_at.is_none() {
+            station.added_at = existing.iter().find(|s| s.id == station.id).and_then(|s| s.added_at);
+        }
+        let json = serde_json::to_vec(&station)?;
+        self.radio_stations.insert(&station.id, json)?;
+        self.db.persist(PersistMode::SyncData)?;
+        Ok(station)
+    }
+
+    /// # Errors
+    /// When the delete or the following flush fails.
+    pub fn delete_custom_radio_station(&self, id: &str) -> Result<()> {
+        self.radio_stations.remove(id)?;
+        self.db.persist(PersistMode::SyncData)?;
+        Ok(())
     }
 
     pub fn get_most_played_songs(&self, limit: usize) -> Vec<Song> {

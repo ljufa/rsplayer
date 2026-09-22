@@ -379,7 +379,7 @@ mod queue {
 mod metadata {
     use std::{fs, process::Command, vec};
 
-    use api_models::{settings::MetadataStoreSettings, state::StateChangeEvent};
+    use api_models::{radio::RadioStation, settings::MetadataStoreSettings, state::StateChangeEvent};
 
     use crate::test::test_shared::TestContext;
 
@@ -503,6 +503,70 @@ mod metadata {
         let favs = ctx.metadata_service.get_favorite_radio_stations();
         assert_eq!(favs.len(), 1);
         assert_eq!(favs.first().unwrap(), "http://radioaparat.com");
+    }
+
+    #[test]
+    fn test_custom_radio_station_crud() {
+        let ctx = TestContext::new();
+        let station = RadioStation {
+            name: "  Radio Aparat  ".to_string(),
+            url: " http://radioaparat.com/stream ".to_string(),
+            ..Default::default()
+        };
+        let saved = ctx.metadata_service.save_custom_radio_station(&station).expect("save failed");
+        assert!(!saved.id.is_empty(), "a new station must get an id");
+        assert_eq!(saved.name, "Radio Aparat", "name must be trimmed");
+        assert_eq!(saved.url, "http://radioaparat.com/stream");
+        assert!(saved.added_at.is_some());
+
+        let stored = ctx.metadata_service.get_custom_radio_stations();
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored.first().unwrap(), &saved);
+
+        // Same id updates in place and keeps the original added_at.
+        let renamed = RadioStation {
+            name: "Aparat".to_string(),
+            ..saved.clone()
+        };
+        let updated = ctx.metadata_service.save_custom_radio_station(&renamed).expect("update failed");
+        let stored = ctx.metadata_service.get_custom_radio_stations();
+        assert_eq!(stored.len(), 1, "update must not create a second station");
+        assert_eq!(updated.name, "Aparat");
+        assert_eq!(updated.added_at, saved.added_at);
+
+        ctx.metadata_service
+            .delete_custom_radio_station(&saved.id)
+            .expect("delete failed");
+        assert!(ctx.metadata_service.get_custom_radio_stations().is_empty());
+    }
+
+    #[test]
+    fn test_custom_radio_station_rejects_invalid_and_duplicates() {
+        let ctx = TestContext::new();
+        let no_name = RadioStation {
+            url: "http://radioaparat.com/stream".to_string(),
+            ..Default::default()
+        };
+        assert!(ctx.metadata_service.save_custom_radio_station(&no_name).is_err());
+
+        let bad_url = RadioStation {
+            name: "Aparat".to_string(),
+            url: "radioaparat.com/stream".to_string(),
+            ..Default::default()
+        };
+        assert!(ctx.metadata_service.save_custom_radio_station(&bad_url).is_err());
+
+        let station = RadioStation {
+            name: "Aparat".to_string(),
+            url: "http://radioaparat.com/stream".to_string(),
+            ..Default::default()
+        };
+        ctx.metadata_service.save_custom_radio_station(&station).expect("save failed");
+        assert!(
+            ctx.metadata_service.save_custom_radio_station(&station).is_err(),
+            "the same stream URL must not be stored twice"
+        );
+        assert_eq!(ctx.metadata_service.get_custom_radio_stations().len(), 1);
     }
 
     /// aa/music.flac has REPLAYGAIN_TRACK_GAIN=+3.14 dB, REPLAYGAIN_ALBUM_GAIN=-1.50 dB

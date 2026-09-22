@@ -20,6 +20,7 @@ use crate::{
     common::{PlaybackMode, Volume},
     player::Song,
     playlist::{Album, PlaylistPage, Playlists},
+    radio::RadioStation,
     stat::LibraryStats,
 };
 
@@ -79,6 +80,8 @@ pub enum StateChangeEvent {
     NotificationSuccess(String),
     NotificationError(String),
     FavoriteRadioStations(Vec<String>),
+    /// All hand-added radio stations, sent after any change and on query.
+    CustomRadioStationsEvent(Vec<RadioStation>),
     PlaybackStateEvent(PlayerState),
     PlaybackModeChangedEvent(PlaybackMode),
     VUEvent(u8, u8),

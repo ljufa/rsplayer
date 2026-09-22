@@ -1,5 +1,33 @@
 # Release Notes
 
+## v5.0.0 — 2026-09-22
+
+Internet radio stations can now be saved by hand and kept in Favorites for good, and the album rows in the library can be scrolled sideways with a mouse. Nothing needs to be migrated: the library, queue, playlists, statistics and settings are read exactly as before.
+
+### Features
+
+#### Save your own radio stations
+
+Library → Radio → Favorites has an **Add station** button. Enter a station name, the stream URL and, if you have one, a logo URL, and the station is stored by the server. It stays in Favorites after the queue is cleared, the browser is closed or the machine restarts. Until now a stream that is not listed in the radio-browser directory could only be dropped into the queue, and was gone with the next **Clear**.
+
+- Saved stations are listed above the starred radio-browser stations, sorted by name, each with **Add to queue**, **Play now**, **Edit** and **Remove** (removing asks for confirmation).
+- They are also shown when the radio-browser directory cannot be reached, so a self-hosted or local stream keeps working without an internet connection.
+- The same stream URL cannot be stored twice; the message names the station that already uses it.
+- Stations live on the server, not in the browser: one added on a phone appears on every other client right away, and the list is part of the server database.
+
+#### Sideways scrolling for the cover rows
+
+Recently Added, New Releases, Saved Playlists, Favorites and the genre and decade rows scrolled only by touch or by holding Shift while turning the mouse wheel, because the rows have no visible scrollbar. They now have arrow buttons on the left and right, each shown only while there is something to scroll in that direction, so covers past the right edge can be reached with a mouse. Swiping on a phone or tablet works as before.
+
+### Documentation
+
+- New **[Privacy Policy](https://docs.rsplayer.de/#/privacy_policy)** and **[Disclaimer](https://docs.rsplayer.de/#/disclaimer)** pages, linked from the README, the documentation home page and the installation guide.
+- The [usage guide](https://docs.rsplayer.de/#/usage?id=radio-view) describes the Radio page in full: the Favorites tab, adding and editing your own stations, and browsing the directory by search, country, language or tag.
+
+### Build and CI
+
+- The Android release is built inside a pinned Docker image (`docker/Dockerfile.android`), built and published by its own workflow, instead of installing the toolchain on the runner for every build. Two builds of the same version stay byte-identical, which is what the F-Droid submission checks.
+
 ## v4.9.9 — 2026-09-21
 
 Android app fixes, a new Android application ID, and smaller, reproducible Android builds for the F-Droid release.
