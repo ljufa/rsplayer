@@ -281,32 +281,38 @@ cargo make build_android_release
 The "Full release" workflow builds the Android app in the `build_android` job and attaches
 to the draft release the universal `rsplayer_<version>_android.apk`, plus one signed APK per
 ABI: `rsplayer_<version>_android_arm64-v8a.apk` and `rsplayer_<version>_android_armeabi-v7a.apk`.
-The job runs on a self-hosted runner carrying the `android` label, which needs the SDK, NDK, JDK
-and rust targets listed above installed for the runner's user (`ANDROID_HOME`,
-`NDK_HOME` and `JAVA_HOME` default to `~/Android/Sdk`, the NDK version pinned in
-`app/build.gradle.kts`, and the `java` on the runner's PATH). Dispatch the workflow
-with target `android` to build only the APKs.
+The job runs on a self-hosted runner carrying the `android` label, as a job `container:` on
+`ghcr.io/ljufa/rsplayer-android-builder:latest` (built from `docker/Dockerfile.android` by
+`build-images.yml`), so the runner itself needs only Docker — none of the SDK/NDK/JDK/rustup
+setup above. Dispatch the workflow with target `android` to build only the APKs.
 
 #### Reproducible builds (F-Droid)
 
 F-Droid builds the app from source and compares the result with the per-ABI APKs above (the
 `binary:` URLs in its recipe), then publishes our signed file. That only works if both builds
-are byte-identical, so the job:
+are byte-identical, which turned out to need more than matching tool versions: an identical
+commit, `Cargo.lock`, Rust/`dx`/`wasm-bindgen`/`wasm-opt`, built on Fedora, produced a web UI
+bundle with different hashed asset names than F-Droid's Debian trixie build — some part of the
+OS environment itself affects the output, not just the pinned tools. So the job:
 
+- builds inside the image built from `docker/Dockerfile.android`, Debian trixie with the same
+  pinned tool versions F-Droid's recipe installs — proven to reproduce F-Droid's build byte for
+  byte, not just assumed to,
 - builds the release UI itself (`cargo make build_ui_android`), never from the shared `web_ui`
-  artifact,
+  artifact, which could have been built anywhere,
 - sources `crates/desktop/android-build-env.sh` before every Rust build. It maps machine-specific
   paths (`~/.cargo`, `~/.rustup`, the Rust sources) to fixed names in the binaries and keeps
   `--cfg tokio_unstable`, because setting `RUSTFLAGS` replaces `build.rustflags` from
   `.cargo/config.toml`,
-- uses the tool versions pinned at the top of that script (rustc, `dx`, `tauri-cli`) and stops
-  in `android-check-tools.sh` if the runner differs, and sets `SOURCE_DATE_EPOCH` to the commit time.
+- runs `android-check-tools.sh` before building, which stops the job if the image is stale
+  relative to the versions pinned in `android-build-env.sh`,
+- sets `SOURCE_DATE_EPOCH` to the commit time, like F-Droid does.
 
-The runner therefore needs the pinned Rust toolchain (as a rustup toolchain named after the
-version, with the Android targets and `wasm32-unknown-unknown`), `dx` and `tauri-cli` at the pinned
-versions. When you change a pin, change the F-Droid recipe (`PKGS/fdroid`, and the copy in
-fdroiddata) in the same release. Do not use `asset!()` in the web UI: it embeds the absolute
-source path in the wasm.
+When you change a tool version, change it in all three places in the same release:
+`crates/desktop/android-build-env.sh`, `docker/Dockerfile.android` (then let
+`build-images.yml` rebuild and push the image), and the F-Droid recipe (`PKGS/fdroid`, and its
+copy in fdroiddata). Do not use `asset!()` in the web UI: it embeds the absolute source path in
+the wasm.
 
 The APK is signed with the release key from three repository secrets; without them
 the job warns and signs with the runner's debug key. Create the key once and keep a

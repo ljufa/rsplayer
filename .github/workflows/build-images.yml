@@ -5,6 +5,7 @@ on:
     branches: [main_public]
     paths:
       - 'docker/Dockerfile.*'
+      - 'docker/Dockerfile.android'
       - '.github/workflows/build-images.yml'
   workflow_dispatch:
     inputs:
@@ -22,6 +23,7 @@ on:
           - cross-aarch64
           - cross-x86_64
           - cross-riscv64
+          - android-builder
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -174,3 +176,32 @@ jobs:
           tags: ghcr.io/${{ github.repository_owner }}/rsplayer-cross-riscv64:latest
           cache-from: type=gha,scope=cross-riscv64
           cache-to: type=gha,mode=max,scope=cross-riscv64
+
+  android-builder:
+    # Builds the Android app in the same environment F-Droid's buildserver uses (Debian
+    # trixie, the same pinned Rust/dx/tauri-cli/NDK versions), so cd.yml's build_android job
+    # produces APKs byte-identical to F-Droid's own build (reproducible builds; see
+    # docker/Dockerfile.android and docs/build.md). Rebuild after any change to that file or to
+    # the versions pinned in crates/desktop/android-build-env.sh.
+    name: Android builder image
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.image == 'all' || github.event.inputs.image == 'android-builder' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile.android
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/rsplayer-android-builder:latest
+          cache-from: type=gha,scope=android-builder
+          cache-to: type=gha,mode=max,scope=android-builder

@@ -1,0 +1,106 @@
+# Builds the Android release APKs (and the .aab for Play) in the same environment F-Droid
+# builds from source, so the CI-built and F-Droid-built APKs match byte for byte and F-Droid
+# can publish our signed file (reproducible builds; see docs/build.md, "Reproducible builds
+# (F-Droid)"). Debian trixie is what F-Droid's own buildserver uses, and matters as such: the
+# same commit, same Cargo.lock and same pinned Rust/dx/wasm-bindgen/wasm-opt built on Fedora
+# produced a web UI bundle with different hashed asset names than this image's Debian build —
+# some part of the OS environment itself affects the output, not just the pinned tool versions.
+#
+# Keep every pinned version here in sync with crates/desktop/android-build-env.sh and with
+# PKGS/fdroid/de.rsplayer.app.yml (and its copy in fdroiddata) — a mismatch in any of the
+# three makes the build stop being reproducible, quietly.
+#
+# Built and pushed to ghcr.io/ljufa/rsplayer-android-builder by the android-builder job in
+# .github/workflows/build-images.yml, and used as a job `container:` by cd.yml's build_android.
+# Local build, from the repo root:
+#   docker build -f docker/Dockerfile.android -t rsplayer-android-builder .
+# Local use: bind-mount the repo anywhere and run e.g. `cargo make build_android_release`
+# (see docs/build.md, "Android release builds (CI)").
+
+FROM debian:trixie
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential pkg-config libclang-dev libssl-dev \
+    nodejs npm binaryen \
+    openjdk-21-jdk-headless \
+    curl ca-certificates unzip git rustup \
+    && rm -rf /var/lib/apt/lists/*
+ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+
+# These paths are load-bearing, not cosmetic: they are the ones F-Droid's buildserver uses, and
+# the build stops being reproducible if they change. android-build-env.sh derives its
+# --remap-path-prefix flags from CARGO_HOME and RUSTUP_HOME, so a different value produces a
+# different RUSTFLAGS string, which feeds cargo's -C metadata hash and changes code generation —
+# the remapping normalises the paths that end up *in* the binary, but not the flags that built
+# it. Measured: the very same commit built with /usr/local/cargo instead of /home/vagrant/.cargo
+# emits a differently content-hashed web UI bundle, and F-Droid's verification then fails.
+#
+# They are set explicitly rather than left to default off $HOME because GitHub Actions overrides
+# HOME to /github/home for jobs using this image as a `container:`, which would otherwise send
+# rustup, cargo and gradle looking in an empty directory.
+RUN useradd -m -s /bin/bash vagrant
+ENV RUSTUP_HOME=/home/vagrant/.rustup \
+    CARGO_HOME=/home/vagrant/.cargo \
+    GRADLE_USER_HOME=/home/vagrant/.gradle \
+    ANDROID_HOME=/home/vagrant/Android/Sdk
+ENV PATH="${CARGO_HOME}/bin:${PATH}"
+USER vagrant
+
+# Rust toolchain. The version must match ANDROID_RUST_VERSION in android-build-env.sh, which
+# fails the build (android-check-tools.sh) if it doesn't.
+ARG RUST_VERSION=1.98.1
+RUN rustup toolchain install "${RUST_VERSION}" --profile minimal \
+    && rustup default "${RUST_VERSION}" \
+    && rustup target add aarch64-linux-android armv7-linux-androideabi wasm32-unknown-unknown
+
+# Android SDK + NDK. compileSdk/build-tools/ndkVersion must match app/build.gradle.kts. Kept
+# above the Rust tools because it is a 2.2 GB download that changes far less often than they do.
+ARG ANDROID_CMDLINE_TOOLS_URL=https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+ARG ANDROID_PLATFORM=android-36
+ARG ANDROID_BUILD_TOOLS=36.0.0
+ARG ANDROID_NDK=28.2.13676358
+ENV NDK_HOME=${ANDROID_HOME}/ndk/${ANDROID_NDK}
+ENV PATH="${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
+RUN mkdir -p "${ANDROID_HOME}/cmdline-tools" \
+    && curl -sSL "${ANDROID_CMDLINE_TOOLS_URL}" -o /tmp/cmdline-tools.zip \
+    && unzip -q /tmp/cmdline-tools.zip -d "${ANDROID_HOME}/cmdline-tools" \
+    && mv "${ANDROID_HOME}/cmdline-tools/cmdline-tools" "${ANDROID_HOME}/cmdline-tools/latest" \
+    && rm /tmp/cmdline-tools.zip \
+    && yes | sdkmanager --licenses > /dev/null \
+    && sdkmanager "platform-tools" "platforms;${ANDROID_PLATFORM}" \
+       "build-tools;${ANDROID_BUILD_TOOLS}" "ndk;${ANDROID_NDK}" > /dev/null
+
+# Same tool versions as android-build-env.sh / the F-Droid recipe's `build:` steps. The recipe
+# compiles all of them with `cargo install`; we take the upstream prebuilt binaries instead,
+# which is ~20 minutes of the image build (binstall falls back to compiling from source when a
+# crate publishes no prebuilt release for this platform).
+#
+# Prebuilt and source-compiled are interchangeable here, which is worth stating because it is
+# not obvious — binstall serves musl-linked builds: the same commit built with a binstalled dx
+# and with a source-compiled dx of the same version produced byte-identical APKs. What is *not*
+# interchangeable is the paths above; see that comment.
+ARG CARGO_MAKE_VERSION=0.37.24
+ARG DIOXUS_CLI_VERSION=0.7.10
+ARG WASM_BINDGEN_VERSION=0.2.127
+ARG TAURI_CLI_VERSION=2.11.4
+RUN curl -L --proto '=https' --tlsv1.2 -sSf \
+      https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash \
+    && cargo binstall --no-confirm --locked \
+       cargo-make@${CARGO_MAKE_VERSION} \
+       dioxus-cli@${DIOXUS_CLI_VERSION} \
+       wasm-bindgen-cli@${WASM_BINDGEN_VERSION} \
+       tauri-cli@${TAURI_CLI_VERSION} \
+    && rm -rf "${CARGO_HOME}/registry" "${CARGO_HOME}/git"
+
+# The workspace GitHub bind-mounts into a `container:` job is owned by the runner's user, so the
+# build user has to be able to write it: `vagrant` is uid 1000 here, as is the runner's user on
+# the maintainer's machine. On a runner whose user is not uid 1000, add `options: --user root`
+# to the job — root can write regardless, and reproducibility rides on the paths pinned above
+# rather than on which user runs the build.
+WORKDIR /home/vagrant/build
+
+# Not a login shell: `bash -l` re-sources /etc/profile, which resets PATH and drops
+# everything set above with ENV.
+ENTRYPOINT ["/bin/bash", "-c"]

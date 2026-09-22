@@ -470,64 +470,30 @@ jobs:
   build_android:
     name: Build Android (APK)
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'android' }}
-    # The runner labelled "android" is the maintainer's workstation: the Android SDK/NDK,
-    # a JDK and the rust android targets are installed there (docs/build.md, Android)
-    # rather than downloaded on every run.
+    # The SDK/NDK, JDK and the pinned Rust/dx/tauri-cli toolchain all live in the image built
+    # from docker/Dockerfile.android, so the runner itself needs nothing but Docker. That image
+    # is also what makes the APKs byte-identical to F-Droid's own build — see "Reproducible
+    # builds (F-Droid)" in docs/build.md — so it, not whatever is installed on the runner, is
+    # the toolchain of record.
+    #
+    # The "android" label therefore no longer means "has the Android SDK installed"; it now just
+    # pins the job to a machine that can actually run it. Dropping it would let this land on any
+    # [self-hosted, linux, x64] runner, including the small docs/demo VPS, which has neither the
+    # disk for a 5.5 GB image plus a three-ABI build nor (necessarily) a uid-1000 runner user —
+    # the image builds as `vagrant`, uid 1000, and has to write the bind-mounted workspace.
     runs-on: [self-hosted, linux, x64, android]
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/rsplayer-android-builder:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      # This job runs on the host as the runner user, while container jobs that land on
-      # the same runner write the shared workspace as root. Hand such files back first,
-      # or checkout cannot clean the workspace ("Permission denied" on .git/index.lock).
-      - name: Reclaim workspace from container jobs
-        run: |
-          for dir in "$GITHUB_WORKSPACE" "$RUNNER_TEMP"; do
-            if [ -n "$(find "$dir" ! -user "$(id -u)" -print -quit 2>/dev/null)" ]; then
-              echo "Taking back root-owned files in $dir"
-              docker run --rm -v "$dir:/reclaim" alpine:3 chown -R "$(id -u):$(id -g)" /reclaim
-            fi
-          done
-
       - uses: actions/checkout@v7
         with:
           clean: true
 
-      # The APKs must match what F-Droid builds from source (the recipe pins the same
-      # versions), so use the toolchain pinned in android-build-env.sh, not whatever "stable"
-      # is today, and the commit time as build date like F-Droid does.
-      - name: Pin toolchain and build date
-        run: |
-          rust=$(sed -n 's/^ANDROID_RUST_VERSION=//p' crates/desktop/android-build-env.sh)
-          echo "RUSTUP_TOOLCHAIN=$rust" >> "$GITHUB_ENV"
-          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
-
-      # Runner services start without a login shell, so resolve the toolchain from the
-      # conventional locations; the NDK version comes from the Gradle project.
-      - name: Check Android toolchain
-        run: |
-          android_home="${ANDROID_HOME:-$HOME/Android/Sdk}"
-          ndk_version=$(sed -n 's/.*ndkVersion = "\(.*\)".*/\1/p' crates/desktop/gen/android/app/build.gradle.kts)
-          ndk_home="${NDK_HOME:-$android_home/ndk/$ndk_version}"
-          java_home="${JAVA_HOME:-$(java -XshowSettings:properties -version 2>&1 | sed -n 's/^ *java.home = //p')}"
-          missing=0
-          for dir in "$android_home/platforms" "$ndk_home" "$java_home"; do
-            if [ -z "$dir" ] || [ ! -d "$dir" ]; then
-              echo "::error::Missing '$dir' (see docs/build.md, Android)"
-              missing=1
-            fi
-          done
-          for target in aarch64-linux-android armv7-linux-androideabi; do
-            if ! rustup target list --installed | grep -qx "$target"; then
-              echo "::error::Rust target $target is not installed"
-              missing=1
-            fi
-          done
-          [ "$missing" = 0 ] || exit 1
-          {
-            echo "ANDROID_HOME=$android_home"
-            echo "NDK_HOME=$ndk_home"
-            echo "JAVA_HOME=$java_home"
-          } >> "$GITHUB_ENV"
-
+      # Catches an image that is stale relative to this commit (someone bumped a version in
+      # android-build-env.sh but build-images.yml hasn't rebuilt and pushed the image yet).
       - name: Check pinned tool versions
         run: sh crates/desktop/android-check-tools.sh
 
@@ -549,11 +515,12 @@ jobs:
             "$RUNNER_TEMP/rsplayer-release.jks" "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" \
             > crates/desktop/gen/android/keystore.properties
 
-      # Builds the release UI itself (build_ui_android): the shared web_ui artifact is built on
-      # another runner and would not match F-Droid's build byte for byte. Produces the universal
-      # APK/AAB plus one signed APK per ABI, which the F-Droid recipe points its `binary:` at.
+      # Builds the release UI itself (build_ui_android) and one signed APK per ABI plus the
+      # universal APK/AAB, with SOURCE_DATE_EPOCH set to the commit time like F-Droid does.
       - name: Build Android APKs
-        run: cargo make build_android_release
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" cargo make build_android_release
 
       - name: Upload APK
         uses: actions/upload-artifact@v7
