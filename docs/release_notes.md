@@ -1,5 +1,23 @@
 # Release Notes
 
+## v5.1.1 (2026-09-24)
+
+A Snap-only release: the other packages stay at 5.1.0.
+
+### Fixes
+
+#### Snap: choppy playback on PipeWire systems
+
+On Ubuntu 24.04 and later (and other systems that use PipeWire, such as Zorin OS 18), the Snap played through the PulseAudio compatibility layer and hit constant buffer underruns: playback started late and stuttered, and the log filled with `audio output error (n/30): A buffer underrun or overrun occurred`.
+
+- The Snap now asks the system's sound server at startup. On PipeWire it plays directly through PipeWire's own ALSA plugin, the same way the Flatpak does. On PulseAudio systems such as Ubuntu 22.04 it keeps using PulseAudio.
+- The Snap no longer reads the system's own ALSA configuration (`/etc/alsa/conf.d`, `/etc/asound.conf`). This also fixes the "Default" output failing on Fedora and other non-Ubuntu systems.
+- Direct `hw:` output to a USB DAC (after `sudo snap connect rsplayer:alsa`) is unchanged.
+
+### Build and CI
+
+- The "Full release" workflow can publish the Snap alone: run it manually with target `snap` and **publish_snap** enabled. A tag push still runs the full release.
+
 ## v5.1.0 (2026-09-24)
 
 The desktop app can now keep playing from the system tray when its window is closed, and on Linux it uses a compact title bar. The player has 10-second skip buttons, internet radio recovers from short dropouts on its own, and the web UI stays in step with the player after a slow or interrupted connection. Nothing needs to be migrated.

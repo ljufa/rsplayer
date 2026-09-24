@@ -20,7 +20,8 @@ on:
           # Linux desktop app packages (deb/rpm/tgz)
           - desktop-x86_64
           - desktop-aarch64
-          # Sandboxed Linux desktop app
+          # Sandboxed Linux desktop app (snap = both snap architectures)
+          - snap
           - snap-amd64
           - snap-arm64
           - flatpak-amd64
@@ -31,6 +32,14 @@ on:
           - windows
           # Android app (universal APK), built on the self-hosted runner labelled "android"
           - android
+      publish_snap:
+        # Snap-only release without a tag (a tag push runs the full release):
+        # dispatch target "snap" on a branch whose Cargo.toml has the new
+        # version, with this enabled.
+        description: "Upload the snap to the Snap Store (beta) even though this is not a tag build"
+        required: false
+        default: false
+        type: boolean
   push:
     tags:
       - "*.*.*"
@@ -215,7 +224,7 @@ jobs:
   build_snap:
     needs: build_ui
     name: Build Snap (${{ matrix.arch }})
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'snap-amd64' || inputs.target == 'snap-arm64' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'snap' || inputs.target == 'snap-amd64' || inputs.target == 'snap-arm64' }}
     # GitHub-hosted runners: snapcore/action-build needs snapd + LXD, which
     # are not available inside the self-hosted builder container. snapcraft
     # builds for the runner's own architecture, so arm64 uses a native runner.
@@ -248,9 +257,10 @@ jobs:
 
       # Uploaded to the beta channel; promote to candidate/stable manually
       # after smoke-testing (see PKGS/snap/README.md). Requires the
-      # SNAPCRAFT_STORE_CREDENTIALS secret (snapcraft export-login).
+      # SNAPCRAFT_STORE_CREDENTIALS secret (snapcraft export-login). Runs on
+      # tag builds, or on a manual run with publish_snap (snap-only release).
       - name: Publish to Snap Store (beta)
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_snap)
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}

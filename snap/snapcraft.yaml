@@ -72,8 +72,8 @@ layout:
     bind: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/alsa-lib
   # NOTE: no /etc/asound.conf bind-file layout here — creating files under
   # /etc via layout is denied by SELinux on Fedora hosts (snap-update-ns
-  # "mounton" denial). The snap's asound.conf is wired in with the
-  # ALSA_CONFIG_PATH env var instead (see apps.rsplayer.environment).
+  # "mounton" denial). The snap's ALSA config is wired in with the
+  # ALSA_CONFIG_PATH env var instead, set by the alsa-select command-chain.
 
 slots:
   mpris:
@@ -85,6 +85,9 @@ slots:
 apps:
   rsplayer:
     command: usr/bin/rsplayer-desktop
+    # Sets ALSA_CONFIG_PATH for the host's sound server (PulseAudio or
+    # PipeWire), see PKGS/snap/alsa-select.sh.
+    command-chain: [bin/alsa-select]
     desktop: usr/share/applications/io.github.ljufa.rsplayer.desktop
     # Provides GTK/desktop integration, wayland/x11/opengl plugs and themes.
     extensions: [gnome]
@@ -135,10 +138,14 @@ apps:
       # connects and the UI's WebSocket comes up.
       GIO_USE_NETWORK_MONITOR: base
       GIO_USE_PROXY_RESOLVER: dummy
-      # Loaded instead of /usr/share/alsa/alsa.conf (which it includes) —
-      # routes the "default" PCM to PulseAudio/PipeWire. Replaces an
-      # /etc/asound.conf layout that SELinux blocks on Fedora hosts.
-      ALSA_CONFIG_PATH: $SNAP/etc/asound.conf
+      # ALSA_CONFIG_PATH is set by the alsa-select command-chain instead (it
+      # depends on the host sound server). This replaces an /etc/asound.conf
+      # layout that SELinux blocks on Fedora hosts.
+      # The staged pipewire-alsa plugin's client: modules, SPA plugins and
+      # client.conf from the snap, not the paths compiled into libpipewire.
+      PIPEWIRE_MODULE_DIR: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/pipewire-0.3
+      SPA_PLUGIN_DIR: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/spa-0.2
+      PIPEWIRE_CONFIG_DIR: $SNAP/usr/share/pipewire
 
 parts:
   rsplayer:
@@ -173,6 +180,9 @@ parts:
       # pactl, so the Pipewire volume-control type stays available in the
       # sandbox (the server offers it only when wpctl or pactl is present).
       - pulseaudio-utils
+      # Native PipeWire ALSA plugin for the "default" PCM on PipeWire hosts
+      # (pulls libpipewire, its modules, SPA plugins and client.conf).
+      - pipewire-alsa
     override-build: |
       craftctl set version="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
       # The server embeds dist/web-ui via RustEmbed at compile time. The
@@ -208,3 +218,20 @@ parts:
       install -Dm644 crates/desktop/icons/128x128.png \
         "$CRAFT_PART_INSTALL/usr/share/icons/hicolor/128x128/apps/rsplayer.png"
       install -Dm644 PKGS/snap/asound.conf "$CRAFT_PART_INSTALL/etc/asound.conf"
+      install -Dm644 PKGS/snap/asound-pipewire.conf "$CRAFT_PART_INSTALL/etc/asound-pipewire.conf"
+      install -Dm755 PKGS/snap/alsa-select.sh "$CRAFT_PART_INSTALL/bin/alsa-select"
+      # alsa.conf minus the hooks that load host files (/etc/alsa/conf.d,
+      # /etc/asound.conf, /var/lib/alsa/conf.d). Hooks run after the rest of
+      # the config is parsed, so a host snippet would replace the snap's
+      # "default": Fedora's real 99-pipewire-default.conf, or on Ubuntu the
+      # /etc/alsa/conf.d symlinks, which resolve into the snap's own
+      # /usr/share/alsa (layout) and would pick up the staged pipewire-alsa
+      # snippets even on a PulseAudio host. Card definitions still come from
+      # the staged /usr/share/alsa.
+      sed -e '\#"/var/lib/alsa/conf.d"#d' -e '\#"/usr/etc/alsa/conf.d"#d' \
+        -e '\#"/etc/alsa/conf.d"#d' -e '\#"/etc/asound.conf|||/usr/etc/asound.conf"#d' \
+        /usr/share/alsa/alsa.conf > "$CRAFT_PART_INSTALL/etc/alsa-snap.conf"
+      if grep -q '/etc/alsa/conf.d' "$CRAFT_PART_INSTALL/etc/alsa-snap.conf"; then
+        echo "ERROR: host hooks still in alsa-snap.conf" >&2
+        exit 1
+      fi

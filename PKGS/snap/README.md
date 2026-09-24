@@ -11,10 +11,20 @@ Files:
   here) because `snapcraft` and `snapcore/action-build` require it there.
 - `io.github.ljufa.rsplayer.desktop` — desktop entry installed by the
   manifest (`Exec=rsplayer` = the snap command; icon via `${SNAP}` path).
-- `asound.conf` — loaded via `ALSA_CONFIG_PATH`; includes the staged
-  `alsa.conf` and routes the ALSA "default" PCM to PulseAudio/PipeWire with
-  a sysdefault fallback. (Not an `/etc/asound.conf` layout — SELinux on
-  Fedora hosts denies snap-update-ns creating files under `/etc`.)
+- `alsa-select.sh` — the app's `command-chain` launcher. It asks the host
+  sound server (`pactl info`) and sets `ALSA_CONFIG_PATH` to
+  `alsa-snap.conf` plus one route file:
+  - `asound-pipewire.conf` on PipeWire hosts (Ubuntu 22.10+, Fedora): the
+    "default" PCM uses the staged `pipewire-alsa` plugin, like the Flatpak.
+    The pulse plugin route underruns constantly through pipewire-pulse.
+  - `asound.conf` otherwise (PulseAudio hosts such as Ubuntu 22.04): the
+    pulse plugin, with a sysdefault fallback.
+
+  `alsa-snap.conf` is generated in `override-build`: the staged `alsa.conf`
+  without the hooks that load host ALSA config (`/etc/alsa/conf.d`,
+  `/etc/asound.conf`), which would otherwise replace the snap's "default".
+  (Not an `/etc/asound.conf` layout: SELinux on Fedora hosts denies
+  snap-update-ns creating files under `/etc`.)
 
 Unlike the flatpak there is no vendoring (`cargo-sources.json` equivalent):
 snapcraft builds are online, so `cargo build --locked` fetches crates.io and
@@ -136,6 +146,20 @@ snapcraft release rsplayer <arm64-revision> stable
 
 (or promote via the store dashboard). Flip the CI `release:` input to
 `stable` later if this proves reliable.
+
+### Snap-only release
+
+A tag push runs the full release (every package). To ship only the snap,
+bump `version` in the workspace `Cargo.toml` on a branch, push the branch
+(no tag), and dispatch the workflow with target `snap` and `publish_snap`:
+
+```bash
+gh workflow run cd.yml --ref <branch> -f target=snap -f publish_snap=true
+```
+
+Both architectures are built and uploaded to beta; no GitHub release is
+created and no other package is published. The next full release tags a
+later version as usual.
 
 Version is read from the workspace `Cargo.toml` at build time — nothing to
 bump here. There is no external repo or PR review to keep in sync; the
