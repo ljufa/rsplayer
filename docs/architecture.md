@@ -53,6 +53,28 @@ the Tauri mobile entry point for Android:
   Android), picks a free port, exports `PORT`/`RSPLAYER_DESKTOP`, and runs
   `rsplayer::run_backend` as a tokio task while the webview shows
   `loading.html` until the port opens, then loads `http://localhost:<port>`.
+- Desktop only: `tray` adds a system tray icon (Show, Previous,
+  Play/Pause, Next, Quit). While `desktop_settings.close_to_tray` is on and
+  the tray was created, the close request hides the window instead of
+  shutting the backend down; the server mirrors the setting into
+  `rsplayer::close_to_tray()` at startup and on every settings save.
+  Tray creation is guarded with `catch_unwind` because libappindicator
+  panics when its library is missing on Linux. `tauri-plugin-single-instance`
+  runs before `setup`, which is where the desktop backend is started, so a
+  second launch shows the running window and exits before it can open the
+  same database.
+- Linux only, with `desktop_settings.custom_titlebar` on (the default):
+  the window is undecorated and the web UI's nav bar is the title bar. An
+  initialization script defines `window.__RSPLAYER_WINDOW__` (minimize /
+  toggle maximize / close / `setDecorations` through Tauri's window
+  commands); the UI shows its window buttons and marks the nav
+  `data-tauri-drag-region` only when that object exists and the setting is
+  on, so browsers and the other platforms are unaffected. The window starts
+  undecorated and applies the saved setting (`rsplayer::custom_titlebar()`)
+  once the backend port is open; toggling it in Settings switches the
+  decorations live. `capabilities/titlebar.json` grants just those window
+  permissions to the `http://localhost` origin the UI is served from; tao
+  provides edge resizing for undecorated windows.
 - `run_backend` is idempotent about process-global setup (crypto provider,
   logger) because "Restart RSPlayer" relaunches the executable on desktop but
   restarts the backend **in-process** on Android.
@@ -134,6 +156,14 @@ Key points:
   root) for a start offset and arms `skip_to_time` with it. This is how a
   half-heard episode continues from any entry path (play button, next/prev,
   queue click) without the player knowing what a podcast is.
+- **Failures**: only HTTP sources are retried, 3 times with 1/2/4 s
+  backoff and one "reconnecting" notification per outage; the retry resumes
+  at the position reached (`PlaybackContext::position_secs`, ignored by
+  non-seekable radio), and a stream that played 30 s before failing gets a
+  fresh set of retries. A song that still fails is skipped with a
+  notification. `OutputUnavailable` (device missing, busy or rejecting the
+  format) is never retried or skipped: it stops playback with `ERROR`, as do
+  3 failed songs in a row.
 - **Sample-format negotiation**: the device is opened at the source rate if
   it supports it, otherwise the resampler targets an integer multiple
   (cleanest ratio) or the closest supported rate; retry ladders handle

@@ -10,6 +10,11 @@
 //! `ndk-context`, and the Kotlin `PlaybackService` provides the media session
 //! over the backend's WebSocket.
 //!
+//! On desktop, closing the window can hide it to the system tray instead of
+//! quitting (`tray`, `desktop_settings.close_to_tray`); the single-instance
+//! plugin makes a second launch show the running window instead of starting
+//! another backend.
+//!
 //! "Restart RSPlayer" from the settings UI shuts the backend down and
 //! relaunches the whole app: via Tauri on desktop, via the Kotlin
 //! `RestartPlugin` on Android (a trampoline activity in a separate process
@@ -21,6 +26,8 @@
 mod android;
 #[cfg(not(target_os = "android"))]
 mod media_keys;
+#[cfg(not(target_os = "android"))]
+mod tray;
 
 use std::env;
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -107,27 +114,48 @@ async fn async_main() {
     }
 
     let shutdown: ShutdownSlot = Arc::new(Mutex::new(None));
-    #[allow(unused_mut)]
-    let mut backend = spawn_backend(&shutdown);
-
+    // Desktop starts the backend in `setup`, after the single-instance check
+    // below: a second launch must exit before it opens the same database.
+    #[cfg(target_os = "android")]
+    let early_backend = Some(spawn_backend(&shutdown));
     #[cfg(not(target_os = "android"))]
-    media_keys::start(backend.cmd_rx.take().expect("fresh backend run has a command receiver"));
+    let early_backend: Option<BackendRun> = None;
 
     let shutdown_on_close = Arc::clone(&shutdown);
     let builder = tauri::Builder::default();
+    // Registered first so it runs before `setup`: a second launch (e.g. from
+    // the app menu while the window is hidden to the tray) shows the running
+    // app's window and exits.
+    #[cfg(not(target_os = "android"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        tray::show_main_window(app);
+    }));
     #[cfg(target_os = "android")]
     let builder = builder.plugin(android_restart_plugin());
     builder
         .setup(move |app| {
+            #[allow(unused_mut)]
+            let mut backend = early_backend.unwrap_or_else(|| spawn_backend(&shutdown));
+            #[cfg(not(target_os = "android"))]
+            {
+                let commands = media_keys::start(backend.cmd_rx.take().expect("fresh backend run has a command receiver"));
+                tray::install(app.handle(), commands);
+            }
+
             // Create the window pointing at loading.html from the frontend
             // dist (tauri.conf.json "windows" is empty — no auto-create).
             // The loading page shows "Starting server, please wait…" with a
             // spinner — pure HTML/CSS, no WASM, visible instantly.
-            let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(PathBuf::from("loading.html")))
+            let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(PathBuf::from("loading.html")))
                 .title("RSPlayer")
-                .inner_size(WINDOW_WIDTH, WINDOW_HEIGHT)
-                .build()
-                .expect("failed to create window");
+                .inner_size(WINDOW_WIDTH, WINDOW_HEIGHT);
+            // Linux: no OS title bar (GTK/Mutter's is tall); the web UI's nav
+            // bar takes its place when it finds the helper below. Starts
+            // undecorated (the default); `redirect_when_ready` applies the
+            // saved setting once the backend has loaded it.
+            #[cfg(target_os = "linux")]
+            let builder = builder.decorations(false).initialization_script(CUSTOM_TITLEBAR_SCRIPT);
+            let window = builder.build().expect("failed to create window");
             #[cfg(not(target_os = "android"))]
             maximize_on_small_monitor(&window);
             redirect_when_ready(&window, http_port);
@@ -136,15 +164,45 @@ async fn async_main() {
             Ok(())
         })
         .on_window_event(move |_window, event| {
-            if let WindowEvent::CloseRequested { .. } = event
-                && let Some(tx) = shutdown_on_close.lock().ok().and_then(|mut g| g.take())
-            {
-                let _ = tx.send(());
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                #[cfg(not(target_os = "android"))]
+                if tray::hide_instead_of_close(_window) {
+                    api.prevent_close();
+                    return;
+                }
+                #[cfg(target_os = "android")]
+                let _ = api;
+                if let Some(tx) = shutdown_on_close.lock().ok().and_then(|mut g| g.take()) {
+                    let _ = tx.send(());
+                }
             }
         })
-        .run(generate_context!())
-        .expect("error while running tauri application");
+        .build(generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            // macOS: clicking the Dock icon brings a window hidden to the
+            // tray back.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                tray::show_main_window(_app);
+            }
+        });
 }
+
+/// Window controls for the web UI's own title bar, injected into every page
+/// of the Linux window. The web UI shows the controls only when this object
+/// exists and `desktop_settings.custom_titlebar` is on (toggling the setting
+/// calls `setDecorations`), so browsers and the other platforms are
+/// unaffected. Allowed by `capabilities/titlebar.json`.
+#[cfg(target_os = "linux")]
+const CUSTOM_TITLEBAR_SCRIPT: &str = r"
+window.__RSPLAYER_WINDOW__ = {
+  minimize: () => window.__TAURI_INTERNALS__.invoke('plugin:window|minimize', { label: 'main' }),
+  toggleMaximize: () => window.__TAURI_INTERNALS__.invoke('plugin:window|toggle_maximize', { label: 'main' }),
+  close: () => window.__TAURI_INTERNALS__.invoke('plugin:window|close', { label: 'main' }),
+  setDecorations: (value) => window.__TAURI_INTERNALS__.invoke('plugin:window|set_decorations', { label: 'main', value }),
+};
+";
 
 /// Default desktop window size (logical pixels).
 const WINDOW_WIDTH: f64 = 1200.0;
@@ -214,6 +272,10 @@ fn redirect_when_ready(window: &WebviewWindow, http_port: u16) {
             if wait_for_backend(http_port, 30, 500) {
                 break;
             }
+        }
+        #[cfg(target_os = "linux")]
+        if let Err(e) = w.set_decorations(!rsplayer::custom_titlebar()) {
+            warn!("Failed to apply title bar setting: {e}");
         }
         let url = format!("http://localhost:{http_port}");
         for _ in 0..120 {

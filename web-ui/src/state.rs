@@ -37,6 +37,9 @@ pub struct AppState {
     pub notification: Signal<Option<StateChangeEvent>>,
     pub current_theme: Signal<String>,
     pub global_settings: Signal<Option<Settings>>,
+    /// `desktop_settings.custom_titlebar`: the nav bar is the window's title
+    /// bar (Linux desktop app only; see `has_window_helper`).
+    pub custom_titlebar: Signal<bool>,
     pub connected: Signal<bool>,
     pub startup_error: Signal<Option<String>>,
     pub mount_statuses: Signal<Vec<MountStatus>>,
@@ -100,6 +103,7 @@ impl AppState {
             notification: Signal::new(None),
             current_theme: Signal::new("dark".to_string()),
             global_settings: Signal::new(None),
+            custom_titlebar: Signal::new(false),
             connected: Signal::new(false),
             startup_error: Signal::new(None),
             mount_statuses: Signal::new(Vec::new()),

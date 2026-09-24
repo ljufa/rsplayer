@@ -1,0 +1,5 @@
+The player has buttons to skip 10 seconds back and forward.
+
+Internet radio and podcasts reconnect on their own after a short network dropout, and a podcast continues where it stopped. A song that cannot be played is skipped instead of stopping the queue.
+
+The app shows the correct song and play state after it returns from the background.

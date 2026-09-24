@@ -87,6 +87,54 @@
 }
 .app-nav__chevron.is-open { transform: rotate(180deg); }
 
+/* Linux desktop app: the nav bar is the window's title bar. Items shrink to
+   their content and sit centered, so the sides stay free for dragging; the
+   side padding keeps them clear of the window controls. */
+/* Span the whole window, not just the centred .app-shell column, so the
+   controls sit at the window's right edge and all empty space drags. */
+.app-nav--titlebar {
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+}
+html:has(.app-nav--titlebar) { overflow-x: clip; }
+.app-nav--titlebar .app-nav__items {
+  justify-content: center;
+  padding: 0 7rem;
+}
+.app-nav--titlebar .app-nav__item { flex: 0 1 7rem; }
+.app-nav--titlebar .app-nav__label { white-space: nowrap; }
+/* Narrow window: no room to centre, keep only the space the controls need. */
+@media (max-width: 640px) {
+  .app-nav--titlebar .app-nav__items { padding: 0 6.75rem 0 0; }
+}
+.app-nav__window-controls {
+  position: absolute;
+  top: 50%;
+  right: 0.25rem;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 0.125rem;
+}
+.app-nav__window-btn {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
+  transition: background-color 0.15s, color 0.15s;
+}
+.app-nav__window-btn:hover {
+  background: color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  color: var(--color-base-content);
+}
+.app-nav__window-btn--close:hover {
+  background: var(--color-error);
+  color: var(--color-error-content);
+}
+.app-nav__window-btn .material-icons { font-size: 1.1rem; }
+
 /* ── Player page ────────────────────────────────────────────── */
 .player-page {
   position: relative;

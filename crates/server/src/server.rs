@@ -42,7 +42,7 @@ use tower_http::{
     set_header::SetResponseHeaderLayer,
 };
 
-use api_models::common::UserCommand;
+use api_models::common::{PlayerCommand, QueueCommand, UserCommand};
 use api_models::serde_json;
 use api_models::settings::Settings;
 use api_models::state::StateChangeEvent;
@@ -76,7 +76,9 @@ pub fn start(
     user_commands_tx: UserCommandSender,
     config: &Config,
 ) -> (impl Future<Output = ()>, Option<impl Future<Output = ()>>, impl Future<Output = ()>) {
-    let (ws_broadcast, _) = broadcast::channel::<Arc<String>>(32);
+    // VU (20/s) and time events fill a small buffer within a second or two
+    // on a throttled client (backgrounded Android WebView, slow Wi-Fi).
+    let (ws_broadcast, _) = broadcast::channel::<Arc<String>>(256);
     let state = AppState {
         config: config.clone(),
         user_commands_tx,
@@ -389,6 +391,7 @@ async fn save_settings(
 ) -> StatusCode {
     debug!("Settings to save {settings:?} and reload {query:?}");
     state.config.save_settings(&settings);
+    crate::set_desktop_settings(&settings.desktop_settings);
     let reload = query.get("reload").map_or("false", String::as_str);
     if reload == "true" {
         info!("Reloading service");
@@ -574,6 +577,7 @@ async fn user_connected(ws: WebSocket, mut ws_rx: broadcast::Receiver<Arc<String
     info!("Number of active websockets is: {current_users}");
 
     let (mut to_user_ws, mut from_user_ws) = ws.split();
+    let mut last_resync: Option<std::time::Instant> = None;
 
     loop {
         tokio::select! {
@@ -620,6 +624,19 @@ async fn user_connected(ws: WebSocket, mut ws_rx: broadcast::Receiver<Arc<String
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
                         warn!("Client {user_id} is lagging, skipped {n} messages.");
+                        // Skipped messages may include state transitions
+                        // (play/stop, song change) that are never re-sent.
+                        if last_resync.is_none_or(|t| t.elapsed() >= std::time::Duration::from_secs(1)) {
+                            last_resync = Some(std::time::Instant::now());
+                            for cmd in [
+                                UserCommand::Queue(QueueCommand::QueryCurrentSong),
+                                UserCommand::Player(PlayerCommand::QueryCurrentPlayerInfo),
+                            ] {
+                                if user_commands_tx.send(cmd).await.is_err() {
+                                    error!("failed to request state resync");
+                                }
+                            }
+                        }
                     }
                     Err(broadcast::error::RecvError::Closed) => {
                         break;

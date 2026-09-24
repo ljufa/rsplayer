@@ -14,7 +14,7 @@
 
 # RSPlayer
 
-RSPlayer is an open-source music player written in Rust. Run it as a **headless server** on a NAS, home server or Raspberry Pi and control it from any browser or phone — or install the **desktop app** on your computer.
+RSPlayer is an open-source music player written in Rust. Run it as a **headless server** on a NAS, home server or Raspberry Pi and control it from any browser or phone - or install the **desktop app** on your computer.
 
 🎧 **[Online demo](https://demo.rsplayer.de)** · 📖 **[Documentation](https://docs.rsplayer.de/)** · ⬇️ **[Latest release](https://github.com/ljufa/rsplayer/releases/latest)**
 
@@ -26,7 +26,7 @@ https://github.com/user-attachments/assets/7cf6ef93-2251-4f85-a1cb-be5865a257d5
 - FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE
 - Multiroom: synchronized playback across devices with automatic discovery
 - Parametric EQ and DSP presets, EBU R128 loudness normalization, automatic resampling
-- Internet radio and a podcast client — subscribe to shows and resume episodes where you stopped
+- Internet radio and a podcast client - subscribe to shows and resume episodes where you stopped
 - Visualizer, synchronized lyrics, library browsing, dynamic playlists
 - SMB/NFS network share mounting, Home Assistant integration, DIY hardware control
 
@@ -38,9 +38,9 @@ See the [full feature list](https://docs.rsplayer.de/#/?id=features) and [featur
 
 | | Linux | macOS · Windows | Android |
 |---|---|---|---|
-| **Server** — runs in the background, you control it from a browser or phone. Best for a Raspberry Pi, NAS or always-on audio PC. | [Install script](#linux-server) | [Download](#macos-and-windows) | — |
-| **Desktop app** — a normal app window on the computer you're using. | [Snap / Flatpak / script](#linux-desktop-app) | [Download](#macos-and-windows) | [APK](#android) |
-| **Docker** | [docker run](#docker) | — | — |
+| **Server** - runs in the background, you control it from a browser or phone. Best for a Raspberry Pi, NAS or always-on audio PC. | [Install script](#linux-server) | [Download](#macos-and-windows) | - |
+| **Desktop app** - a normal app window on the computer you're using. | [Snap / Flatpak / script](#linux-desktop-app) | [Download](#macos-and-windows) | [APK](#android) |
+| **Docker** | [docker run](#docker) | - | - |
 
 ### Linux server
 
@@ -75,15 +75,20 @@ sudo dnf install rsplayer
 
 ### Linux desktop app
 
-<a href="https://snapcraft.io/rsplayer"><img height="48" alt="Get it from the Snap Store" src="https://snapcraft.io/en/dark/install.svg"></a>
-
+#### Native .deb/.rpm package
 ```bash
-sudo snap install rsplayer
-# or
-flatpak install https://ljufa.github.io/rsplayer-flatpak/io.github.ljufa.rsplayer.flatpakref
-# or a native .deb/.rpm package
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/main/install_desktop.sh)
 ```
+
+#### Snap on Ubuntu
+```bash
+sudo snap install rsplayer
+```
+#### Flatpak
+```bash
+flatpak install https://ljufa.github.io/rsplayer-flatpak/io.github.ljufa.rsplayer.flatpakref
+```
+
 
 The Snap and Flatpak are sandboxed. For bit-perfect output to USB DACs, see [sandbox permissions](https://docs.rsplayer.de/#/installation?id=desktop-app-flatpak-and-snap).
 
@@ -93,16 +98,17 @@ Download from the [latest release](https://github.com/ljufa/rsplayer/releases/la
 
 | | Server | Desktop app |
 |---|---|---|
-| **macOS** | `rsplayer_darwin_arm64` (Apple Silicon) or `rsplayer_darwin_amd64` (Intel) — `chmod +x` and run | `.dmg` |
-| **Windows** | `rsplayer_windows_amd64.exe` — just run it | `rsplayer-desktop_windows_amd64.exe` |
+| **macOS** | `rsplayer_darwin_arm64` (Apple Silicon) or `rsplayer_darwin_amd64` (Intel) - `chmod +x` and run | `.dmg` |
+| **Windows** | `rsplayer_windows_amd64.exe` - just run it | `rsplayer-desktop_windows_amd64.exe` |
 
 After starting the server, open `http://localhost:8000`. On Windows, installed ASIO drivers can be selected in Settings → Audio interface. More in the [macOS](https://docs.rsplayer.de/#/installation?id=macos) and [Windows](https://docs.rsplayer.de/#/installation?id=windows) guides.
+
+> ASIO is a trademark and software of Steinberg Media Technologies GmbH.
 
 ### Android
 
 Download `rsplayer_<version>_android.apk` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest) and open it on the phone (Android 8.0+). The full player runs inside the app: put music in the shared **Music** folder, grant the media permission on first start, and playback works offline with lock-screen controls. Details in the [Android guide](https://docs.rsplayer.de/#/installation?id=android).
 
-> ASIO is a trademark and software of Steinberg Media Technologies GmbH.
 
 ### Docker
 
@@ -141,7 +147,7 @@ Control RSPlayer from [Home Assistant](https://www.home-assistant.io/) with the 
 
 ## Contributing
 
-Contributions are welcome — open an issue or a pull request. See [Building from source](https://docs.rsplayer.de/#/build).
+Contributions are welcome - open an issue or a pull request. See [Building from source](https://docs.rsplayer.de/#/build).
 
 ## License
 

@@ -221,7 +221,7 @@ pub fn handle_queue_command(cmd: QueueCommand, ctx: &CommandContext) {
             ctx.send_notification("Queue replaced with one song");
         }
         QueryCurrentSong => {
-            if let Some(song) = ctx.queue_service.get_current_song() {
+            if let Some(song) = ctx.current_song() {
                 ctx.send_event(StateChangeEvent::CurrentSongEvent(song));
             }
         }

@@ -39,7 +39,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mobile)', 'cfg(desktop)'] 
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 api_models = { path = "../api_models" }
 tokio = { workspace = true }
 serde = { workspace = true }
@@ -53,6 +53,9 @@ env_logger = { workspace = true }
 [target.'cfg(not(target_os = "android"))'.dependencies]
 souvlaki = "0.8"
 dirs = "6"
+# With the window hidden to the tray, a second launch must show it instead
+# of starting another backend.
+tauri-plugin-single-instance = "2"
 
 # Android: logcat logger and the ndk-context registration that cpal's AAudio
 # host and iroh's interface discovery require.

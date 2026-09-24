@@ -1,5 +1,50 @@
 # Release Notes
 
+## v5.1.0 (2026-09-24)
+
+The desktop app can now keep playing from the system tray when its window is closed, and on Linux it uses a compact title bar. The player has 10-second skip buttons, internet radio recovers from short dropouts on its own, and the web UI stays in step with the player after a slow or interrupted connection. Nothing needs to be migrated.
+
+### Features
+
+#### Desktop app: system tray and minimize on close
+
+The desktop app (Linux, Windows, macOS) has a system tray icon with **Show RSPlayer**, **Previous**, **Play/Pause**, **Next** and **Quit**. A new **Settings → Desktop App** section holds the window options.
+
+- **Minimize to tray on close** (on by default): closing the window hides RSPlayer to the tray and playback continues. Quit from the tray menu. Turn it off to make closing the window quit the app.
+- Launching RSPlayer again while it is hidden brings the running window back instead of starting a second copy.
+- **Linux:** the tray icon needs `libayatana-appindicator3`. The deb and rpm packages recommend it and the Arch package lists it as an optional dependency. Without it there is no tray icon and closing the window quits, whatever the setting. Stock GNOME shows no tray icons unless the *AppIndicator and KStatusNotifierItem Support* extension is installed, so either install the extension or turn the setting off. The Flatpak and Snap apps have no tray icon yet.
+
+#### Desktop app: compact title bar on Linux
+
+On Linux the desktop's title bar is replaced by RSPlayer's navigation bar, which saves a row of screen space (useful on small touch panels). Drag its empty space to move the window, double-click it to maximize, and use the minimize, maximize and close buttons on its right. **Settings → Desktop App → Compact title bar** turns it off and brings the desktop's own title bar back; the change applies right away. Windows and macOS keep their normal title bar.
+
+#### Skip 10 seconds back and forward
+
+The player controls have **Back 10 seconds** and **Forward 10 seconds** buttons next to Play/Pause, the same as the existing Shift+Left and Shift+Right keyboard shortcuts. They also work in browser playback mode, and are disabled for live radio, which cannot seek.
+
+### Improvements
+
+#### Network streams recover from dropouts
+
+- An internet radio station or podcast whose connection drops is reconnected up to 3 times (after 1, 2 and 4 seconds), with a single "Stream interrupted, reconnecting..." message per outage instead of one per attempt. A podcast continues from where it stopped. A stream that played for at least 30 seconds before dropping gets a fresh set of retries, so a long radio session survives several short outages.
+- Local files and audio output errors are no longer retried, since they fail the same way again. A song that cannot be played is skipped with a notification and the queue continues.
+- Playback stops with an error, instead of running through the whole queue, when the audio output is missing, busy or rejects the format, or when 3 songs in a row fail (for example a library share that went offline, or Loop Single on a broken file).
+
+#### The web UI stays in step with the player
+
+- A client that falls behind (a phone browser in the background, slow Wi-Fi) is sent the current song and player state again, so it no longer shows a stopped player as playing or an old song. The server also buffers more updates per client before it drops any.
+- Reopening the player, or reconnecting, shows the live title of the radio station being played, not only the station entry from the queue. Liking or disliking the playing song updates its indicator immediately.
+- When the queue plays to the end, the player shows as stopped, and pressing Play starts again from the beginning of the last song instead of trying to resume a finished one.
+
+### Fixes
+
+- Turning DSP on or off in Settings is saved right away and asks for the restart it needs, like the other playback settings. Before, the change was only kept after a separate save.
+- **Raspberry Pi startup crash ([#36](https://github.com/ljufa/rsplayer/issues/36)):** on an affected database the server aborted at startup while writing its cached data to disk. Two switches work around it without losing data: `RSPLAYER_SKIP_DB_FLUSH=1` skips that write at startup and shutdown (everything is still saved in the database journal), and the one-time rebuild of the playback-state table added in 4.9.5 now runs only with `RSPLAYER_RESET_BLOATED_KEYSPACES=1`. The root cause is still being investigated.
+
+### Build and CI
+
+- Release builds of the Snap are now published to the Snap Store **beta** channel instead of candidate (`sudo snap install rsplayer --channel=beta`), and promoted to stable after testing.
+
 ## v5.0.0 — 2026-09-22
 
 Internet radio stations can now be saved by hand and kept in Favorites for good, and the album rows in the library can be scrolled sideways with a mouse. Nothing needs to be migrated: the library, queue, playlists, statistics and settings are read exactly as before.

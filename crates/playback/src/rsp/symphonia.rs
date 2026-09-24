@@ -42,6 +42,20 @@ use crate::rsp::playback_config::PlaybackConfig;
 use crate::rsp::playback_context::PlaybackContext;
 use crate::rsp::tee::{MonoClock, TeeSession, TeeSpec};
 
+/// The configured audio output could not be opened (device missing, busy or
+/// rejecting the format). Retrying the track cannot help, unlike a dropped
+/// network stream.
+#[derive(Debug)]
+pub struct OutputUnavailable(pub String);
+
+impl std::fmt::Display for OutputUnavailable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for OutputUnavailable {}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum PlaybackResult {
     QueueFinished,
@@ -236,6 +250,7 @@ pub fn play_file(
         let current_time = tb.calc_time(packet.pts).map_or(0, |t| t.as_secs().unsigned_abs());
         if current_time != last_current_time {
             last_current_time = current_time;
+            context.position_secs = current_time;
             let _ = context.changes_tx.send(StateChangeEvent::SongTimeEvent(SongProgress {
                 total_time,
                 current_time: Duration::from_secs(current_time),
@@ -251,12 +266,13 @@ pub fn play_file(
                     let spec_rate = spec.rate();
                     let spec_channels = spec.channels().count();
 
-                    let (device, is_asio) = crate::rsp::audio_host::find_device(&config.audio_device)?;
+                    let (device, is_asio) = crate::rsp::audio_host::find_device(&config.audio_device)
+                        .map_err(|e| OutputUnavailable(format!("Audio output {} not available: {e}", config.audio_device)))?;
 
                     #[allow(clippy::cast_possible_truncation)]
                     let caps = DeviceCapabilities::query(&device, spec_rate, spec_channels as u16);
 
-                    let Ok(audio_out) = AudioOutput::new(
+                    let audio_out = match AudioOutput::new(
                         spec,
                         duration,
                         &device,
@@ -266,34 +282,38 @@ pub fn play_file(
                         context.dsp_handle.as_ref(),
                         vu_meter.clone(),
                         context.software_gain.as_ref(),
-                    ) else {
-                        if caps.rate.is_none() {
-                            let fallback_rates = fallback_rate_candidates(&device, spec_rate);
-                            for fallback_rate in fallback_rates {
-                                warn!("{spec_rate}Hz rejected, trying {fallback_rate}Hz");
-                                if let Some(handle) = &context.dsp_handle {
-                                    let ch = caps.channels.map_or(spec_channels, |c| c as usize);
-                                    handle.rebuild(ch, fallback_rate as usize);
-                                }
-                                let spec_for_retry = decoded_buff.spec().clone();
-                                if let Ok(audio_out) = AudioOutput::new(
-                                    spec_for_retry,
-                                    duration,
-                                    &device,
-                                    &config.settings,
-                                    is_dsd,
-                                    is_asio,
-                                    context.dsp_handle.as_ref(),
-                                    vu_meter.clone(),
-                                    context.software_gain.as_ref(),
-                                ) {
-                                    debug!("Audio opened with fallback rate");
-                                    audio_output.replace(audio_out);
-                                    break;
-                                }
-                            }
+                    ) {
+                        Ok(audio_out) => audio_out,
+                        Err(e) => {
+                            let fallback = if caps.rate.is_none() {
+                                fallback_rate_candidates(&device, spec_rate).into_iter().find_map(|fallback_rate| {
+                                    warn!("{spec_rate}Hz rejected, trying {fallback_rate}Hz");
+                                    if let Some(handle) = &context.dsp_handle {
+                                        let ch = caps.channels.map_or(spec_channels, |c| c as usize);
+                                        handle.rebuild(ch, fallback_rate as usize);
+                                    }
+                                    AudioOutput::new(
+                                        decoded_buff.spec().clone(),
+                                        duration,
+                                        &device,
+                                        &config.settings,
+                                        is_dsd,
+                                        is_asio,
+                                        context.dsp_handle.as_ref(),
+                                        vu_meter.clone(),
+                                        context.software_gain.as_ref(),
+                                    )
+                                    .ok()
+                                })
+                            } else {
+                                None
+                            };
+                            let Some(audio_out) = fallback else {
+                                break Err(OutputUnavailable(format!("Failed to open audio output {}: {e}", config.audio_device)).into());
+                            };
+                            debug!("Audio opened with fallback rate");
+                            audio_out
                         }
-                        break Err(format_err!("Failed to open audio output {}", config.audio_device));
                     };
                     debug!("Audio opened");
 

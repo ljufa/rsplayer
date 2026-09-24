@@ -127,6 +127,8 @@ pub fn SettingsPage() -> Element {
     let mut confirm: Signal<Option<ConfirmAction>> = use_signal(|| None);
     let mut dsp_dirty = use_signal(|| false);
     let mut pending_restart = use_signal(|| false);
+    let global_settings = state.global_settings;
+    let mut custom_titlebar = state.custom_titlebar;
 
     // Fetch settings on mount
     use_effect(move || {
@@ -265,6 +267,49 @@ pub fn SettingsPage() -> Element {
                 content: rsx! {
                     AppearanceSection {}
                 },
+            }
+
+            // ── Desktop app section (not Android: no tray there) ─────────────
+            if settings.read().desktop_mode
+                && settings.read().install_method != api_models::settings::InstallMethod::Android
+            {
+                SettingsSection {
+                    title: "Desktop App",
+                    icon: "desktop_windows",
+                    content: rsx! {
+                        ToggleRow {
+                            label: "Minimize to tray on close",
+                            checked: settings.read().desktop_settings.close_to_tray,
+                            onchange: move |_| {
+                                let v = !settings.read().desktop_settings.close_to_tray;
+                                settings.write().desktop_settings.close_to_tray = v;
+                                sync_desktop_settings(global_settings, &settings.read().desktop_settings);
+                                auto_save();
+                            },
+                        }
+                        p { class: "text-xs opacity-60",
+                            "Closing the window keeps RSPlayer playing in the system tray; quit from the tray menu. Turn this off if your desktop shows no tray icons (e.g. GNOME without the AppIndicator extension)."
+                        }
+                        // Linux only: the other platforms keep the OS title bar.
+                        if crate::has_window_helper() {
+                            ToggleRow {
+                                label: "Compact title bar",
+                                checked: settings.read().desktop_settings.custom_titlebar,
+                                onchange: move |_| {
+                                    let v = !settings.read().desktop_settings.custom_titlebar;
+                                    settings.write().desktop_settings.custom_titlebar = v;
+                                    sync_desktop_settings(global_settings, &settings.read().desktop_settings);
+                                    custom_titlebar.set(v);
+                                    let _ = js_sys::eval(&format!("window.__RSPLAYER_WINDOW__.setDecorations({})", !v));
+                                    auto_save();
+                                },
+                            }
+                            p { class: "text-xs opacity-60",
+                                "Replaces the desktop's title bar with the navigation bar, which then holds the window buttons and can be dragged. Off: the desktop's own title bar."
+                            }
+                        }
+                    },
+                }
             }
 
             // ── Playback section ─────────────────────────────────────────────
@@ -852,8 +897,7 @@ pub fn SettingsPage() -> Element {
                         onchange: move |_| {
                             let v = !settings.read().rs_player_settings.dsp_settings.enabled;
                             settings.write().rs_player_settings.dsp_settings.enabled = v;
-                            *dsp_dirty.write() = true;
-                            *pending_restart.write() = true;
+                            auto_save_restart();
                         },
                     }
 
@@ -1666,6 +1710,14 @@ fn SettingsSection(title: &'static str, icon: &'static str, content: Element) ->
                 div { class: "px-4 py-3", {content} }
             }
         }
+    }
+}
+
+/// Other settings controls (Appearance) save a copy of the global settings;
+/// keep its desktop section current so they don't revert these toggles.
+fn sync_desktop_settings(mut global: Signal<Option<Settings>>, desktop: &api_models::settings::DesktopSettings) {
+    if let Some(s) = global.write().as_mut() {
+        s.desktop_settings = desktop.clone();
     }
 }
 

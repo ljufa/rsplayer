@@ -17,9 +17,9 @@ RepoType: git
 Repo: https://github.com/ljufa/rsplayer.git
 
 Builds:
-  - versionName: 5.0.0
-    versionCode: 50000001
-    commit: 5.0.0
+  - versionName: 5.1.0
+    versionCode: 50010001
+    commit: 5.1.0
     subdir: crates/desktop/gen/android/app
     sudo:
       - apt-get update
@@ -50,9 +50,9 @@ Builds:
       - cargo tauri android build --apk --ci --target armv7
     ndk: r28c
 
-  - versionName: 5.0.0
-    versionCode: 50000002
-    commit: 5.0.0
+  - versionName: 5.1.0
+    versionCode: 50010002
+    commit: 5.1.0
     subdir: crates/desktop/gen/android/app
     sudo:
       - apt-get update
@@ -91,5 +91,5 @@ UpdateCheckMode: Tags ^[0-9]+\.[0-9]+\.[0-9]+$
 VercodeOperation:
   - 10 * %c + 1
   - 10 * %c + 2
-CurrentVersion: 5.0.0
-CurrentVersionCode: 50000002
+CurrentVersion: 5.1.0
+CurrentVersionCode: 50010002

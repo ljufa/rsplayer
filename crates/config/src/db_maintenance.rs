@@ -5,8 +5,10 @@
 //! is 64 MiB *per keyspace*, which slow, tiny writes (e.g. playback progress
 //! once a second) can take months to reach, while every restart replays the
 //! whole journal. [`reset_bloated_keyspaces`] runs once per database to drop
-//! keyspaces created with that default, and [`flush_all`] forces memtables to
-//! disk on demand.
+//! keyspaces created with that default (only when the server is started with
+//! `RSPLAYER_RESET_BLOATED_KEYSPACES=1`), and [`flush_all`] forces memtables
+//! to disk on demand (at startup and shutdown, unless the server is started
+//! with `RSPLAYER_SKIP_DB_FLUSH=1`, see [`flush_enabled`]).
 
 use fjall::{Database, KeyspaceCreateOptions};
 use log::{info, warn};
@@ -52,6 +54,15 @@ pub fn reset_bloated_keyspaces(db: &Database) {
     if let Err(e) = migrations.insert(PLAYER_STATE_RESET_MARKER, b"1") {
         warn!("Maintenance: failed to store reset marker: {e}");
     }
+}
+
+/// Whether [`flush_all`] should run at startup and shutdown. On by default;
+/// `RSPLAYER_SKIP_DB_FLUSH=1` turns it off for databases whose flush aborts
+/// the process (issue #36). Skipping only lets the journal grow until fjall
+/// flushes on its own; no data is lost.
+#[must_use]
+pub fn flush_enabled() -> bool {
+    !std::env::var("RSPLAYER_SKIP_DB_FLUSH").is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
 }
 
 /// Flushes every keyspace's active memtable to disk and waits, letting fjall

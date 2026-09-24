@@ -35,6 +35,7 @@ pub mod system_commands;
 use fjall::PersistMode;
 use hardware::usb;
 use log::{error, info, warn};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot::{Receiver, Sender};
@@ -46,6 +47,29 @@ use api_models::common::UserCommand;
 use config::{ArcConfiguration, Configuration};
 
 use env_logger::Env;
+
+// Mirrors of `desktop_settings` for the desktop wrapper, which has no access
+// to the configuration store. Set before the HTTP server listens, so they
+// hold the saved values once the backend port is open.
+static CLOSE_TO_TRAY: AtomicBool = AtomicBool::new(true);
+static CUSTOM_TITLEBAR: AtomicBool = AtomicBool::new(true);
+
+/// Whether closing the desktop window should hide it to the tray instead of
+/// quitting (see `DesktopSettings::close_to_tray`).
+pub fn close_to_tray() -> bool {
+    CLOSE_TO_TRAY.load(Ordering::Relaxed)
+}
+
+/// Whether the Linux desktop window uses the app's own title bar instead of
+/// the OS one (see `DesktopSettings::custom_titlebar`).
+pub fn custom_titlebar() -> bool {
+    CUSTOM_TITLEBAR.load(Ordering::Relaxed)
+}
+
+pub(crate) fn set_desktop_settings(settings: &api_models::settings::DesktopSettings) {
+    CLOSE_TO_TRAY.store(settings.close_to_tray, Ordering::Relaxed);
+    CUSTOM_TITLEBAR.store(settings.custom_titlebar, Ordering::Relaxed);
+}
 
 pub async fn run_backend(
     shutdown_rx: Option<Receiver<()>>,
@@ -81,8 +105,11 @@ pub async fn run_backend(
             .expect("Failed to open fjall database"),
     );
     info!("Shared database opened.");
-    config::db_maintenance::reset_bloated_keyspaces(&shared_db);
-    {
+    // Opt-in: suspected in a startup abort on a Raspberry Pi (issue #36).
+    if std::env::var("RSPLAYER_RESET_BLOATED_KEYSPACES").is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true")) {
+        config::db_maintenance::reset_bloated_keyspaces(&shared_db);
+    }
+    if config::db_maintenance::flush_enabled() {
         let db = shared_db.clone();
         let _ = tokio::task::spawn_blocking(move || config::db_maintenance::flush_all(&db)).await;
     }
@@ -91,6 +118,7 @@ pub async fn run_backend(
     info!("Detected platform profile: {platform_profile:?}");
     let config = Configuration::new(&shared_db, platform_profile.first_launch_settings());
     info!("Configuration successfully loaded.");
+    set_desktop_settings(&config.get_settings().desktop_settings);
 
     MountService::mount_all(&config.get_settings().network_storage_settings);
 
@@ -282,7 +310,9 @@ async fn run(
 fn persist_db_on_shutdown(db: &fjall::Database) {
     info!("Persisting database to WAL...");
     let _ = db.persist(PersistMode::SyncAll);
-    config::db_maintenance::flush_all(db);
+    if config::db_maintenance::flush_enabled() {
+        config::db_maintenance::flush_all(db);
+    }
 }
 
 fn terminate_signal() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {

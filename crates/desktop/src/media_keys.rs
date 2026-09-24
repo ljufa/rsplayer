@@ -12,11 +12,16 @@ use log::{info, warn};
 use souvlaki::{MediaControlEvent, MediaControls, PlatformConfig};
 use tokio::sync::{mpsc, oneshot};
 
+/// The backend's command sender — `None` until the backend is up.
+pub type CommandSlot = Arc<Mutex<Option<mpsc::Sender<UserCommand>>>>;
+
 /// Start the media-key listener. `cmd_rx` yields the backend's command
 /// sender once the backend is up; until then media events are dropped.
-pub fn start(cmd_rx: oneshot::Receiver<mpsc::Sender<UserCommand>>) {
+/// Returns the slot so other controls (the tray menu) can send commands too.
+pub fn start(cmd_rx: oneshot::Receiver<mpsc::Sender<UserCommand>>) -> CommandSlot {
     // Shared slot — starts None, filled once the backend hands us the sender.
-    let media_sender: Arc<Mutex<Option<mpsc::Sender<UserCommand>>>> = Arc::new(Mutex::new(None));
+    let media_sender: CommandSlot = Arc::new(Mutex::new(None));
+    let commands = Arc::clone(&media_sender);
 
     let media_sender_init = Arc::clone(&media_sender);
     tokio::spawn(async move {
@@ -82,4 +87,5 @@ pub fn start(cmd_rx: oneshot::Receiver<mpsc::Sender<UserCommand>>) {
             sleep(Duration::from_secs(1));
         }
     });
+    commands
 }

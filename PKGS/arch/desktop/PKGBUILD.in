@@ -7,6 +7,7 @@ arch=('@ARCH@')
 url="https://github.com/ljufa/rsplayer"
 license=('MIT')
 depends=('webkit2gtk-4.1' 'gtk3' 'librsvg' 'alsa-lib')
+optdepends=('libayatana-appindicator: system tray icon')
 makedepends=('cargo' 'npm')
 install=rsplayer-desktop.install
 source=("$pkgname-$pkgver.tar.gz")

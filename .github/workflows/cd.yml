@@ -246,17 +246,17 @@ jobs:
           path: ${{ steps.snapcraft.outputs.snap }}
           if-no-files-found: error
 
-      # Uploaded to the candidate channel; promote to stable manually after
-      # smoke-testing (see PKGS/snap/README.md). Requires the
+      # Uploaded to the beta channel; promote to candidate/stable manually
+      # after smoke-testing (see PKGS/snap/README.md). Requires the
       # SNAPCRAFT_STORE_CREDENTIALS secret (snapcraft export-login).
-      - name: Publish to Snap Store (candidate)
+      - name: Publish to Snap Store (beta)
         if: startsWith(github.ref, 'refs/tags/')
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
           snap: ${{ steps.snapcraft.outputs.snap }}
-          release: candidate
+          release: beta
 
   build_flatpak:
     needs: build_ui

@@ -13,6 +13,15 @@ To configure `rsplayer`, navigate to the settings page in the web UI. Settings a
 - **Theme:** Select a visual theme for the web UI. Available themes: Dark, Light, Synthwave, Dracula, Nord, Dim, Aqua, Coffee, Caramel, and Black.
 - **Album art background:** Toggle whether the album artwork is used as the page background.
 
+## Desktop App
+
+Shown only in the desktop app (Linux, Windows, macOS).
+
+- **Minimize to tray on close:** On by default. Closing the window hides RSPlayer to the system tray and playback continues; the tray menu has **Show RSPlayer**, **Previous**, **Play/Pause**, **Next** and **Quit**. Launching RSPlayer again while it is hidden brings the window back instead of starting a second copy. Turn this off to make closing the window quit the app.
+- **Compact title bar** (Linux only): On by default. The desktop's title bar is removed and the navigation bar takes its place: drag its empty space to move the window, double-click it to maximize, and use the minimize / maximize / close buttons on its right. Turn it off to get the desktop's own title bar back; the change applies immediately.
+
+?> **Linux:** the tray icon needs `libayatana-appindicator3` (recommended by the deb and rpm packages, an optional dependency of the Arch package). Without it there is no tray and closing the window quits, whatever the setting. Stock GNOME shows no tray icons unless the *AppIndicator and KStatusNotifierItem Support* extension is installed; turn the setting off there, or install the extension. The Flatpak and Snap apps have no tray icon yet.
+
 ## Playback
 
 ![Playback Settings](/_assets/settings_playback.png)

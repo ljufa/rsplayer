@@ -233,6 +233,7 @@ fn App() -> Element {
                         if !prefs.welcome_shown {
                             welcome.set(true);
                         }
+                        *gs.custom_titlebar.write() = settings.desktop_settings.custom_titlebar;
                         *gs.global_settings.write() = Some(settings.clone());
                         *gs.local_browser_playback.write() = settings.local_browser_playback;
                         // Android updates arrive through the store the app came from (F-Droid etc.)
@@ -289,8 +290,9 @@ fn App() -> Element {
     rsx! {
         // Not `asset!()`: it embeds the absolute source path in the wasm, which makes the build
         // depend on where it runs (reproducible builds). The server caches static files for 3
-        // days, so the version in the query string busts the cache on upgrade.
-        document::Stylesheet { href: concat!("/tw.css?v=", env!("CARGO_PKG_VERSION")) }
+        // days, so the query string carries a hash of the CSS (build.rs) to bust the cache
+        // whenever the styles change.
+        document::Stylesheet { href: concat!("/tw.css?v=", env!("TW_CSS_HASH")) }
         if (ui_state.welcome_open)() {
             WelcomeModal {}
         }
@@ -1018,15 +1020,31 @@ pub fn NavLink(to: String, #[props(optional)] class: Option<String>, children: E
 
 // ─── Navigation bar ─────────────────────────────────────────────────────────
 
+/// The Linux desktop app injects window controls as `window.__RSPLAYER_WINDOW__`;
+/// with `desktop_settings.custom_titlebar` on, the nav bar is the title bar.
+pub fn has_window_helper() -> bool {
+    web_sys::window()
+        .and_then(|w| js_sys::Reflect::get(&w, &"__RSPLAYER_WINDOW__".into()).ok())
+        .is_some_and(|v| !v.is_undefined())
+}
+
 #[component]
 fn NavBar() -> Element {
     let CurrentPath(path) = use_context::<CurrentPath>();
     let current = path();
     let is_library = current.starts_with("/library/");
+    let state = use_context::<AppState>();
+    let has_helper = use_hook(has_window_helper);
+    let titlebar = has_helper && *state.custom_titlebar.read();
+    // Empty nav space drags the window (double-click maximizes); links and
+    // buttons inside keep working.
+    let drag = titlebar.then_some("true");
 
     rsx! {
-        nav { class: "app-nav",
-            ul { class: "app-nav__items",
+        nav {
+            class: if titlebar { "app-nav app-nav--titlebar" } else { "app-nav" },
+            "data-tauri-drag-region": drag,
+            ul { class: "app-nav__items", "data-tauri-drag-region": drag,
                 NavItem {
                     label: "Now Playing",
                     icon: "music_note",
@@ -1052,6 +1070,28 @@ fn NavBar() -> Element {
                     to: "/settings",
                 }
             }
+            if titlebar {
+                div { class: "app-nav__window-controls",
+                    WindowButton { title: "Minimize", icon: "remove", action: "minimize" }
+                    WindowButton { title: "Maximize", icon: "crop_square", action: "toggleMaximize" }
+                    WindowButton { title: "Close", icon: "close", action: "close" }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn WindowButton(title: &'static str, icon: &'static str, action: &'static str) -> Element {
+    rsx! {
+        button {
+            class: if action == "close" { "app-nav__window-btn app-nav__window-btn--close" } else { "app-nav__window-btn" },
+            title,
+            aria_label: title,
+            onclick: move |_| {
+                let _ = js_sys::eval(&format!("window.__RSPLAYER_WINDOW__.{action}()"));
+            },
+            i { class: "material-icons", aria_hidden: "true", "{icon}" }
         }
     }
 }

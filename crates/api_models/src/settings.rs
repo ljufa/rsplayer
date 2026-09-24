@@ -59,6 +59,8 @@ pub struct Settings {
     #[serde(default)]
     #[validate(nested)]
     pub podcast_settings: PodcastSettings,
+    #[serde(default)]
+    pub desktop_settings: DesktopSettings,
 }
 
 /// How this rsplayer instance was installed — detected by the server at runtime
@@ -196,6 +198,37 @@ impl Default for UiPreferences {
             visualizer: Self::default_visualizer(),
             theme: Self::default_theme(),
             show_bg_image: Self::default_show_bg_image(),
+        }
+    }
+}
+
+/// Desktop app window behavior (ignored by the headless server and Android).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DesktopSettings {
+    /// Closing the window hides it to the system tray and playback goes on;
+    /// Quit is in the tray menu. Off: closing the window quits the app.
+    #[serde(default = "DesktopSettings::default_close_to_tray")]
+    pub close_to_tray: bool,
+    /// Linux: replace the OS title bar with the app's nav bar (window
+    /// buttons and drag area). Off: the desktop's own title bar.
+    #[serde(default = "DesktopSettings::default_custom_titlebar")]
+    pub custom_titlebar: bool,
+}
+
+impl DesktopSettings {
+    const fn default_close_to_tray() -> bool {
+        true
+    }
+    const fn default_custom_titlebar() -> bool {
+        true
+    }
+}
+
+impl Default for DesktopSettings {
+    fn default() -> Self {
+        Self {
+            close_to_tray: Self::default_close_to_tray(),
+            custom_titlebar: Self::default_custom_titlebar(),
         }
     }
 }
@@ -572,6 +605,7 @@ impl Default for Settings {
             multiroom_settings: MultiroomSettings::default(),
             install_method: InstallMethod::default(),
             podcast_settings: PodcastSettings::default(),
+            desktop_settings: DesktopSettings::default(),
         }
     }
 }

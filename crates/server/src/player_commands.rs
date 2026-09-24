@@ -58,6 +58,12 @@ pub fn handle_player_command(cmd: api_models::common::PlayerCommand, ctx: &Comma
             if let Some(info) = ctx.player_service.get_current_player_info() {
                 ctx.send_event(StateChangeEvent::PlayerInfoEvent(info));
             }
+            // A follower's state comes from the group leader, and browser
+            // playback's from the <audio> element, not the playback thread.
+            let follower = ctx.multiroom_follower_active.load(std::sync::atomic::Ordering::SeqCst);
+            if !follower && !settings.local_browser_playback {
+                ctx.send_event(StateChangeEvent::PlaybackStateEvent(ctx.player_service.get_player_state()));
+            }
         }
     }
 }

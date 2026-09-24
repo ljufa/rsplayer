@@ -35,7 +35,8 @@ use metadata::queue_service::QueueService;
 
 use dsp::DspProcessor;
 
-use super::symphonia::PlaybackResult;
+use super::audio_source::is_http_stream;
+use super::symphonia::{OutputUnavailable, PlaybackResult};
 use crate::rsp::playback_config::PlaybackConfig;
 use crate::rsp::playback_context::PlaybackContext;
 use crate::rsp::tee::SyncTee;
@@ -52,6 +53,9 @@ pub struct PlayerService {
     metadata_service: Arc<MetadataService>,
     playback_thread_handle: Arc<Mutex<Option<JoinHandle<PlaybackResult>>>>,
     stop_signal: Arc<AtomicBool>,
+    /// Set when the playback thread ran off the end of the queue: the
+    /// STOPPED it sends marks the song paused, but there is nothing to resume.
+    queue_finished: Arc<AtomicBool>,
     skip_to_time: Arc<AtomicU16>,
     last_known_time: Arc<AtomicU32>,
     current_volume: Arc<AtomicU8>,
@@ -63,6 +67,9 @@ pub struct PlayerService {
     dsp_processor: Arc<Mutex<Option<DspProcessor>>>,
     loudness_service: Arc<LoudnessService>,
     last_player_info: Arc<Mutex<Option<PlayerInfo>>>,
+    /// Last broadcast song, including in-stream (ICY) radio titles that
+    /// never reach the queue.
+    last_song: Arc<Mutex<Option<Song>>>,
     sync_tee: Option<SyncTee>,
     resume_provider: Option<Arc<dyn ResumePositionProvider>>,
 }
@@ -115,6 +122,8 @@ impl PlayerService {
         let dsp_processor_clone = dsp_processor.clone();
         let last_player_info = Arc::new(Mutex::new(None));
         let last_player_info_clone = last_player_info.clone();
+        let last_song = Arc::new(Mutex::new(None));
+        let last_song_clone = last_song.clone();
 
         tokio::task::spawn(async move {
             let mut last_saved_secs: u64 = u64::MAX;
@@ -158,6 +167,11 @@ impl PlayerService {
                     StateChangeEvent::VolumeChangeEvent(vol) => {
                         current_volume_clone.store(vol.current, Ordering::Relaxed);
                     }
+                    StateChangeEvent::CurrentSongEvent(song) => {
+                        if let Ok(mut guard) = last_song_clone.lock() {
+                            *guard = Some(song);
+                        }
+                    }
                     StateChangeEvent::PlayerInfoEvent(info) => {
                         if let Ok(mut guard) = last_player_info_clone.lock() {
                             *guard = Some(info.clone());
@@ -186,6 +200,7 @@ impl PlayerService {
             metadata_service,
             playback_thread_handle: Arc::new(Mutex::new(None)),
             stop_signal: Arc::new(AtomicBool::new(false)),
+            queue_finished: Arc::new(AtomicBool::new(false)),
             skip_to_time: Arc::new(AtomicU16::new(0)),
             last_known_time,
             current_volume,
@@ -196,6 +211,7 @@ impl PlayerService {
             dsp_processor,
             loudness_service,
             last_player_info,
+            last_song,
             sync_tee,
             resume_provider,
         };
@@ -216,7 +232,8 @@ impl PlayerService {
         if self.is_playing() {
             return;
         }
-        if let Ok(Some(_)) = self.state_db.get(LAST_SONG_PAUSED_KEY) {
+        let queue_finished = self.queue_finished.swap(false, Ordering::Relaxed);
+        if !queue_finished && let Ok(Some(_)) = self.state_db.get(LAST_SONG_PAUSED_KEY) {
             let last_song_time = self.get_last_played_song_time();
             self.seek_current_song(last_song_time);
         }
@@ -238,6 +255,22 @@ impl PlayerService {
             return None;
         }
         self.last_player_info.lock().ok().and_then(|guard| guard.clone())
+    }
+
+    /// Actual transport state, for clients that missed the
+    /// `PlaybackStateEvent`s (reconnect, lagging websocket).
+    pub fn get_player_state(&self) -> PlayerState {
+        if self.is_playing() { PlayerState::PLAYING } else { PlayerState::STOPPED }
+    }
+
+    /// Song as last broadcast to clients, if playback is active (playing or
+    /// paused). Unlike the queue entry, this carries the live stream title
+    /// of a radio station.
+    pub fn get_current_song(&self) -> Option<Song> {
+        if !self.is_playing() {
+            return None;
+        }
+        self.last_song.lock().ok().and_then(|guard| guard.clone())
     }
 
     pub fn play_from_beginning(&self) {
@@ -307,7 +340,9 @@ impl PlayerService {
     #[allow(clippy::too_many_lines)]
     fn play_all_in_queue(&self) -> JoinHandle<PlaybackResult> {
         self.stop_signal.store(false, Ordering::Relaxed);
+        self.queue_finished.store(false, Ordering::Relaxed);
         let stop_signal = self.stop_signal.clone();
+        let queue_finished = self.queue_finished.clone();
         let skip_to_time = self.skip_to_time.clone();
         let queue = self.queue_service.clone();
         let audio_device = self.audio_device.clone();
@@ -333,7 +368,17 @@ impl PlayerService {
             .name("playback".to_string())
             .priority(prio)
             .spawn(move |prio| {
-                const MAX_RETRIES: i32 = 5;
+                // Only network streams are retried: a dropped connection or a
+                // station restarting can recover, a local file or audio output
+                // failure fails the same way again.
+                const MAX_STREAM_RETRIES: u32 = 3;
+                // A stream that played this long before failing starts over
+                // with a full set of retries (radio never "finishes").
+                const STREAM_RETRY_RESET: std::time::Duration = std::time::Duration::from_secs(30);
+                // A song that fails for good is skipped, but this many failures
+                // in a row (library mount gone, Loop Single on a broken file)
+                // stop playback instead of running through the whole queue.
+                const MAX_CONSECUTIVE_FAILURES: u32 = 3;
                 loudness_service.set_playback_active(true);
                 if prio.is_ok() {
                     info!("Playback thread started with priority {playback_thread_prio:?}");
@@ -348,6 +393,7 @@ impl PlayerService {
                     }
                 }
                 let mut retry_count = 0;
+                let mut consecutive_failures = 0;
                 let result = loop {
                     let Some(song) = queue.get_current_song() else {
                         changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
@@ -443,6 +489,7 @@ impl PlayerService {
                     );
                     context.fallback_duration = song.time;
 
+                    let attempt_started = std::time::Instant::now();
                     let play_result = if local_browser_playback {
                         loop {
                             if context.is_stopped() {
@@ -459,16 +506,26 @@ impl PlayerService {
                             break PlaybackResult::PlaybackStopped;
                         }
                         Err(err) => {
-                            if retry_count < MAX_RETRIES && !stop_signal.load(Ordering::Relaxed) {
+                            let failed_at = context.position_secs;
+                            if attempt_started.elapsed() >= STREAM_RETRY_RESET {
+                                retry_count = 0;
+                            }
+                            let retryable = is_http_stream(&song.file) && !err.is::<OutputUnavailable>();
+                            if retryable && retry_count < MAX_STREAM_RETRIES && !stop_signal.load(Ordering::Relaxed) {
                                 retry_count += 1;
-                                warn!("Playback failed, retrying ({retry_count}/{MAX_RETRIES}) in 1s... Error: {err:?}");
-                                changes_tx
-                                    .send(StateChangeEvent::NotificationError(format!(
-                                        "Retrying ({retry_count}/{MAX_RETRIES})..."
-                                    )))
-                                    .ok();
+                                let delay_secs = 1u64 << (retry_count - 1);
+                                warn!(
+                                    "Stream {} failed at {failed_at}s, reconnecting in {delay_secs}s ({retry_count}/{MAX_STREAM_RETRIES}). Error: {err:?}",
+                                    song.file
+                                );
+                                // One message per outage; the final failure reports itself.
+                                if retry_count == 1 {
+                                    changes_tx
+                                        .send(StateChangeEvent::NotificationError("Stream interrupted, reconnecting...".to_string()))
+                                        .ok();
+                                }
                                 // Sleep in small increments so we can respond to stop_signal quickly.
-                                for _ in 0..10 {
+                                for _ in 0..delay_secs * 10 {
                                     if stop_signal.load(Ordering::Relaxed) {
                                         break;
                                     }
@@ -478,21 +535,51 @@ impl PlayerService {
                                     changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
                                     break PlaybackResult::PlaybackStopped;
                                 }
+                                // Resume where it dropped (podcasts); sources that
+                                // cannot seek (live radio) ignore it.
+                                if failed_at > 0 {
+                                    skip_to_time.store(u16::try_from(failed_at).unwrap_or(u16::MAX), Ordering::Relaxed);
+                                }
                                 continue;
                             }
                             error!("Failed to play file {}. Error: {:?}", song.file, err);
+                            // Stop/Next/Prev arrived meanwhile: the command side
+                            // moves the queue, skipping here would advance twice.
+                            if stop_signal.load(Ordering::Relaxed) {
+                                changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
+                                break PlaybackResult::PlaybackStopped;
+                            }
+                            consecutive_failures += 1;
+                            // Every other song would fail on the same output.
+                            let stop = err.is::<OutputUnavailable>() || consecutive_failures >= MAX_CONSECUTIVE_FAILURES;
+                            if stop {
+                                let reason = if err.is::<OutputUnavailable>() {
+                                    format!("{}: {err}", song.file)
+                                } else {
+                                    format!("{} ({consecutive_failures} songs in a row failed, stopping)", song.file)
+                                };
+                                changes_tx
+                                    .send(StateChangeEvent::PlaybackStateEvent(PlayerState::ERROR(reason)))
+                                    .ok();
+                                break PlaybackResult::PlaybackFailed;
+                            }
                             changes_tx
-                                .send(StateChangeEvent::PlaybackStateEvent(PlayerState::ERROR(song.file)))
+                                .send(StateChangeEvent::NotificationError(format!(
+                                    "Failed to play {}, skipping to the next song",
+                                    song.file
+                                )))
                                 .ok();
-                            break PlaybackResult::PlaybackFailed;
                         }
                         res => {
                             info!("Playback finished with result {res:?}");
+                            consecutive_failures = 0;
                         }
                     }
 
                     retry_count = 0;
                     if !queue.move_current_to_next_song() {
+                        queue_finished.store(true, Ordering::Relaxed);
+                        changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
                         break PlaybackResult::QueueFinished;
                     }
                 };

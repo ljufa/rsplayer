@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "custom-titlebar",
+  "description": "Linux draws its own title bar in the web UI (the window is undecorated): dragging, double-click maximize, the minimize / maximize / close buttons, and switching back to the OS title bar from Settings. The UI is served by the embedded backend, so the grant is scoped to that localhost origin.",
+  "windows": ["main"],
+  "platforms": ["linux"],
+  "remote": {
+    "urls": ["http://localhost:*/*"]
+  },
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-set-decorations"
+  ]
+}

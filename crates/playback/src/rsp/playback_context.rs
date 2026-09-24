@@ -30,6 +30,9 @@ pub struct PlaybackContext {
     /// Track length known from metadata (e.g. a podcast episode's feed
     /// duration), reported as `total_time` when the demuxer cannot tell.
     pub fallback_duration: Option<std::time::Duration>,
+    /// Last position reported by the decode loop (seconds); a stream retry
+    /// resumes here when the source can seek.
+    pub position_secs: u64,
 }
 
 impl PlaybackContext {
@@ -57,6 +60,7 @@ impl PlaybackContext {
             vu_meter,
             sync_tee,
             fallback_duration: None,
+            position_secs: 0,
         }
     }
 

@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use tokio::sync::broadcast::Sender;
 
+use api_models::player::Song;
 use api_models::state::StateChangeEvent;
 use config::ArcConfiguration;
 use hardware::audio_device::audio_service::ArcAudioInterfaceSvc;
@@ -67,6 +68,21 @@ impl CommandContext {
 
     pub fn send_event(&self, event: StateChangeEvent) {
         let _ = self.state_changes_sender.send(event);
+    }
+
+    /// The song clients should display: what the player last broadcast while
+    /// playback is active (a radio queue entry has no title, the live ICY
+    /// title only exists there), otherwise the current queue entry.
+    pub fn current_song(&self) -> Option<Song> {
+        let queued = self.queue_service.get_current_song();
+        let Some(mut live) = self.player_service.get_current_song() else {
+            return queued;
+        };
+        // Statistics may have changed (like/dislike) since the broadcast.
+        if let Some(q) = queued.filter(|q| q.file == live.file) {
+            live.statistics = q.statistics;
+        }
+        Some(live)
     }
 
     pub fn send_notification(&self, message: &str) {

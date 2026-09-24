@@ -132,9 +132,8 @@ fn send_custom_radio_stations(ctx: &CommandContext) {
 /// Re-broadcast the current song with fresh statistics when it was the
 /// (dis)liked item, so clients update the like indicator immediately.
 fn resend_current_song_if_affected(ctx: &CommandContext, media_item_id: &str) {
-    if let Some(song) = ctx.queue_service.get_current_song() {
-        if song.file == media_item_id {
-            ctx.send_event(StateChangeEvent::CurrentSongEvent(song));
-        }
+    let queued_matches = ctx.queue_service.get_current_song().is_some_and(|s| s.file == media_item_id);
+    if let Some(song) = ctx.current_song().filter(|s| queued_matches || s.file == media_item_id) {
+        ctx.send_event(StateChangeEvent::CurrentSongEvent(song));
     }
 }

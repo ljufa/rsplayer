@@ -108,7 +108,7 @@ journalctl -u rsplayer.service -f -n 300
 
 If RSPlayer refuses to play anything after a reboot, but starts working again as soon as you stop another audio service (Squeezelite, MPD, etc.), the two applications are fighting over the same exclusive ALSA hardware device.
 
-ALSA only allows **one** process at a time to hold a `hw:X` device open. RSPlayer's Settings page recommends `hw:` devices (labeled "hw, recommended") because they give the best audio quality by bypassing software mixing — but that also means the device cannot be shared with any other player that opens it directly. Squeezelite in particular keeps its output device open continuously once started, so it never releases it on its own, and RSPlayer's automatic retry (5 attempts, 1 second apart) isn't long enough to outlast that.
+ALSA only allows **one** process at a time to hold a `hw:X` device open. RSPlayer's Settings page recommends `hw:` devices (labeled "hw, recommended") because they give the best audio quality by bypassing software mixing — but that also means the device cannot be shared with any other player that opens it directly. Squeezelite in particular keeps its output device open continuously once started, so it never releases it on its own. RSPlayer does not retry a busy output device (only interrupted network streams are retried), so playback stops with an error right away.
 
 **Diagnose:**
 ```bash
@@ -126,7 +126,7 @@ Look for an "audio output stream open error" mentioning the device being busy wh
 - **Share the device** — point RSPlayer and/or the other player at a shared PCM device instead of the raw `hw:X` card, so ALSA software-mixes the two streams:
   - Define a `dmix` device for your card in `/etc/asound.conf` (or `~/.asoundrc`), then pick it from RSPlayer's **Settings → Audio output device** dropdown instead of the "hw, recommended" entry.
   - Point Squeezelite at the same `dmix` device via its `-a` option.
-- **Give the other player an idle timeout** — e.g. Squeezelite's `-C <seconds>` flag closes its output device after that many seconds of inactivity, freeing it for RSPlayer between uses. This only helps if RSPlayer happens to retry during that window, so prefer one of the two fixes above for a permanent solution.
+- **Give the other player an idle timeout** — e.g. Squeezelite's `-C <seconds>` flag closes its output device after that many seconds of inactivity, freeing it for RSPlayer between uses. You still have to press Play again once the device is free, so prefer one of the two fixes above for a permanent solution.
 
 ## Windows-specific issues
 

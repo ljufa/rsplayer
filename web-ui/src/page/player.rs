@@ -355,6 +355,9 @@ fn Controls(
         .is_some_and(|st| st.liked_count > 0);
     let song_id = current_song.as_ref().map(|s| s.file.clone());
     let is_muted = volume.current == 0;
+    // Live streams report no duration and cannot seek.
+    let seekable = !progress.total_time.is_zero();
+    let app_state = use_context::<AppState>();
 
     rsx! {
         div { class: "player-controls",
@@ -368,6 +371,17 @@ fn Controls(
                         move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::Prev))
                     },
                     i { class: "material-icons text-xl", "skip_previous" }
+                }
+                button {
+                    class: "btn btn-ghost btn-md",
+                    title: "Back 10 seconds (Shift+Left)",
+                    disabled: !seekable,
+                    onclick: {
+                        let ws = ws;
+                        let state = app_state.clone();
+                        move |_| skip_seconds(&ws, &state, -10)
+                    },
+                    i { class: "material-icons text-xl", "replay_10" }
                 }
                 button {
                     class: "btn btn-primary btn-circle btn-lg",
@@ -388,6 +402,17 @@ fn Controls(
                             "play_arrow"
                         }
                     }
+                }
+                button {
+                    class: "btn btn-ghost btn-md",
+                    title: "Forward 10 seconds (Shift+Right)",
+                    disabled: !seekable,
+                    onclick: {
+                        let ws = ws;
+                        let state = app_state.clone();
+                        move |_| skip_seconds(&ws, &state, 10)
+                    },
+                    i { class: "material-icons text-xl", "forward_10" }
                 }
                 button {
                     class: "btn btn-ghost btn-md",
@@ -784,31 +809,48 @@ fn SeekBar(ws: Signal<Option<WebSocket>>, progress: SongProgress) -> Element {
                 aria_label: "Track progress",
                 onchange: {
                     let ws = ws;
-                    let mut progress_sig = state.progress;
-                    let mut seeking_sig = state.audio_seeking;
+                    let progress_sig = state.progress;
+                    let seeking_sig = state.audio_seeking;
                     move |e: Event<FormData>| {
                         if let Ok(v) = e.value().parse::<u16>() {
                             ws_send(&ws, &UserCommand::Player(PlayerCommand::Seek(v)));
                             if browser {
-                                *seeking_sig.write() = true;
-                                if let Some(window) = web_sys::window() {
-                                    if let Some(doc) = window.document() {
-                                        if let Some(el) = doc.get_element_by_id("local-audio-player")
-                                        {
-                                            let audio: web_sys::HtmlAudioElement = el.unchecked_into();
-                                            audio.set_current_time(f64::from(v));
-                                        }
-                                    }
-                                }
-                                progress_sig.write().current_time = std::time::Duration::from_secs(
-                                    v.into(),
-                                );
+                                browser_seek_to(v, seeking_sig, progress_sig);
                             }
                         }
                     }
                 },
             }
         }
+    }
+}
+
+/// Move the local `<audio>` element (browser playback mode) to `secs` and
+/// show the new position right away.
+fn browser_seek_to(secs: u16, mut seeking: Signal<bool>, mut progress: Signal<SongProgress>) {
+    *seeking.write() = true;
+    if let Some(el) = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.get_element_by_id("local-audio-player"))
+    {
+        let audio: web_sys::HtmlAudioElement = el.unchecked_into();
+        audio.set_current_time(f64::from(secs));
+    }
+    progress.write().current_time = std::time::Duration::from_secs(secs.into());
+}
+
+/// Skip `offset` seconds within the current track. The backend applies it
+/// to its own playback; in browser playback mode the `<audio>` element
+/// follows as well.
+fn skip_seconds(ws: &Signal<Option<WebSocket>>, state: &AppState, offset: i32) {
+    let cmd = if offset < 0 { PlayerCommand::SeekBackward } else { PlayerCommand::SeekForward };
+    ws_send(ws, &UserCommand::Player(cmd));
+    if *state.local_browser_playback.peek() {
+        let p = state.progress.peek().clone();
+        let cur = i64::try_from(p.current_time.as_secs()).unwrap_or(0);
+        let tot = i64::try_from(p.total_time.as_secs()).unwrap_or(0);
+        let target = u16::try_from((cur + i64::from(offset)).clamp(0, tot)).unwrap_or(0);
+        browser_seek_to(target, state.audio_seeking, state.progress);
     }
 }
 

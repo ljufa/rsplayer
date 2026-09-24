@@ -19,6 +19,7 @@
     },
     "linux": {
       "deb": {
+        "recommends": ["libayatana-appindicator3-1"],
         "desktopTemplate": "../../PKGS/desktop/rsplayer-desktop.desktop.template",
         "files": {
           "/usr/libexec/rsplayer-mount-helper": "target/release/rsplayer-mount-helper",
@@ -26,6 +27,7 @@
         }
       },
       "rpm": {
+        "recommends": ["libayatana-appindicator-gtk3"],
         "desktopTemplate": "../../PKGS/desktop/rsplayer-desktop.desktop.template",
         "files": {
           "/usr/libexec/rsplayer-mount-helper": "target/release/rsplayer-mount-helper",
