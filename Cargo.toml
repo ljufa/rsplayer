@@ -44,7 +44,7 @@ serde_json = "1"
 tokio-stream = "0.1"
 ureq = "3"
 feed-rs = "2"
-sha1 = "0.10"
+sha1 = "0.11"
 
 [workspace.dependencies.chrono]
 version = "0.4"
@@ -132,8 +132,8 @@ opt-level = "s"
 [profile.release.package.tungstenite]
 opt-level = "s"
 
-# fjall fork (3.1.9 + Database::rotate_journal) so db_maintenance::flush_all
+# fjall fork (3.1.10 + Database::rotate_journal) so db_maintenance::flush_all
 # can drop the fully flushed journal instead of replaying up to 64 MB of it
 # on every start.
 [patch.crates-io]
-fjall = { git = "https://github.com/ljufa/fjall.git", branch = "v_3.1.9_patched" }
+fjall = { git = "https://github.com/ljufa/fjall.git", branch = "v_3.1.10_patched" }

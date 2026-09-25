@@ -20,6 +20,11 @@ The ARMv6 server binaries and packages (`armhfv6`) were built with a compiler se
 
 - The `RSPLAYER_SKIP_DB_FLUSH` and `RSPLAYER_RESET_BLOATED_KEYSPACES` switches added in 5.1.0 are gone. They were a precaution for a startup crash on one Raspberry Pi 3 ([#36](https://github.com/ljufa/rsplayer/issues/36)); the user's database turned out to be fine, the crash could not be reproduced in 48 starts on x86 and Raspberry Pi hardware, and it has not happened again on that Pi since. The one-time rebuild of the playback-state table from 4.9.5 runs again on the first start of databases that have not had it yet.
 
+### Dependencies
+
+- **fjall 3.1.10** (database), still with RSPlayer's journal-rotation patch: fixes a race between compaction and clearing a table (used when the album list or the random-play history is reset) and the handling of journal files recovered after a crash.
+- **iroh 1.2** (multiroom), **rustls 0.23.45**, **tauri 2.11.6**, **tower-http 0.7.1**, **ureq 3.4.2**, **sha1 0.11**, **dirs 7** and smaller updates. Podcast and episode ids are unchanged.
+
 ## v5.1.1 (2026-09-24)
 
 A Snap-only release: the other packages stay at 5.1.0.

@@ -52,7 +52,7 @@ env_logger = { workspace = true }
 # private files dir take over.
 [target.'cfg(not(target_os = "android"))'.dependencies]
 souvlaki = "0.8"
-dirs = "6"
+dirs = "7"
 # With the window hidden to the tray, a second launch must show it instead
 # of starting another backend.
 tauri-plugin-single-instance = "2"

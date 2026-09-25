@@ -28,9 +28,22 @@ pub struct ParsedFeed {
 /// Hex SHA-1 of `input`; ids for podcasts (feed URL) and episodes.
 #[must_use]
 pub fn stable_id(input: &str) -> String {
+    sha1_hex(&[input.as_bytes()])
+}
+
+/// Lowercase hex SHA-1 of the concatenated `parts`. Stored podcast and
+/// episode ids depend on this exact format.
+pub(crate) fn sha1_hex(parts: &[&[u8]]) -> String {
+    use std::fmt::Write;
+
     let mut hasher = Sha1::new();
-    hasher.update(input.as_bytes());
-    format!("{:x}", hasher.finalize())
+    for part in parts {
+        hasher.update(part);
+    }
+    hasher.finalize().iter().fold(String::with_capacity(40), |mut hex, b| {
+        let _ = write!(hex, "{b:02x}");
+        hex
+    })
 }
 
 /// Parses feed bytes; `podcast_id` seeds the episode ids. Items without an
@@ -293,6 +306,8 @@ mod tests {
         assert_eq!(stable_id("https://example.com/feed.xml"), stable_id("https://example.com/feed.xml"));
         assert_eq!(stable_id("a").len(), 40);
         assert_ne!(stable_id("a"), stable_id("b"));
+        // Stored ids must not change across sha1 upgrades: FIPS 180 test vector.
+        assert_eq!(stable_id("abc"), "a9993e364706816aba3e25717850c26c9cd0d89d");
     }
 
     #[test]

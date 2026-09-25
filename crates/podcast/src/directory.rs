@@ -10,7 +10,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, anyhow};
 use log::debug;
 use serde::Deserialize;
-use sha1::{Digest, Sha1};
 use ureq::Agent;
 
 use api_models::podcast::{PodcastDirectory, PodcastSearchResult};
@@ -176,11 +175,11 @@ impl PodcastIndexDirectory {
     /// `Authorization` = hex SHA-1 of `key + secret + unix-time`, per the
     /// Podcast Index API docs.
     fn auth_headers(&self, unix_time: u64) -> [(String, String); 3] {
-        let mut hasher = Sha1::new();
-        hasher.update(self.api_key.as_bytes());
-        hasher.update(self.api_secret.as_bytes());
-        hasher.update(unix_time.to_string().as_bytes());
-        let hash = format!("{:x}", hasher.finalize());
+        let hash = crate::feed::sha1_hex(&[
+            self.api_key.as_bytes(),
+            self.api_secret.as_bytes(),
+            unix_time.to_string().as_bytes(),
+        ]);
         [
             ("X-Auth-Key".to_string(), self.api_key.clone()),
             ("X-Auth-Date".to_string(), unix_time.to_string()),
@@ -273,13 +272,7 @@ mod tests {
         assert_eq!(headers[0].1, "key");
         assert_eq!(headers[1].1, "1700000000");
         // sha1("keysecret1700000000")
-        assert_eq!(headers[2].1, stable_sha1("keysecret1700000000"));
-    }
-
-    fn stable_sha1(s: &str) -> String {
-        let mut h = Sha1::new();
-        h.update(s.as_bytes());
-        format!("{:x}", h.finalize())
+        assert_eq!(headers[2].1, "abaf71c02050c31e4d4e6b08c1625173af0445ba");
     }
 
     #[test]
