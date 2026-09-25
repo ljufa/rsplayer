@@ -131,3 +131,9 @@ opt-level = "s"
 opt-level = "s"
 [profile.release.package.tungstenite]
 opt-level = "s"
+
+# fjall fork (3.1.9 + Database::rotate_journal) so db_maintenance::flush_all
+# can drop the fully flushed journal instead of replaying up to 64 MB of it
+# on every start.
+[patch.crates-io]
+fjall = { git = "https://github.com/ljufa/fjall.git", branch = "v_3.1.9_patched" }

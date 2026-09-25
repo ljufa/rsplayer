@@ -1,5 +1,25 @@
 # Release Notes
 
+## Unreleased
+
+### Fixes
+
+#### Desktop app on Linux: sliders did not react to touch
+
+On touchscreens (e.g. a Surface running Ubuntu), dragging the volume or seek slider with a finger moved it but changed nothing; only the + and − buttons worked. The Linux desktop webview (WebKitGTK) does not report the end of a touch drag the way browsers do, so the new position was never sent. The sliders now send it when the finger is lifted.
+
+#### Faster startup: the database no longer replays old journal data
+
+Every start read the database's write-ahead journal from the beginning, and the journal is only split into a new file once it passes 64 MB, so it kept growing between restarts. On a long-running Raspberry Pi 4 opening the database took 1.4 s, and on a development machine with a 42 MB journal 8.8 s. RSPlayer now closes the journal and starts a fresh one right after writing everything to disk at startup and shutdown, and the old journal is deleted. Opening the database now takes about 0.02 s on the same Pi 4. This needs a small addition to the database library, fjall, which RSPlayer now builds from its own fork until the change is available upstream.
+
+#### Raspberry Pi Zero / Pi 1 (ARMv6) builds crashed on start
+
+The ARMv6 server binaries and packages (`armhfv6`) were built with a compiler setup that targets ARMv7, so they crashed immediately on a Raspberry Pi Zero, Zero W or Pi 1 without printing anything. This affected every release since at least 4.0.0. The ARMv6 builds now use a proper ARMv6 toolchain and start normally on a Pi Zero W.
+
+### Changes
+
+- The `RSPLAYER_SKIP_DB_FLUSH` and `RSPLAYER_RESET_BLOATED_KEYSPACES` switches added in 5.1.0 are gone. They were a precaution for a startup crash on one Raspberry Pi 3 ([#36](https://github.com/ljufa/rsplayer/issues/36)); the user's database turned out to be fine, the crash could not be reproduced in 48 starts on x86 and Raspberry Pi hardware, and it has not happened again on that Pi since. The one-time rebuild of the playback-state table from 4.9.5 runs again on the first start of databases that have not had it yet.
+
 ## v5.1.1 (2026-09-24)
 
 A Snap-only release: the other packages stay at 5.1.0.

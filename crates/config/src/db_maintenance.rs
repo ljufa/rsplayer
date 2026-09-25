@@ -1,14 +1,14 @@
 //! Keeps the shared fjall journal small so startup replay stays fast.
 //!
-//! fjall keeps one write-ahead journal for all keyspaces and only truncates it
-//! once every keyspace's memtable has been flushed. Its default flush trigger
-//! is 64 MiB *per keyspace*, which slow, tiny writes (e.g. playback progress
-//! once a second) can take months to reach, while every restart replays the
-//! whole journal. [`reset_bloated_keyspaces`] runs once per database to drop
-//! keyspaces created with that default (only when the server is started with
-//! `RSPLAYER_RESET_BLOATED_KEYSPACES=1`), and [`flush_all`] forces memtables
-//! to disk on demand (at startup and shutdown, unless the server is started
-//! with `RSPLAYER_SKIP_DB_FLUSH=1`, see [`flush_enabled`]).
+//! fjall keeps one write-ahead journal for all keyspaces, replays the whole
+//! active journal on every open, and only starts a new one once it passes
+//! 64 MB. A journal can be deleted only after every keyspace has flushed past
+//! it, and fjall's default flush trigger is 64 MiB *per keyspace*, which slow,
+//! tiny writes (e.g. playback progress once a second) can take months to
+//! reach. [`reset_bloated_keyspaces`] runs once per database to drop
+//! keyspaces created with that default, and [`flush_all`] (at startup and
+//! shutdown) flushes every keyspace and rotates the journal, so the next open
+//! has almost nothing to replay.
 
 use fjall::{Database, KeyspaceCreateOptions};
 use log::{info, warn};
@@ -56,17 +56,9 @@ pub fn reset_bloated_keyspaces(db: &Database) {
     }
 }
 
-/// Whether [`flush_all`] should run at startup and shutdown. On by default;
-/// `RSPLAYER_SKIP_DB_FLUSH=1` turns it off for databases whose flush aborts
-/// the process (issue #36). Skipping only lets the journal grow until fjall
-/// flushes on its own; no data is lost.
-#[must_use]
-pub fn flush_enabled() -> bool {
-    !std::env::var("RSPLAYER_SKIP_DB_FLUSH").is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-}
-
-/// Flushes every keyspace's active memtable to disk and waits, letting fjall
-/// truncate the journal. Blocking; run from a blocking context.
+/// Flushes every keyspace's active memtable to disk and waits, then rotates
+/// the journal so fjall can delete the flushed one (see the fjall fork's
+/// `Database::rotate_journal`). Blocking; run from a blocking context.
 pub fn flush_all(db: &Database) {
     for name in db.list_keyspace_names() {
         let Ok(ks) = db.keyspace(&name, KeyspaceCreateOptions::default) else {
@@ -76,7 +68,14 @@ pub fn flush_all(db: &Database) {
             warn!("Maintenance: flush of keyspace {} failed: {e}", &*name);
         }
     }
-    info!("Maintenance: memtables flushed");
+    // fjall only starts a new journal once the active one passes 64 MB and
+    // replays all of the active one on open. Everything is flushed now, so
+    // seal it: fjall deletes it right away (a journal still needed by an
+    // unflushed keyspace is kept until that keyspace flushes).
+    if let Err(e) = db.rotate_journal() {
+        warn!("Maintenance: journal rotation failed: {e}");
+    }
+    info!("Maintenance: memtables flushed, journal rotated");
 }
 
 #[cfg(test)]

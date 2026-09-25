@@ -2899,8 +2899,7 @@ checksum = "d45db016d36b838f563236e9193d0ee6ce38f3f68b6c94e914b4929c96bbb890"
 [[package]]
 name = "fjall"
 version = "3.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5427b70d8592043024955a4a40b5cf44af323fdad7c1f62848a01ec7806709e"
+source = "git+https://github.com/ljufa/fjall.git?branch=v_3.1.9_patched#955bd7c0d7ae8aab1876e24b831e213dc3f092b8"
 dependencies = [
  "byteorder-lite",
  "byteview",
@@ -5799,7 +5798,7 @@ version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "680998035259dcfcafe653688bf2aa6d3e2dc05e98be6ab46afb089dc84f1df8"
 dependencies = [
- "proc-macro-crate 2.0.2",
+ "proc-macro-crate 3.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.119",

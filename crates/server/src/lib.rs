@@ -105,11 +105,8 @@ pub async fn run_backend(
             .expect("Failed to open fjall database"),
     );
     info!("Shared database opened.");
-    // Opt-in: suspected in a startup abort on a Raspberry Pi (issue #36).
-    if std::env::var("RSPLAYER_RESET_BLOATED_KEYSPACES").is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true")) {
-        config::db_maintenance::reset_bloated_keyspaces(&shared_db);
-    }
-    if config::db_maintenance::flush_enabled() {
+    config::db_maintenance::reset_bloated_keyspaces(&shared_db);
+    {
         let db = shared_db.clone();
         let _ = tokio::task::spawn_blocking(move || config::db_maintenance::flush_all(&db)).await;
     }
@@ -310,9 +307,7 @@ async fn run(
 fn persist_db_on_shutdown(db: &fjall::Database) {
     info!("Persisting database to WAL...");
     let _ = db.persist(PersistMode::SyncAll);
-    if config::db_maintenance::flush_enabled() {
-        config::db_maintenance::flush_all(db);
-    }
+    config::db_maintenance::flush_all(db);
 }
 
 fn terminate_signal() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {

@@ -14,6 +14,7 @@ mod dsp;
 mod hooks;
 pub mod lyrics;
 mod page;
+mod range;
 mod state;
 mod update;
 pub mod vumeter;
@@ -1210,17 +1211,14 @@ fn FooterPlayer() -> Element {
                 }
                 div { class: "hidden sm:flex items-center gap-1 w-24",
                     i { class: "material-icons text-xs text-base-content/50", "volume_down" }
-                    input {
-                        r#type: "range",
+                    range::RangeSlider {
                         class: "range range-xs flex-1",
                         min: i64::from(volume.min),
                         max: i64::from(volume.max),
                         value: i64::from(volume.current),
-                        onchange: {
-                            move |e: Event<FormData>| {
-                                if let Ok(v) = e.value().parse::<u8>() {
-                                    ws_system(&ws, SystemRequest::SetVol(v));
-                                }
+                        on_commit: move |v: String| {
+                            if let Ok(v) = v.parse::<u8>() {
+                                ws_system(&ws, SystemRequest::SetVol(v));
                             }
                         },
                     }

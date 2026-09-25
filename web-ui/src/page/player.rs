@@ -16,6 +16,7 @@ use crate::{
     hooks::ws_send,
     lyrics::{self, LrcLibResponse, LyricLine},
     navigate,
+    range::RangeSlider,
     state::AppState,
     vumeter::{VUMeter, VisualizerType},
     ws_system, CurrentPath, UiState,
@@ -800,19 +801,17 @@ fn SeekBar(ws: Signal<Option<WebSocket>>, progress: SongProgress) -> Element {
                 span { "{format_time(cur)}" }
                 span { "{format_time(tot)}" }
             }
-            input {
-                r#type: "range",
+            RangeSlider {
                 class: "range range-primary range-xs w-full",
                 min: 0,
                 max: tot as i64,
                 value: cur as i64,
                 aria_label: "Track progress",
-                onchange: {
-                    let ws = ws;
+                on_commit: {
                     let progress_sig = state.progress;
                     let seeking_sig = state.audio_seeking;
-                    move |e: Event<FormData>| {
-                        if let Ok(v) = e.value().parse::<u16>() {
+                    move |v: String| {
+                        if let Ok(v) = v.parse::<u16>() {
                             ws_send(&ws, &UserCommand::Player(PlayerCommand::Seek(v)));
                             if browser {
                                 browser_seek_to(v, seeking_sig, progress_sig);
@@ -875,19 +874,15 @@ fn VolumeControl(ws: Signal<Option<WebSocket>>, volume: Volume) -> Element {
                     },
                     i { class: "material-icons", "remove_circle" }
                 }
-                input {
-                    r#type: "range",
+                RangeSlider {
                     class: "range range-sm flex-1",
                     min: i64::from(volume.min),
                     max: i64::from(volume.max),
                     value: i64::from(volume.current),
                     aria_label: "Volume",
-                    onchange: {
-                        let ws = ws;
-                        move |e: Event<FormData>| {
-                            if let Ok(v) = e.value().parse::<u8>() {
-                                ws_system(&ws, SystemRequest::SetVol(v));
-                            }
+                    on_commit: move |v: String| {
+                        if let Ok(v) = v.parse::<u8>() {
+                            ws_system(&ws, SystemRequest::SetVol(v));
                         }
                     },
                 }
