@@ -20,7 +20,7 @@ fn should_play_radio_url() {
         "https://fluxmusic.api.radiosphere.io/channels/90s/stream.aac?quality=10",
     );
     player.add_song_in_queue("https://stream.rcast.net/66036");
-    player.play_from_current_queue_song();
+    player.play_current();
     std::thread::sleep(Duration::from_secs(10));
     player.play_next_song();
     std::thread::sleep(Duration::from_secs(10));
@@ -32,7 +32,7 @@ fn should_play_all_songs_in_queue() {
     let player = create_player();
     player.add_song_in_queue("mp3");
     player.add_song_in_queue("flac");
-    player.play_from_current_queue_song();
+    player.play_current();
     assert!(player.await_playing_song_to_finish()[0].is_ok());
 }
 

@@ -1,6 +1,19 @@
 # Release Notes
 
-## Unreleased
+## v5.2.0 (2026-09-26)
+
+### New
+
+#### Radio and podcasts play without using the queue
+
+Playing a radio station or a podcast episode used to add it to the end of the queue and jump there. The queue filled up with stations, and Next/Previous jumped out of the stream back into your music.
+
+- Stations and episodes now play directly; the queue and your place in it stay as they were. The station or episode playing is highlighted on the Radio and Podcasts pages.
+- **Radio:** Next/Previous switch between your favorite stations and the ones you added by hand, from the player, the desktop tray, media keys, the Android notification or a hardware panel. Now Playing shows a **Live radio** badge and hides the seek controls; the heart adds or removes the station from Favorites.
+- **Podcasts:** when an episode ends, the next newer unplayed episode of the same show plays. Next/Previous move to the newer/older episode.
+- **Back to queue** on Now Playing and on the Queue page continues the queue song where you left it. Playing anything from the queue or the library switches back to the queue too.
+- **Add to queue** / **Play next** are still available for stations and episodes you want in the queue.
+- Favorites starred before this version are picked up the first time the Radio page is opened.
 
 ### Fixes
 

@@ -5,6 +5,7 @@
 //! in `AppState`); the page itself only holds view state.
 
 use api_models::common::UserCommand;
+use api_models::playback_source::PlaybackSource;
 use api_models::podcast::{Episode, Podcast, PodcastCommand, PodcastSearchResult};
 use dioxus::prelude::*;
 use web_sys::WebSocket;
@@ -436,7 +437,12 @@ fn EpisodeList(podcast: Podcast, expanded: Option<String>, on_toggle_expand: Eve
 
 #[component]
 fn EpisodeRow(episode: Episode, fallback_image: Option<String>, expanded: bool, on_toggle_expand: EventHandler<String>) -> Element {
+    let state = use_context::<AppState>();
     let ws = use_context::<Signal<Option<WebSocket>>>();
+    let playing = matches!(
+        &*state.playback_source.read(),
+        PlaybackSource::Podcast { episode_id, .. } if *episode_id == episode.id
+    );
     let img = episode
         .image_url
         .clone()
@@ -448,7 +454,9 @@ fn EpisodeRow(episode: Episode, fallback_image: Option<String>, expanded: bool, 
     let played = episode.played;
     let id = episode.id.clone();
     let description = episode.description.clone().unwrap_or_default();
-    let row_class = if played {
+    let row_class = if playing {
+        "flex items-start gap-2 sm:gap-3 px-3 py-2 bg-primary/10 group"
+    } else if played {
         "flex items-start gap-2 sm:gap-3 px-3 py-2 hover:bg-base-200 group opacity-50"
     } else {
         "flex items-start gap-2 sm:gap-3 px-3 py-2 hover:bg-base-200 group"
@@ -475,7 +483,9 @@ fn EpisodeRow(episode: Episode, fallback_image: Option<String>, expanded: bool, 
                     class: "flex-1 min-w-0 cursor-pointer",
                     onclick: toggle_expand(id.clone()),
                     p { class: if expanded { "text-sm font-medium" } else { "text-sm font-medium line-clamp-2" },
-                        if played {
+                        if playing {
+                            i { class: "material-icons text-sm align-middle mr-1 text-primary", title: "Playing", "graphic_eq" }
+                        } else if played {
                             i { class: "material-icons text-sm align-middle mr-1 text-success", "check_circle" }
                         }
                         "{episode.title}"

@@ -151,6 +151,20 @@ Key points:
   connections, so Symphonia reports a real duration and user seeks work;
   anything else plays as a plain non-seekable stream. Stream agents carry no
   global timeout (it would also bound body reads and cut long tracks).
+- **Playback source**: `PlayerService` plays from a `PlaybackSource`
+  (`api_models::playback_source`): `Queue`, `Radio(RadioStation)` or
+  `Podcast { podcast_id, episode_id }`. Stations and episodes are played
+  directly, never added to the queue. A `SourceNavigator`
+  (`server/src/source_navigator.rs`, wired in the composition root) turns
+  a source into the `Song` to decode and answers Next/Prev: radio cycles
+  through `MetadataService::get_zap_stations` (favorites, then hand-added
+  stations), podcasts walk the show's episodes by publish date
+  (`PodcastService::adjacent_episode`); at the end of an episode the next
+  newer unplayed one follows, a live stream that ends just stops. The
+  source is persisted in `player_state` and broadcast as
+  `PlaybackSourceEvent`. Leaving the queue saves its progress
+  (`queue_resume_secs`) for `return_to_queue`; any queue play
+  (`play_from_beginning`, `play_song`) switches back to `Queue`.
 - **Resume hook**: before each track starts, `PlayerService` asks an optional
   `ResumePositionProvider` (the podcast service, wired in the composition
   root) for a start offset and arms `skip_to_time` with it. This is how a
@@ -193,11 +207,11 @@ concern:
 | `songs` | `Song` JSON keyed by library-relative path |
 | `albums` | Albums keyed by normalized `artist\|album` |
 | `play_statistics` | Play/skip/like counters per song key; `radio_uuid_*` keys hold the liked radio-browser stations |
-| `radio_stations` | Stations added by hand in the UI (`RadioStation` JSON keyed by a generated uuid) |
+| `radio_stations` | Stations added by hand in the UI (`RadioStation` JSON keyed by a generated uuid), plus the details of liked radio-browser stations (keyed `fav_{stationuuid}`, `radio_browser_uuid` set) so Next/Prev can switch between favorites |
 | `loudness` | Integrated LUFS per song key |
 | `queue`, `queue_status`, `queue_random_history` | Queue items (insertion-ordered ids), current position/mode, random-mode history |
 | `playlist`, `playlist_list` | Saved playlist items (`{name}_{index}`) and headers |
-| `player_state` | Pause flag + last position for resume-on-restart |
+| `player_state` | Pause flag + last position for resume-on-restart, current `PlaybackSource`, queue progress saved when switching to radio/podcast |
 | `podcasts` | Subscribed feeds (`Podcast` JSON keyed by feed-URL hash) incl. refresh validators (`ETag`/`Last-Modified`) |
 | `podcast_episodes` | `Episode` JSON keyed `{podcast_id}/{inverted publish ts}/{episode_id}` — a prefix scan is newest-first; carries `position_secs`/`played` |
 | `podcast_episode_index` | `id:{episode_id}` and `url:{audio_url}` → episode key, for lookups from playback events |

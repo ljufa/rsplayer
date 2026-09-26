@@ -1,9 +1,11 @@
-//! Podcast commands: subscriptions, episode queries, and queueing episodes.
+//! Podcast commands: subscriptions, episode queries, playing and queueing
+//! episodes.
 //!
 //! Anything that touches the network (`Search`, `Subscribe`, `Refresh`) is
 //! handed to the podcast worker thread and answered later via events; the
 //! rest is served synchronously from the local store.
 
+use api_models::playback_source::PlaybackSource;
 use api_models::podcast::PodcastCommand;
 use api_models::state::StateChangeEvent;
 use podcast::PodcastJob;
@@ -35,12 +37,13 @@ pub fn handle_podcast_command(cmd: PodcastCommand, ctx: &CommandContext) {
                 ctx.send_error("Episode not found");
                 return;
             };
-            ctx.player_service.stop_current_song();
-            ctx.queue_service.add_song(&episode.to_song(&podcast));
-            ctx.queue_service.set_current_to_last();
-            // The player asks the podcast service for a resume position
-            // before it starts the track, so a started episode continues.
-            ctx.player_service.play_from_beginning();
+            // Played directly, the queue stays as it is. The player asks the
+            // podcast service for a resume position before it starts the
+            // track, so a started episode continues.
+            ctx.player_service.play_source(PlaybackSource::Podcast {
+                podcast_id: podcast.id,
+                episode_id: episode.id.clone(),
+            });
             ctx.send_notification(&format!("Playing {}", episode.title));
         }
         PodcastCommand::AddEpisodeToQueue(episode_id) => {

@@ -135,6 +135,58 @@ impl MetadataService {
 
     /// Stations the listener typed in by hand, sorted by name.
     pub fn get_custom_radio_stations(&self) -> Vec<RadioStation> {
+        self.stored_radio_stations(false)
+    }
+
+    /// Liked radio-browser stations whose details were sent with
+    /// `LikeRadioStation`, sorted by name.
+    pub fn get_favorite_radio_station_records(&self) -> Vec<RadioStation> {
+        let liked = self.get_favorite_radio_stations();
+        self.stored_radio_stations(true)
+            .into_iter()
+            .filter(|s| s.radio_browser_uuid.as_ref().is_some_and(|u| liked.contains(u)))
+            .collect()
+    }
+
+    /// Stations Next/Prev cycle through while radio plays: favorites, then
+    /// hand-added ones, each sorted by name; a stream URL appears once.
+    pub fn get_zap_stations(&self) -> Vec<RadioStation> {
+        let mut stations = self.get_favorite_radio_station_records();
+        for custom in self.get_custom_radio_stations() {
+            if !stations.iter().any(|s| s.url == custom.url) {
+                stations.push(custom);
+            }
+        }
+        stations
+    }
+
+    /// Likes a radio-browser station and stores its details. The like-stat
+    /// (`radio_uuid_{uuid}`) stays the source of truth for "is favorite".
+    ///
+    /// # Errors
+    /// When the station has no `radio_browser_uuid`, is invalid, or the write fails.
+    pub fn like_radio_station(&self, station: &RadioStation) -> Result<RadioStation> {
+        let mut station = station.validated().map_err(Error::msg)?;
+        let uuid = station
+            .radio_browser_uuid
+            .clone()
+            .filter(|u| !u.is_empty())
+            .ok_or_else(|| Error::msg("Station has no radio-browser uuid"))?;
+        let key = favorite_station_key(&uuid);
+        let already_liked = self.get_favorite_radio_stations().contains(&uuid);
+        if !already_liked {
+            self.like_media_item(&format!("radio_uuid_{uuid}"));
+        }
+        station.id.clone_from(&key);
+        if station.added_at.is_none() {
+            station.added_at = Some(Utc::now());
+        }
+        self.radio_stations.insert(&key, serde_json::to_vec(&station)?)?;
+        self.db.persist(PersistMode::SyncData)?;
+        Ok(station)
+    }
+
+    fn stored_radio_stations(&self, favorites: bool) -> Vec<RadioStation> {
         let mut stations: Vec<RadioStation> = self
             .radio_stations
             .iter()
@@ -144,6 +196,7 @@ impl MetadataService {
                     .map_err(|e| warn!("Failed to decode stored radio station: {e}"))
                     .ok()
             })
+            .filter(|s| s.radio_browser_uuid.is_some() == favorites)
             .collect();
         stations.sort_by_key(|a| a.name.to_lowercase());
         stations
@@ -157,6 +210,7 @@ impl MetadataService {
     /// duplicates the stream URL of another station, or when the write fails.
     pub fn save_custom_radio_station(&self, station: &RadioStation) -> Result<RadioStation> {
         let mut station = station.validated().map_err(Error::msg)?;
+        station.radio_browser_uuid = None;
         let existing = self.get_custom_radio_stations();
         if let Some(dup) = existing.iter().find(|s| s.url == station.url && s.id != station.id) {
             return Err(Error::msg(format!("Stream URL is already saved as '{}'", dup.name)));
@@ -261,6 +315,11 @@ impl MetadataService {
 
     pub fn dislike_media_item(&self, media_item_id: &str) {
         self.update_or_create_media_item_stat(media_item_id, |item| item.liked_count -= 1);
+        if let Some(uuid) = media_item_id.strip_prefix("radio_uuid_")
+            && !self.get_favorite_radio_stations().iter().any(|u| u == uuid)
+        {
+            _ = self.radio_stations.remove(favorite_station_key(uuid));
+        }
     }
 
     pub fn increase_play_count(&self, media_item_id: &str) {
@@ -722,4 +781,10 @@ impl MetadataService {
             }
         }
     }
+}
+
+/// Key of a favorite station record in the `radio_stations` keyspace; kept
+/// apart from the uuid keys of hand-added stations.
+fn favorite_station_key(uuid: &str) -> String {
+    format!("fav_{uuid}")
 }

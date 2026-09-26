@@ -18,6 +18,7 @@ use crate::podcast::{Episode, EpisodePage, Podcast, PodcastSearchResult};
 use crate::common::MetadataLibraryItem;
 use crate::{
     common::{PlaybackMode, Volume},
+    playback_source::PlaybackSource,
     player::Song,
     playlist::{Album, PlaylistPage, Playlists},
     radio::RadioStation,
@@ -103,6 +104,11 @@ pub enum StateChangeEvent {
     PodcastEpisodeUpdatedEvent(Episode),
     /// The podcast worker is busy with a search/subscribe/refresh job.
     PodcastBusyEvent(bool),
+    /// What the player plays from: the queue, a station or an episode.
+    PlaybackSourceEvent(PlaybackSource),
+    /// Favorite stations whose details the server knows (see
+    /// `MetadataCommand::LikeRadioStation`).
+    FavoriteRadioStationRecords(Vec<RadioStation>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

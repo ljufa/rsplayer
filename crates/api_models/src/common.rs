@@ -206,6 +206,12 @@ pub enum PlayerCommand {
     SeekBackward,
     QueryCurrentPlayerInfo,
     TogglePlay,
+    /// Play a station directly, without adding it to the queue.
+    PlayRadioStation(RadioStation),
+    /// Leave radio/podcast playback and resume the queue where it was.
+    ReturnToQueue,
+    /// Answered by `PlaybackSourceEvent`.
+    QueryPlaybackSource,
 }
 
 pub use wire::PlaybackMode;
@@ -228,6 +234,9 @@ pub enum MetadataCommand {
     LikeMediaItem(String),
     DislikeMediaItem(String),
     QueryFavoriteRadioStations,
+    /// Like a radio-browser station and remember its details (the id is the
+    /// `radio_browser_uuid`), so the server can switch stations on Next/Prev.
+    LikeRadioStation(RadioStation),
     /// All hand-added stations, answered with `CustomRadioStationsEvent`.
     QueryCustomRadioStations,
     /// Creates the station when `id` is empty, otherwise updates that one.

@@ -87,10 +87,8 @@ pub fn handle_metadata_command(cmd: MetadataCommand, ctx: &CommandContext) {
             ctx.send_notification(&format!("Song {id} disliked"));
             resend_current_song_if_affected(ctx, &id);
         }
-        MetadataCommand::QueryFavoriteRadioStations => {
-            let favorites = ctx.metadata_service.get_favorite_radio_stations();
-            ctx.send_event(StateChangeEvent::FavoriteRadioStations(favorites));
-        }
+        MetadataCommand::QueryFavoriteRadioStations => send_favorite_radio_stations(ctx),
+        MetadataCommand::LikeRadioStation(station) => like_radio_station(&station, ctx),
         MetadataCommand::QueryCustomRadioStations => send_custom_radio_stations(ctx),
         MetadataCommand::SaveCustomRadioStation(station) => save_custom_radio_station(&station, ctx),
         MetadataCommand::DeleteCustomRadioStation(id) => delete_custom_radio_station(&id, ctx),
@@ -99,6 +97,23 @@ pub fn handle_metadata_command(cmd: MetadataCommand, ctx: &CommandContext) {
             stats.songs_loudness_analysed = ctx.loudness_repository.count_analysed();
             ctx.send_event(StateChangeEvent::LibraryStatsEvent(stats));
         }
+    }
+}
+
+fn like_radio_station(station: &RadioStation, ctx: &CommandContext) {
+    // The UI also sends this to backfill details of older favorites.
+    let already_liked = station
+        .radio_browser_uuid
+        .as_ref()
+        .is_some_and(|u| ctx.metadata_service.get_favorite_radio_stations().contains(u));
+    match ctx.metadata_service.like_radio_station(station) {
+        Ok(saved) => {
+            send_favorite_radio_stations(ctx);
+            if !already_liked {
+                ctx.send_notification(&format!("{} added to favorites", saved.name));
+            }
+        }
+        Err(e) => ctx.send_error(&format!("Failed to save favorite: {e}")),
     }
 }
 
@@ -122,6 +137,13 @@ fn delete_custom_radio_station(id: &str, ctx: &CommandContext) {
         }
         Err(e) => ctx.send_error(&format!("Failed to remove station: {e}")),
     }
+}
+
+fn send_favorite_radio_stations(ctx: &CommandContext) {
+    ctx.send_event(StateChangeEvent::FavoriteRadioStations(ctx.metadata_service.get_favorite_radio_stations()));
+    ctx.send_event(StateChangeEvent::FavoriteRadioStationRecords(
+        ctx.metadata_service.get_favorite_radio_station_records(),
+    ));
 }
 
 fn send_custom_radio_stations(ctx: &CommandContext) {

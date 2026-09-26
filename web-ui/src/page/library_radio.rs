@@ -1,8 +1,11 @@
 //! Library → Radio: radio-browser discovery (countries/languages/tags/search),
-//! favourites kept as radio-browser uuids, and stations the user typed in by
-//! hand, which the server stores so they survive queue clears and restarts.
+//! favourites (radio-browser uuids whose details the server also keeps), and
+//! stations the user typed in by hand, which the server stores so they
+//! survive queue clears and restarts. Stations play directly, without being
+//! added to the queue.
 
-use api_models::common::{MetadataCommand, QueueCommand, UserCommand};
+use api_models::common::{MetadataCommand, PlayerCommand, QueueCommand, UserCommand};
+use api_models::playback_source::PlaybackSource;
 use api_models::radio::RadioStation;
 use dioxus::prelude::*;
 use gloo_net::http::Request;
@@ -43,6 +46,28 @@ struct Station {
     votes: usize,
     codec: String,
     bitrate: usize,
+}
+
+impl Station {
+    /// The server-side representation, used to play or favorite the station.
+    fn to_record(&self) -> RadioStation {
+        RadioStation {
+            name: self.name.clone(),
+            url: self.url.clone(),
+            image_url: Some(self.favicon.clone()).filter(|f| !f.is_empty()),
+            radio_browser_uuid: Some(self.stationuuid.clone()),
+            ..Default::default()
+        }
+    }
+}
+
+/// True when `url` is the station the player is currently tuned to.
+fn is_playing_station(state: &AppState, url: &str) -> bool {
+    matches!(&*state.playback_source.read(), PlaybackSource::Radio(s) if s.url == url)
+}
+
+fn play_station(ws: &Signal<Option<WebSocket>>, station: RadioStation) {
+    ws_send(ws, &UserCommand::Player(PlayerCommand::PlayRadioStation(station)));
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -90,6 +115,15 @@ pub fn LibraryRadioPage() -> Element {
         if !uuids.is_empty() && *filter.read() == FilterType::Favorites {
             spawn(async move {
                 let fetched = fetch_stations_by_uuid(uuids).await;
+                // Favorites liked before the server kept station details:
+                // send them so Next/Prev can switch between all favorites.
+                let known = state.favorite_radio_station_records.peek().clone();
+                for st in fetched
+                    .iter()
+                    .filter(|st| !known.iter().any(|k| k.radio_browser_uuid.as_deref() == Some(st.stationuuid.as_str())))
+                {
+                    ws_send(&ws, &UserCommand::Metadata(MetadataCommand::LikeRadioStation(st.to_record())));
+                }
                 *stations.write() = fetched;
                 *loading.write() = false;
                 *showing_stations.write() = true;
@@ -318,44 +352,55 @@ pub fn LibraryRadioPage() -> Element {
                                 .iter()
                                 .map(move |st| {
                                     let url = st.url.clone();
-                                    let url2 = st.url.clone();
                                     let uuid = st.stationuuid.clone();
                                     let key = st.stationuuid.clone();
+                                    let record = st.to_record();
+                                    let record_row = record.clone();
+                                    let record_like = record.clone();
+                                    let playing = is_playing_station(&state, &st.url);
+                                    let row_bg = if playing { "bg-primary/10" } else { "hover:bg-base-200" };
                                     rsx! {
                                         div {
                                             key: "{key}",
-                                            class: "flex items-center gap-3 px-3 py-2 hover:bg-base-200 group",
-                                            if !st.favicon.is_empty() {
-                                                img { class: "w-8 h-8 rounded-full object-cover", src: "{st.favicon}" }
-                                            } else {
-                                                span { class: "w-8 h-8 flex items-center justify-center rounded-full bg-base-300",
-                                                    i { class: "material-icons text-sm", "radio" }
+                                            class: "flex items-center gap-3 px-3 py-2 group {row_bg}",
+                                            div {
+                                                class: "flex flex-1 min-w-0 items-center gap-3 cursor-pointer",
+                                                title: "Play",
+                                                onclick: move |_| play_station(&ws, record_row.clone()),
+                                                if !st.favicon.is_empty() {
+                                                    img { class: "w-8 h-8 rounded-full object-cover", src: "{st.favicon}" }
+                                                } else {
+                                                    span { class: "w-8 h-8 flex items-center justify-center rounded-full bg-base-300",
+                                                        i { class: "material-icons text-sm", "radio" }
+                                                    }
+                                                }
+                                                div { class: "flex-1 min-w-0",
+                                                    p { class: if playing { "text-sm font-medium truncate text-primary" } else { "text-sm font-medium truncate" },
+                                                        "{st.name}"
+                                                    }
+                                                    p { class: "text-xs text-base-content/50 truncate",
+                                                        "{st.codec} {st.bitrate}kbps • {st.tags}"
+                                                    }
                                                 }
                                             }
-                                            div { class: "flex-1 min-w-0",
-                                                p { class: "text-sm font-medium truncate", "{st.name}" }
-                                                p { class: "text-xs text-base-content/50 truncate",
-                                                    "{st.codec} {st.bitrate}kbps • {st.tags}"
-                                                }
+                                            if playing {
+                                                i { class: "material-icons text-sm text-primary", title: "Playing", "graphic_eq" }
                                             }
                                             div { class: "flex sm:hidden sm:group-hover:flex items-center gap-1",
                                                 button {
                                                     class: "btn btn-ghost btn-xs",
+                                                    title: "Play now",
+                                                    onclick: move |_| play_station(&ws, record.clone()),
+                                                    i { class: "material-icons text-sm", "play_arrow" }
+                                                }
+                                                button {
+                                                    class: "btn btn-ghost btn-xs opacity-60",
                                                     title: "Add to queue",
                                                     onclick: move |_| ws_send(
                                                         &ws,
                                                         &UserCommand::Queue(QueueCommand::AddSongToQueue(url.clone())),
                                                     ),
                                                     i { class: "material-icons text-sm", "playlist_add" }
-                                                }
-                                                button {
-                                                    class: "btn btn-ghost btn-xs",
-                                                    title: "Play now",
-                                                    onclick: move |_| ws_send(
-                                                        &ws,
-                                                        &UserCommand::Queue(QueueCommand::AddSongAndPlay(url2.clone())),
-                                                    ),
-                                                    i { class: "material-icons text-sm", "play_arrow" }
                                                 }
                                                 if is_favorites {
                                                     button {
@@ -382,9 +427,7 @@ pub fn LibraryRadioPage() -> Element {
                                                         title: "Add to favorites",
                                                         onclick: move |_| ws_send(
                                                             &ws,
-                                                            &UserCommand::Metadata(
-                                                                MetadataCommand::LikeMediaItem(format!("radio_uuid_{uuid}")),
-                                                            ),
+                                                            &UserCommand::Metadata(MetadataCommand::LikeRadioStation(record_like.clone())),
                                                         ),
                                                         i { class: "material-icons text-sm", "favorite_border" }
                                                     }
@@ -463,27 +506,41 @@ pub fn LibraryRadioPage() -> Element {
 /// One hand-added station: play/queue it, edit it, or drop it.
 #[component]
 fn CustomStationRow(station: RadioStation, on_edit: EventHandler<RadioStation>) -> Element {
+    let state = use_context::<AppState>();
     let ws = use_context::<Signal<Option<WebSocket>>>();
     let mut confirm_delete = use_signal(|| false);
 
     let url_queue = station.url.clone();
-    let url_play = station.url.clone();
+    let station_play = station.clone();
+    let station_row = station.clone();
+    let playing = is_playing_station(&state, &station.url);
+    let row_bg = if playing { "bg-primary/10" } else { "hover:bg-base-200" };
     let station_edit = station.clone();
     let id = station.id.clone();
     let logo = station.image_url.clone().unwrap_or_default();
 
     rsx! {
-        div { class: "flex items-center gap-3 px-3 py-2 hover:bg-base-200 group",
-            if logo.is_empty() {
-                span { class: "w-8 h-8 flex items-center justify-center rounded-full bg-base-300",
-                    i { class: "material-icons text-sm", "radio" }
+        div { class: "flex items-center gap-3 px-3 py-2 group {row_bg}",
+            div {
+                class: "flex flex-1 min-w-0 items-center gap-3 cursor-pointer",
+                title: "Play",
+                onclick: move |_| play_station(&ws, station_row.clone()),
+                if logo.is_empty() {
+                    span { class: "w-8 h-8 flex items-center justify-center rounded-full bg-base-300",
+                        i { class: "material-icons text-sm", "radio" }
+                    }
+                } else {
+                    img { class: "w-8 h-8 rounded-full object-cover", src: "{logo}" }
                 }
-            } else {
-                img { class: "w-8 h-8 rounded-full object-cover", src: "{logo}" }
+                div { class: "flex-1 min-w-0",
+                    p { class: if playing { "text-sm font-medium truncate text-primary" } else { "text-sm font-medium truncate" },
+                        "{station.name}"
+                    }
+                    p { class: "text-xs text-base-content/50 truncate", "{station.url}" }
+                }
             }
-            div { class: "flex-1 min-w-0",
-                p { class: "text-sm font-medium truncate", "{station.name}" }
-                p { class: "text-xs text-base-content/50 truncate", "{station.url}" }
+            if playing {
+                i { class: "material-icons text-sm text-primary", title: "Playing", "graphic_eq" }
             }
             if confirm_delete() {
                 div { class: "flex items-center gap-1",
@@ -508,21 +565,18 @@ fn CustomStationRow(station: RadioStation, on_edit: EventHandler<RadioStation>) 
                 div { class: "flex sm:hidden sm:group-hover:flex items-center gap-1",
                     button {
                         class: "btn btn-ghost btn-xs",
+                        title: "Play now",
+                        onclick: move |_| play_station(&ws, station_play.clone()),
+                        i { class: "material-icons text-sm", "play_arrow" }
+                    }
+                    button {
+                        class: "btn btn-ghost btn-xs opacity-60",
                         title: "Add to queue",
                         onclick: move |_| ws_send(
                             &ws,
                             &UserCommand::Queue(QueueCommand::AddSongToQueue(url_queue.clone())),
                         ),
                         i { class: "material-icons text-sm", "playlist_add" }
-                    }
-                    button {
-                        class: "btn btn-ghost btn-xs",
-                        title: "Play now",
-                        onclick: move |_| ws_send(
-                            &ws,
-                            &UserCommand::Queue(QueueCommand::AddSongAndPlay(url_play.clone())),
-                        ),
-                        i { class: "material-icons text-sm", "play_arrow" }
                     }
                     button {
                         class: "btn btn-ghost btn-xs",
@@ -563,6 +617,7 @@ fn CustomStationDialog(station: RadioStation, on_close: EventHandler) -> Element
             url: url(),
             image_url: Some(image_url()),
             added_at: added_at(),
+            radio_browser_uuid: None,
         };
         match candidate.validated() {
             Ok(valid) => {

@@ -79,7 +79,10 @@ pub fn handle_queue_command(cmd: QueueCommand, ctx: &CommandContext) {
             ctx.send_notification("1 song added to queue");
         }
         ClearQueue => {
-            ctx.player_service.stop_current_song();
+            // A station or episode playing directly is not in the queue.
+            if ctx.player_service.playback_source().is_queue() {
+                ctx.player_service.stop_current_song();
+            }
             ctx.queue_service.clear();
         }
         RemoveItem(song_id) => {

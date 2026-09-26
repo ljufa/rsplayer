@@ -1,4 +1,5 @@
 - [Home](/)
+- [rsplayer.de](https://rsplayer.de)
 - **Getting Started**
   - [Installation](installation.md)
   - [Configuration](configuration.md)

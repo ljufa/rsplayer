@@ -33,6 +33,8 @@ use playback::rsp::player_service::{PlayerService, ResumePositionProvider};
 use playback::rsp::tee::{SyncTee, TeeEvent};
 use podcast::PodcastService;
 
+use crate::source_navigator::AppSourceNavigator;
+
 pub struct ChannelPair<T> {
     pub tx: mpsc::Sender<T>,
     pub rx: mpsc::Receiver<T>,
@@ -184,6 +186,10 @@ pub fn build_app_container(config: &ArcConfiguration, shared_db: &Arc<fjall::Dat
         loudness_service,
         sync_tee.clone(),
         Some(Arc::new(PodcastResume(podcast_service.clone()))),
+        Some(Arc::new(AppSourceNavigator {
+            metadata_service: metadata_service.clone(),
+            podcast_service: podcast_service.clone(),
+        })),
     );
     info!("Player service successfully created.");
 

@@ -6,7 +6,7 @@ It runs as a systemd service and exposes a responsive web UI, making it a great 
 
 Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia) for audio decoding and [Cpal](https://github.com/rustaudio/cpal) for output, with a Rust-native audio pipeline for low-latency, high-performance playback.
 
-**Online demo → https://demo.rsplayer.de**
+**Website → https://rsplayer.de** · **Online demo → https://demo.rsplayer.de**
 
 ## Getting Started
 

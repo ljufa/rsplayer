@@ -506,6 +506,45 @@ mod metadata {
     }
 
     #[test]
+    fn test_favorite_radio_station_records_and_zap_list() {
+        let ctx = TestContext::new();
+        let fav = RadioStation {
+            name: "Zeta FM".to_string(),
+            url: "http://zeta.example/stream".to_string(),
+            radio_browser_uuid: Some("u-zeta".to_string()),
+            ..Default::default()
+        };
+        ctx.metadata_service.like_radio_station(&fav).expect("like failed");
+        // Liking again must not double the like count or the record.
+        ctx.metadata_service.like_radio_station(&fav).expect("like failed");
+        assert_eq!(ctx.metadata_service.get_favorite_radio_stations(), vec!["u-zeta".to_string()]);
+        assert_eq!(ctx.metadata_service.get_favorite_radio_station_records().len(), 1);
+        assert!(
+            ctx.metadata_service.get_custom_radio_stations().is_empty(),
+            "favorites are not custom stations"
+        );
+
+        let custom = RadioStation {
+            name: "Alpha".to_string(),
+            url: "http://alpha.example/stream".to_string(),
+            ..Default::default()
+        };
+        ctx.metadata_service.save_custom_radio_station(&custom).expect("save failed");
+        let dup = RadioStation {
+            name: "Zeta again".to_string(),
+            url: "http://zeta.example/stream".to_string(),
+            ..Default::default()
+        };
+        ctx.metadata_service.save_custom_radio_station(&dup).expect("save failed");
+
+        let zap: Vec<String> = ctx.metadata_service.get_zap_stations().into_iter().map(|s| s.name).collect();
+        assert_eq!(zap, vec!["Zeta FM".to_string(), "Alpha".to_string()], "favorites first, urls deduped");
+
+        ctx.metadata_service.dislike_media_item("radio_uuid_u-zeta");
+        assert!(ctx.metadata_service.get_favorite_radio_station_records().is_empty());
+    }
+
+    #[test]
     fn test_custom_radio_station_crud() {
         let ctx = TestContext::new();
         let station = RadioStation {

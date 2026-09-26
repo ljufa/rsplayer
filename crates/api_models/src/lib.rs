@@ -10,9 +10,11 @@
 //! [`settings`] — the persisted `Settings` tree edited in the UI; [`player`],
 //! [`playlist`], [`stat`] — songs, albums/playlists and library statistics;
 //! [`podcast`] — subscriptions, episodes and their commands; [`radio`] —
-//! hand-added radio stations.
+//! hand-added and favorite radio stations; [`playback_source`]: whether the
+//! player plays the queue, a radio station or a podcast episode.
 
 pub mod common;
+pub mod playback_source;
 pub mod player;
 pub mod playlist;
 pub mod podcast;

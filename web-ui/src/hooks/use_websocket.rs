@@ -1,6 +1,6 @@
 use crate::state::AppState;
 use api_models::{
-    common::{MultiroomCommand, PlayerCommand, QueueCommand, SystemRequest, UserCommand},
+    common::{MetadataCommand, MultiroomCommand, PlayerCommand, QueueCommand, SystemRequest, UserCommand},
     state::StateChangeEvent,
 };
 use dioxus::prelude::*;
@@ -165,6 +165,9 @@ fn request_current_state(ws: &WebSocket) {
     let commands = [
         UserCommand::Queue(QueueCommand::QueryCurrentSong),
         UserCommand::Player(PlayerCommand::QueryCurrentPlayerInfo),
+        UserCommand::Player(PlayerCommand::QueryPlaybackSource),
+        // The heart button on a playing station shows whether it is a favorite.
+        UserCommand::Metadata(MetadataCommand::QueryFavoriteRadioStations),
         UserCommand::System(SystemRequest::QueryCurrentVolume),
         UserCommand::Multiroom(MultiroomCommand::QueryState),
     ];

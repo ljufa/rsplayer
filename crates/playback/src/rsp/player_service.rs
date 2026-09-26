@@ -13,6 +13,13 @@
 //! Before each track starts, an optional [`ResumePositionProvider`] (the
 //! podcast service) can arm `skip_to_time` so episodes continue where the
 //! listener left off, whatever path (play, next, queue click) started them.
+//!
+//! The player plays from a [`PlaybackSource`]: the queue, or a radio station
+//! or podcast episode played directly, without touching the queue. A
+//! [`SourceNavigator`] resolves those to a `Song` and walks them on
+//! Next/Prev and at the end of an episode. The source is persisted, and the
+//! queue position is saved when leaving the queue so `return_to_queue`
+//! continues where the listener was.
 
 use fjall::{Database, Keyspace};
 use log::{debug, error, info, trace, warn};
@@ -25,6 +32,7 @@ use thread_priority::{ThreadBuilder, ThreadPriority};
 use tokio::sync::broadcast::{Sender, error::RecvError};
 
 use api_models::{
+    playback_source::PlaybackSource,
     player::Song,
     settings::{DspSettings, RsPlayerSettings, Settings},
     state::{PlayerInfo, PlayerState, StateChangeEvent},
@@ -45,6 +53,57 @@ use crate::rsp::tee::SyncTee;
 /// track begins playing; `None` means start from the beginning.
 pub trait ResumePositionProvider: Send + Sync {
     fn resume_position(&self, song: &Song) -> Option<u16>;
+}
+
+/// Resolves and walks the sources that are not the queue (radio, podcasts).
+pub trait SourceNavigator: Send + Sync {
+    /// What to play for `source`; `None` when it no longer exists.
+    fn song_for(&self, source: &PlaybackSource) -> Option<Song>;
+    /// The source after `source`. `finished` is true when `source` played to
+    /// its end, false when the listener pressed Next.
+    fn next(&self, source: &PlaybackSource, finished: bool) -> Option<PlaybackSource>;
+    fn prev(&self, source: &PlaybackSource) -> Option<PlaybackSource>;
+}
+
+/// The current [`PlaybackSource`], persisted and broadcast on every change.
+#[derive(Clone)]
+struct SourceState {
+    current: Arc<Mutex<PlaybackSource>>,
+    state_db: Keyspace,
+    changes_tx: Sender<StateChangeEvent>,
+}
+
+impl SourceState {
+    fn load(state_db: Keyspace, changes_tx: Sender<StateChangeEvent>) -> Self {
+        let current = match state_db.get(PLAYBACK_SOURCE_KEY) {
+            Ok(Some(json)) => serde_json::from_slice(&json).unwrap_or_default(),
+            _ => PlaybackSource::Queue,
+        };
+        Self {
+            current: Arc::new(Mutex::new(current)),
+            state_db,
+            changes_tx,
+        }
+    }
+
+    fn get(&self) -> PlaybackSource {
+        self.current.lock().expect("lock poisoned").clone()
+    }
+
+    fn set(&self, source: PlaybackSource) {
+        {
+            let mut guard = self.current.lock().expect("lock poisoned");
+            if *guard == source {
+                return;
+            }
+            guard.clone_from(&source);
+        }
+        match serde_json::to_vec(&source) {
+            Ok(json) => _ = self.state_db.insert(PLAYBACK_SOURCE_KEY, json),
+            Err(e) => warn!("Failed to encode playback source: {e}"),
+        }
+        self.changes_tx.send(StateChangeEvent::PlaybackSourceEvent(source)).ok();
+    }
 }
 
 pub struct PlayerService {
@@ -72,10 +131,15 @@ pub struct PlayerService {
     last_song: Arc<Mutex<Option<Song>>>,
     sync_tee: Option<SyncTee>,
     resume_provider: Option<Arc<dyn ResumePositionProvider>>,
+    source: SourceState,
+    source_navigator: Option<Arc<dyn SourceNavigator>>,
 }
 
 const LAST_SONG_PAUSED_KEY: &str = "last_song_paused";
 const LAST_SONG_PROGRESS_KEY: &str = "last_played_song_progress";
+const PLAYBACK_SOURCE_KEY: &str = "playback_source";
+/// Progress of the queue song when playback switched to radio/podcast.
+const QUEUE_RESUME_SECS_KEY: &str = "queue_resume_secs";
 
 impl PlayerService {
     #[must_use]
@@ -90,6 +154,7 @@ impl PlayerService {
         loudness_service: Arc<LoudnessService>,
         sync_tee: Option<SyncTee>,
         resume_provider: Option<Arc<dyn ResumePositionProvider>>,
+        source_navigator: Option<Arc<dyn SourceNavigator>>,
     ) -> Arc<Self> {
         let state_db = db
             .keyspace("player_state", config::db_maintenance::small_memtable_options)
@@ -193,6 +258,7 @@ impl PlayerService {
             }
         });
 
+        let source = SourceState::load(state_db.clone(), state_changes_tx.clone());
         let ps = PlayerService {
             state_db,
             changes_tx: state_changes_tx,
@@ -214,6 +280,8 @@ impl PlayerService {
             last_song,
             sync_tee,
             resume_provider,
+            source,
+            source_navigator,
         };
         let last_played_song_progress = ps.get_last_played_song_time();
         if last_played_song_progress > 0 {
@@ -228,7 +296,9 @@ impl PlayerService {
         self.dsp_processor.lock().ok().and_then(|g| g.as_ref().map(DspProcessor::handle))
     }
 
-    pub fn play_from_current_queue_song(&self) {
+    /// Starts (or resumes) the current source: the queue's current song, the
+    /// station or the episode.
+    pub fn play_current(&self) {
         if self.is_playing() {
             return;
         }
@@ -273,24 +343,98 @@ impl PlayerService {
         self.last_song.lock().ok().and_then(|guard| guard.clone())
     }
 
+    #[must_use]
+    pub fn playback_source(&self) -> PlaybackSource {
+        self.source.get()
+    }
+
+    /// The song the current source plays: the queue's current entry, or the
+    /// station/episode resolved by the navigator.
+    #[must_use]
+    pub fn current_source_song(&self) -> Option<Song> {
+        let source = self.source.get();
+        if source.is_queue() {
+            self.queue_service.get_current_song()
+        } else {
+            self.source_navigator.as_ref().and_then(|n| n.song_for(&source))
+        }
+    }
+
+    /// Plays the queue's current song from the start. Switches back to the
+    /// queue when a station or episode was playing.
     pub fn play_from_beginning(&self) {
         self.stop_current_song();
+        self.source.set(PlaybackSource::Queue);
+        self.start_from_beginning();
+    }
+
+    /// Plays a station or episode directly; the queue and its position are
+    /// kept for [`Self::return_to_queue`].
+    pub fn play_source(&self, source: PlaybackSource) {
+        self.stop_current_song();
+        if self.source.get().is_queue() && !source.is_queue() {
+            let secs = self.last_known_time.load(Ordering::Relaxed).to_string();
+            _ = self.state_db.insert(QUEUE_RESUME_SECS_KEY, secs.as_bytes());
+        }
+        self.source.set(source);
+        // A pending seek (e.g. the restored queue progress) belongs to the
+        // old song; the new one starts at 0 or at its resume position.
+        self.skip_to_time.store(0, Ordering::Relaxed);
+        self.start_from_beginning();
+    }
+
+    /// Leaves radio/podcast playback and continues the queue song where it
+    /// was when the listener switched away.
+    pub fn return_to_queue(&self) {
+        if self.source.get().is_queue() {
+            self.play_current();
+            return;
+        }
+        self.stop_current_song();
+        self.source.set(PlaybackSource::Queue);
+        let secs = self
+            .state_db
+            .get(QUEUE_RESUME_SECS_KEY)
+            .ok()
+            .flatten()
+            .map_or_else(|| b"0".to_vec(), |v| v.to_vec());
+        _ = self.state_db.insert(LAST_SONG_PROGRESS_KEY, secs);
+        _ = self.state_db.insert(LAST_SONG_PAUSED_KEY, "true");
+        self.queue_finished.store(false, Ordering::Relaxed);
+        self.play_current();
+    }
+
+    fn start_from_beginning(&self) {
         _ = self.state_db.remove(LAST_SONG_PAUSED_KEY);
         *self.playback_thread_handle.lock().expect("lock poisoned") = Some(self.play_all_in_queue());
     }
 
     pub fn play_next_song(&self) {
+        let source = self.source.get();
+        if !source.is_queue() {
+            if let Some(next) = self.source_navigator.as_ref().and_then(|n| n.next(&source, false)) {
+                self.play_source(next);
+            }
+            return;
+        }
         self.stop_current_song();
         self.queue_service.move_current_to_next_song();
         _ = self.state_db.remove(LAST_SONG_PAUSED_KEY);
-        self.play_from_current_queue_song();
+        self.play_current();
     }
 
     pub fn play_prev_song(&self) {
+        let source = self.source.get();
+        if !source.is_queue() {
+            if let Some(prev) = self.source_navigator.as_ref().and_then(|n| n.prev(&source)) {
+                self.play_source(prev);
+            }
+            return;
+        }
         self.stop_current_song();
         self.queue_service.move_current_to_previous_song();
         _ = self.state_db.remove(LAST_SONG_PAUSED_KEY);
-        self.play_from_current_queue_song();
+        self.play_current();
     }
 
     pub fn stop_current_song(&self) -> Option<PlaybackResult> {
@@ -303,7 +447,7 @@ impl PlayerService {
         if self.is_playing() {
             self.stop_current_song();
         } else {
-            self.play_from_current_queue_song();
+            self.play_current();
         }
     }
 
@@ -320,11 +464,13 @@ impl PlayerService {
         self.seek_current_song(new_time);
     }
 
+    /// Plays a queue entry (switching back to the queue if needed).
     pub fn play_song(&self, song_id: &str) {
         self.stop_current_song();
+        self.source.set(PlaybackSource::Queue);
         self.queue_service.move_current_to(song_id);
         _ = self.state_db.remove(LAST_SONG_PAUSED_KEY);
-        self.play_from_current_queue_song();
+        self.play_current();
     }
 
     pub fn update_dsp_settings(&self, dsp_settings: &DspSettings) {
@@ -360,6 +506,8 @@ impl PlayerService {
         let local_browser_playback = self.local_browser_playback;
         let sync_tee = self.sync_tee.clone();
         let resume_provider = self.resume_provider.clone();
+        let source = self.source.clone();
+        let source_navigator = self.source_navigator.clone();
         // Use the configured priority on single-core platforms too: with
         // ThreadPriority::Min the audio thread on an RPi Zero was starved by
         // web-UI/library requests sharing the one core, breaking playback.
@@ -395,7 +543,13 @@ impl PlayerService {
                 let mut retry_count = 0;
                 let mut consecutive_failures = 0;
                 let result = loop {
-                    let Some(song) = queue.get_current_song() else {
+                    let current_source = source.get();
+                    let song = if current_source.is_queue() {
+                        queue.get_current_song()
+                    } else {
+                        source_navigator.as_ref().and_then(|n| n.song_for(&current_source))
+                    };
+                    let Some(song) = song else {
                         changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
                         break PlaybackResult::QueueFinished;
                     };
@@ -550,10 +704,13 @@ impl PlayerService {
                                 break PlaybackResult::PlaybackStopped;
                             }
                             consecutive_failures += 1;
-                            // Every other song would fail on the same output.
-                            let stop = err.is::<OutputUnavailable>() || consecutive_failures >= MAX_CONSECUTIVE_FAILURES;
+                            // Every other song would fail on the same output;
+                            // a station has no "next song" to skip to.
+                            let stop = err.is::<OutputUnavailable>()
+                                || consecutive_failures >= MAX_CONSECUTIVE_FAILURES
+                                || current_source.is_radio();
                             if stop {
-                                let reason = if err.is::<OutputUnavailable>() {
+                                let reason = if err.is::<OutputUnavailable>() || current_source.is_radio() {
                                     format!("{}: {err}", song.file)
                                 } else {
                                     format!("{} ({consecutive_failures} songs in a row failed, stopping)", song.file)
@@ -577,7 +734,17 @@ impl PlayerService {
                     }
 
                     retry_count = 0;
-                    if !queue.move_current_to_next_song() {
+                    let advanced = match &current_source {
+                        PlaybackSource::Queue => queue.move_current_to_next_song(),
+                        // A live stream that ended is not a cue to switch stations.
+                        PlaybackSource::Radio(_) => false,
+                        PlaybackSource::Podcast { .. } => source_navigator
+                            .as_ref()
+                            .and_then(|n| n.next(&current_source, true))
+                            .map(|next| source.set(next))
+                            .is_some(),
+                    };
+                    if !advanced {
                         queue_finished.store(true, Ordering::Relaxed);
                         changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
                         break PlaybackResult::QueueFinished;

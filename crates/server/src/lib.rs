@@ -29,6 +29,7 @@ pub mod playlist_commands;
 pub mod podcast_commands;
 pub mod queue_commands;
 pub mod server;
+pub mod source_navigator;
 pub mod storage_commands;
 pub mod system_commands;
 
@@ -183,7 +184,7 @@ async fn run(
         usb::spawn_sender_thread(service, &state_changes_tx);
     }
     if config.get_settings().auto_resume_playback {
-        player_service.play_from_current_queue_song();
+        player_service.play_current();
     }
     #[cfg(feature = "lirc")]
     {

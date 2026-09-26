@@ -1,0 +1,3 @@
+Radio stations and podcast episodes play directly instead of being added to the queue. Next and Previous switch between favorite stations, or between newer and older episodes of a show. Back to queue continues where you left off.
+
+The app starts faster: the database no longer replays its old journal on every start.

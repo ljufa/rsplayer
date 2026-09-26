@@ -71,10 +71,10 @@ impl CommandContext {
     }
 
     /// The song clients should display: what the player last broadcast while
-    /// playback is active (a radio queue entry has no title, the live ICY
-    /// title only exists there), otherwise the current queue entry.
+    /// playback is active (the live ICY title only exists there), otherwise
+    /// the current queue entry, station or episode.
     pub fn current_song(&self) -> Option<Song> {
-        let queued = self.queue_service.get_current_song();
+        let queued = self.player_service.current_source_song();
         let Some(mut live) = self.player_service.get_current_song() else {
             return queued;
         };

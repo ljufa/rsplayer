@@ -125,6 +125,27 @@ pub fn QueuePage() -> Element {
                 }
             }
 
+            // ── Radio/podcast playing outside the queue ─────────────────────
+            if !state.playback_source.read().is_queue() {
+                div { class: "flex items-center gap-2 px-3 py-2 bg-primary/10 text-sm",
+                    i { class: "material-icons text-base text-primary",
+                        if state.playback_source.read().is_radio() { "radio" } else { "podcasts" }
+                    }
+                    span { class: "flex-1 min-w-0 truncate",
+                        if state.playback_source.read().is_radio() {
+                            "Radio is playing, the queue is paused where you left it."
+                        } else {
+                            "A podcast is playing, the queue is paused where you left it."
+                        }
+                    }
+                    button {
+                        class: "btn btn-xs btn-primary",
+                        onclick: move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::ReturnToQueue)),
+                        "Back to queue"
+                    }
+                }
+            }
+
             // ── Queue content ───────────────────────────────────────────────
             if loading() && queue().is_none() {
                 QueueSkeleton {}

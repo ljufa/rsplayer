@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use api_models::{
     common::{MetadataCommand, MultiroomCommand, PlaybackMode, PlayerCommand, SystemRequest, UserCommand, Volume},
+    playback_source::PlaybackSource,
     player::Song,
     state::{MultiroomRole, PlayerInfo, PlayerState, SongProgress},
 };
@@ -153,12 +154,16 @@ pub fn PlayerPage() -> Element {
                         VolumeControl { ws, volume: *volume.read() }
                     }
                 } else {
+                    if !state.playback_source.read().is_queue() {
+                        SourceBanner { ws, source: state.playback_source.read().clone() }
+                    }
                     TrackInfo {
                         song: current_song.read().clone(),
                         player_info: player_info.read().clone(),
                     }
                     Controls {
                         ws,
+                        source: state.playback_source.read().clone(),
                         player_state: player_state.read().clone(),
                         playback_mode: *playback_mode.read(),
                         progress: progress.read().clone(),
@@ -222,6 +227,34 @@ fn VUMeterCanvas() -> Element {
     rsx! {
         div { class: "player-page__vumeter",
             canvas { id: "vumeter" }
+        }
+    }
+}
+
+// ─── Playback source ─────────────────────────────────────────────────────────
+
+/// Shown while a station or episode plays directly: what is playing and a
+/// way back to the (untouched) queue.
+#[component]
+fn SourceBanner(ws: Signal<Option<WebSocket>>, source: PlaybackSource) -> Element {
+    let (icon, label) = match &source {
+        PlaybackSource::Radio(station) => ("radio", format!("Live radio · {}", station.name)),
+        PlaybackSource::Podcast { .. } => ("podcasts", "Podcast".to_string()),
+        PlaybackSource::Queue => return rsx! {},
+    };
+    rsx! {
+        div { class: "flex items-center justify-center gap-2 mb-3 flex-wrap",
+            span { class: "badge badge-primary badge-outline gap-1 py-3 max-w-full",
+                i { class: "material-icons text-sm", "{icon}" }
+                span { class: "truncate", "{label}" }
+            }
+            button {
+                class: "btn btn-ghost btn-xs",
+                title: "Stop and continue the queue where it was",
+                onclick: move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::ReturnToQueue)),
+                i { class: "material-icons text-sm", "queue_music" }
+                "Back to queue"
+            }
         }
     }
 }
@@ -334,6 +367,7 @@ fn TrackInfo(song: Option<Song>, player_info: Option<PlayerInfo>) -> Element {
 #[component]
 fn Controls(
     ws: Signal<Option<WebSocket>>,
+    source: PlaybackSource,
     player_state: PlayerState,
     playback_mode: PlaybackMode,
     progress: SongProgress,
@@ -350,15 +384,33 @@ fn Controls(
         PlaybackMode::LoopSingle => ("repeat_one", "Loop Single"),
         PlaybackMode::LoopQueue => ("repeat", "Loop Queue"),
     };
-    let liked = current_song
-        .as_ref()
-        .and_then(|s| s.statistics.as_ref())
-        .is_some_and(|st| st.liked_count > 0);
-    let song_id = current_song.as_ref().map(|s| s.file.clone());
+    let app_state = use_context::<AppState>();
+    // Radio: the heart (un)favorites the station; hand-added stations have
+    // no radio-browser id and are managed on the Radio page.
+    let station_uuid = match &source {
+        PlaybackSource::Radio(st) => st.radio_browser_uuid.clone(),
+        _ => None,
+    };
+    let liked = if let Some(uuid) = &station_uuid {
+        app_state.favorite_radio_stations.read().contains(uuid)
+    } else {
+        current_song
+            .as_ref()
+            .and_then(|s| s.statistics.as_ref())
+            .is_some_and(|st| st.liked_count > 0)
+    };
+    let like_target = match &source {
+        PlaybackSource::Radio(st) => station_uuid.as_ref().map(|_| LikeTarget::Station(st.clone())),
+        _ => current_song.as_ref().map(|s| LikeTarget::Item(s.file.clone())),
+    };
     let is_muted = volume.current == 0;
     // Live streams report no duration and cannot seek.
-    let seekable = !progress.total_time.is_zero();
-    let app_state = use_context::<AppState>();
+    let seekable = !source.is_radio() && !progress.total_time.is_zero();
+    let (prev_title, next_title) = match &source {
+        PlaybackSource::Queue => ("Previous", "Next"),
+        PlaybackSource::Radio(_) => ("Previous station", "Next station"),
+        PlaybackSource::Podcast { .. } => ("Previous episode", "Next episode"),
+    };
 
     rsx! {
         div { class: "player-controls",
@@ -366,23 +418,25 @@ fn Controls(
             div { class: "player-controls__main-row",
                 button {
                     class: "btn btn-ghost btn-md",
-                    title: "Previous",
+                    title: "{prev_title}",
                     onclick: {
                         let ws = ws;
                         move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::Prev))
                     },
                     i { class: "material-icons text-xl", "skip_previous" }
                 }
-                button {
-                    class: "btn btn-ghost btn-md",
-                    title: "Back 10 seconds (Shift+Left)",
-                    disabled: !seekable,
-                    onclick: {
-                        let ws = ws;
-                        let state = app_state.clone();
-                        move |_| skip_seconds(&ws, &state, -10)
-                    },
-                    i { class: "material-icons text-xl", "replay_10" }
+                if !source.is_radio() {
+                    button {
+                        class: "btn btn-ghost btn-md",
+                        title: "Back 10 seconds (Shift+Left)",
+                        disabled: !seekable,
+                        onclick: {
+                            let ws = ws;
+                            let state = app_state.clone();
+                            move |_| skip_seconds(&ws, &state, -10)
+                        },
+                        i { class: "material-icons text-xl", "replay_10" }
+                    }
                 }
                 button {
                     class: "btn btn-primary btn-circle btn-lg",
@@ -404,20 +458,22 @@ fn Controls(
                         }
                     }
                 }
-                button {
-                    class: "btn btn-ghost btn-md",
-                    title: "Forward 10 seconds (Shift+Right)",
-                    disabled: !seekable,
-                    onclick: {
-                        let ws = ws;
-                        let state = app_state.clone();
-                        move |_| skip_seconds(&ws, &state, 10)
-                    },
-                    i { class: "material-icons text-xl", "forward_10" }
+                if !source.is_radio() {
+                    button {
+                        class: "btn btn-ghost btn-md",
+                        title: "Forward 10 seconds (Shift+Right)",
+                        disabled: !seekable,
+                        onclick: {
+                            let ws = ws;
+                            let state = app_state.clone();
+                            move |_| skip_seconds(&ws, &state, 10)
+                        },
+                        i { class: "material-icons text-xl", "forward_10" }
+                    }
                 }
                 button {
                     class: "btn btn-ghost btn-md",
-                    title: "Next",
+                    title: "{next_title}",
                     onclick: {
                         let ws = ws;
                         move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::Next))
@@ -453,29 +509,39 @@ fn Controls(
                         i { class: "material-icons", "equalizer" }
                     }
                 }
-                button {
-                    class: "btn btn-ghost btn-sm",
-                    title: "{shuffle_title}",
-                    onclick: {
-                        let ws = ws;
-                        move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::CyclePlaybackMode))
-                    },
-                    i { class: "material-icons", "{shuffle_icon}" }
-                }
-                if let Some(ref id) = song_id {
+                // Playback mode only applies to the queue.
+                if source.is_queue() {
                     button {
                         class: "btn btn-ghost btn-sm",
-                        title: "Like / Unlike",
+                        title: "{shuffle_title}",
                         onclick: {
                             let ws = ws;
-                            let id = id.clone();
+                            move |_| ws_send(&ws, &UserCommand::Player(PlayerCommand::CyclePlaybackMode))
+                        },
+                        i { class: "material-icons", "{shuffle_icon}" }
+                    }
+                }
+                if let Some(target) = like_target {
+                    button {
+                        class: "btn btn-ghost btn-sm",
+                        title: if station_uuid.is_some() { "Favorite station" } else { "Like / Unlike" },
+                        onclick: {
+                            let ws = ws;
                             move |_| {
-                                let cmd = if liked {
-                                    MetadataCommand::DislikeMediaItem(id.clone())
-                                } else {
-                                    MetadataCommand::LikeMediaItem(id.clone())
+                                let cmd = match (&target, liked) {
+                                    (LikeTarget::Station(st), true) => MetadataCommand::DislikeMediaItem(format!(
+                                        "radio_uuid_{}",
+                                        st.radio_browser_uuid.clone().unwrap_or_default()
+                                    )),
+                                    (LikeTarget::Station(st), false) => MetadataCommand::LikeRadioStation(st.clone()),
+                                    (LikeTarget::Item(id), true) => MetadataCommand::DislikeMediaItem(id.clone()),
+                                    (LikeTarget::Item(id), false) => MetadataCommand::LikeMediaItem(id.clone()),
                                 };
+                                let refresh_favorites = matches!(target, LikeTarget::Station(_));
                                 ws_send(&ws, &UserCommand::Metadata(cmd));
+                                if refresh_favorites {
+                                    ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryFavoriteRadioStations));
+                                }
                             }
                         },
                         i { class: if liked { "material-icons text-error" } else { "material-icons" },
@@ -509,10 +575,19 @@ fn Controls(
                     }
                 }
             }
-            SeekBar { ws, progress }
+            if !source.is_radio() {
+                SeekBar { ws, progress }
+            }
             VolumeControl { ws, volume }
         }
     }
+}
+
+/// What the heart button (un)likes.
+#[derive(Clone, PartialEq)]
+enum LikeTarget {
+    Station(api_models::radio::RadioStation),
+    Item(String),
 }
 
 // ─── Multiroom ───────────────────────────────────────────────────────────────

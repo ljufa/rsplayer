@@ -188,9 +188,16 @@ Manage internet radio streams.
 ![Library Radio](/_assets/library_radio.png)
 
 - **Favorites** lists your own stations and the ones you starred while browsing. It is the first tab, shown when the page opens.
-- **Add station** stores a stream by hand: enter a name, the stream URL and, if you like, a logo URL. The station stays in Favorites until you remove it, so clearing the queue no longer loses it. Hover (or tap) a station for **Add to queue**, **Play now**, **Edit** and **Remove**; removing asks for confirmation.
+- **Add station** stores a stream by hand: enter a name, the stream URL and, if you like, a logo URL. The station stays in Favorites until you remove it. Hover (or tap) a station for **Play now**, **Add to queue**, **Edit** and **Remove**; removing asks for confirmation.
 - **Search**, **Countries**, **Languages** and **Tags** browse the [radio-browser.info](https://www.radio-browser.info) directory; the heart button keeps a station in Favorites.
-- Play radio streams directly
+- Click a station to play it. It plays directly, without being added to the queue, and the station playing is highlighted.
+
+While a station plays:
+
+- **Next** and **Previous** (in the player, the desktop tray, media keys, the Android notification or a hardware panel) switch to the next or previous station in Favorites: your starred stations first, then the ones you added by hand, each sorted by name.
+- Now Playing shows a **Live radio** badge with the station name; the seek bar, the 10-second skip buttons and the playback mode button are hidden. The heart adds or removes the station from Favorites.
+- **Back to queue** (on Now Playing and on the Queue page) stops the radio and continues the queue song where you left it. Playing anything from the queue or the library also switches back to the queue.
+- **Add to queue** is still there if you do want a station in the queue.
 
 ### Podcasts View
 Subscribe to podcasts and listen to episodes; RSPlayer remembers where you stopped.
@@ -201,8 +208,8 @@ Subscribe to podcasts and listen to episodes; RSPlayer remembers where you stopp
 
 ![Episode list](/_assets/podcasts_episodes.png)
 
-- **Play** (resumes a started episode where you left off)
-- **Play next** / **Add to queue**
+- **Play** (resumes a started episode where you left off). The episode plays directly, without being added to the queue. When it ends, the next newer unplayed episode of the same show follows; **Next** / **Previous** move to the newer / older episode. **Back to queue** returns to your queue where you left it, as for radio.
+- **Play next** / **Add to queue**, to play an episode as part of the queue instead
 - **Mark played / unplayed** — episodes are marked played automatically once 95 % has been heard (configurable), and are shown dimmed
 
 The show header has **Refresh** (re-fetch the feed now) and **Unsubscribe** (tap twice to confirm). Feeds are refreshed in the background, hourly by default.

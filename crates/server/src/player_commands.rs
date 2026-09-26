@@ -7,12 +7,14 @@ use crate::command_context::CommandContext;
 
 pub fn handle_player_command(cmd: api_models::common::PlayerCommand, ctx: &CommandContext) {
     use api_models::common::PlayerCommand::{
-        CyclePlaybackMode, Next, Pause, Play, PlayItem, Prev, QueryCurrentPlayerInfo, Seek, SeekBackward, SeekForward, Stop, TogglePlay,
+        CyclePlaybackMode, Next, Pause, Play, PlayItem, PlayRadioStation, Prev, QueryCurrentPlayerInfo, QueryPlaybackSource, ReturnToQueue,
+        Seek, SeekBackward, SeekForward, Stop, TogglePlay,
     };
+    use api_models::playback_source::PlaybackSource;
 
     // A grouped multiroom follower plays what the leader streams; local
     // transport commands would fight over the audio device.
-    let is_transport = !matches!(cmd, QueryCurrentPlayerInfo | CyclePlaybackMode);
+    let is_transport = !matches!(cmd, QueryCurrentPlayerInfo | QueryPlaybackSource | CyclePlaybackMode);
     if is_transport && ctx.multiroom_follower_active.load(std::sync::atomic::Ordering::SeqCst) {
         ctx.send_error("Playback is controlled by the multiroom group leader. Leave the group to control it locally.");
         return;
@@ -21,7 +23,7 @@ pub fn handle_player_command(cmd: api_models::common::PlayerCommand, ctx: &Comma
     match cmd {
         Play => {
             ctx.player_service.stop_current_song();
-            ctx.player_service.play_from_current_queue_song();
+            ctx.player_service.play_current();
         }
         PlayItem(id) => {
             ctx.player_service.play_song(&id);
@@ -46,6 +48,19 @@ pub fn handle_player_command(cmd: api_models::common::PlayerCommand, ctx: &Comma
         }
         SeekBackward => {
             ctx.player_service.seek_relative(-10);
+        }
+        PlayRadioStation(station) => match station.validated() {
+            Ok(station) => {
+                ctx.send_notification(&format!("Playing {}", station.name));
+                ctx.player_service.play_source(PlaybackSource::Radio(station));
+            }
+            Err(e) => ctx.send_error(&e),
+        },
+        ReturnToQueue => {
+            ctx.player_service.return_to_queue();
+        }
+        QueryPlaybackSource => {
+            ctx.send_event(StateChangeEvent::PlaybackSourceEvent(ctx.player_service.playback_source()));
         }
         CyclePlaybackMode => {
             ctx.send_event(StateChangeEvent::PlaybackModeChangedEvent(ctx.queue_service.cycle_playback_mode()));

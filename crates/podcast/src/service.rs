@@ -162,6 +162,22 @@ impl PodcastService {
         Some(episode.position_secs)
     }
 
+    /// The episode published after (`newer`) or before `episode_id` in the
+    /// same show; with `unplayed_only`, the nearest one not marked played.
+    #[must_use]
+    pub fn adjacent_episode(&self, episode_id: &str, newer: bool, unplayed_only: bool) -> Option<Episode> {
+        let current = self.repo.get_episode(episode_id)?;
+        // Newest first, so "newer" walks toward the start of the list.
+        let (_, episodes) = self.repo.episodes_page(&current.podcast_id, 0, usize::MAX);
+        let pos = episodes.iter().position(|e| e.id == current.id)?;
+        let wanted = |e: &Episode| !unplayed_only || !e.played;
+        if newer {
+            episodes.into_iter().take(pos).rev().find(wanted)
+        } else {
+            episodes.into_iter().skip(pos + 1).find(wanted)
+        }
+    }
+
     fn resolve_episode(&self, song: &Song) -> Option<Episode> {
         song.podcast_episode_id()
             .and_then(|id| self.repo.get_episode(id))
@@ -670,5 +686,33 @@ mod tests {
         assert!(!again.played);
         assert_eq!(svc.resume_position(&s), Some(300));
         assert_eq!(svc.list_podcasts()[0].unplayed_count, 1);
+    }
+
+    #[test]
+    fn adjacent_episode_walks_by_publish_date() {
+        let tmp = TempDir::new().unwrap();
+        let repo: ArcPodcastRepository = Arc::new(FjallPodcastRepository::new_standalone(&tmp.path().join("db")));
+        let ep = |n: u32, played: bool| Episode {
+            id: format!("e{n}"),
+            podcast_id: "p".into(),
+            title: format!("E{n}"),
+            audio_url: format!("https://cdn/e{n}.mp3"),
+            published: chrono::DateTime::from_timestamp(i64::from(n) * 86_400, 0),
+            played,
+            ..Default::default()
+        };
+        repo.upsert_episodes(&[ep(1, false), ep(2, true), ep(3, false), ep(4, false)]).unwrap();
+        let cfg_tmp = TempDir::new().unwrap();
+        let db = Database::builder(cfg_tmp.path().join("cfg")).open().unwrap();
+        let config = config::Configuration::new(&db, api_models::settings::Settings::default());
+        let (tx, _rx) = broadcast::channel(8);
+        let svc = PodcastService::with_repository(repo, config, tx);
+
+        let id = |e: Option<Episode>| e.map(|e| e.id);
+        assert_eq!(id(svc.adjacent_episode("e1", true, true)), Some("e3".into()), "skips played e2");
+        assert_eq!(id(svc.adjacent_episode("e1", true, false)), Some("e2".into()));
+        assert_eq!(id(svc.adjacent_episode("e4", true, true)), None, "newest has no next");
+        assert_eq!(id(svc.adjacent_episode("e3", false, false)), Some("e2".into()));
+        assert_eq!(id(svc.adjacent_episode("e1", false, false)), None);
     }
 }

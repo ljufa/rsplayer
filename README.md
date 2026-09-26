@@ -16,7 +16,7 @@
 
 RSPlayer is an open-source music player written in Rust. Run it as a **headless server** on a NAS, home server or Raspberry Pi and control it from any browser or phone - or install the **desktop app** on your computer.
 
-🎧 **[Online demo](https://demo.rsplayer.de)** · 📖 **[Documentation](https://docs.rsplayer.de/)** · ⬇️ **[Latest release](https://github.com/ljufa/rsplayer/releases/latest)**
+🏠 **[Website](https://rsplayer.de)** · 🎧 **[Online demo](https://demo.rsplayer.de)** · 📖 **[Documentation](https://docs.rsplayer.de/)** · ⬇️ **[Latest release](https://github.com/ljufa/rsplayer/releases/latest)**
 
 https://github.com/user-attachments/assets/7cf6ef93-2251-4f85-a1cb-be5865a257d5
 

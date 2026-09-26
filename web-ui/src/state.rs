@@ -1,6 +1,7 @@
 use crate::vumeter::VisualizerType;
 use api_models::{
     common::{MetadataLibraryItem, PlaybackMode, Volume},
+    playback_source::PlaybackSource,
     player::Song,
     playlist::{Album, PlaylistPage, Playlists},
     podcast::{Episode, EpisodePage, Podcast, PodcastSearchResult},
@@ -28,6 +29,11 @@ pub struct AppState {
     /// Raw items returned by the last Metadata query (files/artists tree).
     pub metadata_local_items: Signal<Vec<MetadataLibraryItem>>,
     pub favorite_radio_stations: Signal<Vec<String>>,
+    /// Favorite stations whose details the server stored (used to backfill
+    /// favorites liked before the server kept their details).
+    pub favorite_radio_station_records: Signal<Vec<RadioStation>>,
+    /// What the player plays from: the queue, a station or an episode.
+    pub playback_source: Signal<PlaybackSource>,
     /// Radio stations the user added by hand (name + stream URL), stored by the server.
     pub custom_radio_stations: Signal<Vec<RadioStation>>,
     pub playlists: Signal<Option<Playlists>>,
@@ -95,6 +101,8 @@ impl AppState {
             current_queue: Signal::new(None),
             metadata_local_items: Signal::new(Vec::new()),
             favorite_radio_stations: Signal::new(Vec::new()),
+            favorite_radio_station_records: Signal::new(Vec::new()),
+            playback_source: Signal::new(PlaybackSource::Queue),
             custom_radio_stations: Signal::new(Vec::new()),
             playlists: Signal::new(None),
             library_stats: Signal::new(None),
@@ -203,6 +211,12 @@ impl AppState {
             }
             StateChangeEvent::FavoriteRadioStations(stations) => {
                 *self.favorite_radio_stations.write() = stations;
+            }
+            StateChangeEvent::FavoriteRadioStationRecords(stations) => {
+                *self.favorite_radio_station_records.write() = stations;
+            }
+            StateChangeEvent::PlaybackSourceEvent(source) => {
+                *self.playback_source.write() = source;
             }
             StateChangeEvent::CustomRadioStationsEvent(stations) => {
                 *self.custom_radio_stations.write() = stations;

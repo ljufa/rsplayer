@@ -1,9 +1,10 @@
 //! User-defined radio stations.
 //!
 //! A [`RadioStation`] is a stream the listener entered by hand (name + URL),
-//! stored by the server so it survives queue clears and restarts. It is kept
-//! separate from the radio-browser favourites, which are only remembered by
-//! their `stationuuid` and resolved against the radio-browser API by the UI.
+//! stored by the server so it survives queue clears and restarts. The same
+//! type also carries a liked radio-browser station (then `radio_browser_uuid`
+//! is set), so the server knows the stream of every favorite and can cycle
+//! through them on Next/Prev without the UI.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -14,13 +15,17 @@ pub struct RadioStation {
     #[serde(default)]
     pub id: String,
     pub name: String,
-    /// Stream URL, played by adding it to the queue like any other source.
+    /// Stream URL.
     pub url: String,
     /// Optional station logo shown in the list.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_url: Option<String>,
     #[serde(default)]
     pub added_at: Option<DateTime<Utc>>,
+    /// radio-browser `stationuuid` for a liked station, `None` for a
+    /// hand-added one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub radio_browser_uuid: Option<String>,
 }
 
 impl RadioStation {
@@ -52,6 +57,7 @@ impl RadioStation {
             url: url.to_string(),
             image_url,
             added_at: self.added_at,
+            radio_browser_uuid: self.radio_browser_uuid.clone(),
         })
     }
 }
