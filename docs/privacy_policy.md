@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated: 2026-09-21_
+_Last updated: 2026-09-26_
 
 This policy applies to the RSPlayer Android app (`de.rsplayer.app`) and the other RSPlayer applications (server, desktop). RSPlayer is free, open source software (https://github.com/ljufa/rsplayer) developed by Dragan Ljubojevic.
 
@@ -59,6 +59,17 @@ Data is kept in the app's private storage on your device. Connections to third-p
 ## License and disclaimer
 
 RSPlayer is released under the [MIT License](https://github.com/ljufa/rsplayer/blob/main/LICENSE). The software is provided "as is", without warranty of any kind, express or implied. To the maximum extent permitted by law, the developer is not liable for any claim, damages or other liability arising from the use of the software, including any damage to audio equipment, speakers, hearing or data. See the full [Disclaimer](disclaimer.md).
+
+## Websites
+
+The websites rsplayer.de and docs.rsplayer.de count visits with [GoatCounter](https://www.goatcounter.com/), hosted on RSPlayer's own server at stats.rsplayer.de. No data goes to a third party.
+
+- No cookies, and nothing is stored in your browser.
+- Your IP address is never written to disk. To tell a new visit from a page reload, GoatCounter keeps IP address and browser only in memory, under a random ID, for up to 8 hours.
+- Recorded per visit: the page, the referring site, browser and operating system, screen size, and the country derived from the IP address. Clicks on some buttons (for example "Try the live demo" or an install tab) are counted the same way.
+- The data is used only to see which pages and install methods are used, and is never sold or shared.
+
+The live demo at demo.rsplayer.de and the RSPlayer applications do not use analytics.
 
 ## Changes to this policy
 

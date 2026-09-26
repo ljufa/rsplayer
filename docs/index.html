@@ -139,9 +139,27 @@
         noData: 'No Results!',
         depth: 3,
         hideOtherSidebarContent: true,
-      }
+      },
+      plugins: [
+        // Page views go to the self-hosted GoatCounter at stats.rsplayer.de (no cookies).
+        // docsify routes by URL hash, so count each route change as /docs/<page>.
+        function (hook, vm) {
+          hook.doneEach(function () {
+            var path = '/docs' + vm.route.path, title = document.title, tries = 0;
+            (function send() {
+              // count.js loads async and may not be ready on the first page
+              if (window.goatcounter && window.goatcounter.count) {
+                window.goatcounter.count({ path: path, title: title });
+              } else if (++tries < 20) {
+                setTimeout(send, 250);
+              }
+            })();
+          });
+        }
+      ]
     }
   </script>
+  <script data-goatcounter="https://stats.rsplayer.de/count" data-goatcounter-settings='{"no_onload": true}' async src="https://stats.rsplayer.de/count.js"></script>
   <script src="//cdn.jsdelivr.net/npm/docsify@4.13.1/lib/docsify.min.js"></script>
   <script src="//cdn.jsdelivr.net/npm/docsify@4.13.1/lib/plugins/search.min.js"></script>
   <script src="//cdn.jsdelivr.net/npm/docsify@4.13.1/lib/plugins/zoom-image.min.js"></script>
