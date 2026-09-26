@@ -13,16 +13,19 @@
     :root {
       --theme-color: #090240;
     }
+    /* Dark theme: RSPlayer brand colors (navy, cream, VU-meter red), as on rsplayer.de.
+       Every text color is at least 5:1 against the background it sits on. */
     @media (prefers-color-scheme: dark) {
       :root {
-        --theme-color: #a5a0f0;
-        --bg: #14151a;
-        --bg-alt: #1b1d24;
-        --bg-code: #1e2028;
-        --border: #2c2f3a;
-        --text: #c9cdd6;
-        --text-strong: #eceef3;
-        --text-muted: #8b91a0;
+        --theme-color: #ff8f84;
+        --bg: #10102b;
+        --bg-alt: #17173a;
+        --bg-code: #0b0b22;
+        --border: #2a2a58;
+        --text: #d8d2c2;
+        --text-strong: #f2e8cf;
+        --text-muted: #a29fbf;
+        --accent: #e4574c;
         color-scheme: dark;
       }
       .app-name-link img {
@@ -32,32 +35,48 @@
         background-color: var(--bg);
         color: var(--text);
       }
+      .sidebar, .sidebar-toggle { background-color: #0d0d24; }
       .sidebar, .sidebar-toggle { border-color: var(--border); }
       .sidebar ul li a, .sidebar-nav > ul > li > a { color: var(--text); }
-      .sidebar ul li.active > a, .sidebar ul li a:hover { color: var(--theme-color); }
+      .sidebar ul li.active > a { color: var(--theme-color); border-right-color: var(--accent); }
+      .sidebar ul li a:hover { color: var(--text-strong); }
       .sidebar-nav > ul > li > ul a { color: var(--text-muted); }
+      .sidebar-nav > ul > li > strong, .sidebar-nav > ul > li > p { color: var(--text-strong); }
       .sidebar::-webkit-scrollbar-thumb { background: var(--border); }
       .sidebar-toggle span { background-color: var(--text); }
       .markdown-section { color: var(--text); }
+      /* vue.css colors the heading anchor spans, not the headings */
       .markdown-section h1, .markdown-section h2, .markdown-section h3,
       .markdown-section h4, .markdown-section h5, .markdown-section h6,
+      .markdown-section h1 a, .markdown-section h2 a, .markdown-section h3 a,
+      .markdown-section h4 a, .markdown-section h5 a, .markdown-section h6 a,
+      .markdown-section .anchor span,
       .markdown-section strong { color: var(--text-strong); }
       .markdown-section h2 { border-bottom-color: var(--border); }
-      .markdown-section a { color: var(--theme-color); }
-      .markdown-section p.tip, .markdown-section blockquote {
+      .markdown-section a { color: var(--theme-color); text-decoration-color: #ff8f8466; }
+      .markdown-section a:hover { text-decoration-color: currentColor; }
+      .markdown-section blockquote {
         background-color: var(--bg-alt);
         color: var(--text-muted);
-        border-color: var(--theme-color);
+        border-left-color: var(--accent);
       }
+      .markdown-section p.tip {
+        background-color: var(--bg-alt);
+        color: var(--text);
+        border-left-color: var(--accent);
+      }
+      .markdown-section p.tip:before { background-color: var(--accent); color: #fff; }
+      .markdown-section p.warn { background-color: var(--bg-alt); color: var(--text); }
       .markdown-section code {
         background-color: var(--bg-code);
-        color: #e5a3b8;
+        color: #f3c98b;
       }
       .markdown-section pre, .markdown-section pre > code {
         background-color: var(--bg-code);
         color: var(--text);
       }
       .markdown-section pre { border: 1px solid var(--border); }
+      .markdown-section pre:after { color: var(--text-muted); }
       .markdown-section table { border-collapse: collapse; }
       .markdown-section th, .markdown-section td {
         border: 1px solid var(--border);
@@ -65,19 +84,22 @@
       }
       .markdown-section th { background-color: var(--bg-alt); color: var(--text-strong); }
       .markdown-section tr { background-color: var(--bg); border-top: 1px solid var(--border); }
-      .markdown-section tr:nth-child(2n) { background-color: var(--bg-alt); }
+      .markdown-section tr:nth-child(2n) { background-color: #131333; }
       .markdown-section hr { border-bottom-color: var(--border); }
       .markdown-section img { background: transparent; }
       .search input { background-color: var(--bg-alt); color: var(--text); border-color: var(--border); }
+      .search input::placeholder { color: var(--text-muted); }
       .search, .search .results-panel, .search .matching-post { border-color: var(--border); }
       .search a { color: var(--text); }
       .search .matching-post h2 { color: var(--text-strong); }
-      .github-corner svg { fill: var(--theme-color); color: var(--bg); }
-      .token.comment, .token.prolog, .token.doctype, .token.cdata { color: #7f8797; }
+      .search .search-keyword { color: var(--theme-color); }
+      .github-corner svg { fill: var(--accent); color: var(--bg); }
+      .progress { background-color: var(--accent); }
+      .token.comment, .token.prolog, .token.doctype, .token.cdata { color: #8a87a8; }
       .token.punctuation { color: var(--text); }
-      .token.string, .token.attr-value { color: #8fd19e; }
-      .token.function, .token.selector, .token.keyword { color: #8ab4f8; }
-      .token.number, .token.boolean, .token.property { color: #f0a86e; }
+      .token.string, .token.attr-value { color: #9be48f; }
+      .token.function, .token.selector, .token.keyword, .token.builtin { color: #9ab8ff; }
+      .token.number, .token.boolean, .token.property, .token.parameter { color: #f3c98b; }
     }
     .app-name-link img {
       max-width: 180px;
