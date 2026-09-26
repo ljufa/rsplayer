@@ -109,6 +109,10 @@ After starting the server, open `http://localhost:8000`. On Windows, installed A
 
 Download `rsplayer_<version>_android.apk` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest) and open it on the phone (Android 8.0+). The full player runs inside the app: put music in the shared **Music** folder, grant the media permission on first start, and playback works offline with lock-screen controls. Details in the [Android guide](https://docs.rsplayer.de/#/installation?id=android).
 
+[<img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="54">](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22de.rsplayer.app%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fljufa%2Frsplayer%22%2C%22author%22%3A%22ljufa%22%2C%22name%22%3A%22RSPlayer%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Afalse%2C%5C%22autoApkFilterByArch%5C%22%3Atrue%2C%5C%22apkFilterRegEx%5C%22%3A%5C%22_android_%28arm64-v8a%7Carmeabi-v7a%29%5C%5C%5C%5C.apk%24%5C%22%7D%22%7D)
+
+With [Obtainium](https://obtainium.imranr.dev/) the app updates itself from GitHub releases: tap the badge on the phone and it picks the APK for your device.
+
 
 ### Docker
 

@@ -158,6 +158,16 @@ The Android app is the desktop app on a phone or tablet: the RSPlayer server run
 
 On first start the app asks for **music and notification** permissions. Put your music in the shared **Music** folder (`/storage/emulated/0/Music`, what a computer shows as `Music` over USB) — it is scanned automatically once the permission is granted; more folders can be added in Settings → Music library. Playback keeps going with the screen off and is controllable from the lock screen, the notification and headset buttons.
 
+### Automatic updates with Obtainium
+
+[Obtainium](https://obtainium.imranr.dev/) installs the app straight from GitHub releases and keeps it updated. Install Obtainium, then open this badge on the phone:
+
+[<img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="54">](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22de.rsplayer.app%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fljufa%2Frsplayer%22%2C%22author%22%3A%22ljufa%22%2C%22name%22%3A%22RSPlayer%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Afalse%2C%5C%22autoApkFilterByArch%5C%22%3Atrue%2C%5C%22apkFilterRegEx%5C%22%3A%5C%22_android_%28arm64-v8a%7Carmeabi-v7a%29%5C%5C%5C%5C.apk%24%5C%22%7D%22%7D)
+
+It adds RSPlayer with the right APK for your device (arm64 or ARMv7) and skips pre-releases. To add it by hand instead, use the source URL `https://github.com/ljufa/rsplayer`.
+
+!> Stay with one source per phone. The GitHub, Obtainium and F-Droid builds are signed with the same key and switch between each other freely, but the all-in-one `rsplayer_<version>_android.apk` has a lower version code than the per-device APKs, so after installing a per-device APK Android refuses the all-in-one file as a downgrade.
+
 ?> Android only lets the app see audio and image files in shared storage: `.cue`, `.m3u` and `.lrc` sidecar files next to the music are invisible, and SMB/NFS network mounts are unavailable. Podcasts and internet radio work as on the desktop. Multiroom peer discovery works on Wi-Fi. A Google Play listing is planned.
 
 ## Docker

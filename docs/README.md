@@ -1,4 +1,4 @@
-# RSPlayer — Rust-native music server
+# RSPlayer - Rust-native music server
 
 RSPlayer is an open-source, headless music server primarily for Linux. Run it on your NAS, home server, Raspberry Pi, or any x86_64/ARM machine and control it from any browser. A native desktop app (Linux x86_64/ARM64, macOS, Windows) is also available, and on Android.
 
