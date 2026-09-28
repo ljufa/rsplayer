@@ -1,0 +1,5 @@
+New Analog visualizer: two needle VU meters above the track info, in the colors of your theme.
+
+Visualizations now follow the volume setting, and are no longer stretched after rotating the phone.
+
+Privacy: album cover, lyrics and radio directory lookups no longer send the player's address as a referrer.

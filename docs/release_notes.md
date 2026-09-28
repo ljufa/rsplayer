@@ -1,5 +1,42 @@
 # Release Notes
 
+## v5.3.0 (2026-09-28)
+
+A new analog VU meter visualizer, visualizations that follow the volume, and a few privacy improvements in the web interface. Nothing needs to be migrated.
+
+### New
+
+#### Analog VU meter
+
+The new **Analog** visualizer style shows two needle VU meters, one per channel, modeled on the meter on [rsplayer.de](https://rsplayer.de).
+
+- The meters sit above the track info at the full width of the player instead of behind it. They use the free space above the track info and controls, so on a large screen turning them on does not move the controls.
+- They follow the selected theme: the needle takes the theme's primary color and the zone above 0 its error color.
+- The scale runs from -20 to +3. 0 VU is a peak level of -3 dBFS, so only the loudest peaks reach the red zone. Like a real VU meter, the needles rise quickly and fall back more slowly.
+
+Turn on **Settings → Enable visualization**, then press **V** or the visualizer button until the meters appear.
+
+### Improvements
+
+#### Visualizations follow the volume
+
+Visualizations used to follow the volume only with software volume control. With an ALSA or PipeWire mixer they showed the level of the music whatever the volume was. Now every style follows the volume with every volume control type.
+
+- The display drops by half as many dB as the sound: at 50 % volume it is 9 dB lower instead of 18 dB. This keeps the needles and bars moving at normal listening volume, while turning the volume down still clearly lowers them.
+- With an ALSA hardware mixer the effect is approximate, because the mixer's own volume curve is not known and the software volume curve is used instead.
+- With volume control set to **Off**, visualizations show the level of the music itself, as before.
+
+#### Privacy
+
+- The web interface no longer sends the address or host name of your RSPlayer server as a referrer when it loads album covers, lyrics, the radio directory or the update check.
+- Album covers are always looked up on Last.fm over HTTPS, also when the web interface is opened over plain HTTP.
+- The update check asks GitHub at most once a day per browser instead of on every page load.
+- The [privacy policy](privacy_policy.md) now lists every third-party service the web interface contacts (Radio Browser, Last.fm, LRCLIB and GitHub).
+
+### Fixes
+
+- Visualizations drawn behind the player could look stretched on phones, and after resizing the window or rotating the phone, because their drawing area kept the size it had when the player first opened. It now follows the size of the player area.
+
 ## v5.2.0 (2026-09-26)
 
 ### New
