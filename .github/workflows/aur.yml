@@ -1,0 +1,74 @@
+name: Publish AUR packages
+
+# Pushes rsplayer-bin and rsplayer-desktop-bin to the AUR so Arch/Manjaro
+# users get updates through their AUR helper (yay, paru, pamac). The
+# PKGBUILDs download the release tgz files, so this runs on "released" (not
+# pre-releases): same gate as pkg-repo.yml and the flatpak repo. Can also be
+# dispatched manually with a tag to (re-)publish that release.
+#
+# Required secret (see PKGS/arch/README.md):
+# - AUR_SSH_PRIVATE_KEY: private key whose public half is on the AUR account
+#   that maintains both packages.
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish to the AUR"
+        required: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  publish:
+    name: Publish to AUR
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install tooling
+        run: |
+          pacman -Syu --noconfirm --needed base-devel git openssh github-cli
+          useradd -m builder
+
+      - name: Download release tarballs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ github.event.release.tag_name || inputs.tag }}"
+          echo "TAG=${tag}" >> "$GITHUB_ENV"
+          gh release download "$tag" -R ${{ github.repository }} --pattern '*.tgz' --dir assets
+
+      - name: Configure AUR SSH access
+        env:
+          AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p -m 700 ~/.ssh
+          echo "$AUR_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -t ed25519,rsa aur.archlinux.org >> ~/.ssh/known_hosts
+          printf 'Host aur.archlinux.org\n  User aur\n  IdentityFile ~/.ssh/aur\n' > ~/.ssh/config
+
+      # The first push of a name that does not exist on the AUR yet creates it
+      - name: Render and push PKGBUILDs
+        run: |
+          for pkg in rsplayer-bin rsplayer-desktop-bin; do
+            bash PKGS/arch/render-pkgbuild.sh "$pkg" "$TAG" assets "render/$pkg"
+            chown -R builder "render/$pkg"
+            (cd "render/$pkg" && runuser -u builder -- makepkg --printsrcinfo) > "render/$pkg/.SRCINFO"
+            git clone "ssh://aur@aur.archlinux.org/${pkg}.git" "aur-$pkg"
+            cp -a "render/$pkg/." "aur-$pkg/"
+            cd "aur-$pkg"
+            git add -A
+            if git diff --cached --quiet; then
+              echo "$pkg: already up to date"
+            else
+              git -c user.name=github-actions -c user.email=github-actions@github.com commit -m "Update to ${TAG}"
+              git push origin HEAD:master
+            fi
+            cd ..
+          done

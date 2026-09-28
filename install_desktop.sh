@@ -38,19 +38,19 @@ echo "[INFO] Device architecture: $device_arch"
 if [ "$device_arch" = "x86_64" ]; then
     deb_arch_suffix="amd64"
     rpm_arch_suffix="x86_64"
-    arch_arch_suffix="amd64"
+    arch_arch_suffix="x86_64"
 elif [ "$device_arch" = "aarch64" ]; then
     deb_arch_suffix="arm64"
     rpm_arch_suffix="aarch64"
-    arch_arch_suffix="arm64"
+    arch_arch_suffix="aarch64"
 elif [ "$device_arch" = "armv7l" ]; then
     deb_arch_suffix="armhfv7"
     rpm_arch_suffix="armv7hl"
-    arch_arch_suffix="armhfv7"
+    arch_arch_suffix="armv7h"
 elif [ "$device_arch" = "armv6l" ]; then
     deb_arch_suffix="armhfv6"
     rpm_arch_suffix="armv6hl"
-    arch_arch_suffix="armhfv6"
+    arch_arch_suffix="armv6h"
 elif [ "$device_arch" = "riscv64" ]; then
     deb_arch_suffix="riscv64"
     rpm_arch_suffix="riscv64"
@@ -81,7 +81,7 @@ if [ -f /etc/os-release ]; then
         arch|archarm|manjaro)
             pkg_type="arch"
             pkg_suffix="$arch_arch_suffix"
-            pkg_ext="tgz"
+            pkg_ext="pkg.tar.zst"
             ;;
         *)
             echo "[WARN] Unknown distribution '$ID', defaulting to deb"
@@ -147,13 +147,18 @@ try_download() {
     local suffix=$2
     local ext=$3
     local file="rsplayer-desktop_${suffix}.${ext}"
+    # Arch: rsplayer-desktop-bin-<ver>-<rel>-<carch>.pkg.tar.zst
+    local pattern="/rsplayer-desktop[^/]*[-_.]${suffix}\.${ext}$"
+    if [ "$type" = "arch" ]; then
+        pattern="/rsplayer-desktop-bin-[^/]*-${suffix}\.pkg\.tar\.zst$"
+    fi
 
     if [ "$PRE_RELEASE" = true ]; then
         echo "[INFO] Querying GitHub API for latest pre-release..."
-        URL=$(curl -s "https://api.github.com/repos/ljufa/rsplayer/releases?per_page=1" | grep browser_download_url | cut -d '"' -f 4 | grep "/rsplayer-desktop" | grep "[-_.]${suffix}\.${ext}" | head -n 1)
+        URL=$(curl -s "https://api.github.com/repos/ljufa/rsplayer/releases?per_page=1" | grep browser_download_url | cut -d '"' -f 4 | grep -E "$pattern" | head -n 1)
     else
         echo "[INFO] Querying GitHub API for latest stable release..."
-        URL=$(curl -s "https://api.github.com/repos/ljufa/rsplayer/releases/latest" | grep browser_download_url | cut -d '"' -f 4 | grep "/rsplayer-desktop" | grep "[-_.]${suffix}\.${ext}" | head -n 1)
+        URL=$(curl -s "https://api.github.com/repos/ljufa/rsplayer/releases/latest" | grep browser_download_url | cut -d '"' -f 4 | grep -E "$pattern" | head -n 1)
     fi
     if [ -z "$URL" ]; then
         echo "[WARN] No $type desktop package found for suffix=$suffix ext=$ext"
@@ -174,11 +179,28 @@ try_download() {
     fi
 }
 
+# Sets overwrite_args to --overwrite for each file of package $1 that is already
+# on disk without a pacman owner (left there by an earlier tarball install).
+overwrite_unowned() {
+    overwrite_args=()
+    local path
+    while read -r path; do
+        if [ -f "$path" ] && ! pacman -Qo "$path" >/dev/null 2>&1; then
+            overwrite_args+=(--overwrite "$path")
+        fi
+    done < <(pacman -Qlpq "$1")
+}
+
 # Direct-download install (pre-releases, other arches, Arch, repo fallback)
 if [ "$repo_install_done" = false ]; then
 
 echo "[INFO] Attempting primary package type: $pkg_type"
 if ! try_download "$pkg_type" "$pkg_suffix" "$pkg_ext"; then
+    if [ "$pkg_type" = "arch" ]; then
+        echo "[ERROR] No Arch desktop package found for $device_arch in this release."
+        echo "[ERROR] Try the AUR instead: yay -S rsplayer-desktop-bin"
+        exit 1
+    fi
     echo "[WARN] Primary package type $pkg_type not available, falling back to DEB"
     if ! try_download "deb" "$deb_arch_suffix" "deb"; then
         echo "[ERROR] No suitable desktop package found for architecture $device_arch"
@@ -202,30 +224,11 @@ case $pkg_type in
         $SUDO dnf install "./${pkg_file_name}"
         ;;
     arch)
-        echo "[INFO] Installing desktop dependencies..."
-        # Only install packages that are absent. 'pacman -S --needed' would still
-        # upgrade an outdated one on its own, i.e. a partial upgrade that breaks
-        # sonames (webkit2gtk-4.1 built against a newer glibc/libjxl than installed).
-        missing_pkgs=""
-        for p in webkit2gtk-4.1 gtk3 librsvg alsa-lib; do
-            pacman -Q "$p" >/dev/null 2>&1 || missing_pkgs="$missing_pkgs $p"
-        done
-        if [ -n "$missing_pkgs" ]; then
-            $SUDO pacman -S --needed $missing_pkgs
-        fi
-        echo "[INFO] Extracting tarball to / (files go to /usr/bin, /usr/share)"
-        $SUDO tar -xzvf "${pkg_file_name}" -C /
-        echo "[INFO] Updating icon cache..."
-        $SUDO gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || true
-        # webkit2gtk-4.1 pulls in glibc, libjxl, icu, etc. A partially upgraded
-        # system leaves them at mismatched sonames.
-        missing_libs=$(ldd /usr/bin/rsplayer-desktop 2>/dev/null | grep "not found" || true)
-        if [ -n "$missing_libs" ]; then
-            echo "[WARN] rsplayer-desktop is missing shared libraries:"
-            echo "$missing_libs"
-            echo "[WARN] Your system packages are out of sync (partial upgrade)."
-            echo "[WARN] Run 'sudo pacman -Syu' to fully upgrade, then start rsplayer-desktop again."
-        fi
+        # Take over files left on disk by an earlier installer version, which
+        # extracted a tarball to / instead of installing a package.
+        overwrite_unowned "./${pkg_file_name}"
+        echo "[INFO] Installing with pacman (resolves dependencies automatically)"
+        $SUDO pacman -U "${overwrite_args[@]}" "./${pkg_file_name}"
         ;;
 esac
 

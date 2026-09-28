@@ -1,0 +1,32 @@
+# Maintainer: Dragan Ljubojevic <dragan.ljubojevic@gmail.com>
+#
+# Rendered by PKGS/arch/render-pkgbuild.sh: @VERSION@, @LICENSE_SHA256@ and
+# @ARCH_SOURCES@ are filled in from the repo and the release tarballs. Repackages the prebuilt release binary.
+pkgname=rsplayer-bin
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="Hi-fi music player with bit-perfect playback (headless server with web UI)"
+url="https://github.com/ljufa/rsplayer"
+license=('MIT')
+depends=('alsa-lib' 'libgcc' 'glibc')
+optdepends=('nfs-utils: mount NFS music shares'
+            'cifs-utils: mount SMB music shares'
+            'polkit: power off / reboot from the web UI')
+provides=('rsplayer')
+conflicts=('rsplayer')
+backup=('opt/rsplayer/env' 'opt/rsplayer/self.crt' 'opt/rsplayer/self.key')
+options=('!strip' '!debug')
+install=rsplayer-bin.install
+# The release tarballs carry no license file; take it from the release tag
+source=("LICENSE-${pkgver}::https://raw.githubusercontent.com/ljufa/rsplayer/${pkgver}/LICENSE")
+sha256sums=('@LICENSE_SHA256@')
+@ARCH_SOURCES@
+
+package() {
+    cd "$srcdir"
+    install -Dm755 usr/bin/rsplayer "$pkgdir/usr/bin/rsplayer"
+    install -Dm644 etc/systemd/system/rsplayer.service "$pkgdir/usr/lib/systemd/system/rsplayer.service"
+    install -Dm644 etc/polkit-1/rules.d/99-rsplayer.rules "$pkgdir/usr/share/polkit-1/rules.d/99-rsplayer.rules"
+    install -Dm644 -t "$pkgdir/opt/rsplayer" opt/rsplayer/env opt/rsplayer/self.crt opt/rsplayer/self.key
+    install -Dm644 "LICENSE-$pkgver" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

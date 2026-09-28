@@ -114,7 +114,6 @@ See the [Configuration](configuration.md) page for hardware integration details.
 - **Desktop App File Logging**: Rolling log files for the desktop app, so users can capture and share diagnostics without running from a terminal.
 - **Homebrew Distribution**: Install and update RSPlayer on macOS through a Homebrew formula/cask.
 - **Android App on Google Play**: publish the Android app (shipped as an APK since v4.9.0) to the Play Store, and add an optional kiosk mode for dedicated players.
-- **AUR Package**: An official Arch User Repository package for Arch Linux and derivatives.
 
 ## Contributing
 

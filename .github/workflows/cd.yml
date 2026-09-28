@@ -221,6 +221,51 @@ jobs:
           path: target/aarch64-unknown-linux-gnu/pkg/rsplayer-desktop*
           if-no-files-found: error
 
+  build_arch_pkgs:
+    needs: [build_backend, build_desktop_linux, build_desktop_linux_arm64]
+    name: Build Arch packages (.pkg.tar.zst)
+    # Repackages the release tgz files built above; every arch is packaged on
+    # one x86_64 Arch host since nothing is compiled. !cancelled(): a failed
+    # target only drops its own arch (render-pkgbuild.sh skips missing tgz).
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.target == 'all') }}
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Linux server (pkg-<triple>) and desktop (pkg-desktop-linux-<arch>) builds
+      - name: Download server and desktop packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: pkg-*linux*
+          path: assets
+          merge-multiple: true
+
+      - name: Install makepkg
+        run: pacman -Syu --noconfirm --needed base-devel
+
+      # Output: the .pkg.tar.zst release assets, plus the rendered
+      # PKGBUILD/.SRCINFO per package under out/aur/ (aur.yml renders its own
+      # from the published release; this copy is for inspection)
+      - name: Build Arch packages
+        run: |
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          bash PKGS/arch/build-pkgs.sh "$version" assets out
+
+      - name: Upload Arch packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: pkg-arch
+          path: out/*.pkg.tar.zst
+          if-no-files-found: error
+
+      - name: Upload rendered PKGBUILDs
+        uses: actions/upload-artifact@v7
+        with:
+          name: arch-pkgbuilds
+          path: out/aur/
+          include-hidden-files: true
+
   build_snap:
     needs: build_ui
     name: Build Snap (${{ matrix.arch }})
@@ -554,7 +599,7 @@ jobs:
     # Collects every build's artifacts (and creates the draft release on tag pushes) —
     # only meaningful for a full run, so single-build dispatches skip it.
     if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.target == 'all') }}
-    needs: [build_backend, build_desktop_macos, build_desktop_linux, build_desktop_linux_arm64, build_desktop_windows, build_snap, build_flatpak, build_android]
+    needs: [build_backend, build_desktop_macos, build_desktop_linux, build_desktop_linux_arm64, build_arch_pkgs, build_desktop_windows, build_snap, build_flatpak, build_android]
     name: Create release
     runs-on: [self-hosted, linux, x64]
     steps:

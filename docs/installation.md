@@ -23,7 +23,7 @@ bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/main/install.sh)
 
 The script detects your distribution and architecture, installs RSPlayer and starts the service. At the end it prints the address to open in your browser — usually `http://<device-ip>`, for example `http://raspberrypi.local`.
 
-On Debian/Ubuntu and Fedora/openSUSE it adds the [RSPlayer package repository](https://ljufa.github.io/rsplayer-pkg), so future updates arrive with your regular `apt upgrade` / `dnf upgrade`. On Arch it installs the release tarball. Run the same command again to upgrade on Arch, or add `--pre-release` to try the latest pre-release.
+On Debian/Ubuntu and Fedora/openSUSE it adds the [RSPlayer package repository](https://ljufa.github.io/rsplayer-pkg), so future updates arrive with your regular `apt upgrade` / `dnf upgrade`. On Arch and Manjaro it installs the `rsplayer-bin` pacman package from the release; run the same command again to upgrade, or install it from the [AUR](?id=arch-linux-and-manjaro-aur) instead to get updates with your system upgrade. Add `--pre-release` to try the latest pre-release.
 
 If the page doesn't load:
 
@@ -62,9 +62,21 @@ Download the file for your system from the [latest release](https://github.com/l
 ```bash
 sudo apt install ./rsplayer_*_arm64.deb     # Debian / Ubuntu / Raspberry Pi OS
 sudo dnf install ./rsplayer_*_x86_64.rpm    # Fedora / RHEL / openSUSE
+sudo pacman -U ./rsplayer-bin-*-x86_64.pkg.tar.zst   # Arch / Manjaro
 ```
 
-On Arch, the `.tgz` is extracted to `/` — the install script handles the required users and groups for you.
+The package sets up the `rsplayer` user and starts the service.
+
+### Arch Linux and Manjaro (AUR)
+
+The server and the desktop app are on the AUR as `rsplayer-bin` and `rsplayer-desktop-bin`. Install them with your AUR helper, and updates arrive with your regular system upgrade:
+
+```bash
+yay -S rsplayer-bin            # server
+yay -S rsplayer-desktop-bin    # desktop app
+```
+
+On Manjaro you can also find them in **Add/Remove Software** (pamac) once AUR support is enabled in its preferences. They are the same packages the install scripts use, so you can switch between the two.
 
 ### Run the binary without installing
 
@@ -115,7 +127,7 @@ Grant other music folders with [Flatseal](https://flathub.org/apps/com.github.tc
 
 ### Desktop app (native package)
 
-Installs the `.deb` / `.rpm` from the package repository (x86_64 and ARM64), or the release tarball on Arch:
+Installs the `.deb` / `.rpm` from the package repository (x86_64 and ARM64), or the `rsplayer-desktop-bin` pacman package on Arch and Manjaro (also on the [AUR](?id=arch-linux-and-manjaro-aur)):
 
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/main/install_desktop.sh)
@@ -186,11 +198,11 @@ Then open `http://localhost:8000`. A ready-made [docker-compose.yaml](https://gi
 
 | Architecture | Typical devices | Debian / Ubuntu / Raspberry Pi OS | Fedora / RHEL / openSUSE | Arch / Manjaro | Docker | Nix |
 |:---|:---|:---|:---|:---|:---:|:---:|
-| **x86_64** | Intel/AMD PCs, servers, NAS | `.deb` **S+D** | `.rpm` **S+D** | `.tgz` **S+D** | ✓ | ✓ |
-| **ARM64** (aarch64) | RPi 4, RPi 5, ARMv8 boards | `.deb` **S+D** | `.rpm` **S+D** | `.tgz` **S+D** | — | ✓ |
-| **ARMv7** | RPi 2, RPi 3, 32-bit RPi 4 | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
-| **ARMv6** | RPi Zero, RPi Zero W, RPi 1 | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
-| **RISC-V 64** | RISC-V 64-bit boards | `.deb` S | `.rpm` S | `.tgz` S | — | ✓ |
+| **x86_64** | Intel/AMD PCs, servers, NAS | `.deb` **S+D** | `.rpm` **S+D** | `.pkg.tar.zst` **S+D** | ✓ | ✓ |
+| **ARM64** (aarch64) | RPi 4, RPi 5, ARMv8 boards | `.deb` **S+D** | `.rpm` **S+D** | `.pkg.tar.zst` **S+D** | — | ✓ |
+| **ARMv7** | RPi 2, RPi 3, 32-bit RPi 4 | `.deb` S | `.rpm` S | `.pkg.tar.zst` S | — | ✓ |
+| **ARMv6** | RPi Zero, RPi Zero W, RPi 1 | `.deb` S | `.rpm` S | `.pkg.tar.zst` S | — | ✓ |
+| **RISC-V 64** | RISC-V 64-bit boards | `.deb` S | `.rpm` S | `.pkg.tar.zst` S | — | ✓ |
 
 **S** = server, **D** = desktop app. macOS (Apple Silicon and Intel) and Windows (x86_64) have both a server binary and a desktop app. Android (ARM64 and ARMv7, Android 8.0+) has the desktop app as an APK.
 
@@ -198,12 +210,12 @@ Not supported yet: FreeBSD.
 
 ### Release file names
 
-| Architecture | `.deb` | `.rpm` | `.tgz` (Arch) |
-|:---|:---|:---|:---|
-| x86_64 | `amd64` | `x86_64` | `amd64` |
-| aarch64 | `arm64` | `aarch64` | `arm64` |
-| armv7 | `armhfv7` | `armv7hl` | `armhfv7` |
-| armv6 | `armhfv6` | `armv6hl` | `armhfv6` |
-| riscv64 | `riscv64` | `riscv64` | `riscv64` |
+| Architecture | `.deb` | `.rpm` | `.pkg.tar.zst` (Arch) | `.tgz` |
+|:---|:---|:---|:---|:---|
+| x86_64 | `amd64` | `x86_64` | `x86_64` | `amd64` |
+| aarch64 | `arm64` | `aarch64` | `aarch64` | `arm64` |
+| armv7 | `armhfv7` | `armv7hl` | `armv7h` | `armhfv7` |
+| armv6 | `armhfv6` | `armv6hl` | `armv6h` | `armhfv6` |
+| riscv64 | `riscv64` | `riscv64` | `riscv64` | `riscv64` |
 
-Examples: `rsplayer_<version>_arm64.deb` (server), `rsplayer-desktop_<version>_amd64.deb` (desktop app), `rsplayer-desktop_<version>_amd64.tgz` (desktop app for Arch), `rsplayer_darwin_arm64` (macOS server binary), `rsplayer_<version>_android.apk` (Android app, all ABIs in one file).
+Examples: `rsplayer_<version>_arm64.deb` (server), `rsplayer-desktop_<version>_amd64.deb` (desktop app), `rsplayer-desktop-bin-<version>-1-x86_64.pkg.tar.zst` (desktop app for Arch), `rsplayer_<version>_amd64.tgz` (plain file tree the Arch packages are made from), `rsplayer_darwin_arm64` (macOS server binary), `rsplayer_<version>_android.apk` (Android app, all ABIs in one file).

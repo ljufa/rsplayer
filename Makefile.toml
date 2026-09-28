@@ -90,10 +90,6 @@ script = [
     "(cd ${ARCH_DIR}/rootfs && tar -czf ${PKG_DIR}/rsplayer-desktop_${RELEASE_VERSION}_${ARCH_SUFFIX}.tgz .)",
     "rm -rf ${ARCH_DIR}/rootfs",
     "echo \"Arch desktop package: ${PKG_DIR}/rsplayer-desktop_${RELEASE_VERSION}_${ARCH_SUFFIX}.tgz\"",
-    "# Also copy PKGBUILD and install script alongside for source-based installs",
-    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" -e \"s/@ARCH@/${HOST_ARCH}/g\" ../../PKGS/arch/desktop/PKGBUILD.in > ${ARCH_DIR}/PKGBUILD",
-    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" ../../PKGS/arch/desktop/rsplayer-desktop.install.in > ${ARCH_DIR}/rsplayer-desktop.install",
-    "echo 'Arch desktop PKGBUILD ready at ${ARCH_DIR}/PKGBUILD'",
 ]
 
 [tasks.bundle_desktop_release_aarch64]
@@ -127,8 +123,6 @@ script = [
     "RELEASE_VERSION=$(grep -m1 '^version' Cargo.toml | cut -d'\"' -f2)",
     "(cd ${ARCH_DIR}/rootfs && tar -czf ${PKG_DIR}/rsplayer-desktop_${RELEASE_VERSION}_arm64.tgz .)",
     "rm -rf ${ARCH_DIR}/rootfs",
-    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" -e \"s/@ARCH@/aarch64/g\" PKGS/arch/desktop/PKGBUILD.in > ${ARCH_DIR}/PKGBUILD",
-    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" PKGS/arch/desktop/rsplayer-desktop.install.in > ${ARCH_DIR}/rsplayer-desktop.install",
     "ls -la ${PKG_DIR}/rsplayer-desktop*",
 ]
 
@@ -216,8 +210,6 @@ script = [
     "  riscv64gc-unknown-linux-gnu) arch_arch=riscv64 ;;",
     "  *) arch_arch=${TARGET} ;;",
     "esac",
-    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" -e \"s/@ARCH@/${arch_arch}/g\" PKGS/arch/PKGBUILD.in > ${ARCH_DIR}/PKGBUILD",
-    "sed -e \"s/@VERSION@/${RELEASE_VERSION}/g\" PKGS/arch/rsplayer.install.in > ${ARCH_DIR}/rsplayer.install",
     "mkdir -p ${ARCH_DIR}/rootfs/usr/bin ${ARCH_DIR}/rootfs/etc/systemd/system ${ARCH_DIR}/rootfs/etc/polkit-1/rules.d ${ARCH_DIR}/rootfs/opt/rsplayer",
     "cp ${ARCH_DIR}/rsplayer ${ARCH_DIR}/rootfs/usr/bin/rsplayer && chmod 755 ${ARCH_DIR}/rootfs/usr/bin/rsplayer",
     "cp ${ARCH_DIR}/rsplayer.service ${ARCH_DIR}/rootfs/etc/systemd/system/rsplayer.service",
@@ -260,6 +252,17 @@ dependencies = [
     "package_rpm_release",
     "package_arch_release",
     "stage_binary_release",
+]
+
+[tasks.package_arch_pkgs]
+description = "Build the Arch packages (rsplayer-bin, rsplayer-desktop-bin .pkg.tar.zst) from the release tgz files in ARCH_ASSETS (default: every target/cross/*/pkg), in an archlinux container. Output: target/arch-pkg/"
+script = [
+    "set -e",
+    "RELEASE_VERSION=$(grep -m1 '^version' Cargo.toml | cut -d'\"' -f2)",
+    "ASSETS=$(pwd)/target/arch-pkg/assets",
+    "rm -rf target/arch-pkg && mkdir -p ${ASSETS}",
+    "if [ -n \"${ARCH_ASSETS}\" ]; then cp ${ARCH_ASSETS}/*.tgz ${ASSETS}/; else cp target/cross/*/pkg/*.tgz ${ASSETS}/; fi",
+    "docker run --rm -v $(pwd):/src:ro -v ${ASSETS}:/assets:ro -v $(pwd)/target/arch-pkg:/out archlinux:latest bash -c \"pacman -Syu --noconfirm --needed base-devel >/dev/null && bash /src/PKGS/arch/build-pkgs.sh ${RELEASE_VERSION} /assets /out && chown -R $(id -u):$(id -g) /out\"",
 ]
 
 # ═══════════════════════════════════════════

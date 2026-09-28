@@ -1,0 +1,42 @@
+# Same service user setup as the deb/rpm packages. The user is created here
+# (not via sysusers.d) because post_install starts the service, which runs
+# before pacman's post-transaction sysusers hook.
+_setup_user() {
+    for g in audio dialout i2c gpio spi input rsplayer; do
+        getent group "$g" >/dev/null || groupadd -r "$g"
+    done
+    if ! getent passwd rsplayer >/dev/null; then
+        useradd -r -s /usr/bin/nologin -d /opt/rsplayer -g rsplayer rsplayer
+    fi
+    # uucp owns USB serial devices on Arch (dialout on Debian): RP2040 front panel
+    usermod -a -G audio,dialout,uucp,i2c,gpio,spi,input rsplayer 2>/dev/null || true
+    mkdir -p /mnt/rsplayer
+    chown rsplayer /mnt/rsplayer
+}
+
+post_install() {
+    _setup_user
+    chown -R rsplayer /opt/rsplayer
+    systemctl daemon-reload
+    systemctl enable rsplayer
+    # restart, not start: replaces a server left running by an earlier tarball install
+    systemctl restart rsplayer
+}
+
+post_upgrade() {
+    _setup_user
+    # pacman writes packaged files as root; the server needs to own these
+    chown rsplayer /opt/rsplayer /opt/rsplayer/env /opt/rsplayer/self.crt /opt/rsplayer/self.key
+    systemctl daemon-reload
+    systemctl try-restart rsplayer
+}
+
+pre_remove() {
+    systemctl disable --now rsplayer
+}
+
+post_remove() {
+    systemctl daemon-reload
+    echo "The rsplayer user, its data in /opt/rsplayer and /mnt/rsplayer were kept."
+    echo "Remove them with: userdel rsplayer && rm -rf /opt/rsplayer"
+}

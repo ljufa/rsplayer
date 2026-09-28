@@ -237,6 +237,22 @@ for regenerating `cargo-sources.json`, building locally with `flatpak-builder`,
 and the release checklist. The manifest builds a staged copy of the workspace
 offline from vendored crates plus the pre-built `dist/web-ui`.
 
+## Arch Linux packages (pacman / AUR)
+
+`rsplayer-bin` (server) and `rsplayer-desktop-bin` (desktop app) wrap the
+release `.tgz` file trees; nothing is compiled. The `build_arch_pkgs` job of
+the "Full release" workflow runs `makepkg` in an `archlinux` container for
+every architecture and attaches the `.pkg.tar.zst` files to the release;
+`aur.yml` pushes the same PKGBUILDs to the AUR when the release is promoted
+to a full release. Locally, after the tgz files exist:
+
+```bash
+cargo make package_arch_pkgs    # needs Docker; output in target/arch-pkg/
+```
+
+See [`PKGS/arch/README.md`](https://github.com/ljufa/rsplayer/blob/master/PKGS/arch/README.md)
+for the layout and the one-time AUR setup.
+
 ## Android (desktop app)
 
 The Android app is the Tauri desktop crate built for Android (Tauri mobile):
@@ -365,3 +381,33 @@ When local `cargo-make` cross target-dir override is active, artifacts are under
 `target/cross/${TARGET}/release/`
 
 For example: `target/aarch64-unknown-linux-gnu/debian/rsplayer_<version>_arm64.deb`
+
+
+
+# Create a folder under the drive root
+$ mkdir actions-runner; cd actions-runner# Download the latest runner package
+$ Invoke-WebRequest -Uri https://github.com/actions/runner/releases/download/v2.335.1/actions-runner-win-x64-2.335.1.zip -OutFile actions-runner-win-x64-2.335.1.zip
+# Optional: Validate the hash
+$ if((Get-FileHash -Path actions-runner-win-x64-2.335.1.zip -Algorithm SHA256).Hash.ToUpper() -ne 'eb65c95277af42bcf3778a799c41359d224ba2a67b4de26b7cea1729b09c803d'.ToUpper()){ throw 'Computed checksum did not match' }
+# Extract the installer
+$ Add-Type -AssemblyName System.IO.Compression.FileSystem ; [System.IO.Compression.ZipFile]::ExtractToDirectory("$PWD/actions-runner-win-x64-2.335.1.zip", "$PWD")
+
+
+./config.cmd --url https://github.com/ljufa/rsplayer_private --token AEF4FRO2KOC4NTZF4ZCN3G3KJKA4Q
+
+
+
+winget install --id Git.Git -e                     # git (checkout) + Git Bash
+winget install --id Rustlang.Rustup -e             # rustup / cargo
+winget install --id LLVM.LLVM -e                   # libclang for bindgen (ASIO)
+winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+
+# Rust toolchain + MSVC target
+rustup toolchain install stable
+rustup target add x86_64-pc-windows-msvc
+
+# Optional: pre-install so it isn't rebuilt every run
+cargo install tauri-cli --version "^2" --locked
+
+
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force

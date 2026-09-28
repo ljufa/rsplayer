@@ -1,0 +1,34 @@
+# Maintainer: Dragan Ljubojevic <dragan.ljubojevic@gmail.com>
+#
+# Rendered by PKGS/arch/render-pkgbuild.sh: @VERSION@, @LICENSE_SHA256@ and
+# @ARCH_SOURCES@ are filled in from the repo and the release tarballs. Repackages the prebuilt release binary.
+pkgname=rsplayer-desktop-bin
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="Hi-fi music player with bit-perfect playback (desktop app)"
+url="https://github.com/ljufa/rsplayer"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3' 'glib2' 'librsvg' 'alsa-lib' 'dbus' 'libgcc' 'glibc' 'hicolor-icon-theme')
+optdepends=('libayatana-appindicator: system tray icon'
+            'polkit: mount SMB/NFS music shares'
+            'nfs-utils: mount NFS music shares'
+            'cifs-utils: mount SMB music shares')
+provides=('rsplayer-desktop')
+conflicts=('rsplayer-desktop')
+options=('!strip' '!debug')
+# The release tarballs carry no license file; take it from the release tag
+source=("LICENSE-${pkgver}::https://raw.githubusercontent.com/ljufa/rsplayer/${pkgver}/LICENSE")
+sha256sums=('@LICENSE_SHA256@')
+@ARCH_SOURCES@
+
+package() {
+    cd "$srcdir"
+    install -Dm755 usr/bin/rsplayer-desktop "$pkgdir/usr/bin/rsplayer-desktop"
+    install -Dm755 usr/libexec/rsplayer-mount-helper "$pkgdir/usr/libexec/rsplayer-mount-helper"
+    install -Dm644 usr/share/polkit-1/actions/io.github.ljufa.rsplayer.policy "$pkgdir/usr/share/polkit-1/actions/io.github.ljufa.rsplayer.policy"
+    install -Dm644 usr/share/applications/rsplayer-desktop.desktop "$pkgdir/usr/share/applications/rsplayer-desktop.desktop"
+    for size in 32x32 128x128 256x256; do
+        install -Dm644 "usr/share/icons/hicolor/$size/apps/rsplayer-desktop.png" "$pkgdir/usr/share/icons/hicolor/$size/apps/rsplayer-desktop.png"
+    done
+    install -Dm644 "LICENSE-$pkgver" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

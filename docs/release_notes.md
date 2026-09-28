@@ -16,6 +16,15 @@ The new **Analog** visualizer style shows two needle VU meters, one per channel,
 
 Turn on **Settings → Enable visualization**, then press **V** or the visualizer button until the meters appear.
 
+#### Arch Linux packages
+
+On Arch Linux and Manjaro, RSPlayer is now a real pacman package instead of a tarball extracted to `/`. The server is `rsplayer-bin` and the desktop app is `rsplayer-desktop-bin`.
+
+- `install.sh` and `install_desktop.sh` install them with `pacman -U`, so pacman resolves the dependencies, knows every installed file and can remove them again with `sudo pacman -R rsplayer-bin`.
+- The same packages are on the AUR, so you can install with `yay -S rsplayer-bin` (or pamac on Manjaro) and get updates with your normal system upgrade.
+- An existing tarball install is taken over when you run the install script again. A changed `/opt/rsplayer/env` is kept, and the new default is saved next to it as `env.pacnew`.
+- The systemd unit and the polkit rule of the server moved to `/usr/lib/systemd/system` and `/usr/share/polkit-1/rules.d`, where Arch packages keep them. The script removes the old copies from `/etc`.
+
 ### Improvements
 
 #### Visualizations follow the volume
@@ -35,6 +44,7 @@ Visualizations used to follow the volume only with software volume control. With
 
 ### Fixes
 
+- The desktop install script could break the app on Arch Linux and Manjaro. It installed the dependencies with `pacman -S --needed`, which also upgrades an already installed but outdated WebKitGTK on its own, without the rest of the system. The app then failed to start with an error such as `libjxl.so.0.12: cannot open shared object file`. The script now installs the app as a pacman package, which only installs dependencies that are missing. If you hit this error, run `sudo pacman -Syu`.
 - Visualizations drawn behind the player could look stretched on phones, and after resizing the window or rotating the phone, because their drawing area kept the size it had when the player first opened. It now follows the size of the player area.
 
 ## v5.2.0 (2026-09-26)

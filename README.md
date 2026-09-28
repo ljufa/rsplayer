@@ -70,7 +70,9 @@ sudo curl -fsSL -o /etc/yum.repos.d/rsplayer.repo https://ljufa.github.io/rsplay
 sudo dnf install rsplayer
 ```
 
-`.deb`, `.rpm` and `.tgz` files for manual install are on the [release page](https://github.com/ljufa/rsplayer/releases/latest).
+On Arch Linux and Manjaro you can also install from the AUR: `yay -S rsplayer-bin` (server) or `yay -S rsplayer-desktop-bin` (desktop app).
+
+`.deb`, `.rpm` and `.pkg.tar.zst` files for manual install are on the [release page](https://github.com/ljufa/rsplayer/releases/latest).
 </details>
 
 ### Linux desktop app
