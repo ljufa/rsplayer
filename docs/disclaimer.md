@@ -21,4 +21,4 @@ Back up your music library and configuration. The developer is not responsible f
 
 ## Privacy
 
-See the [Privacy Policy](privacy_policy.md).
+See the [Privacy Policy](https://rsplayer.de/privacy.html).

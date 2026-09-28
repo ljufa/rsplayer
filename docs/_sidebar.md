@@ -1,5 +1,4 @@
 - [Home](/)
-- [rsplayer.de](https://rsplayer.de)
 - **Getting Started**
   - [Installation](installation.md)
   - [Configuration](configuration.md)
@@ -12,5 +11,7 @@
   - [Multiroom Architecture](multiroom_architecture.md)
   - [Release Notes](release_notes.md)
   - [Feature Parity](feature_parity.md)
+- **Legal**
   - [Disclaimer](disclaimer.md)
-  - [Privacy Policy](privacy_policy.md)
+  - [Privacy Policy](https://rsplayer.de/privacy.html)
+  - [Legal Notice](https://rsplayer.de/impressum.html)

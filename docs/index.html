@@ -13,6 +13,15 @@
     :root {
       --theme-color: #090240;
     }
+    /* Footer added to every page by the plugin in window.$docsify */
+    .site-footer {
+      margin-top: 4em;
+      padding-top: 1.2em;
+      border-top: 1px solid #eee;
+      font-size: 0.85em;
+      color: #7f8c8d;
+    }
+    .markdown-section .site-footer a { color: inherit; font-weight: normal; }
     /* Dark theme: RSPlayer brand colors (navy, cream, VU-meter red), as on rsplayer.de.
        Every text color is at least 5:1 against the background it sits on. */
     @media (prefers-color-scheme: dark) {
@@ -100,6 +109,8 @@
       .token.string, .token.attr-value { color: #9be48f; }
       .token.function, .token.selector, .token.keyword, .token.builtin { color: #9ab8ff; }
       .token.number, .token.boolean, .token.property, .token.parameter { color: #f3c98b; }
+      .markdown-section .site-footer { border-top-color: var(--border); color: var(--text-muted); }
+      .markdown-section .site-footer a { color: var(--text); }
     }
     .app-name-link img {
       max-width: 180px;
@@ -125,6 +136,8 @@
       // Render :emoji: as unicode instead of images from github.githubassets.com.
       nativeEmoji: true,
       name: 'RSPlayer',
+      // The logo leads to the main site (also linked in the footer); "Home" opens the docs start page.
+      nameLink: 'https://rsplayer.de/',
       logo: '_assets/banner-light.svg',
       repo: 'ljufa/rsplayer',
       coverpage: false,
@@ -143,6 +156,16 @@
         hideOtherSidebarContent: true,
       },
       plugins: [
+        // Privacy policy and legal notice links on every page (they live on rsplayer.de).
+        function (hook) {
+          hook.afterEach(function (html) {
+            return html +
+              '<footer class="site-footer"><a href="https://rsplayer.de/">rsplayer.de</a> · ' +
+              'Open source, <a href="https://github.com/ljufa/rsplayer/blob/main/LICENSE">MIT license</a> · ' +
+              '<a href="https://rsplayer.de/privacy.html">Privacy</a> · ' +
+              '<a href="https://rsplayer.de/impressum.html">Legal notice</a></footer>';
+          });
+        },
         // Page views go to the self-hosted GoatCounter at stats.rsplayer.de (no cookies).
         // docsify routes by URL hash, so count each route change as /docs/<page>.
         function (hook, vm) {
