@@ -203,11 +203,29 @@ case $pkg_type in
         ;;
     arch)
         echo "[INFO] Installing desktop dependencies..."
-        $SUDO pacman -S --needed webkit2gtk-4.1 gtk3 librsvg alsa-lib
+        # Only install packages that are absent. 'pacman -S --needed' would still
+        # upgrade an outdated one on its own, i.e. a partial upgrade that breaks
+        # sonames (webkit2gtk-4.1 built against a newer glibc/libjxl than installed).
+        missing_pkgs=""
+        for p in webkit2gtk-4.1 gtk3 librsvg alsa-lib; do
+            pacman -Q "$p" >/dev/null 2>&1 || missing_pkgs="$missing_pkgs $p"
+        done
+        if [ -n "$missing_pkgs" ]; then
+            $SUDO pacman -S --needed $missing_pkgs
+        fi
         echo "[INFO] Extracting tarball to / (files go to /usr/bin, /usr/share)"
         $SUDO tar -xzvf "${pkg_file_name}" -C /
         echo "[INFO] Updating icon cache..."
         $SUDO gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || true
+        # webkit2gtk-4.1 pulls in glibc, libjxl, icu, etc. A partially upgraded
+        # system leaves them at mismatched sonames.
+        missing_libs=$(ldd /usr/bin/rsplayer-desktop 2>/dev/null | grep "not found" || true)
+        if [ -n "$missing_libs" ]; then
+            echo "[WARN] rsplayer-desktop is missing shared libraries:"
+            echo "$missing_libs"
+            echo "[WARN] Your system packages are out of sync (partial upgrade)."
+            echo "[WARN] Run 'sudo pacman -Syu' to fully upgrade, then start rsplayer-desktop again."
+        fi
         ;;
 esac
 
