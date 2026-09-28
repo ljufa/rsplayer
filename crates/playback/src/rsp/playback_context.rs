@@ -36,21 +36,15 @@ pub struct PlaybackContext {
 }
 
 impl PlaybackContext {
-    pub fn new(
+    pub const fn new(
         stop_signal: Arc<AtomicBool>,
         skip_to_time: Arc<AtomicU16>,
         software_gain: Option<Arc<AtomicU8>>,
         changes_tx: Sender<StateChangeEvent>,
         dsp_handle: Option<DspHandle>,
-        vu_meter_enabled: bool,
+        vu_meter: Option<VUMeter>,
         sync_tee: Option<SyncTee>,
     ) -> Self {
-        let vu_meter = if vu_meter_enabled {
-            Some(VUMeter::new(software_gain.clone(), changes_tx.clone()))
-        } else {
-            None
-        };
-
         Self {
             stop_signal,
             skip_to_time,

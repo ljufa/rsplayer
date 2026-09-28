@@ -36,7 +36,7 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 - **Drag-and-Drop Queue Reordering**: Reorder queue items by dragging them directly in the queue view.
 - **DSP Integration**: Advanced Digital Signal Processing with parametric EQ, filters, and presets.
 - **Loudness Normalization**: Per-song EBU R128 loudness normalization, toggleable from the settings page. Analysis runs automatically in the background while playback is stopped and results are stored permanently.
-- **Music Visualizer**: Real-time audio visualization in the web interface, with 12 animated visualizer styles.
+- **Music Visualizer**: Real-time audio visualization in the web interface, with 13 visualizer styles, including an analog VU meter.
 - **Synchronized Lyrics**: Real-time synchronized lyrics support via LRCLIB integration.
 - **Library Statistics**: Dedicated statistics page showing song/album/artist counts, total duration, play history, top genres, albums by decade, and loudness analysis progress.
 - **Web UI Themes**: Support for customizable themes and dark/light modes (10+ built-in themes).

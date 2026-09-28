@@ -20,6 +20,16 @@ pub fn cubic_gain(volume: u8) -> f32 {
     v * v * v
 }
 
+/// Volume factor for the meter: half of the [`cubic_gain`] attenuation in dB
+/// (`(vol/100)^1.5`). The full curve puts 50 % volume at -18 dB, nearly the
+/// whole ~23 dB range of a VU scale, leaving the needles parked at the left
+/// stop at normal listening levels. Half keeps them moving there while
+/// turning the volume down still clearly lowers the meter.
+#[inline]
+fn meter_gain(volume: u8) -> f32 {
+    cubic_gain(volume).sqrt()
+}
+
 /// VU meter state and logic.
 ///
 /// When VU metering is disabled the caller should simply not create a
@@ -32,22 +42,24 @@ pub struct VUMeter {
     current_max_l: f32,
     /// Current maximum absolute sample value (right channel).
     current_max_r: f32,
-    /// Software gain level (0-100), `Some` only when software volume control
-    /// is active. The meter then shows the post-gain level actually sent to
-    /// the device. With hardware volume control the meter shows the source
-    /// amplitude — attenuation happens after the DAC where we cannot see it.
-    software_gain: Option<Arc<AtomicU8>>,
+    /// Volume level (0-100) applied through [`meter_gain`], so the meter
+    /// follows the volume the listener hears. With software volume this
+    /// mirrors the gain actually applied; with a hardware mixer (ALSA,
+    /// `PipeWire`) the attenuation happens after the DAC where we cannot see
+    /// it, so the same curve stands in for it. `None` (no volume control)
+    /// meters the source.
+    volume: Option<Arc<AtomicU8>>,
     /// Channel to send VU events to the frontend.
     changes_tx: Sender<StateChangeEvent>,
 }
 
 impl VUMeter {
-    pub(crate) fn new(software_gain: Option<Arc<AtomicU8>>, changes_tx: Sender<StateChangeEvent>) -> Self {
+    pub(crate) fn new(volume: Option<Arc<AtomicU8>>, changes_tx: Sender<StateChangeEvent>) -> Self {
         Self {
             last_update: std::time::Instant::now(),
             current_max_l: 0.0,
             current_max_r: 0.0,
-            software_gain,
+            volume,
             changes_tx,
         }
     }
@@ -56,9 +68,9 @@ impl VUMeter {
     /// `samples` is an interleaved slice of channel-count samples.
     pub(crate) fn update_peaks(&mut self, channels: usize, samples: &[impl IntoSample<f32> + Copy]) {
         let volume_factor = self
-            .software_gain
+            .volume
             .as_ref()
-            .map_or(1.0, |level| cubic_gain(level.load(Ordering::Relaxed)));
+            .map_or(1.0, |level| meter_gain(level.load(Ordering::Relaxed)));
         if channels >= 2 {
             for chunk in samples.chunks(channels) {
                 if chunk.len() >= 2 {

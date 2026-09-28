@@ -48,6 +48,7 @@ use super::symphonia::{OutputUnavailable, PlaybackResult};
 use crate::rsp::playback_config::PlaybackConfig;
 use crate::rsp::playback_context::PlaybackContext;
 use crate::rsp::tee::SyncTee;
+use crate::rsp::vumeter::VUMeter;
 
 /// Supplies a per-song start offset (seconds) consulted right before a
 /// track begins playing; `None` means start from the beginning.
@@ -119,6 +120,9 @@ pub struct PlayerService {
     last_known_time: Arc<AtomicU32>,
     current_volume: Arc<AtomicU8>,
     software_gain_active: bool,
+    /// Volume in percent of the mixer range for the VU meter; `None` when
+    /// there is no volume control.
+    meter_volume: Option<Arc<AtomicU8>>,
     audio_device: String,
     rsp_settings: RsPlayerSettings,
     local_browser_playback: bool,
@@ -140,6 +144,16 @@ const LAST_SONG_PROGRESS_KEY: &str = "last_played_song_progress";
 const PLAYBACK_SOURCE_KEY: &str = "playback_source";
 /// Progress of the queue song when playback switched to radio/podcast.
 const QUEUE_RESUME_SECS_KEY: &str = "queue_resume_secs";
+
+/// Volume as percent of the mixer range, the value the web UI shows.
+fn volume_percent(vol: api_models::common::Volume) -> u8 {
+    if vol.max == 0 {
+        return 0;
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    let pct = (u16::from(vol.current.min(vol.max)) * 100 / u16::from(vol.max)) as u8;
+    pct
+}
 
 impl PlayerService {
     #[must_use]
@@ -168,6 +182,16 @@ impl PlayerService {
         let last_known_time_clone = last_known_time.clone();
         let current_volume_clone = current_volume.clone();
         let software_gain_active = settings.volume_ctrl_settings.ctrl_device == api_models::common::VolumeCrtlType::Software;
+        // Hardware mixers report raw units; until the first volume event
+        // (the web UI queries it on connect) the meter shows the source level.
+        let meter_volume = (settings.volume_ctrl_settings.ctrl_device != api_models::common::VolumeCrtlType::Off).then(|| {
+            Arc::new(AtomicU8::new(if software_gain_active {
+                current_volume.load(Ordering::Relaxed)
+            } else {
+                100
+            }))
+        });
+        let meter_volume_clone = meter_volume.clone();
         let dsp_processor = Arc::new(Mutex::new({
             let rsp = &settings.rs_player_settings;
             if rsp.dsp_settings.enabled || rsp.loudness_normalization_enabled {
@@ -231,6 +255,9 @@ impl PlayerService {
                     }
                     StateChangeEvent::VolumeChangeEvent(vol) => {
                         current_volume_clone.store(vol.current, Ordering::Relaxed);
+                        if let Some(mv) = &meter_volume_clone {
+                            mv.store(volume_percent(vol), Ordering::Relaxed);
+                        }
                     }
                     StateChangeEvent::CurrentSongEvent(song) => {
                         if let Ok(mut guard) = last_song_clone.lock() {
@@ -271,6 +298,7 @@ impl PlayerService {
             last_known_time,
             current_volume,
             software_gain_active,
+            meter_volume,
             audio_device: settings.alsa_settings.output_device.name.clone(),
             rsp_settings: settings.rs_player_settings.clone(),
             local_browser_playback: settings.local_browser_playback,
@@ -501,6 +529,7 @@ impl PlayerService {
         let current_volume = self.current_volume.clone();
         let software_gain = if self.software_gain_active { Some(current_volume) } else { None };
         let vu_meter_enabled = self.rsp_settings.vu_meter_enabled;
+        let meter_volume = self.meter_volume.clone();
         let loudness_service = self.loudness_service.clone();
         let is_multi_core_platform = core_affinity::get_core_ids().is_some_and(|ids| ids.len() > 1);
         let local_browser_playback = self.local_browser_playback;
@@ -638,7 +667,7 @@ impl PlayerService {
                         software_gain.clone(),
                         changes_tx.clone(),
                         dsp_handle.clone(),
-                        vu_meter_enabled,
+                        vu_meter_enabled.then(|| VUMeter::new(meter_volume.clone(), changes_tx.clone())),
                         sync_tee.clone(),
                     );
                     context.fallback_duration = song.time;
@@ -765,5 +794,24 @@ impl PlayerService {
             Ok(Some(lt)) => std::str::from_utf8(&lt).ok().and_then(|s| s.parse().ok()).unwrap_or(0),
             _ => 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::volume_percent;
+    use api_models::common::Volume;
+
+    fn vol(min: u8, max: u8, current: u8) -> Volume {
+        Volume { step: 1, min, max, current }
+    }
+
+    #[test]
+    fn volume_percent_of_mixer_range() {
+        assert_eq!(volume_percent(vol(0, 100, 42)), 42);
+        assert_eq!(volume_percent(vol(0, 255, 255)), 100);
+        assert_eq!(volume_percent(vol(0, 255, 128)), 50);
+        assert_eq!(volume_percent(vol(0, 87, 200)), 100);
+        assert_eq!(volume_percent(vol(0, 0, 10)), 0);
     }
 }

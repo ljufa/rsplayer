@@ -16,6 +16,7 @@ pub enum VisualizerType {
     Plasma,
     Tunnel,
     Bounce,
+    Analog,
 }
 
 impl VisualizerType {
@@ -34,6 +35,7 @@ impl VisualizerType {
             Self::Plasma => "plasma",
             Self::Tunnel => "tunnel",
             Self::Bounce => "bounce",
+            Self::Analog => "analog",
         }
     }
 
@@ -52,6 +54,7 @@ impl VisualizerType {
             "plasma" => Some(Self::Plasma),
             "tunnel" => Some(Self::Tunnel),
             "bounce" => Some(Self::Bounce),
+            "analog" => Some(Self::Analog),
             _ => None,
         }
     }
@@ -71,9 +74,82 @@ impl VisualizerType {
             Self::Dna => Self::Plasma,
             Self::Plasma => Self::Tunnel,
             Self::Tunnel => Self::Bounce,
-            Self::Bounce => Self::None,
+            Self::Bounce => Self::Analog,
+            Self::Analog => Self::None,
         }
     }
+}
+
+/// Analog VU scale: (VU dB, needle angle in degrees), same layout as the
+/// meter on rsplayer.de
+const ANALOG_MARKS: [(f64, f64); 11] = [
+    (-20.0, -48.0),
+    (-10.0, -30.0),
+    (-7.0, -19.0),
+    (-5.0, -9.0),
+    (-3.0, 3.0),
+    (-2.0, 10.0),
+    (-1.0, 17.0),
+    (0.0, 25.0),
+    (1.0, 34.0),
+    (2.0, 42.0),
+    (3.0, 48.0),
+];
+/// Needle position at silence, just left of the -20 mark
+const ANALOG_REST_DEG: f64 = -52.0;
+/// Needle end stop past +3
+const ANALOG_MAX_DEG: f64 = 52.0;
+/// Peak level in dBFS that reads 0 VU. The backend sends sample peaks, not
+/// RMS, so the reference sits well above the usual -18 dBFS: a full-scale
+/// peak reads +3, only the loudest beats reach the red.
+const ANALOG_REF_DBFS: f64 = -3.0;
+
+/// Analog dial colors, taken from the active daisyUI theme
+struct AnalogPalette {
+    plate: String,
+    ink: String,
+    red: String,
+    needle: String,
+}
+
+impl AnalogPalette {
+    fn from_theme(el: &HtmlCanvasElement) -> Self {
+        let style = web_sys::window().and_then(|w| w.get_computed_style(el).ok().flatten());
+        let var = |name: &str, fallback: &str| {
+            style
+                .as_ref()
+                .and_then(|st| st.get_property_value(name).ok())
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty())
+                .unwrap_or_else(|| fallback.to_string())
+        };
+        Self {
+            plate: var("--color-base-300", "#15153d"),
+            ink: var("--color-base-content", "#f2e8cf"),
+            red: var("--color-error", "#e4574c"),
+            needle: var("--color-primary", "#f2e8cf"),
+        }
+    }
+}
+
+/// Maps a backend level (linear peak, 0-255) to a needle angle.
+fn analog_angle(level: u8) -> f64 {
+    if level == 0 {
+        return ANALOG_REST_DEG;
+    }
+    let vu_db = 20.0 * (f64::from(level) / 255.0).log10() - ANALOG_REF_DBFS;
+    let (first_db, first_deg) = ANALOG_MARKS[0];
+    if vu_db <= first_db {
+        return (first_deg - (first_db - vu_db) * 0.4).max(ANALOG_REST_DEG);
+    }
+    for pair in ANALOG_MARKS.windows(2) {
+        let ((db0, deg0), (db1, deg1)) = (pair[0], pair[1]);
+        if vu_db <= db1 {
+            return (vu_db - db0) / (db1 - db0) * (deg1 - deg0) + deg0;
+        }
+    }
+    let (last_db, last_deg) = ANALOG_MARKS[ANALOG_MARKS.len() - 1];
+    ((vu_db - last_db) * 6.0 + last_deg).min(ANALOG_MAX_DEG)
 }
 
 /// Particle: [`x_px`, `y_px`, `vx_px`, `vy_px`, life (0–1)]
@@ -106,6 +182,9 @@ pub struct VUMeter {
     peak_right: f64,
     spectrum_peaks_left: Vec<f64>,
     spectrum_peaks_right: Vec<f64>,
+    /// Analog VU needle angles in degrees (0 = straight up)
+    needle_left: f64,
+    needle_right: f64,
 }
 
 impl VUMeter {
@@ -149,6 +228,8 @@ impl VUMeter {
             peak_right: 0.0,
             spectrum_peaks_left: vec![0.0; bar_count],
             spectrum_peaks_right: vec![0.0; bar_count],
+            needle_left: ANALOG_REST_DEG,
+            needle_right: ANALOG_REST_DEG,
         };
         meter.resize();
         meter.draw();
@@ -156,13 +237,31 @@ impl VUMeter {
     }
 
     pub fn resize(&mut self) {
-        let rect = self.canvas.get_bounding_client_rect();
-        self.canvas.set_width(rect.width() as u32);
-        self.canvas.set_height(rect.height() as u32);
+        self.sync_size();
         self.draw();
     }
 
+    /// Match the canvas bitmap to its on-screen size. The layout can still
+    /// change after the meter is created (player content rendering, window
+    /// resize, phone rotation); a stale bitmap gets stretched by the browser.
+    fn sync_size(&self) {
+        let rect = self.canvas.get_bounding_client_rect();
+        // The analog dials carry text, render them at device resolution
+        let dpr = if self.visualizer_type == VisualizerType::Analog {
+            web_sys::window().map_or(1.0, |w| w.device_pixel_ratio())
+        } else {
+            1.0
+        };
+        let (w, h) = ((rect.width() * dpr) as u32, (rect.height() * dpr) as u32);
+        // Setting the size clears the canvas, only do it on a real change
+        if self.canvas.width() != w || self.canvas.height() != h {
+            self.canvas.set_width(w);
+            self.canvas.set_height(h);
+        }
+    }
+
     pub fn update(&mut self, left: u8, right: u8) {
+        self.sync_size();
         self.left = left;
         self.right = right;
         let smoothing = 0.3;
@@ -192,6 +291,7 @@ impl VUMeter {
             VisualizerType::Circular => self.update_circular(),
             VisualizerType::Lissajous => self.update_lissajous(),
             VisualizerType::Particles => self.update_particles(),
+            VisualizerType::Analog => self.update_analog(),
             _ => {}
         }
 
@@ -442,6 +542,17 @@ impl VUMeter {
         }
     }
 
+    fn update_analog(&mut self) {
+        // Ballistic lag of a real VU needle: ~300 ms to settle at the 50 ms
+        // update rate, falling back a bit slower than it rises
+        let step = |needle: f64, target: f64| {
+            let k = if target > needle { 0.45 } else { 0.3 };
+            (target - needle).mul_add(k, needle)
+        };
+        self.needle_left = step(self.needle_left, analog_angle(self.left));
+        self.needle_right = step(self.needle_right, analog_angle(self.right));
+    }
+
     fn draw(&self) {
         let width = f64::from(self.canvas.width());
         let height = f64::from(self.canvas.height());
@@ -462,6 +573,7 @@ impl VUMeter {
             VisualizerType::Plasma => self.draw_plasma(width, height),
             VisualizerType::Tunnel => self.draw_tunnel(width, height),
             VisualizerType::Bounce => self.draw_bounce(width, height),
+            VisualizerType::Analog => self.draw_analog(width, height),
         }
     }
 
@@ -1036,5 +1148,141 @@ impl VUMeter {
             self.ctx.fill();
         }
         self.ctx.set_shadow_blur(0.0);
+    }
+
+    /// Two analog VU dials (left, right) modeled on the rsplayer.de meter.
+    /// Side by side on wide canvases, stacked on narrow ones.
+    fn draw_analog(&self, width: f64, height: f64) {
+        // Dial space in the rsplayer.de SVG units, plate padding included
+        const DIAL_W: f64 = 424.0;
+        const DIAL_H: f64 = 195.0;
+        let pad = 8.0 * web_sys::window().map_or(1.0, |w| w.device_pixel_ratio());
+        let side_by_side = width >= height * 1.2;
+        let (bw, bh) = if side_by_side {
+            ((width - pad * 3.0) / 2.0, height - pad * 2.0)
+        } else {
+            (width - pad * 2.0, (height - pad * 3.0) / 2.0)
+        };
+        let scale = (bw / DIAL_W).min(bh / DIAL_H);
+        if scale <= 0.0 {
+            return;
+        }
+        let (dw, dh) = (DIAL_W * scale, DIAL_H * scale);
+        let gap = pad * 2.0;
+        let (x1, y1, x2, y2) = if side_by_side {
+            let x = (width - dw * 2.0 - gap) / 2.0;
+            let y = (height - dh) / 2.0;
+            (x, y, x + dw + gap, y)
+        } else {
+            let x = (width - dw) / 2.0;
+            let y = (height - dh * 2.0 - gap) / 2.0;
+            (x, y, x, y + dh + gap)
+        };
+
+        // Read per frame so a theme switch shows up right away
+        let palette = AnalogPalette::from_theme(&self.canvas);
+        self.draw_analog_dial(x1, y1, scale, &palette, "LEFT", self.needle_left);
+        self.draw_analog_dial(x2, y2, scale, &palette, "RIGHT", self.needle_right);
+    }
+
+    fn draw_analog_dial(&self, x: f64, y: f64, scale: f64, palette: &AnalogPalette, label: &str, needle_deg: f64) {
+        let ink = palette.ink.as_str();
+        let red_color = palette.red.as_str();
+        let (cx, cy, r) = (200.0, 250.0, 190.0);
+        let pt = |deg: f64, radius: f64| {
+            let a = (deg - 90.0).to_radians();
+            (radius.mul_add(a.cos(), cx), radius.mul_add(a.sin(), cy))
+        };
+        let ctx = &self.ctx;
+        ctx.save();
+        // Dial units: x -12..412, y 43..238 (the SVG viewBox plus padding)
+        let _ = ctx.translate(12.0_f64.mul_add(scale, x), 43.0_f64.mul_add(-scale, y));
+        let _ = ctx.scale(scale, scale);
+
+        // Plate
+        self.analog_round_rect(-12.0, 43.0, 424.0, 195.0, 22.0);
+        ctx.set_global_alpha(0.6);
+        ctx.set_fill_style_str(&palette.plate);
+        ctx.fill();
+        ctx.set_global_alpha(0.18);
+        ctx.set_stroke_style_str(ink);
+        ctx.set_line_width(1.5);
+        ctx.stroke();
+
+        // Scale arc: ink up to 0 VU, thick red (theme error color) band above
+        let arc = |a1: f64, a2: f64, radius: f64| {
+            ctx.begin_path();
+            let _ = ctx.arc(cx, cy, radius, (a1 - 90.0).to_radians(), (a2 - 90.0).to_radians());
+        };
+        ctx.set_global_alpha(0.8);
+        arc(-48.0, 25.0, r - 40.0);
+        ctx.set_line_width(3.0);
+        ctx.stroke();
+        arc(25.0, 48.0, r - 40.0);
+        ctx.set_stroke_style_str(red_color);
+        ctx.set_line_width(9.0);
+        ctx.stroke();
+
+        // Ticks and numbers
+        ctx.set_font("700 17px ui-monospace, SFMono-Regular, Menlo, monospace");
+        ctx.set_text_align("center");
+        ctx.set_text_baseline("middle");
+        for &(v, deg) in &ANALOG_MARKS {
+            let red = v > 0.0;
+            let color = if red { red_color } else { ink };
+            let (tx1, ty1) = pt(deg, r - 40.0);
+            let (tx2, ty2) = pt(deg, r - 58.0);
+            ctx.set_stroke_style_str(color);
+            ctx.set_line_width(2.5);
+            ctx.begin_path();
+            ctx.move_to(tx1, ty1);
+            ctx.line_to(tx2, ty2);
+            ctx.stroke();
+            if [-20.0, -10.0, -7.0, -5.0, -3.0, 0.0, 3.0].contains(&v) {
+                let (lx, ly) = pt(deg, r - 22.0);
+                ctx.set_fill_style_str(if red || v == 0.0 { red_color } else { ink });
+                let text = if red { format!("+{v}") } else { format!("{v}") };
+                let _ = ctx.fill_text(&text, lx, ly);
+            }
+        }
+
+        // Legends
+        ctx.set_fill_style_str(ink);
+        ctx.set_font("800 26px ui-monospace, SFMono-Regular, Menlo, monospace");
+        let _ = ctx.fill_text("V U", cx, 150.0);
+        ctx.set_global_alpha(0.55);
+        ctx.set_font("700 14px ui-monospace, SFMono-Regular, Menlo, monospace");
+        ctx.set_text_baseline("alphabetic");
+        ctx.set_text_align("right");
+        let _ = ctx.fill_text(label, 360.0, 215.0);
+
+        // Needle, pivot hidden below the plate edge
+        ctx.begin_path();
+        ctx.rect(-12.0, 43.0, 424.0, 179.0);
+        ctx.clip();
+        let (nx, ny) = pt(needle_deg, r - 30.0);
+        ctx.set_global_alpha(1.0);
+        ctx.set_stroke_style_str(&palette.needle);
+        ctx.set_line_width(3.0);
+        ctx.set_line_cap("round");
+        ctx.set_shadow_blur(6.0);
+        ctx.set_shadow_color("rgba(0,0,0,0.5)");
+        ctx.begin_path();
+        ctx.move_to(cx, cy);
+        ctx.line_to(nx, ny);
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    fn analog_round_rect(&self, x: f64, y: f64, w: f64, h: f64, r: f64) {
+        let ctx = &self.ctx;
+        ctx.begin_path();
+        ctx.move_to(x + r, y);
+        let _ = ctx.arc_to(x + w, y, x + w, y + h, r);
+        let _ = ctx.arc_to(x + w, y + h, x, y + h, r);
+        let _ = ctx.arc_to(x, y + h, x, y, r);
+        let _ = ctx.arc_to(x, y, x + w, y, r);
+        ctx.close_path();
     }
 }

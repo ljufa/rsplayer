@@ -134,8 +134,18 @@ pub fn PlayerPage() -> Element {
     rsx! {
         div { class: "player-page",
             // VU meter canvas layer
-            if *vu_meter_enabled.read() && *state.visualizer_type.read() != VisualizerType::None {
-                VUMeterCanvas {}
+            if *vu_meter_enabled.read()
+                && !matches!(*state.visualizer_type.read(), VisualizerType::None | VisualizerType::Analog)
+            {
+                VUMeterCanvas { class: "player-page__vumeter" }
+            }
+            // Space above the content. The analog dials carry information,
+            // so they sit here instead of behind the content, using the full
+            // player width
+            div { class: "player-page__top",
+                if *vu_meter_enabled.read() && *state.visualizer_type.read() == VisualizerType::Analog {
+                    VUMeterCanvas { class: "player-page__analog" }
+                }
             }
             // Content
             div { class: "player-page__content",
@@ -180,6 +190,7 @@ pub fn PlayerPage() -> Element {
                     }
                 }
             }
+            div { class: "player-page__bottom" }
             if (ui.lyrics_open)() {
                 LyricsModal {
                     on_close: move |()| ui.lyrics_open.set(false),
@@ -196,7 +207,7 @@ pub fn PlayerPage() -> Element {
 // ─── VU Meter Canvas ─────────────────────────────────────────────────────────
 
 #[component]
-fn VUMeterCanvas() -> Element {
+fn VUMeterCanvas(class: &'static str) -> Element {
     let state = use_context::<AppState>();
     let vu_left = state.vu_left;
     let vu_right = state.vu_right;
@@ -222,7 +233,7 @@ fn VUMeterCanvas() -> Element {
     });
 
     rsx! {
-        div { class: "player-page__vumeter",
+        div { class,
             canvas { id: "vumeter" }
         }
     }

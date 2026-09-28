@@ -136,13 +136,26 @@ html:has(.app-nav--titlebar) { overflow-x: clip; }
 .app-nav__window-btn .material-icons { font-size: 1.1rem; }
 
 /* ── Player page ────────────────────────────────────────────── */
+/* Content between two equal spacers, so it stays vertically centered. The
+   analog dials live at the bottom of the top spacer, which cannot shrink
+   below them: showing the dials only moves the content when the space above
+   it is too small to hold them. */
 .player-page {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   min-height: 80vh;
+}
+.player-page__top,
+.player-page__bottom {
+  flex: 1 1 0;
+  width: 100%;
+}
+.player-page__top {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 
 /* Album art background — fixed, covers the full viewport on all pages */
@@ -172,6 +185,21 @@ html:has(.app-nav--titlebar) { overflow-x: clip; }
 }
 .player-page__vumeter canvas {
   display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Analog VU dials, above the content column at full player width */
+.player-page__analog {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4.3;
+  pointer-events: none;
+}
+/* Out of flow so the canvas bitmap size never feeds back into the box */
+.player-page__analog canvas {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
 }
