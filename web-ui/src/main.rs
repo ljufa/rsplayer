@@ -294,6 +294,8 @@ fn App() -> Element {
         // days, so the query string carries a hash of the CSS (build.rs) to bust the cache
         // whenever the styles change.
         document::Stylesheet { href: concat!("/tw.css?v=", env!("TW_CSS_HASH")) }
+        // The server also sends a Referrer-Policy header; this covers `dx serve`.
+        document::Meta { name: "referrer", content: "no-referrer" }
         if (ui_state.welcome_open)() {
             WelcomeModal {}
         }

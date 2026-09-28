@@ -560,6 +560,9 @@ async fn spa_or_static_fallback(uri: Uri, _req: Request) -> Response {
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
             .header(header::CACHE_CONTROL, "no-cache, must-revalidate")
             .header("ETag", concat!("\"", env!("CARGO_PKG_VERSION"), "\""))
+            // The UI calls third-party services (covers, lyrics, radio directory, update
+            // check); don't leak the LAN address or hostname in the Referer header.
+            .header(header::REFERRER_POLICY, "no-referrer")
             .body(Body::from(file.data.into_owned()))
             .unwrap(),
         None => Response::builder()

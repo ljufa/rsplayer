@@ -8,7 +8,7 @@
   <meta name="viewport"
     content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
   <link rel="icon" type="image/png" href="_assets/favicon.png">
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4.13.1/lib/themes/vue.css" />
+  <link rel="stylesheet" href="_assets/vendor/docsify-vue.css" />
   <style>
     :root {
       --theme-color: #090240;
@@ -122,6 +122,8 @@
   <div id="app"></div>
   <script>
     window.$docsify = {
+      // Render :emoji: as unicode instead of images from github.githubassets.com.
+      nativeEmoji: true,
       name: 'RSPlayer',
       logo: '_assets/banner-light.svg',
       repo: 'ljufa/rsplayer',
@@ -148,8 +150,16 @@
             var path = '/docs' + vm.route.path, title = document.title, tries = 0;
             (function send() {
               // count.js loads async and may not be ready on the first page
-              if (window.goatcounter && window.goatcounter.count) {
-                window.goatcounter.count({ path: path, title: title });
+              var g = window.goatcounter;
+              if (g && g.count) {
+                // count.js always sends the screen width and has no option to turn it
+                // off, so drop it before sending (see the privacy policy).
+                if (!g.noScreenSize) {
+                  var getData = g.get_data;
+                  g.get_data = function (vars) { var d = getData(vars); delete d.s; return d; };
+                  g.noScreenSize = true;
+                }
+                g.count({ path: path, title: title });
               } else if (++tries < 20) {
                 setTimeout(send, 250);
               }
@@ -160,11 +170,11 @@
     }
   </script>
   <script data-goatcounter="https://stats.rsplayer.de/count" data-goatcounter-settings='{"no_onload": true}' async src="https://stats.rsplayer.de/count.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/docsify@4.13.1/lib/docsify.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/docsify@4.13.1/lib/plugins/search.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/docsify@4.13.1/lib/plugins/zoom-image.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="_assets/vendor/docsify-docsify.min.js"></script>
+  <script src="_assets/vendor/docsify-search.min.js"></script>
+  <script src="_assets/vendor/docsify-zoom-image.min.js"></script>
+  <script src="_assets/vendor/prism-bash.min.js"></script>
+  <script src="_assets/vendor/prism-json.min.js"></script>
 </body>
 
 </html>

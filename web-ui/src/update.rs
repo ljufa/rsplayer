@@ -3,7 +3,9 @@
 //! The check runs once per app load (after `/api/settings` delivers the running
 //! version) directly from the browser — the GitHub API allows cross-origin GET.
 //! A dismissed version is remembered in `localStorage` so the banner doesn't
-//! reappear on every page load until the next release.
+//! reappear on every page load until the next release. The latest release is
+//! also cached there for a day, so GitHub is asked at most once per day per
+//! browser instead of on every page load.
 
 use api_models::settings::InstallMethod;
 use gloo_net::http::Request;
@@ -13,6 +15,9 @@ const LATEST_RELEASE_API: &str = "https://api.github.com/repos/ljufa/rsplayer/re
 /// Human-facing page the update banner links to.
 pub const RELEASES_PAGE: &str = "https://github.com/ljufa/rsplayer/releases/latest";
 const DISMISSED_KEY: &str = "rsplayer_update_dismissed";
+/// Cached check result, stored as `<unix millis>|<latest version>`.
+const LAST_CHECK_KEY: &str = "rsplayer_update_last_check";
+const CHECK_INTERVAL_MS: f64 = 24.0 * 60.0 * 60.0 * 1000.0;
 
 #[derive(Deserialize)]
 struct LatestRelease {
@@ -21,17 +26,41 @@ struct LatestRelease {
 
 /// Returns the latest released version if it is newer than `current`.
 pub async fn check_for_update(current: &str) -> Option<String> {
-    let resp = Request::get(LATEST_RELEASE_API).send().await.ok()?;
-    if !resp.ok() {
-        return None;
-    }
-    let release: LatestRelease = resp.json().await.ok()?;
-    let latest = release.tag_name.trim().trim_start_matches('v').to_string();
+    let latest = match cached_latest() {
+        Some(latest) => latest,
+        None => {
+            let latest = fetch_latest().await?;
+            if let Some(storage) = local_storage() {
+                let _ = storage.set_item(LAST_CHECK_KEY, &format!("{}|{latest}", js_sys::Date::now()));
+            }
+            latest
+        }
+    };
     if is_newer(current, &latest) {
         Some(latest)
     } else {
         None
     }
+}
+
+async fn fetch_latest() -> Option<String> {
+    let resp = Request::get(LATEST_RELEASE_API).send().await.ok()?;
+    if !resp.ok() {
+        return None;
+    }
+    let release: LatestRelease = resp.json().await.ok()?;
+    Some(release.tag_name.trim().trim_start_matches('v').to_string())
+}
+
+/// Latest version from a check made less than `CHECK_INTERVAL_MS` ago.
+fn cached_latest() -> Option<String> {
+    let entry = local_storage()?.get_item(LAST_CHECK_KEY).ok()??;
+    let (checked_at, latest) = entry.split_once('|')?;
+    let age = js_sys::Date::now() - checked_at.parse::<f64>().ok()?;
+    (0.0..CHECK_INTERVAL_MS)
+        .contains(&age)
+        .then(|| latest.to_string())
+        .filter(|l| !l.is_empty())
 }
 
 /// True if the user already dismissed the notification banner for `version`.

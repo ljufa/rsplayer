@@ -77,7 +77,7 @@ On Arch, the `.tgz` is extracted to `/` — the install script handles the requi
 ### Desktop app (Flatpak and Snap)
 
 <p>
-  <a href="https://snapcraft.io/rsplayer"><img class="store-badge" height="56" alt="Get it from the Snap Store" src="https://snapcraft.io/en/dark/install.svg"></a>
+  <a href="https://snapcraft.io/rsplayer"><img class="store-badge" height="56" alt="Get it from the Snap Store" src="_assets/snap-store-badge.svg"></a>
 </p>
 
 **Snap** (x86_64, ARM64):
@@ -162,7 +162,7 @@ On first start the app asks for **music and notification** permissions. Put your
 
 [Obtainium](https://obtainium.imranr.dev/) installs the app straight from GitHub releases and keeps it updated. Install Obtainium, then open this badge on the phone:
 
-[<img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="54">](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22de.rsplayer.app%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fljufa%2Frsplayer%22%2C%22author%22%3A%22ljufa%22%2C%22name%22%3A%22RSPlayer%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Afalse%2C%5C%22autoApkFilterByArch%5C%22%3Atrue%2C%5C%22apkFilterRegEx%5C%22%3A%5C%22_android_%28arm64-v8a%7Carmeabi-v7a%29%5C%5C%5C%5C.apk%24%5C%22%7D%22%7D)
+[<img src="_assets/obtainium-badge.png" alt="Get it on Obtainium" height="54">](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22de.rsplayer.app%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fljufa%2Frsplayer%22%2C%22author%22%3A%22ljufa%22%2C%22name%22%3A%22RSPlayer%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Afalse%2C%5C%22autoApkFilterByArch%5C%22%3Atrue%2C%5C%22apkFilterRegEx%5C%22%3A%5C%22_android_%28arm64-v8a%7Carmeabi-v7a%29%5C%5C%5C%5C.apk%24%5C%22%7D%22%7D)
 
 It adds RSPlayer with the right APK for your device (arm64 or ARMv7) and skips pre-releases. To add it by hand instead, use the source URL `https://github.com/ljufa/rsplayer`.
 

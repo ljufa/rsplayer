@@ -50,11 +50,8 @@ pub async fn fetch_album_cover(song: &Song) -> Option<String> {
     }
     let album = song.album.as_deref()?;
     let artist = song.artist.as_deref()?;
-    let protocol = web_sys::window()
-        .and_then(|w| w.location().protocol().ok())
-        .unwrap_or_else(|| "http:".to_string());
     let url = format!(
-        "{protocol}//ws.audioscrobbler.com/2.0/?api_key=3b3df6c5dd3ad07222adc8dd3ccd8cdc&format=json&method=album.getinfo&album={}&artist={}",
+        "https://ws.audioscrobbler.com/2.0/?api_key=3b3df6c5dd3ad07222adc8dd3ccd8cdc&format=json&method=album.getinfo&album={}&artist={}",
         js_sys::encode_uri_component(album),
         js_sys::encode_uri_component(artist),
     );
