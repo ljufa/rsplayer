@@ -198,7 +198,6 @@ echo "[INFO] Attempting primary package type: $pkg_type"
 if ! try_download "$pkg_type" "$pkg_suffix" "$pkg_ext"; then
     if [ "$pkg_type" = "arch" ]; then
         echo "[ERROR] No Arch desktop package found for $device_arch in this release."
-        echo "[ERROR] Try the AUR instead: yay -S rsplayer-desktop-bin"
         exit 1
     fi
     echo "[WARN] Primary package type $pkg_type not available, falling back to DEB"

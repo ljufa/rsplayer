@@ -10,12 +10,10 @@ Two pacman packages, both repackaging the prebuilt release binaries:
 Each PKGBUILD's source is the release `.tgz` for that arch
 (`rsplayer_<ver>_<suffix>.tgz`, `rsplayer-desktop_<ver>_<suffix>.tgz`, built
 by `package_arch_release` / `bundle_desktop_release*` in `Makefile.toml`).
-One PKGBUILD serves both distribution routes, so users can switch between them:
-
-- **Release asset**: `rsplayer-bin-<ver>-1-<arch>.pkg.tar.zst`, installed by
-  `install.sh` / `install_desktop.sh` with `pacman -U`.
-- **AUR**: <https://aur.archlinux.org/packages/rsplayer-bin> and
-  `rsplayer-desktop-bin`, installed with `yay -S rsplayer-bin` etc.
+The packages are published as release assets
+(`rsplayer-bin-<ver>-1-<arch>.pkg.tar.zst`) and installed by `install.sh` /
+`install_desktop.sh` with `pacman -U`. There is no pacman repository yet, so
+`pacman -Syu` does not upgrade them: running the install script again does.
 
 ## Files
 
@@ -44,7 +42,7 @@ the release is published.
   attached to the draft release as `pkg-arch`.
 - Locally: `cargo make package_arch_pkgs` (Docker). Takes the tgz files from
   `target/cross/*/pkg/`, or from `ARCH_ASSETS=<dir>`; output in `target/arch-pkg/`,
-  rendered PKGBUILDs in `target/arch-pkg/aur/`.
+  rendered PKGBUILDs in `target/arch-pkg/pkgbuilds/`.
 
 Install a local build with `sudo pacman -U rsplayer-bin-<ver>-1-x86_64.pkg.tar.zst`.
 
@@ -57,22 +55,6 @@ install over: they remove `/etc/systemd/system/rsplayer.service` and
 `--overwrite` for each file of the package that is on disk without an owner.
 A changed `/opt/rsplayer/env` is kept; pacman saves the new default as
 `env.pacnew`.
-
-## AUR publishing
-
-`.github/workflows/aur.yml` runs when a release is promoted to a full release
-(or by dispatch with a tag). It downloads the release tgz files, renders both
-PKGBUILDs, generates `.SRCINFO` and pushes to
-`ssh://aur@aur.archlinux.org/<pkgname>.git`. The first push creates the package.
-
-One-time setup:
-
-1. Create an account on <https://aur.archlinux.org>.
-2. Generate a key for CI: `ssh-keygen -t ed25519 -f aur -C rsplayer-ci`, and
-   add `aur.pub` under **My Account → SSH Public Key**.
-3. Add the private key as the repository secret `AUR_SSH_PRIVATE_KEY`.
-4. Dispatch **Publish AUR packages** with the current release tag to create
-   both packages.
 
 ## Checking a package
 

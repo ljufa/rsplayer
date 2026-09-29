@@ -237,21 +237,20 @@ for regenerating `cargo-sources.json`, building locally with `flatpak-builder`,
 and the release checklist. The manifest builds a staged copy of the workspace
 offline from vendored crates plus the pre-built `dist/web-ui`.
 
-## Arch Linux packages (pacman / AUR)
+## Arch Linux packages (pacman)
 
 `rsplayer-bin` (server) and `rsplayer-desktop-bin` (desktop app) wrap the
 release `.tgz` file trees; nothing is compiled. The `build_arch_pkgs` job of
 the "Full release" workflow runs `makepkg` in an `archlinux` container for
-every architecture and attaches the `.pkg.tar.zst` files to the release;
-`aur.yml` pushes the same PKGBUILDs to the AUR when the release is promoted
-to a full release. Locally, after the tgz files exist:
+every architecture and attaches the `.pkg.tar.zst` files to the release.
+Locally, after the tgz files exist:
 
 ```bash
 cargo make package_arch_pkgs    # needs Docker; output in target/arch-pkg/
 ```
 
 See [`PKGS/arch/README.md`](https://github.com/ljufa/rsplayer/blob/master/PKGS/arch/README.md)
-for the layout and the one-time AUR setup.
+for the layout.
 
 ## Android (desktop app)
 

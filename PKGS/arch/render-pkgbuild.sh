@@ -3,7 +3,7 @@
 # .install file) for one release. The per-arch source URLs point at the GitHub
 # release tarballs; their sha256sums are computed from the local copies. The
 # LICENSE checksum comes from this checkout, which must match the release tag.
-# The result is what makepkg builds in CI and what gets pushed to the AUR.
+# The result is what makepkg builds in CI.
 #
 # Usage: render-pkgbuild.sh <pkgname> <version> <assets-dir> <out-dir>
 #   <pkgname>     rsplayer-bin | rsplayer-desktop-bin
@@ -45,7 +45,7 @@ for pair in $arches; do
     fi
     sum=$(sha256sum "$ASSETS/$file" | cut -d' ' -f1)
     arch_list="$arch_list '$carch'"
-    # ${pkgver} stays literal so the AUR PKGBUILD reads naturally
+    # ${pkgver} stays literal so the PKGBUILD reads naturally
     sources="${sources}source_${carch}=(\"${RELEASE_URL}/\${pkgver}/${asset}_\${pkgver}_${suffix}.tgz\")
 sha256sums_${carch}=('${sum}')
 "

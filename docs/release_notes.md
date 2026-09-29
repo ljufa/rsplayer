@@ -33,7 +33,6 @@ Turn on **Settings → Enable visualization**, then press **V** or the visualize
 On Arch Linux and Manjaro, RSPlayer is now a real pacman package instead of a tarball extracted to `/`. The server is `rsplayer-bin` and the desktop app is `rsplayer-desktop-bin`.
 
 - `install.sh` and `install_desktop.sh` install them with `pacman -U`, so pacman resolves the dependencies, knows every installed file and can remove them again with `sudo pacman -R rsplayer-bin`.
-- The same packages are on the AUR, so you can install with `yay -S rsplayer-bin` (or pamac on Manjaro) and get updates with your normal system upgrade.
 - An existing tarball install is taken over when you run the install script again. A changed `/opt/rsplayer/env` is kept, and the new default is saved next to it as `env.pacnew`.
 - The systemd unit and the polkit rule of the server moved to `/usr/lib/systemd/system` and `/usr/share/polkit-1/rules.d`, where Arch packages keep them. The script removes the old copies from `/etc`.
 

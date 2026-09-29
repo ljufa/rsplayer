@@ -7,7 +7,7 @@
 # Usage: build-pkgs.sh <version> <assets-dir> <out-dir>
 #   <assets-dir>  directory with the release .tgz files
 #   <out-dir>     receives the .pkg.tar.zst files, plus the rendered
-#                 PKGBUILD/.SRCINFO per package under aur/<pkgname>/
+#                 PKGBUILD/.SRCINFO per package under pkgbuilds/<pkgname>/
 #
 # Runs on Arch Linux (CI: the archlinux container). Needs base-devel.
 # makepkg refuses to run as root, so as root it builds as a "builder" user.
@@ -59,10 +59,10 @@ for pkg in rsplayer-bin rsplayer-desktop-bin; do
         (cd "$dir" && as_builder env PKGDEST="$OUT" makepkg --config "$WORK/makepkg-$carch.conf" --nodeps --force --cleanbuild --noconfirm)
     done
 
-    mkdir -p "$OUT/aur/$pkg"
-    (cd "$dir" && as_builder makepkg --printsrcinfo) > "$OUT/aur/$pkg/.SRCINFO"
-    cp "$dir/PKGBUILD" "$OUT/aur/$pkg/"
-    if [ -f "$dir/$pkg.install" ]; then cp "$dir/$pkg.install" "$OUT/aur/$pkg/"; fi
+    mkdir -p "$OUT/pkgbuilds/$pkg"
+    (cd "$dir" && as_builder makepkg --printsrcinfo) > "$OUT/pkgbuilds/$pkg/.SRCINFO"
+    cp "$dir/PKGBUILD" "$OUT/pkgbuilds/$pkg/"
+    if [ -f "$dir/$pkg.install" ]; then cp "$dir/$pkg.install" "$OUT/pkgbuilds/$pkg/"; fi
 done
 
 if [ "$(id -u)" -eq 0 ]; then chown -R builder "$OUT"; fi

@@ -11,6 +11,7 @@
 ![](https://img.shields.io/github/v/release/ljufa/rsplayer)
 ![](https://img.shields.io/github/license/ljufa/rsplayer?style=flat-square)
 ![](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=flat-square)
+[![rsplayer](https://snapcraft.io/rsplayer/badge.svg)](https://snapcraft.io/rsplayer)
 
 # RSPlayer
 
@@ -69,8 +70,6 @@ Fedora / RHEL / openSUSE:
 sudo curl -fsSL -o /etc/yum.repos.d/rsplayer.repo https://ljufa.github.io/rsplayer-pkg/rpm/rsplayer.repo
 sudo dnf install rsplayer
 ```
-
-On Arch Linux and Manjaro you can also install from the AUR: `yay -S rsplayer-bin` (server) or `yay -S rsplayer-desktop-bin` (desktop app).
 
 `.deb`, `.rpm` and `.pkg.tar.zst` files for manual install are on the [release page](https://github.com/ljufa/rsplayer/releases/latest).
 </details>

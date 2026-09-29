@@ -245,8 +245,7 @@ jobs:
         run: pacman -Syu --noconfirm --needed base-devel
 
       # Output: the .pkg.tar.zst release assets, plus the rendered
-      # PKGBUILD/.SRCINFO per package under out/aur/ (aur.yml renders its own
-      # from the published release; this copy is for inspection)
+      # PKGBUILD/.SRCINFO per package under out/pkgbuilds/ (for inspection)
       - name: Build Arch packages
         run: |
           version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
@@ -263,7 +262,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: arch-pkgbuilds
-          path: out/aur/
+          path: out/pkgbuilds/
           include-hidden-files: true
 
   build_snap:

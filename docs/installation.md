@@ -23,7 +23,7 @@ bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/main/install.sh)
 
 The script detects your distribution and architecture, installs RSPlayer and starts the service. At the end it prints the address to open in your browser — usually `http://<device-ip>`, for example `http://raspberrypi.local`.
 
-On Debian/Ubuntu and Fedora/openSUSE it adds the [RSPlayer package repository](https://ljufa.github.io/rsplayer-pkg), so future updates arrive with your regular `apt upgrade` / `dnf upgrade`. On Arch and Manjaro it installs the `rsplayer-bin` pacman package from the release; run the same command again to upgrade, or install it from the [AUR](?id=arch-linux-and-manjaro-aur) instead to get updates with your system upgrade. Add `--pre-release` to try the latest pre-release.
+On Debian/Ubuntu and Fedora/openSUSE it adds the [RSPlayer package repository](https://ljufa.github.io/rsplayer-pkg), so future updates arrive with your regular `apt upgrade` / `dnf upgrade`. On Arch and Manjaro it installs the `rsplayer-bin` pacman package from the release; run the same command again to upgrade. Add `--pre-release` to try the latest pre-release.
 
 If the page doesn't load:
 
@@ -66,17 +66,6 @@ sudo pacman -U ./rsplayer-bin-*-x86_64.pkg.tar.zst   # Arch / Manjaro
 ```
 
 The package sets up the `rsplayer` user and starts the service.
-
-### Arch Linux and Manjaro (AUR)
-
-The server and the desktop app are on the AUR as `rsplayer-bin` and `rsplayer-desktop-bin`. Install them with your AUR helper, and updates arrive with your regular system upgrade:
-
-```bash
-yay -S rsplayer-bin            # server
-yay -S rsplayer-desktop-bin    # desktop app
-```
-
-On Manjaro you can also find them in **Add/Remove Software** (pamac) once AUR support is enabled in its preferences. They are the same packages the install scripts use, so you can switch between the two.
 
 ### Run the binary without installing
 
@@ -127,7 +116,7 @@ Grant other music folders with [Flatseal](https://flathub.org/apps/com.github.tc
 
 ### Desktop app (native package)
 
-Installs the `.deb` / `.rpm` from the package repository (x86_64 and ARM64), or the `rsplayer-desktop-bin` pacman package on Arch and Manjaro (also on the [AUR](?id=arch-linux-and-manjaro-aur)):
+Installs the `.deb` / `.rpm` from the package repository (x86_64 and ARM64), or the `rsplayer-desktop-bin` pacman package on Arch and Manjaro:
 
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/ljufa/rsplayer/main/install_desktop.sh)
