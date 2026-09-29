@@ -109,7 +109,15 @@ impl AppState {
             playlist_items: Signal::new(Vec::new()),
             metadata_scan_msg: Signal::new(None),
             notification: Signal::new(None),
-            current_theme: Signal::new("dark".to_string()),
+            // index.html has already applied the last used theme; start from it so the first
+            // render doesn't flip back to dark until /api/settings arrives.
+            current_theme: Signal::new(
+                web_sys::window()
+                    .and_then(|w| w.document())
+                    .and_then(|d| d.document_element())
+                    .and_then(|html| html.get_attribute("data-theme"))
+                    .unwrap_or_else(|| "dark".to_string()),
+            ),
             global_settings: Signal::new(None),
             custom_titlebar: Signal::new(false),
             connected: Signal::new(false),
@@ -252,6 +260,13 @@ impl AppState {
                 *self.notification.write() = Some(ev);
             }
             StateChangeEvent::VUEvent(l, r) => {
+                // Each update redraws the visualizer canvas. A hidden page (desktop
+                // window in the tray, background tab) never renders, so WebKitGTK
+                // queues those draws until the window is shown again: memory grows by
+                // GBs and the UI freezes while the backlog is replayed.
+                if page_hidden() {
+                    return;
+                }
                 *self.vu_left.write() = l;
                 *self.vu_right.write() = r;
             }
@@ -282,4 +297,8 @@ impl AppState {
             _ => {}
         }
     }
+}
+
+fn page_hidden() -> bool {
+    web_sys::window().and_then(|w| w.document()).is_some_and(|d| d.hidden())
 }

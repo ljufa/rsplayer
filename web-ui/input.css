@@ -6,6 +6,9 @@
    CUSTOM STYLES — things not expressible in Tailwind utilities
    ============================================================ */
 
+/* index.html hides the app until this stylesheet has loaded (avoids a flash of unstyled HTML) */
+#main { visibility: visible; }
+
 @font-face {
   font-family: 'Material Icons';
   font-style: normal;

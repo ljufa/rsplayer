@@ -213,6 +213,10 @@ fn App() -> Element {
                     let _ = html.set_attribute("data-theme", &theme);
                 }
             }
+            // Read by index.html on the next load, before any CSS or wasm is available.
+            if let Ok(Some(storage)) = window.local_storage() {
+                let _ = storage.set_item("rsplayer_theme", &theme);
+            }
         }
     });
 

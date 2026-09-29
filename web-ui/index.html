@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+    <head>
+        <title>{app_title}</title>
+        <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta charset="UTF-8">
+        <!-- tw.css is attached by the wasm app, so until it arrives the page would paint as
+             unstyled white HTML. Apply the last used theme (remembered by the app) and paint
+             its background instead, keeping the app hidden until tw.css reveals #main.
+             The rules sit in their own layer, declared first, so every tw.css layer wins. -->
+        <script>
+            try {
+                var t = localStorage.getItem("rsplayer_theme");
+                if (t) document.documentElement.setAttribute("data-theme", t);
+            } catch (e) {}
+        </script>
+        <style>
+            @layer boot {
+                html { background-color: oklch(25.33% .016 252.42); color-scheme: dark; }
+                html[data-theme=light] { background-color: oklch(100% 0 0); color-scheme: light; }
+                html[data-theme=nord] { background-color: oklch(95.127% .007 260.731); color-scheme: light; }
+                html[data-theme=caramellatte] { background-color: oklch(98% .016 73.684); color-scheme: light; }
+                html[data-theme=synthwave] { background-color: oklch(15% .09 281.288); }
+                html[data-theme=dracula] { background-color: oklch(28.822% .022 277.508); }
+                html[data-theme=dim] { background-color: oklch(30.857% .023 264.149); }
+                html[data-theme=aqua] { background-color: oklch(37% .146 265.522); }
+                html[data-theme=coffee] { background-color: oklch(24% .023 329.708); }
+                html[data-theme=black] { background-color: oklch(0% 0 0); }
+                html[data-theme=forest] { background-color: oklch(20.84% .008 17.911); }
+                #main { visibility: hidden; }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="main"></div>
+    </body>
+</html>

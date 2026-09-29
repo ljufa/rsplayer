@@ -1,0 +1,1 @@
+Fixed a brief white flash while the interface loads: the page now starts in the background color of your theme.

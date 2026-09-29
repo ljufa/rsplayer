@@ -1,5 +1,17 @@
 # Release Notes
 
+## v5.3.1 (2026-09-29)
+
+### Fixes
+
+#### Desktop app froze when reopened from the system tray
+
+After the window had been hidden in the tray for a while, it opened frozen: the buttons, the right-click menu, the elapsed time and the visualization did not react, sometimes for a long time. While the window was hidden, every visualizer update (20 per second) was still drawn, and the Linux webview (WebKitGTK) kept all these drawings queued because a hidden window never shows them. After 20 minutes the queue took almost 2 GB of memory, and showing the window meant working through all of it first. The visualization is now not drawn while the window or browser tab is hidden. The memory stays flat, and the window reacts immediately when it is shown again.
+
+#### White flash when the page loads
+
+While the web interface was loading, the page was briefly white before the theme was applied, which was very visible with a dark theme. The page now shows the background of the last used theme from the first moment, and the interface appears only once its styles have loaded.
+
 ## v5.3.0 (2026-09-28)
 
 A new analog VU meter visualizer, visualizations that follow the volume, and a few privacy improvements in the web interface. Nothing needs to be migrated.
