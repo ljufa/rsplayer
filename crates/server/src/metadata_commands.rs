@@ -39,6 +39,14 @@ pub fn handle_metadata_command(cmd: MetadataCommand, ctx: &CommandContext) {
                 .collect();
             ctx.send_event(StateChangeEvent::MetadataLocalItems(items));
         }
+        MetadataCommand::QueryArtistsPage { offset, limit, mode } => {
+            let (items, start, total) = ctx.metadata_service.artists_page(offset, limit, mode);
+            ctx.send_event(StateChangeEvent::MetadataArtistsPage {
+                items,
+                offset: start,
+                total,
+            });
+        }
         MetadataCommand::SearchArtists(term) => {
             let items: Vec<MetadataLibraryItem> = ctx
                 .album_repository
@@ -54,6 +62,10 @@ pub fn handle_metadata_command(cmd: MetadataCommand, ctx: &CommandContext) {
                 .collect();
             ctx.send_event(StateChangeEvent::MetadataLocalItems(items));
         }
+        MetadataCommand::SearchLibrary(term, limit) => {
+            let items = ctx.metadata_service.search_library(&term, limit);
+            ctx.send_event(StateChangeEvent::MetadataLocalItems(items));
+        }
         MetadataCommand::QueryAlbumsByArtist(artist) => {
             let items: Vec<MetadataLibraryItem> = ctx
                 .album_repository
@@ -62,6 +74,7 @@ pub fn handle_metadata_command(cmd: MetadataCommand, ctx: &CommandContext) {
                 .map(|alb| MetadataLibraryItem::Album {
                     name: alb.title.clone(),
                     id: alb.id.clone(),
+                    artist: artist.clone(),
                     year: alb.released,
                 })
                 .collect();
@@ -76,6 +89,37 @@ pub fn handle_metadata_command(cmd: MetadataCommand, ctx: &CommandContext) {
                 .map(MetadataLibraryItem::SongItem)
                 .collect();
             ctx.send_event(StateChangeEvent::MetadataLocalItems(items));
+        }
+        MetadataCommand::QueryAlbums => {
+            let mut albums = ctx.album_repository.find_all();
+            albums.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+            let items = albums
+                .into_iter()
+                .map(|alb| MetadataLibraryItem::Album {
+                    name: alb.title,
+                    id: alb.id,
+                    artist: alb.artist.unwrap_or_default(),
+                    year: alb.released,
+                })
+                .collect();
+            ctx.send_event(StateChangeEvent::MetadataLocalItems(items));
+        }
+        MetadataCommand::QuerySongsPage { offset, limit } => {
+            let mut songs = ctx.song_repository.find_all();
+            songs.sort_by(|a, b| a.get_title().to_lowercase().cmp(&b.get_title().to_lowercase()));
+            let total = songs.len();
+            let start = offset.min(total);
+            let items = songs
+                .into_iter()
+                .skip(start)
+                .take(limit)
+                .map(MetadataLibraryItem::SongItem)
+                .collect();
+            ctx.send_event(StateChangeEvent::MetadataSongsPage {
+                items,
+                offset: start,
+                total,
+            });
         }
         MetadataCommand::LikeMediaItem(id) => {
             ctx.metadata_service.like_media_item(&id);

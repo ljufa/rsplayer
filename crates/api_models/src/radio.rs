@@ -41,11 +41,7 @@ impl RadioStation {
         if !url.starts_with("http://") && !url.starts_with("https://") {
             return Err("Stream URL must start with http:// or https://".to_string());
         }
-        let image_url = self
-            .image_url
-            .as_ref()
-            .map(|i| i.trim().to_string())
-            .filter(|i| !i.is_empty());
+        let image_url = self.image_url.as_ref().map(|i| i.trim().to_string()).filter(|i| !i.is_empty());
         Ok(Self {
             id: self.id.trim().to_string(),
             name: name.to_string(),

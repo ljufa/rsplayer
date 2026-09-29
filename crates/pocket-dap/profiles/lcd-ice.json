@@ -1,0 +1,21 @@
+{
+  "seven_segment": false,
+  "font": "7x13",
+  "color": {
+    "background": "#061018",
+    "foreground": "#8ec8d8",
+    "dim": "#3a6570",
+    "accent": "#a8dce8",
+    "highlight": "#0c2830",
+    "highlight_fg": "#8ec8d8",
+    "header": "#041018",
+    "bar": "#8ec8d8",
+    "track": "#163038"
+  },
+  "chassis": {
+    "background": "#0a1218",
+    "button": "#121c24",
+    "button_hover": "#1a3840",
+    "label": "#8ec8d8"
+  }
+}

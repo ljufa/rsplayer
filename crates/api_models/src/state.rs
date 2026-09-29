@@ -14,8 +14,8 @@ use core::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::podcast::{Episode, EpisodePage, Podcast, PodcastSearchResult};
 use crate::common::MetadataLibraryItem;
+use crate::podcast::{Episode, EpisodePage, Podcast, PodcastSearchResult};
 use crate::{
     common::{PlaybackMode, Volume},
     player::Song,
@@ -77,6 +77,20 @@ pub enum StateChangeEvent {
     MetadataSongScanned(String),
     MetadataSongScanFinished(String),
     MetadataLocalItems(Vec<MetadataLibraryItem>),
+    /// Paginated album artists (`QueryArtistsPage`).
+    MetadataArtistsPage {
+        items: Vec<MetadataLibraryItem>,
+        offset: usize,
+        total: usize,
+    },
+    /// Paginated songs (`QuerySongsPage`).
+    MetadataSongsPage {
+        items: Vec<MetadataLibraryItem>,
+        offset: usize,
+        total: usize,
+    },
+    /// Saved playlists only (`QuerySavedPlaylists`).
+    SavedPlaylists(Vec<crate::playlist::Playlist>),
     NotificationSuccess(String),
     NotificationError(String),
     FavoriteRadioStations(Vec<String>),

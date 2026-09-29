@@ -282,10 +282,7 @@ async fn get_settings(State(state): State<AppState>, Query(query): Query<HashMap
 /// audio backend on every settings fetch — which on the Windows ASIO host can
 /// interrupt the live output stream.
 fn get_cached_audio_cards(state: &AppState, force_rescan: bool) -> Vec<api_models::common::AudioCard> {
-    let mut guard = state
-        .audio_cards_cache
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut guard = state.audio_cards_cache.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     if force_rescan || guard.is_none() {
         *guard = Some(enumerate_audio_cards());
     }

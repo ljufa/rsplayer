@@ -8,6 +8,14 @@ use crate::error::RepoResult;
 pub trait AlbumRepository: Send + Sync {
     fn delete_all(&self);
     fn find_all(&self) -> Vec<Album>;
+    /// Walk albums without collecting them. Return `false` from `visit` to stop.
+    fn visit_albums(&self, visit: &mut dyn FnMut(Album) -> bool) {
+        for alb in self.find_all() {
+            if !visit(alb) {
+                break;
+            }
+        }
+    }
     fn find_all_album_artists(&self) -> Vec<String>;
     fn find_by_id(&self, album_id: &str) -> Option<Album>;
     fn find_all_sort_by_added_desc(&self, limit: usize) -> Vec<Album>;

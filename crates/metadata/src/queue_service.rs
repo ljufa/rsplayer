@@ -47,7 +47,9 @@ impl QueueService {
             .keyspace("queue", || KeyspaceCreateOptions::default().max_memtable_size(2 * 1024 * 1024))
             .expect("Failed to open queue keyspace");
         let status_db = db
-            .keyspace("queue_status", || KeyspaceCreateOptions::default().max_memtable_size(2 * 1024 * 1024))
+            .keyspace("queue_status", || {
+                KeyspaceCreateOptions::default().max_memtable_size(2 * 1024 * 1024)
+            })
             .expect("Failed to open queue_status keyspace");
         let random_history_db = db
             .keyspace("queue_random_history", KeyspaceCreateOptions::default)

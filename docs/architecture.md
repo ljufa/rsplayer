@@ -21,6 +21,7 @@ carries the per-file detail — this page is the map.
 | `crates/hardware` | Volume-control devices (ALSA/PipeWire/software/firmware), USB front-panel link, LIRC remote, platform/sandbox detection with first-launch playback defaults |
 | `crates/wire` | `no_std` protocol shared with the front-panel firmware repo (postcard + COBS over USB serial) |
 | `crates/desktop` | Tauri wrapper: embeds the backend in-process, webview UI, OS media keys |
+| `crates/pocket-dap` | 240×240 DAP window UI (X11/HDMI; optional chassis). Screen flow for the mPod and Creative profiles: [Pocket DAP Views](pocket_dap/views.md) |
 | `web-ui` | Dioxus web frontend (not covered here) |
 
 Dependency direction (roughly): `server → {sync, playback, metadata, podcast, hardware, config, dsp} → api_models`. `playback` depends on `metadata` (probe/codec registries, loudness) and `dsp`; `sync` depends on `playback` (tee, sink); `hardware` depends on `wire`. `podcast` depends only on `api_models` and `config`; the server adapts it to playback's `ResumePositionProvider` so the two never depend on each other.

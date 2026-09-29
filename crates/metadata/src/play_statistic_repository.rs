@@ -15,7 +15,9 @@ impl FjallPlayStatisticsRepository {
     pub fn new(db: &Database) -> Self {
         Self {
             db: db
-                .keyspace("play_statistics", || KeyspaceCreateOptions::default().max_memtable_size(2 * 1024 * 1024))
+                .keyspace("play_statistics", || {
+                    KeyspaceCreateOptions::default().max_memtable_size(2 * 1024 * 1024)
+                })
                 .expect("Failed to open play_statistics keyspace"),
         }
     }

@@ -534,9 +534,7 @@ mod metadata {
         assert_eq!(updated.name, "Aparat");
         assert_eq!(updated.added_at, saved.added_at);
 
-        ctx.metadata_service
-            .delete_custom_radio_station(&saved.id)
-            .expect("delete failed");
+        ctx.metadata_service.delete_custom_radio_station(&saved.id).expect("delete failed");
         assert!(ctx.metadata_service.get_custom_radio_stations().is_empty());
     }
 

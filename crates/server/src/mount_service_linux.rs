@@ -234,9 +234,7 @@ impl MountService {
                 .map_err(|e| format!("Failed to send mount options to helper: {e}"))?;
         }
 
-        let output = child
-            .wait_with_output()
-            .map_err(|e| format!("Mount helper did not finish: {e}"))?;
+        let output = child.wait_with_output().map_err(|e| format!("Mount helper did not finish: {e}"))?;
         Self::helper_result(&output, "Mount")
     }
 

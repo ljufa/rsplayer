@@ -16,11 +16,13 @@
 
 pub mod album_repository;
 pub mod ape_bundle;
+pub mod artist_page;
 pub mod audio_metadata_extractor;
 pub mod dsd_bundle;
 pub mod error;
 pub mod genre_utils;
 pub mod icy_reader;
+pub mod library_search;
 pub mod loudness_analyzer;
 pub mod loudness_repository;
 pub mod loudness_service;

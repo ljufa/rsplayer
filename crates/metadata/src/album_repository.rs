@@ -69,16 +69,31 @@ impl AlbumRepository for FjallAlbumRepository {
         pairs.into_iter().map(|(_, display)| display).collect()
     }
     fn find_all(&self) -> Vec<Album> {
-        self.albums_db
-            .iter()
-            .filter_map(|guard| {
-                let (key, value) = guard.into_inner().ok()?;
-                let mut album = Album::from_bytes(&value)?;
-                album.id = String::from_utf8(key.to_vec()).ok()?;
-                album.song_keys.clear();
-                Some(album)
-            })
-            .collect()
+        let mut out = Vec::new();
+        self.visit_albums(&mut |alb| {
+            out.push(alb);
+            true
+        });
+        out
+    }
+
+    fn visit_albums(&self, visit: &mut dyn FnMut(Album) -> bool) {
+        for guard in self.albums_db.iter() {
+            let Some((key, value)) = guard.into_inner().ok() else {
+                continue;
+            };
+            let Some(mut album) = Album::from_bytes(&value) else {
+                continue;
+            };
+            let Some(id) = String::from_utf8(key.to_vec()).ok() else {
+                continue;
+            };
+            album.id = id;
+            album.song_keys.clear();
+            if !visit(album) {
+                break;
+            }
+        }
     }
 
     fn find_by_id(&self, album_id: &str) -> Option<Album> {
