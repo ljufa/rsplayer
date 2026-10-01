@@ -1,0 +1,3 @@
+Visualizer data is only sent while a visualizer is shown, saving network traffic and battery.
+
+Radio fixes: garbled track info on some stations is ignored, covers are looked up by artist and song, and FluxFM, QuantumCast, Radiosphere and iHeartRadio stations show the current artist, title and cover.

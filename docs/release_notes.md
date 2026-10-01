@@ -1,6 +1,6 @@
 # Release Notes
 
-## Unreleased
+## v5.4.0 (2026-10-01)
 
 ### Improvements
 
