@@ -63,6 +63,14 @@ the Tauri mobile entry point for Android:
   runs before `setup`, which is where the desktop backend is started, so a
   second launch shows the running window and exits before it can open the
   same database.
+- Desktop only: `tauri-plugin-window-state` saves the window's size,
+  position and maximized state (not visibility or decorations) to
+  `.window-state.json` in the app config dir on exit and when the window
+  is hidden to the tray, and restores them when the window is created and
+  when it is shown again from the tray (GTK maps a re-shown window at its
+  initial size).
+  `maximize_on_small_monitor` only runs when no saved state exists yet.
+  The plugin is pinned to 2.4 because 2.5 requires tauri 2.12.
 - Linux only, with `desktop_settings.custom_titlebar` on (the default):
   the window is undecorated and the web UI's nav bar is the title bar. An
   initialization script defines `window.__RSPLAYER_WINDOW__` (minimize /

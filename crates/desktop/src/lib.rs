@@ -13,7 +13,8 @@
 //! On desktop, closing the window can hide it to the system tray instead of
 //! quitting (`tray`, `desktop_settings.close_to_tray`); the single-instance
 //! plugin makes a second launch show the running window instead of starting
-//! another backend.
+//! another backend. The window-state plugin remembers the window's size,
+//! position and maximized state between runs.
 //!
 //! "Restart RSPlayer" from the settings UI shuts the backend down and
 //! relaunches the whole app: via Tauri on desktop, via the Kotlin
@@ -38,9 +39,7 @@ use std::time::{Duration, Instant};
 
 use api_models::common::UserCommand;
 use log::{error, info, warn};
-#[cfg(target_os = "android")]
-use tauri::Manager;
-use tauri::{AppHandle, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent, generate_context};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent, generate_context};
 use tokio::sync::{mpsc, oneshot};
 
 /// Shared slot holding the shutdown trigger of the *current* backend run.
@@ -130,6 +129,12 @@ async fn async_main() {
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
         tray::show_main_window(app);
     }));
+    #[cfg(not(target_os = "android"))]
+    let builder = builder.plugin(
+        tauri_plugin_window_state::Builder::new()
+            .with_state_flags(WINDOW_STATE_FLAGS)
+            .build(),
+    );
     #[cfg(target_os = "android")]
     let builder = builder.plugin(android_restart_plugin());
     builder
@@ -155,9 +160,14 @@ async fn async_main() {
             // saved setting once the backend has loaded it.
             #[cfg(target_os = "linux")]
             let builder = builder.decorations(false).initialization_script(CUSTOM_TITLEBAR_SCRIPT);
+            // Checked before `build`, which restores the saved state.
+            #[cfg(not(target_os = "android"))]
+            let first_launch = !has_saved_window_state(app.handle());
             let window = builder.build().expect("failed to create window");
             #[cfg(not(target_os = "android"))]
-            maximize_on_small_monitor(&window);
+            if first_launch {
+                maximize_on_small_monitor(&window);
+            }
             redirect_when_ready(&window, http_port);
 
             tokio::spawn(restart_loop(backend, shutdown, app.handle().clone()));
@@ -203,6 +213,24 @@ window.__RSPLAYER_WINDOW__ = {
   setDecorations: (value) => window.__TAURI_INTERNALS__.invoke('plugin:window|set_decorations', { label: 'main', value }),
 };
 ";
+
+/// What the window-state plugin saves and restores. Visibility is left out
+/// (the window is often hidden to the tray when the app quits) and so are
+/// decorations (on Linux they follow `desktop_settings.custom_titlebar`).
+#[cfg(not(target_os = "android"))]
+pub(crate) const WINDOW_STATE_FLAGS: tauri_plugin_window_state::StateFlags = tauri_plugin_window_state::StateFlags::SIZE
+    .union(tauri_plugin_window_state::StateFlags::POSITION)
+    .union(tauri_plugin_window_state::StateFlags::MAXIMIZED);
+
+/// Whether an earlier run saved the window state. Without it, this is the
+/// first launch and the default size (or [`maximize_on_small_monitor`]) applies.
+#[cfg(not(target_os = "android"))]
+fn has_saved_window_state(app: &AppHandle) -> bool {
+    use tauri_plugin_window_state::AppHandleExt;
+    app.path()
+        .app_config_dir()
+        .is_ok_and(|dir| dir.join(app.filename()).exists())
+}
 
 /// Default desktop window size (logical pixels).
 const WINDOW_WIDTH: f64 = 1200.0;

@@ -18,6 +18,7 @@ use log::{info, warn};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri_plugin_window_state::{AppHandleExt, WindowExt};
 
 use crate::media_keys::CommandSlot;
 
@@ -102,6 +103,11 @@ pub fn hide_instead_of_close(window: &tauri::Window) -> bool {
     if QUITTING.load(Ordering::Relaxed) || !TRAY_ACTIVE.load(Ordering::Relaxed) || !rsplayer::close_to_tray() {
         return false;
     }
+    // The plugin saves on exit; save now too, in case the app is killed or
+    // the session ends while the window sits in the tray.
+    if let Err(e) = window.app_handle().save_window_state(crate::WINDOW_STATE_FLAGS) {
+        warn!("Failed to save window state: {e}");
+    }
     if let Err(e) = window.hide() {
         warn!("Failed to hide window to tray: {e}");
         return false;
@@ -118,7 +124,13 @@ pub fn show_main_window(app: &AppHandle) {
 }
 
 fn focus(window: &WebviewWindow) {
+    let was_hidden = !window.is_visible().unwrap_or(true);
     let _ = window.show();
+    // GTK maps a window shown again at its initial size, dropping any resize
+    // since launch; put back the state saved when it was hidden.
+    if was_hidden && let Err(e) = window.restore_state(crate::WINDOW_STATE_FLAGS) {
+        warn!("Failed to restore window state: {e}");
+    }
     let _ = window.unminimize();
     let _ = window.set_focus();
 }

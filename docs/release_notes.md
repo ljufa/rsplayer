@@ -8,6 +8,10 @@
 
 With visualization enabled, the server sent about ten level updates per second to every connected browser, phone and desktop window, even when none of them showed a visualizer. Each client now receives them only while it shows one: the player page is open, the visualizer is not set to None, and the tab or window is visible. This saves network traffic and battery on phones and tablets, and CPU on the server. The front panel's level meter is not affected.
 
+#### Desktop app remembers its window
+
+The desktop app now opens with the size, position and maximized state it had when it was last closed or hidden to the tray. On Linux with Wayland, only the size and maximized state are restored: Wayland lets the desktop, not the app, decide where windows open.
+
 ### Fixes
 
 #### Garbled track info on some radio stations
