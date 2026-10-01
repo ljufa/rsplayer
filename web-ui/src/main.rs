@@ -21,6 +21,7 @@ pub mod vumeter;
 
 use api_models::{
     common::{dur_to_string, MetadataCommand, PlayerCommand, PlaylistCommand, QueueCommand, SystemRequest, UserCommand},
+    playback_source::PlaybackSource,
     settings::{InstallMethod, Settings},
     state::{CurrentQueueQuery, PlayerState, StateChangeEvent},
 };
@@ -255,6 +256,24 @@ fn App() -> Element {
         });
     }
 
+    // VU events only while a visualizer is on screen: the player page is open,
+    // visualization is on and not set to None, and the page is visible. Re-sent
+    // on every reconnect, since a new connection starts unsubscribed.
+    {
+        // use_context like the effect below: the AppState built in this body is not the one events update.
+        let state = use_context::<AppState>();
+        // A memo, so switching between visualizer styles sends nothing.
+        let wants_vu = use_memo(move || {
+            *state.vu_meter_enabled.read()
+                && *state.visualizer_type.read() != crate::vumeter::VisualizerType::None
+                && *state.page_visible.read()
+                && path.read().as_str() == "/"
+        });
+        use_effect(move || {
+            ws_send(&ws, &UserCommand::SubscribeVuEvents(wants_vu()));
+        });
+    }
+
     // Fetch Last.fm album art when the song has no local image.
     // Uses use_context (same pattern as child components) to get a stable signal reference.
     let app_state_ctx = use_context::<AppState>();
@@ -264,8 +283,16 @@ fn App() -> Element {
         if let Some(ref s) = song {
             if album_image.peek().is_none() {
                 let s = s.clone();
+                let is_radio = matches!(*app_state_ctx.playback_source.peek(), PlaybackSource::Radio(_));
                 spawn_local(async move {
-                    album_image.set(page::player::fetch_album_cover(&s).await);
+                    let cover = page::player::fetch_album_cover(&s, is_radio).await;
+                    // Radio titles change often; drop a reply that arrives after the song changed.
+                    let still_current = app_state_ctx.current_song.peek().as_ref().is_some_and(|cur| {
+                        cur.file == s.file && cur.artist == s.artist && cur.title == s.title
+                    });
+                    if still_current {
+                        album_image.set(cover);
+                    }
                 });
             }
         } else {

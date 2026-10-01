@@ -19,6 +19,7 @@ use api_models::state::StateChangeEvent;
 use log::info;
 use metadata::icy_reader::IcyMetadataReader;
 use metadata::radio_meta::{self, RadioMeta};
+use metadata::radio_providers::{NowPlayingPoller, PolledReader};
 
 use crate::rsp::http_range_source::HttpRangeSource;
 
@@ -97,13 +98,19 @@ pub fn probe_http_source(
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse::<usize>().ok());
 
+    // Stations with a metadata service (QuantumCast, Radiosphere) report track
+    // changes there; the poller lives as long as the stream body.
+    let poller = radio_meta
+        .clone()
+        .and_then(|rm| NowPlayingPoller::start(rm, changes_tx.clone()));
+
     let media_source: Box<dyn MediaSource> = if let (Some(metaint_val), Some(rm)) = (metaint_val, radio_meta.clone()) {
         info!("ICY stream detected with metaint={metaint_val}");
         let reader = resp.into_body().into_reader();
         let icy_reader = IcyMetadataReader::new(reader, metaint_val, changes_tx.clone(), rm);
-        Box::new(ReadOnlySource::new(Box::new(icy_reader)))
+        Box::new(ReadOnlySource::new(PolledReader::new(icy_reader, poller)))
     } else if is_icy_stream {
-        Box::new(ReadOnlySource::new(resp.into_body().into_reader()))
+        Box::new(ReadOnlySource::new(PolledReader::new(resp.into_body().into_reader(), poller)))
     } else {
         match HttpRangeSource::try_from_response(agent, url, resp) {
             Ok(range_source) => {

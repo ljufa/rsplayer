@@ -58,11 +58,19 @@ type UserCommandSender = mpsc::Sender<UserCommand>;
 #[folder = "../../dist/web-ui/public"]
 struct StaticContentDir;
 
+/// One serialized state change, shared by all websocket connections.
+#[derive(Clone)]
+struct WsEvent {
+    json: Arc<String>,
+    /// `VUEvent`s only go to connections that sent `SubscribeVuEvents(true)`.
+    vu: bool,
+}
+
 #[derive(Clone)]
 struct AppState {
     config: Config,
     user_commands_tx: UserCommandSender,
-    ws_broadcast: broadcast::Sender<Arc<String>>,
+    ws_broadcast: broadcast::Sender<WsEvent>,
     /// Cached list of available output devices. Enumerating output devices is
     /// expensive and, on the Windows ASIO host, probing the drivers can disrupt
     /// the live output stream (see `get_cpal_audio_cards`). So we enumerate once
@@ -78,7 +86,7 @@ pub fn start(
 ) -> (impl Future<Output = ()>, Option<impl Future<Output = ()>>, impl Future<Output = ()>) {
     // VU (20/s) and time events fill a small buffer within a second or two
     // on a throttled client (backgrounded Android WebView, slow Wi-Fi).
-    let (ws_broadcast, _) = broadcast::channel::<Arc<String>>(256);
+    let (ws_broadcast, _) = broadcast::channel::<WsEvent>(256);
     let state = AppState {
         config: config.clone(),
         user_commands_tx,
@@ -108,7 +116,10 @@ pub fn start(
                             error!("Failed to serialize state change event: {ev:?}");
                             continue;
                         };
-                        if !json_msg.is_empty() && ws_broadcast.send(Arc::new(json_msg)).is_err() {
+                        let vu = matches!(ev, StateChangeEvent::VUEvent(..));
+                        if !json_msg.is_empty()
+                            && ws_broadcast.send(WsEvent { json: Arc::new(json_msg), vu }).is_err()
+                        {
                             trace!("No active ws clients, not sending state change");
                         }
                     }
@@ -572,7 +583,7 @@ async fn spa_or_static_fallback(uri: Uri, _req: Request) -> Response {
     }
 }
 
-async fn user_connected(ws: WebSocket, mut ws_rx: broadcast::Receiver<Arc<String>>, user_commands_tx: UserCommandSender) {
+async fn user_connected(ws: WebSocket, mut ws_rx: broadcast::Receiver<WsEvent>, user_commands_tx: UserCommandSender) {
     let user_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
 
     debug!("new websocket client: {user_id}");
@@ -581,6 +592,7 @@ async fn user_connected(ws: WebSocket, mut ws_rx: broadcast::Receiver<Arc<String
 
     let (mut to_user_ws, mut from_user_ws) = ws.split();
     let mut last_resync: Option<std::time::Instant> = None;
+    let mut wants_vu = false;
 
     loop {
         tokio::select! {
@@ -601,6 +613,7 @@ async fn user_connected(ws: WebSocket, mut ws_rx: broadcast::Receiver<Arc<String
                         }
                         info!("Got command from user {user_id}: {cmd:?}");
                         match serde_json::from_str::<UserCommand>(cmd) {
+                            Ok(UserCommand::SubscribeVuEvents(on)) => wants_vu = on,
                             Ok(pc) => {
                                 if user_commands_tx.send(pc).await.is_err() {
                                     error!("failed to send user message");
@@ -615,9 +628,12 @@ async fn user_connected(ws: WebSocket, mut ws_rx: broadcast::Receiver<Arc<String
             },
             result = ws_rx.recv() => {
                 match result {
-                    Ok(json_msg) => {
+                    Ok(ev) => {
+                        if ev.vu && !wants_vu {
+                            continue;
+                        }
                         if to_user_ws
-                            .send(Message::text(json_msg.as_ref().clone()))
+                            .send(Message::text(ev.json.as_ref().clone()))
                             .await
                             .is_err()
                         {

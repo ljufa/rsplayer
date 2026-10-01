@@ -1,5 +1,31 @@
 # Release Notes
 
+## Unreleased
+
+### Improvements
+
+#### Visualizer data only goes where it is shown
+
+With visualization enabled, the server sent about ten level updates per second to every connected browser, phone and desktop window, even when none of them showed a visualizer. Each client now receives them only while it shows one: the player page is open, the visualizer is not set to None, and the tab or window is visible. This saves network traffic and battery on phones and tablets, and CPU on the server. The front panel's level meter is not affected.
+
+### Fixes
+
+#### Garbled track info on some radio stations
+
+Some radio stations send broken track info. The 101.ru streams, for example, send a leftover server reply (`{"status":1,"message":"Ok",...}` followed by stray line breaks) instead of the artist and song name, and the player showed it as the song title. Only the first line of the station's track info is used now, and values that look like such a reply are ignored, as are empty placeholders like ` - `. A title with an empty artist (` - Song`) now shows just the song. The player keeps showing the last good title or the station info instead.
+
+#### Cover art for radio songs
+
+For a radio station without its own logo, the player looked up the cover on Last.fm using the station description as the album name (for example Radio Paradise's "DJ-mixed blend of modern and classic rock..."), which never finds anything. Radio songs are now looked up by artist and song title, so the cover of the album the song comes from is shown. Stations whose metadata service reports an empty cover (FluxFM and other QuantumCast stations) no longer block the lookup, which also left an empty background.
+
+#### Current song on FluxFM and other QuantumCast and Radiosphere stations
+
+These stations publish the playing song through their own metadata service, while the stream itself often only names the channel ("FluxFM - Livestream"). The player read the service once when the station started, showed artist and title merged into one line, and a moment later replaced them with the channel name from the stream. The service is now asked again every few seconds while the station plays, so every song change is shown with a separate artist and title, and with the song's cover when the service has one.
+
+#### Track info and cover art on iHeartRadio stations
+
+iHeartRadio stations send the artist followed by a list of internal fields (`.38 SPECIAL - text="Hold On Loosely" song_spot="M" length="00:04:36" ...`), and the player showed the whole list as the song title. The artist and title are now read from it correctly, and the cover art the station sends along is shown instead of the station logo.
+
 ## v5.3.1 (2026-09-29)
 
 ### Fixes

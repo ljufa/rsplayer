@@ -134,6 +134,10 @@ pub enum UserCommand {
     System(SystemRequest),
     Multiroom(MultiroomCommand),
     Podcast(crate::podcast::PodcastCommand),
+    /// Whether this websocket client wants `VUEvent`s. Off until a client asks,
+    /// so clients that show no visualizer don't get ~10 messages a second.
+    /// Handled per connection by the websocket loop, not by the command handler.
+    SubscribeVuEvents(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]

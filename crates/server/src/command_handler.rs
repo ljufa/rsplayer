@@ -22,7 +22,9 @@ use tokio::sync::broadcast::Sender;
 use tokio::sync::mpsc::{self, Receiver};
 
 use api_models::common::SystemCommand;
-use api_models::common::UserCommand::{self, Metadata, Multiroom, Player, Playlist, Podcast, Queue, Storage, System, UpdateDsp};
+use api_models::common::UserCommand::{
+    self, Metadata, Multiroom, Player, Playlist, Podcast, Queue, Storage, SubscribeVuEvents, System, UpdateDsp,
+};
 use api_models::state::StateChangeEvent;
 
 use crate::command_context::{CommandContext, SystemCommandContext};
@@ -106,6 +108,8 @@ pub async fn handle_user_commands(
             Podcast(podcast_cmd) => {
                 handle_podcast_command(podcast_cmd, &ctx);
             }
+            // Consumed by the websocket connection that sent it.
+            SubscribeVuEvents(_) => {}
         }
     }
 }

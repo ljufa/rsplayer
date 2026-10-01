@@ -144,7 +144,9 @@ Key points:
   dirs; APE and SACD-ISO virtual tracks (`…#SACD_<n>`) via the custom readers
   in the metadata crate. HTTP URLs are fetched once with `Icy-Metadata: 1`
   and `Range: bytes=0-`: a response carrying `icy-*` headers is a live radio
-  stream (ICY title updates flow out as events, not seekable); a host that
+  stream (ICY title updates flow out as events, not seekable; stations with a
+  metadata service, QuantumCast and Radiosphere, are polled by
+  `NowPlayingPoller` instead and their ICY titles ignored); a host that
   honours byte ranges (podcast episodes, direct file links) becomes an
   `HttpRangeSource` — a seekable `MediaSource` that re-requests from the new
   offset on seek and reconnects at the current offset on dropped

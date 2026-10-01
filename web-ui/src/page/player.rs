@@ -36,6 +36,16 @@ struct LastFmAlbum {
 }
 
 #[derive(Debug, Deserialize)]
+struct LastFmTrackInfo {
+    track: LastFmTrack,
+}
+
+#[derive(Debug, Deserialize)]
+struct LastFmTrack {
+    album: Option<LastFmAlbum>,
+}
+
+#[derive(Debug, Deserialize)]
 struct LastFmImage {
     size: String,
     #[serde(rename = "#text")]
@@ -44,12 +54,27 @@ struct LastFmImage {
 
 // ─── Album art helper ────────────────────────────────────────────────────────
 
-pub async fn fetch_album_cover(song: &Song) -> Option<String> {
+/// `is_radio`: the song is a live radio track, whose `album` is the station
+/// description and `file` may be the station homepage (from `icy-url`).
+pub async fn fetch_album_cover(song: &Song, is_radio: bool) -> Option<String> {
     if let Some(image_id) = &song.image_id {
         return Some(format!("/artwork/{image_id}"));
     }
-    let album = song.album.as_deref()?;
     let artist = song.artist.as_deref()?;
+    if is_radio || song.file.starts_with("http://") || song.file.starts_with("https://") {
+        // Radio: `album` holds the station description, so look the track up instead.
+        let title = song.title.as_deref()?;
+        let url = format!(
+            "https://ws.audioscrobbler.com/2.0/?api_key=3b3df6c5dd3ad07222adc8dd3ccd8cdc&format=json&method=track.getinfo&autocorrect=1&track={}&artist={}",
+            js_sys::encode_uri_component(title),
+            js_sys::encode_uri_component(artist),
+        );
+        let resp = Request::get(&url).send().await.ok()?;
+        let info: LastFmTrackInfo = resp.json().await.ok()?;
+        // track.getinfo has no "mega" size; the last image is the largest.
+        return info.track.album?.image.into_iter().rev().find(|i| !i.text.is_empty()).map(|i| i.text);
+    }
+    let album = song.album.as_deref()?;
     let url = format!(
         "https://ws.audioscrobbler.com/2.0/?api_key=3b3df6c5dd3ad07222adc8dd3ccd8cdc&format=json&method=album.getinfo&album={}&artist={}",
         js_sys::encode_uri_component(album),

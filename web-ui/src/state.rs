@@ -57,6 +57,8 @@ pub struct AppState {
     pub vu_left: Signal<u8>,
     pub vu_right: Signal<u8>,
     pub vu_meter_enabled: Signal<bool>,
+    /// False while the tab is in the background or the desktop window is in the tray.
+    pub page_visible: Signal<bool>,
     pub visualizer_type: Signal<VisualizerType>,
     /// Whether browser-based playback mode is active (audio streamed via HTTP, not ALSA).
     pub local_browser_playback: Signal<bool>,
@@ -129,6 +131,7 @@ impl AppState {
             vu_left: Signal::new(0),
             vu_right: Signal::new(0),
             vu_meter_enabled: Signal::new(false),
+            page_visible: Signal::new(!page_hidden()),
             visualizer_type: Signal::new(VisualizerType::Lissajous),
             local_browser_playback: Signal::new(false),
             album_image: Signal::new(None),
@@ -186,7 +189,7 @@ impl AppState {
                     .image_id
                     .as_ref()
                     .map(|id| format!("/artwork/{id}"))
-                    .or_else(|| song.image_url.clone());
+                    .or_else(|| song.image_url.clone().filter(|u| !u.trim().is_empty()));
                 *self.album_image.write() = local;
                 *self.current_song.write() = Some(song);
             }

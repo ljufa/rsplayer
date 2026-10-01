@@ -187,8 +187,12 @@ fn install_wake_listeners(app_state: AppState, ws_holder: Signal<Signal<Option<W
     let Some(window) = web_sys::window() else {
         return;
     };
+    let mut page_visible = app_state.page_visible;
     let on_wake = Closure::<dyn FnMut()>::new(move || {
         let hidden = web_sys::window().and_then(|w| w.document()).is_some_and(|d| d.hidden());
+        if *page_visible.peek() == hidden {
+            page_visible.set(!hidden);
+        }
         if hidden {
             return;
         }

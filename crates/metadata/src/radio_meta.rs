@@ -2,7 +2,17 @@
 //! `ice-audio-info`…), enriched by provider-specific lookups in
 //! [`radio_providers`].
 
+use api_models::player::Song;
+
 use crate::radio_providers;
+
+/// The track a station's metadata service reports as playing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NowPlaying {
+    pub artist: Option<String>,
+    pub title: String,
+    pub image_url: Option<String>,
+}
 
 #[derive(Clone, Debug)]
 pub struct RadioMeta {
@@ -14,6 +24,32 @@ pub struct RadioMeta {
     pub samplerate: Option<u32>,
     pub channels: Option<usize>,
     pub bitrate: Option<u32>,
+    /// Current track from the station's metadata service (QuantumCast, Radiosphere).
+    pub now_playing: Option<NowPlaying>,
+    /// That service's now-playing URL. When set, it is polled during playback
+    /// and the stream's own ICY titles (often just the channel name) are ignored.
+    pub now_playing_url: Option<String>,
+}
+
+impl RadioMeta {
+    /// The song to publish for a track playing on this station.
+    pub fn track_song(&self, artist: Option<String>, title: String, image_url: Option<String>) -> Song {
+        let album = [&self.description, &self.name]
+            .into_iter()
+            .flatten()
+            .find(|s| !s.is_empty())
+            .cloned()
+            .unwrap_or_else(|| self.url.clone());
+        Song {
+            title: Some(title),
+            artist,
+            album: Some(album),
+            genre: self.genre.clone(),
+            file: self.url.clone(),
+            image_url: image_url.or_else(|| self.image_url.clone()),
+            ..Default::default()
+        }
+    }
 }
 
 pub fn get_external_radio_meta(agent: &ureq::Agent, resp: &ureq::http::Response<ureq::Body>) -> Option<RadioMeta> {
@@ -31,6 +67,8 @@ pub fn get_external_radio_meta(agent: &ureq::Agent, resp: &ureq::http::Response<
         samplerate: None,
         channels: None,
         bitrate: None,
+        now_playing: None,
+        now_playing_url: None,
     };
 
     if let Some(audio_info) = header_str("ice-audio-info") {

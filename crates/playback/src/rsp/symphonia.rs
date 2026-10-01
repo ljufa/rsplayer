@@ -123,18 +123,23 @@ pub fn play_file(
         // Genuine ICY radio only: the station name replaces the (empty)
         // queue entry. Podcast episodes and direct links keep their queue
         // metadata.
-        if let Some(rm) = &radio_meta {
-            context
-                .changes_tx
-                .send(StateChangeEvent::CurrentSongEvent(Song {
+        // With a metadata service, its current track is shown right away.
+        // A station without a name keeps the queue entry's title.
+        if let Some(rm) = &radio_meta
+            && (rm.now_playing.is_some() || rm.name.as_deref().is_some_and(|n| !n.trim().is_empty()))
+        {
+            let song = rm.now_playing.as_ref().map_or_else(
+                || Song {
                     title: rm.name.clone(),
                     album: rm.description.clone(),
                     genre: rm.genre.clone(),
                     file: rm.url.clone(),
                     image_url: rm.image_url.clone(),
                     ..Default::default()
-                }))
-                .ok();
+                },
+                |np| rm.track_song(np.artist.clone(), np.title.clone(), np.image_url.clone()),
+            );
+            context.changes_tx.send(StateChangeEvent::CurrentSongEvent(song)).ok();
         }
 
         build_probe()
