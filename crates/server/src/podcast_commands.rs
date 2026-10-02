@@ -25,7 +25,11 @@ pub fn handle_podcast_command(cmd: PodcastCommand, ctx: &CommandContext) {
         },
         PodcastCommand::QueryPodcasts => ctx.send_event(StateChangeEvent::PodcastsEvent(svc.list_podcasts())),
         PodcastCommand::QueryEpisodes { podcast_id, offset, limit } => {
-            ctx.send_event(StateChangeEvent::PodcastEpisodesEvent(svc.episodes_page(&podcast_id, offset, limit)));
+            ctx.send_event(StateChangeEvent::PodcastEpisodesEvent(svc.episodes_page(
+                &podcast_id,
+                offset,
+                limit,
+            )));
         }
         PodcastCommand::SetPlayed(episode_id, played) => {
             if let Err(e) = svc.set_played(&episode_id, played) {

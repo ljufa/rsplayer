@@ -69,13 +69,26 @@ impl SongRepository for FjallSongRepository {
     }
 
     fn find_all(&self) -> Vec<Song> {
-        self.songs_db
-            .iter()
-            .filter_map(|guard| {
-                let value = guard.value().ok()?;
-                Song::bytes_to_song(&value)
-            })
-            .collect()
+        let mut out = Vec::new();
+        self.visit_songs(&mut |song| {
+            out.push(song);
+            true
+        });
+        out
+    }
+
+    fn visit_songs(&self, visit: &mut dyn FnMut(Song) -> bool) {
+        for guard in self.songs_db.iter() {
+            let Some(value) = guard.value().ok() else {
+                continue;
+            };
+            let Some(song) = Song::bytes_to_song(&value) else {
+                continue;
+            };
+            if !visit(song) {
+                break;
+            }
+        }
     }
 
     fn find_by_key_contains(&self, search_term: &str) -> Vec<(Vec<u8>, Vec<u8>)> {

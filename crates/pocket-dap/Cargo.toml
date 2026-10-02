@@ -1,0 +1,22 @@
+[package]
+name = "rsplayer-pocket-dap"
+version.workspace = true
+authors = ["Dragan Ljubojevic <dragan.ljubojevic@gmail.com>"]
+edition = "2024"
+license-file = "../../LICENSE"
+repository = "https://github.com/ljufa/rsplayer"
+description = "Dedicated DAP front panel for RSPlayer (X11/HDMI window UI; SPI panel later)"
+
+[[bin]]
+name = "rsplayer-pocket-dap"
+path = "src/main.rs"
+
+[dependencies]
+api_models = { path = "../api_models" }
+embedded-graphics = "0.8"
+futures-util = { version = "0.3", default-features = false, features = ["sink"] }
+minifb = "0.28"
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-tungstenite = "0.26"

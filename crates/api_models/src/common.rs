@@ -35,6 +35,8 @@ pub enum MetadataLibraryItem {
         name: String,
         #[serde(default)]
         id: String,
+        #[serde(default)]
+        artist: String,
         year: Option<DateTime<Utc>>,
     },
     Empty,
@@ -226,14 +228,40 @@ pub fn all_playback_modes() -> Vec<PlaybackMode> {
     PlaybackMode::iter().collect()
 }
 
+/// How [`MetadataCommand::QueryArtistsPage`] picks the first row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+pub enum ArtistPageMode {
+    /// `offset` is the first artist index (0-based).
+    Offset,
+    /// Start of the next letter group after the artist at `offset` (wraps).
+    NextLetter,
+    /// Start of the previous letter group (wraps).
+    PrevLetter,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum MetadataCommand {
     QueryLocalFiles(String, usize),
     SearchLocalFiles(String, usize),
     QueryArtists,
+    /// One page of album artists. Answered by `MetadataArtistsPage`.
+    QueryArtistsPage {
+        offset: usize,
+        limit: usize,
+        mode: ArtistPageMode,
+    },
     SearchArtists(String),
+    /// Artists, albums, and songs in one list. Songs match all tag fields. Empty term → empty list.
+    SearchLibrary(String, usize),
     QueryAlbumsByArtist(String),
     QuerySongsByAlbum(String),
+    /// Every album, title order. Answered by `MetadataLocalItems`.
+    QueryAlbums,
+    /// One page of songs, title order. Answered by `MetadataSongsPage`.
+    QuerySongsPage {
+        offset: usize,
+        limit: usize,
+    },
     RescanMetadata(String, bool),
     LikeMediaItem(String),
     DislikeMediaItem(String),
@@ -255,6 +283,10 @@ pub enum PlaylistCommand {
     QueryPlaylistItems(String, usize),
     QueryAlbumItems(String, usize),
     QueryPlaylist,
+    /// Saved playlists only. Answered by `SavedPlaylists`.
+    QuerySavedPlaylists,
+    /// Every song in one saved playlist. Answered by `MetadataLocalItems`.
+    QuerySavedPlaylistSongs(String),
     QueryAlbumsByGenre(String),
     QueryAlbumsByDecade(String),
 }
