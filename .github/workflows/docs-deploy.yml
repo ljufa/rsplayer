@@ -24,7 +24,7 @@ jobs:
   deploy:
     runs-on: [self-hosted, rsplayer-docs]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # own subfolder: cd.yml jobs on this runner leave root-owned files in the
           # shared workspace root, which would make checkout's cleanup fail (EACCES)
