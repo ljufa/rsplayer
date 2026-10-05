@@ -16,6 +16,12 @@ ANDROID_TAURI_CLI_VERSION=2.11.4
 # docker/Dockerfile.android alike. The wasm-opt version changes the output, so both must agree.
 export NO_DOWNLOADS=1
 export DX_TELEMETRY_ENABLED=false
+# NO_DOWNLOADS alone is not enough: dx still prefers a tool it downloaded earlier into its data
+# dir (~/.local/share/.dx/tools) over PATH. The self-hosted runner keeps $HOME between jobs and
+# had wasm-opt 129 and esbuild 0.27.3 there from older builds, so 5.4.1's CI APKs differed from
+# F-Droid's clean build. A dx data dir of our own, with no tools in it, rules that out.
+export DX_HOME="${TMPDIR:-/tmp}/rsplayer-android-dx"
+rm -rf "$DX_HOME/tools"
 #
 # It makes the output independent of where the build runs, so that the APK F-Droid builds
 # from source is byte-identical to the one we sign and publish (reproducible builds).
