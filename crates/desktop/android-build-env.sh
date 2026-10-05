@@ -9,6 +9,13 @@
 ANDROID_RUST_VERSION=1.98.1
 ANDROID_DX_VERSION=0.7.10
 ANDROID_TAURI_CLI_VERSION=2.11.4
+
+# dx must not download wasm-bindgen, wasm-opt or esbuild (F-Droid requires every build tool to
+# come from source or the distro): take them from PATH instead, i.e. cargo-installed
+# wasm-bindgen-cli and Debian trixie's binaryen and esbuild, in the F-Droid recipe and in
+# docker/Dockerfile.android alike. The wasm-opt version changes the output, so both must agree.
+export NO_DOWNLOADS=1
+export DX_TELEMETRY_ENABLED=false
 #
 # It makes the output independent of where the build runs, so that the APK F-Droid builds
 # from source is byte-identical to the one we sign and publish (reproducible builds).

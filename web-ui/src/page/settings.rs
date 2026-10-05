@@ -788,10 +788,10 @@ pub fn SettingsPage() -> Element {
                             select {
                                 class: "select select-bordered select-sm w-full",
                                 onchange: move |e: Event<FormData>| {
-                                    let dir = if e.value() == "podcast_index" {
-                                        PodcastDirectory::PodcastIndex
-                                    } else {
-                                        PodcastDirectory::Itunes
+                                    let dir = match e.value().as_str() {
+                                        "podcast_index" => PodcastDirectory::PodcastIndex,
+                                        "none" => PodcastDirectory::None,
+                                        _ => PodcastDirectory::Itunes,
                                     };
                                     settings.write().podcast_settings.directory = dir;
                                     auto_save();
@@ -805,6 +805,11 @@ pub fn SettingsPage() -> Element {
                                     value: "podcast_index",
                                     selected: settings.read().podcast_settings.directory == PodcastDirectory::PodcastIndex,
                                     "Podcast Index (needs API key)"
+                                }
+                                option {
+                                    value: "none",
+                                    selected: settings.read().podcast_settings.directory == PodcastDirectory::None,
+                                    "None (add podcasts by feed URL only)"
                                 }
                             }
                         }
@@ -1881,8 +1886,8 @@ fn AppearanceSection() -> Element {
     let show_bg = *state.show_bg_image.read();
 
     rsx! {
-        div { class: "flex items-center justify-between py-1.5 mb-3",
-            span { class: "text-sm", "Album art background" }
+        div { class: "flex items-center justify-between py-1.5",
+            span { class: "text-sm", "Album art background and cover download" }
             input {
                 r#type: "checkbox",
                 class: "toggle toggle-sm toggle-primary",
@@ -1898,6 +1903,9 @@ fn AppearanceSection() -> Element {
                     }
                 },
             }
+        }
+        p { class: "text-xs opacity-60 mb-3",
+            "Downloads covers missing from your files from Last.fm (sends artist and album or song title) and shows the cover behind the page. Off: only covers embedded in or next to your music are shown, and nothing is sent to Last.fm."
         }
         div { class: "flex flex-wrap gap-3",
             {

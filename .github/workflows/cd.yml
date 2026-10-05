@@ -74,6 +74,14 @@ jobs:
       - name: Build release
         run: cargo make build_ui_release
 
+      # The Android/F-Droid build uses the committed CSS and icon fonts (no npm, see
+      # build_ui_android), so they must match what npm just regenerated for every other platform.
+      - name: Verify committed CSS and fonts are current
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git diff --exit-code -- web-ui/public/tw.css web-ui/public/material-icons \
+            || { echo "::error::web-ui/public is stale: run 'cargo make build_css' and commit it"; exit 1; }
+
       - name: Upload web public dir
         uses: actions/upload-artifact@v7
         with:

@@ -137,6 +137,9 @@ pub enum PodcastDirectory {
     #[default]
     Itunes,
     PodcastIndex,
+    /// No directory: search is off and podcasts are added by feed URL only,
+    /// so nothing is sent to a third-party service (the Android default).
+    None,
 }
 
 /// A directory search hit; `feed_url` is what `Subscribe` needs.

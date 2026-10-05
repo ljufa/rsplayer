@@ -4,13 +4,13 @@
 ### Frontend
 - frontend location is `web-ui/`, a member of the main Rust workspace (WASM target)
 - built with Dioxus framework, compiled to WebAssembly
-- one-time setup after clone: `cd web-ui && npm install` (installs tailwind/daisyui/fontawesome/material-icons and copies font files to `public/`)
+- one-time setup after clone: `cd web-ui && npm install` (installs tailwind/daisyui/material-icons and copies font files to `public/material-icons/`)
 - compile check: `dx check` (run from `web-ui/`)
 - dev: `cargo make serve_dev` or `cd web-ui && dx serve`
 - release: `cargo make build_ui_release` (output embedded in backend binary)
 - CSS source is `web-ui/input.css`; compiled output is `web-ui/public/tw.css` (committed to git)
 - regenerate CSS: `cargo make build_css`, then commit `public/tw.css`
-- `public/fontawesome/` and `public/material-icons/` are gitignored — populated by `npm install`
+- `public/material-icons/` is committed too (copied there by `npm install`): the Android/F-Droid UI build (`build_ui_android`) uses the committed CSS and fonts and never runs npm; cd.yml fails the release if they are stale
 
 ### Backend
 - Compile BE with `cargo make build_dev`

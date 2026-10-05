@@ -64,7 +64,9 @@ pub struct AppState {
     pub local_browser_playback: Signal<bool>,
     /// Resolved album art URL for the current song (local /artwork/ or Last.fm).
     pub album_image: Signal<Option<String>>,
-    /// Whether to show the album art as a background image (persisted in localStorage).
+    /// Whether to show the album art as a background image, and to look up missing covers
+    /// on Last.fm (`ui_preferences.show_bg_image`). Starts off until the settings arrive, so
+    /// no Last.fm request is made before the stored choice is known.
     pub show_bg_image: Signal<bool>,
     /// Lazily fetched albums by genre name (keyed by genre string).
     pub lazy_genre_albums: Signal<HashMap<String, Vec<Album>>>,
@@ -138,7 +140,7 @@ impl AppState {
             lazy_genre_albums: Signal::new(HashMap::new()),
             lazy_decade_albums: Signal::new(HashMap::new()),
             audio_seeking: Signal::new(false),
-            show_bg_image: Signal::new(true),
+            show_bg_image: Signal::new(false),
             multiroom_peers: Signal::new(Vec::new()),
             multiroom_group: Signal::new(MultiroomGroupState::default()),
             update_available: Signal::new(None),

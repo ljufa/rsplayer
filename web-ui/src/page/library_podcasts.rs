@@ -6,7 +6,7 @@
 
 use api_models::common::UserCommand;
 use api_models::playback_source::PlaybackSource;
-use api_models::podcast::{Episode, Podcast, PodcastCommand, PodcastSearchResult};
+use api_models::podcast::{Episode, Podcast, PodcastCommand, PodcastDirectory, PodcastSearchResult};
 use dioxus::prelude::*;
 use web_sys::WebSocket;
 
@@ -76,6 +76,12 @@ fn is_feed_url(input: &str) -> bool {
 #[component]
 pub fn LibraryPodcastsPage() -> Element {
     let state = use_context::<AppState>();
+    // Directory set to None in Settings: only feed URLs can be added.
+    let search_off = state
+        .global_settings
+        .read()
+        .as_ref()
+        .is_some_and(|s| s.podcast_settings.directory == PodcastDirectory::None);
     let ws = use_context::<Signal<Option<WebSocket>>>();
     let CurrentPath(path) = use_context::<CurrentPath>();
 
@@ -174,7 +180,7 @@ pub fn LibraryPodcastsPage() -> Element {
                         input {
                             class: "input input-sm input-bordered flex-1",
                             r#type: "text",
-                            placeholder: "Search podcasts, or paste a feed URL…",
+                            placeholder: if search_off { "Paste a podcast feed URL…" } else { "Search podcasts, or paste a feed URL…" },
                             value: "{search}",
                             autofocus: true,
                             oninput: move |e| search.set(e.value()),

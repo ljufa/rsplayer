@@ -11,4 +11,12 @@ RSPlayer is an open-source music player written in Rust, with a bit-perfect play
 
 The app runs the player engine on the device itself. The same engine can also run as a headless server on a NAS or Raspberry Pi.
 
+Online services, all contacted directly from the device:
+<ul>
+<li>radio-browser.info: station search and discovery on the Radio page</li>
+<li>lrclib.net: lyrics, when you open the lyrics view</li>
+<li>Last.fm: cover art for songs without their own, only when "Album art background and cover download" is turned on in Settings, Appearance (off by default)</li>
+<li>Apple Podcasts (iTunes Search) or Podcast Index: podcast search, only when chosen as the search directory in Settings, Podcasts (off by default; podcasts can always be added by feed URL)</li>
+</ul>
+
 Music access is limited to audio files in shared storage (permission to read audio and images). Optional battery optimization exemption keeps playback alive with the screen off.

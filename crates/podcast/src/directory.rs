@@ -24,10 +24,11 @@ pub trait PodcastDirectorySearch: Send + Sync {
     fn search(&self, term: &str) -> Result<Vec<PodcastSearchResult>>;
 }
 
-/// Picks the directory from settings. Podcast Index without credentials
-/// falls back to iTunes; the returned flag says so, for a user notification.
-pub fn directory_for(settings: &PodcastSettings) -> (Box<dyn PodcastDirectorySearch>, bool) {
-    match settings.directory {
+/// Picks the directory from settings, `None` when the user turned search off.
+/// Podcast Index without credentials falls back to iTunes; the returned flag
+/// says so, for a user notification.
+pub fn directory_for(settings: &PodcastSettings) -> Option<(Box<dyn PodcastDirectorySearch>, bool)> {
+    let directory: (Box<dyn PodcastDirectorySearch>, bool) = match settings.directory {
         PodcastDirectory::PodcastIndex
             if !settings.podcast_index_api_key.trim().is_empty() && !settings.podcast_index_api_secret.trim().is_empty() =>
         {
@@ -41,7 +42,9 @@ pub fn directory_for(settings: &PodcastSettings) -> (Box<dyn PodcastDirectorySea
         }
         PodcastDirectory::PodcastIndex => (Box::new(ItunesDirectory), true),
         PodcastDirectory::Itunes => (Box::new(ItunesDirectory), false),
-    }
+        PodcastDirectory::None => return None,
+    };
+    Some(directory)
 }
 
 pub fn directory_agent() -> Agent {
@@ -277,12 +280,19 @@ mod tests {
 
     #[test]
     fn directory_selection_falls_back_without_credentials() {
+        let fell_back = |s: &PodcastSettings| directory_for(s).expect("a directory").1;
         let mut settings = PodcastSettings::default();
-        assert!(!directory_for(&settings).1);
+        assert!(!fell_back(&settings));
         settings.directory = PodcastDirectory::PodcastIndex;
-        assert!(directory_for(&settings).1, "missing credentials → fallback flagged");
+        assert!(fell_back(&settings), "missing credentials → fallback flagged");
         settings.podcast_index_api_key = "k".into();
         settings.podcast_index_api_secret = "s".into();
-        assert!(!directory_for(&settings).1);
+        assert!(!fell_back(&settings));
+    }
+
+    #[test]
+    fn no_directory_turns_search_off() {
+        let settings = PodcastSettings { directory: PodcastDirectory::None, ..PodcastSettings::default() };
+        assert!(directory_for(&settings).is_none());
     }
 }

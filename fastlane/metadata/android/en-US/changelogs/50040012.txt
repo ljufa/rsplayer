@@ -1,0 +1,3 @@
+Cover download from Last.fm is now a setting, "Album art background and cover download" (Settings, Appearance), off by default on new Android installs.
+
+Podcast search directory can be set to None (add podcasts by feed URL only), the default on new Android installs.

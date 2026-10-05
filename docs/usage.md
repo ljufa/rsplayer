@@ -214,7 +214,7 @@ Subscribe to podcasts and listen to episodes; RSPlayer remembers where you stopp
 
 The show header has **Refresh** (re-fetch the feed now) and **Unsubscribe** (tap twice to confirm). Feeds are refreshed in the background, hourly by default.
 
-**Search** finds shows by name in the Apple Podcasts directory, or in Podcast Index when you have entered an API key under Settings → Podcasts. Paste an RSS feed URL into the same box to subscribe to a feed that is not listed.
+**Search** finds shows by name in the Apple Podcasts directory, or in Podcast Index when you have entered an API key under Settings → Podcasts. Paste an RSS feed URL into the same box to subscribe to a feed that is not listed. With the search directory set to None (the default on a new Android installation), search is off and the box only takes feed URLs.
 
 Episodes are seekable like local files, and the Now Playing page links the show name back to its episode list. Positions are tracked when RSPlayer plays the audio itself, not in browser playback mode.
 
@@ -250,14 +250,14 @@ Configure RSPlayer settings. For detailed configuration options, see the [Config
 
 | Section | Description |
 |---------|-------------|
-| Appearance | Theme selection, album art background |
+| Appearance | Theme selection, album art background and cover download (Last.fm) |
 | Playback | Audio interface, auto-resume |
 | Volume Control | Volume backend, mixer, step |
 | Visualization & Normalization | Visualization, loudness normalization |
 | DSP Equalizer | Parametric EQ, presets, CamillaDSP import |
 | Music Library | Music directories, network storage |
 | Multiroom | Synchronized playback across devices |
-| Podcasts | Search directory (Apple Podcasts / Podcast Index + API key), feed refresh interval, episodes kept per show, played threshold |
+| Podcasts | Search directory (Apple Podcasts / Podcast Index + API key / None), feed refresh interval, episodes kept per show, played threshold |
 | Hardware | USB command channel, power control |
 | System | Restart, shutdown |
 

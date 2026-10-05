@@ -274,14 +274,17 @@ fn App() -> Element {
         });
     }
 
-    // Fetch Last.fm album art when the song has no local image.
+    // Fetch Last.fm album art when the song has no local image. Only while "Album art background and cover download"
+    // is on: that toggle is the opt-in for the Last.fm lookup (off by default on
+    // Android). Local artwork is shown either way.
     // Uses use_context (same pattern as child components) to get a stable signal reference.
     let app_state_ctx = use_context::<AppState>();
     use_effect(move || {
         let song = app_state_ctx.current_song.read().clone();
+        let online_covers = *app_state_ctx.show_bg_image.read();
         let mut album_image = app_state_ctx.album_image;
         if let Some(ref s) = song {
-            if album_image.peek().is_none() {
+            if online_covers && album_image.peek().is_none() {
                 let s = s.clone();
                 let is_radio = matches!(*app_state_ctx.playback_source.peek(), PlaybackSource::Radio(_));
                 spawn_local(async move {

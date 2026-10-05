@@ -11,7 +11,7 @@ To configure `rsplayer`, navigate to the settings page in the web UI. Settings a
 ![Appearance Settings](/_assets/settings_appearance.png)
 
 - **Theme:** Select a visual theme for the web UI. Available themes: Dark, Light, Synthwave, Dracula, Nord, Dim, Aqua, Coffee, Caramel, and Black.
-- **Album art background:** Toggle whether the album artwork is used as the page background.
+- **Album art background and cover download:** Shows the album artwork as the page background, and downloads covers missing from your files from Last.fm (sending artist and album or song title). Off: only covers embedded in or next to your music are shown and nothing is sent to Last.fm. Off by default on a new Android installation.
 
 ## Desktop App
 

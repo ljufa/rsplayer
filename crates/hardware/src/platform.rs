@@ -12,6 +12,7 @@
 //! shared Music folder as the library directory.
 
 use api_models::common::{PcmOutputDevice, VolumeCrtlType};
+use api_models::podcast::PodcastDirectory;
 use api_models::settings::{InstallMethod, Settings};
 
 use crate::audio_device::pipewire;
@@ -138,6 +139,13 @@ impl PlatformProfile {
         }
         if let Some(dir) = &self.default_music_dir {
             settings.metadata_settings.music_directories = vec![dir.clone()];
+        }
+        if self.os == TargetOs::Android {
+            // Nothing goes to a non-free third-party service until the user opts in
+            // (F-Droid NonFreeNet): Last.fm cover art, which follows the album art
+            // background toggle, and the podcast directory search (iTunes).
+            settings.ui_preferences.show_bg_image = false;
+            settings.podcast_settings.directory = PodcastDirectory::None;
         }
         settings
     }
@@ -358,6 +366,16 @@ mod tests {
         assert_eq!(s.alsa_settings.output_device.card_id, "default");
         assert_software_50(&s);
         assert_eq!(s.metadata_settings.music_directories, vec!["/storage/emulated/0/Music".to_string()]);
+    }
+
+    #[test]
+    fn android_starts_with_third_party_services_off() {
+        let s = profile(TargetOs::Android, Sandbox::None, false, false, false).first_launch_settings();
+        assert!(!s.ui_preferences.show_bg_image);
+        assert_eq!(s.podcast_settings.directory, PodcastDirectory::None);
+        let s = profile(TargetOs::Linux, Sandbox::None, true, false, false).first_launch_settings();
+        assert!(s.ui_preferences.show_bg_image);
+        assert_eq!(s.podcast_settings.directory, PodcastDirectory::Itunes);
     }
 
     #[test]

@@ -263,7 +263,11 @@ impl PodcastService {
             self.emit(StateChangeEvent::PodcastSearchResultsEvent(vec![]));
             return;
         }
-        let (directory, fell_back) = directory_for(&self.settings());
+        let Some((directory, fell_back)) = directory_for(&self.settings()) else {
+            self.emit(StateChangeEvent::PodcastSearchResultsEvent(vec![]));
+            self.notify_error("Podcast search is off: choose a directory in Settings → Podcasts, or paste a feed URL");
+            return;
+        };
         if fell_back {
             self.notify_error("Podcast Index credentials missing — searching iTunes instead");
         }

@@ -33,9 +33,13 @@ command = "npx"
 args = ["tailwindcss", "-i", "input.css", "-o", "public/tw.css", "--minify"]
 
 [tasks.build_ui_release]
-description = "Build release WASM with Dioxus and copy to dist/"
+description = "Build CSS + release WASM with Dioxus and copy to dist/"
+dependencies = ["build_css"]
+run_task = "build_ui_wasm_release"
+
+[tasks.build_ui_wasm_release]
+description = "Release WASM with Dioxus from the committed public/tw.css (no npm), copied to dist/"
 cwd = "web-ui"
-dependencies = ["build_css" ]
 script = [
     "# dx never removes old hashed assets, and everything in dist/ ends up embedded in the binaries",
     "rm -rf target/dx/rsplayer_web_ui/release",
@@ -272,16 +276,16 @@ script = [
 # ── FE (Web UI) ───────────────────────────
 
 [tasks.build_css_dev]
-description = "Build Tailwind CSS + DaisyUI (dev, no minify)"
+description = "Build Tailwind CSS + DaisyUI (minified like the release, so the committed public/tw.css only changes with its content)"
 cwd = "web-ui"
 command = "npx"
-args = ["tailwindcss", "-i", "input.css", "-o", "public/tw.css"]
+args = ["tailwindcss", "-i", "input.css", "-o", "public/tw.css", "--minify"]
 
 [tasks.watch_css]
 description = "Watch input.css and rebuild Tailwind on changes"
 cwd = "web-ui"
 command = "npx"
-args = ["tailwindcss", "-i", "input.css", "-o", "public/tw.css", "--watch"]
+args = ["tailwindcss", "-i", "input.css", "-o", "public/tw.css", "--minify", "--watch"]
 
 [tasks.dx_serve]
 description = "Run dx serve for dev"
@@ -339,8 +343,8 @@ script = [
 ]
 
 [tasks.build_ui_android]
-description = "Release UI built with the Android reproducible-build environment (see crates/desktop/android-build-env.sh)"
-script = [". ./crates/desktop/android-build-env.sh && cargo make build_ui_release"]
+description = "Release UI built with the Android reproducible-build environment (see crates/desktop/android-build-env.sh): no npm, committed CSS and fonts, dx without downloads"
+script = [". ./crates/desktop/android-build-env.sh && cargo make build_ui_wasm_release"]
 
 [tasks.build_android_release]
 description = "Build release UI + universal APK/AAB + one APK per ABI (arm64 + armv7, no x86_64) into target/android/pkg"

@@ -65,7 +65,7 @@ cd web-ui
 npm install
 ```
 
-`npm install` automatically runs a `postinstall` script that copies the Material Icons font files from `node_modules/` into `public/`. These directories are gitignored — do not commit them.
+`npm install` automatically runs a `postinstall` script that copies the Material Icons font files from `node_modules/` into `public/material-icons/`. Those font files and the generated `public/tw.css` are committed: the Android/F-Droid build uses them as they are and never runs npm (F-Droid does not allow the prebuilt native binaries Tailwind v4 installs).
 
 ## Build Process
 
@@ -86,11 +86,12 @@ Or manually: `cd web-ui && dx serve`
 cargo make build_ui_release
 ```
 
-**Updating CSS** — only needed when `input.css` is changed (Tailwind source):
+**Updating CSS**: needed whenever `input.css` or the Tailwind classes used in `src/` change:
 ```bash
 cargo make build_css
 # commit public/tw.css after regenerating
 ```
+The release workflow regenerates the CSS for the other platforms and fails if the committed `public/tw.css` or `public/material-icons/` differ from it, so a stale stylesheet cannot reach the Android build unnoticed.
 
 ### Backend
 
@@ -314,7 +315,11 @@ OS environment itself affects the output, not just the pinned tools. So the job:
   pinned tool versions F-Droid's recipe installs — proven to reproduce F-Droid's build byte for
   byte, not just assumed to,
 - builds the release UI itself (`cargo make build_ui_android`), never from the shared `web_ui`
-  artifact, which could have been built anywhere,
+  artifact, which could have been built anywhere. It uses the committed `public/tw.css` and
+  icon fonts (no npm), and `NO_DOWNLOADS=1` (set in `android-build-env.sh`) makes `dx` take
+  `wasm-bindgen`, `wasm-opt` and `esbuild` from PATH instead of downloading prebuilt ones:
+  cargo-installed `wasm-bindgen-cli`, Debian's `binaryen` and `esbuild`. The `wasm-opt`
+  version changes the output, so the image and the recipe must install the same Debian ones,
 - sources `crates/desktop/android-build-env.sh` before every Rust build. It maps machine-specific
   paths (`~/.cargo`, `~/.rustup`, the Rust sources) to fixed names in the binaries and keeps
   `--cfg tokio_unstable`, because setting `RUSTFLAGS` replaces `build.rustflags` from

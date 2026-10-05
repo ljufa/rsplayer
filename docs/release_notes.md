@@ -1,5 +1,19 @@
 # Release Notes
 
+## v5.4.1 (2026-10-05)
+
+### Improvements
+
+#### Online lookups are opt-in on Android
+
+For songs without their own cover, the player looks the cover up on Last.fm. The "Album art background" setting in Settings, Appearance now controls this download too and is renamed "Album art background and cover download": when it is off, nothing is sent to Last.fm and only covers embedded in or next to your music are shown. On a new Android installation the setting starts off; other platforms and existing installations keep their current setting.
+
+The podcast search directory (Settings, Podcasts) has a new choice, None: search is off and podcasts are added by pasting their feed URL. It is the default on a new Android installation; other platforms keep Apple Podcasts.
+
+#### Build without downloaded tools
+
+The Android app is now built without any tools downloaded during the build, as F-Droid requires: the web UI's stylesheet and icon font are part of the source code, and the WebAssembly tools come from the build system's own packages.
+
 ## v5.4.0 (2026-10-01)
 
 ### Improvements
