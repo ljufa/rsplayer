@@ -3,6 +3,7 @@
 //! Use these in unit tests to exercise services without a fjall database.
 
 use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
 
 use api_models::{player::Song, playlist::Album, stat::PlayItemStatistics};
 
@@ -15,6 +16,8 @@ use crate::ports::{
 #[derive(Default)]
 pub struct InMemorySongRepository {
     songs: Mutex<Vec<Song>>,
+    /// Songs seen by [`SongRepository::visit_songs`] (tests).
+    pub visits: AtomicUsize,
 }
 
 impl SongRepository for InMemorySongRepository {
@@ -47,6 +50,15 @@ impl SongRepository for InMemorySongRepository {
 
     fn find_all(&self) -> Vec<Song> {
         self.songs.lock().unwrap().clone()
+    }
+
+    fn visit_songs(&self, visit: &mut dyn FnMut(Song) -> bool) {
+        for song in self.songs.lock().unwrap().iter().cloned() {
+            self.visits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if !visit(song) {
+                break;
+            }
+        }
     }
 
     fn find_by_key_contains(&self, search_term: &str) -> Vec<(Vec<u8>, Vec<u8>)> {

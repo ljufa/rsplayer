@@ -174,12 +174,18 @@ pub enum PodcastCommand {
     /// Search the configured directory. Answered by `PodcastSearchResults`.
     Search(String),
     /// Fetch the feed, store it and its episodes. Answered by `Podcasts`.
-    Subscribe { feed_url: String },
+    Subscribe {
+        feed_url: String,
+    },
     Unsubscribe(String),
     /// Answered by `Podcasts`.
     QueryPodcasts,
     /// Answered by `PodcastEpisodes`.
-    QueryEpisodes { podcast_id: String, offset: usize, limit: usize },
+    QueryEpisodes {
+        podcast_id: String,
+        offset: usize,
+        limit: usize,
+    },
     /// Re-fetch one feed, or all when `None`.
     Refresh(Option<String>),
     PlayEpisode(String),

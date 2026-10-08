@@ -395,6 +395,30 @@ impl MetadataService {
         unique
     }
 
+    /// Artists, albums, then songs. Songs match title/artist/album and other tags (`Song::all_text`), not only the file path.
+    pub fn search_library(&self, term: &str, limit: usize) -> Vec<MetadataLibraryItem> {
+        crate::library_search::search_library(&*self.album_repository, &*self.song_repository, term, limit)
+    }
+
+    /// One page of album artists. `offset` is a global index into the sorted name list.
+    pub fn artists_page(
+        &self,
+        offset: usize,
+        limit: usize,
+        mode: api_models::common::ArtistPageMode,
+    ) -> (Vec<MetadataLibraryItem>, usize, usize) {
+        let names = self.album_repository.find_all_album_artists();
+        let total = names.len();
+        let start = crate::artist_page::start_index(&names, offset, mode);
+        let items = names
+            .into_iter()
+            .skip(start)
+            .take(limit)
+            .map(|name| MetadataLibraryItem::Artist { name })
+            .collect();
+        (items, start, total)
+    }
+
     pub fn scan_music_dir(&self, full_scan: bool, state_changes_sender: &Sender<StateChangeEvent>) {
         if self.scan_running.load(Ordering::Relaxed) {
             return;

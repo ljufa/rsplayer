@@ -1,8 +1,10 @@
 //! Playlist commands: saved-playlist CRUD, the dynamic playlists
 //! (most played, liked) and the album carousels behind the home page.
 
+use api_models::common::MetadataLibraryItem;
 use api_models::common::PlaylistCommand::{
-    QueryAlbumItems, QueryAlbumsByDecade, QueryAlbumsByGenre, QueryPlaylist, QueryPlaylistItems, SaveQueueAsPlaylist,
+    QueryAlbumItems, QueryAlbumsByDecade, QueryAlbumsByGenre, QueryPlaylist, QueryPlaylistItems, QuerySavedPlaylistSongs,
+    QuerySavedPlaylists, SaveQueueAsPlaylist,
 };
 use api_models::playlist::PlaylistType;
 use api_models::state::StateChangeEvent;
@@ -84,6 +86,24 @@ pub fn handle_playlist_command(cmd: api_models::common::PlaylistCommand, ctx: &C
                 });
 
             ctx.send_event(StateChangeEvent::PlaylistsEvent(pls));
+        }
+        QuerySavedPlaylists => {
+            let saved = ctx
+                .playlist_service
+                .get_playlists()
+                .items
+                .into_iter()
+                .filter_map(|item| match item {
+                    PlaylistType::Saved(playlist) => Some(playlist),
+                    _ => None,
+                })
+                .collect();
+            ctx.send_event(StateChangeEvent::SavedPlaylists(saved));
+        }
+        QuerySavedPlaylistSongs(name) => {
+            let page = ctx.playlist_service.get_playlist_page_by_name(&name, 0, usize::MAX);
+            let items = page.items.into_iter().map(MetadataLibraryItem::SongItem).collect();
+            ctx.send_event(StateChangeEvent::MetadataLocalItems(items));
         }
         QueryAlbumsByGenre(genre) => {
             let albums: Vec<api_models::playlist::Album> = ctx

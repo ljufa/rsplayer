@@ -1,0 +1,20 @@
+{
+  "font": "7x13",
+  "color": {
+    "background": "#000000",
+    "foreground": "#00ff00",
+    "dim": "#008800",
+    "accent": "#d8d8d8",
+    "highlight": "#000080",
+    "highlight_fg": "#ffffff",
+    "header": "#3a3a4a",
+    "bar": "#00ff00",
+    "track": "#003300"
+  },
+  "chassis": {
+    "background": "#141414",
+    "button": "#222222",
+    "button_hover": "#003300",
+    "label": "#00ff00"
+  }
+}

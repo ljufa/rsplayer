@@ -12,6 +12,7 @@ members = [
     "crates/mount_helper",
     "crates/podcast",
     "web-ui", "crates/desktop",
+    "crates/pocket-dap",
 ]
 default-members = [
 #    "web-ui",
