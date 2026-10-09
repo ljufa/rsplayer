@@ -58,7 +58,7 @@ dirs = "7"
 tauri-plugin-single-instance = "2"
 # Remembers the window's size, position and maximized state between runs.
 # 2.5 requires tauri 2.12; stay on 2.4 until tauri itself is upgraded.
-tauri-plugin-window-state = "~2.4.1"
+tauri-plugin-window-state = "~2.5.0"
 
 # Android: logcat logger and the ndk-context registration that cpal's AAudio
 # host and iroh's interface discovery require.
