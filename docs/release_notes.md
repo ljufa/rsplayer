@@ -1,5 +1,29 @@
 # Release Notes
 
+## v5.5.0 (2026-10-13)
+
+### New features
+
+#### Remote music libraries (S3)
+
+A music library no longer has to be a folder on the player's machine. In Settings, Music Library, Remote Libraries (S3), add any S3-compatible storage by its URL (for example `https://host/bucket` or `s3://bucket`) and access key: Amazon S3, Backblaze B2, Cloudflare R2, MinIO, Garage, or a NAS folder published with `rclone serve s3`. Its songs are scanned and played over the network without mounting anything, which makes a home NAS library playable on the Android app from anywhere. See [Remote Library](remote_library.md) for a NAS setup reached through a VPS.
+
+### Improvements
+
+#### Library scan progress you can see
+
+A running library scan now shows under the navigation bar on every page: a spinner, what it is doing (looking for new music, reading new songs or removing missing ones), a progress bar with counts such as "Reading new songs 1,234 / 15,600", and the file being read. The same progress appears in Settings, Music Library, where the update buttons are disabled until the scan is done. When it finishes, a message sums it up, for example "Library updated: 12 new, 3 removed (2 min 10 s)", and stays in the settings as the last update. A page opened during a scan shows its progress right away.
+
+### Fixes
+
+#### Desktop app quits on `kill` and Ctrl-C
+
+Stopping RSPlayer Desktop with `pkill`, `kill` or Ctrl-C in a terminal stopped the built-in server but left the window and tray icon running, so the app had to be killed with `kill -9`. The whole app now quits.
+
+#### Clearer error when mounting from a remote session
+
+On Linux, the desktop app can mount network shares only when it runs in the computer's own desktop session. Started over SSH or remote desktop, the mount failed with "not authorized by system policy"; the message now says that the app has to be started from the local desktop.
+
 ## v5.4.1 (2026-10-05)
 
 ### Improvements

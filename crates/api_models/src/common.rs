@@ -194,6 +194,9 @@ pub enum StorageCommand {
     /// List the sub-folders of a server-side directory for the settings
     /// folder picker; an empty path lists the platform's library roots.
     ListDirectories(String),
+    /// Check that a remote library is reachable with the given settings;
+    /// answered with a success or error notification.
+    TestRemoteLibrary(crate::settings::RemoteLibrary),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, EnumString, EnumIter, IntoStaticStr)]
@@ -247,6 +250,8 @@ pub enum MetadataCommand {
     SaveCustomRadioStation(RadioStation),
     DeleteCustomRadioStation(String),
     QueryLibraryStats,
+    /// Answered with `MetadataScanProgress` while a scan runs, nothing otherwise.
+    QueryScanStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]

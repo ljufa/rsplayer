@@ -379,7 +379,7 @@ mod queue {
 mod metadata {
     use std::{fs, process::Command, vec};
 
-    use api_models::{radio::RadioStation, settings::MetadataStoreSettings, state::StateChangeEvent};
+    use api_models::{radio::RadioStation, settings::MetadataStoreSettings, state::{ScanPhase, ScanProgress, StateChangeEvent}};
 
     use crate::test::test_shared::TestContext;
 
@@ -435,6 +435,7 @@ mod metadata {
         )
         .expect("Failed to copy file");
         fs::remove_file(format!("{}/assets/aa/aaa/music.flac", &context.music_dir)).expect("Failed to delete file");
+        while context.receiver.try_recv().is_ok() {}
         context.metadata_service.scan_music_dir(false, &context.sender);
         assert_eq!(context.song_repository.find_all().len(), 7);
 
@@ -442,13 +443,29 @@ mod metadata {
         while let Ok(ev) = context.receiver.try_recv() {
             events.push(ev);
         }
-        assert_eq!(events.len(), 5);
-        assert!(events.iter().any(|ev| match ev {
-            StateChangeEvent::MetadataSongScanned(msg) => {
-                msg.contains("music_new.wav") || msg.contains("music_new.flac") || msg.contains("deleted from database")
+        assert_eq!(events.first(), Some(&StateChangeEvent::MetadataSongScanStarted));
+        let progress: Vec<&ScanProgress> = events
+            .iter()
+            .filter_map(|ev| match ev {
+                StateChangeEvent::MetadataScanProgress(p) => Some(p),
+                _ => None,
+            })
+            .collect();
+        // Every phase change is reported, whatever the throttling.
+        let phases: Vec<ScanPhase> = progress.iter().map(|p| p.phase).collect();
+        assert!(phases.contains(&ScanPhase::Listing), "{phases:?}");
+        let reading = progress.iter().find(|p| p.phase == ScanPhase::Reading).expect("reading phase");
+        assert_eq!(reading.total, 2);
+        assert!(reading.current.contains("music_new"), "{}", reading.current);
+        let removing = progress.iter().find(|p| p.phase == ScanPhase::Removing).expect("removing phase");
+        assert_eq!((removing.total, removing.current.as_str()), (1, "assets/aa/aaa/music.flac"));
+        match events.last() {
+            Some(StateChangeEvent::MetadataSongScanFinished(summary)) => {
+                assert!(summary.starts_with("Library updated: 2 new, 1 removed ("), "{summary}");
             }
-            _ => false,
-        }));
+            other => panic!("expected the scan summary last, got {other:?}"),
+        }
+        assert_eq!(context.metadata_service.scan_progress(), None);
     }
 
     #[test]

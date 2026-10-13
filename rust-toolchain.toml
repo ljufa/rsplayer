@@ -1,0 +1,21 @@
+# The Rust toolchain for every rustup-based build: local, CI, cross, snap.
+#
+# Pinned because the release web UI does not build with newer compilers:
+# rustc 1.99 + wasm-bindgen 0.2.127 fails in `cargo make build_ui_release`
+# ("import of `__wbg_new_…` doesn't have an adapter listed").
+#
+# Bumping it: change every pin together, then run `cargo make
+# check_toolchain_pins` (CI runs it too). The pins are this file,
+# docker/Dockerfile.builder, docker/Dockerfile.android,
+# crates/desktop/android-build-env.sh and the macOS job in
+# .github/workflows/cd.yml; rebuild the images afterwards. The F-Droid
+# recipe (PKGS/fdroid/de.rsplayer.app.yml) gets the new version in the
+# build block of the next release, not in the old ones.
+#
+# No components listed: the Android image and F-Droid install their own
+# set, and listing them here would make rustup download extras there.
+# For local lints: rustup component add clippy rustfmt
+[toolchain]
+channel = "1.98.1"
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"

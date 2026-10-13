@@ -599,6 +599,34 @@ script = [
 # LINT / TEST / MISC
 # ═══════════════════════════════════════════
 
+[tasks.check_toolchain_pins]
+description = "Fail when the pinned Rust / dx versions disagree (rust-toolchain.toml, builder + android images, android-build-env.sh, macOS job, Cargo.lock)"
+script = '''
+status=0
+check() {
+  # $1 = where, $2 = wanted, $3 = found (may be several lines)
+  if [ -z "$3" ]; then
+    echo "::error::$1: no version found (pattern out of date?)"; status=1; return
+  fi
+  for v in $3; do
+    if [ "$v" = "$2" ]; then echo "ok      $1 $v"
+    else echo "::error::$1 pins $v, expected $2"; status=1; fi
+  done
+}
+rust=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)
+echo "rust-toolchain.toml: $rust"
+check docker/Dockerfile.builder "$rust" "$(sed -n 's/^ARG RUST_VERSION=//p' docker/Dockerfile.builder)"
+check docker/Dockerfile.android "$rust" "$(sed -n 's/^ARG RUST_VERSION=//p' docker/Dockerfile.android)"
+check crates/desktop/android-build-env.sh "$rust" "$(sed -n 's/^ANDROID_RUST_VERSION=//p' crates/desktop/android-build-env.sh)"
+check ".github/workflows/cd.yml (macOS)" "$rust" "$(sed -n 's/^ *toolchain: //p' .github/workflows/cd.yml)"
+
+dx=$(awk '/^name = "dioxus"$/ {getline; gsub(/version = |"/, ""); print; exit}' Cargo.lock)
+echo "dioxus (Cargo.lock): $dx"
+check docker/Dockerfile.builder "$dx" "$(sed -n 's/^ARG DX_VERSION=//p' docker/Dockerfile.builder)"
+check crates/desktop/android-build-env.sh "$dx" "$(sed -n 's/^ANDROID_DX_VERSION=//p' crates/desktop/android-build-env.sh)"
+exit $status
+'''
+
 [tasks.test_ci]
 description = "Run all tests (creates stub dist/web-ui/public so RustEmbed compiles without a UI build)"
 script = [

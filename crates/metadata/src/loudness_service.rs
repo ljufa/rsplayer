@@ -81,7 +81,8 @@ impl LoudnessService {
                 .song_repository
                 .find_all()
                 .into_iter()
-                .filter(|s| !self.repository.contains(&s.file))
+                // Remote songs would have to be downloaded in full; not analysed.
+                .filter(|s| !crate::remote_store::is_remote_key(&s.file) && !self.repository.contains(&s.file))
                 .map(|s| s.file)
                 .collect();
 

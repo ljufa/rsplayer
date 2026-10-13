@@ -1,4 +1,7 @@
-FROM rust:1-slim-bookworm
+# Must match rust-toolchain.toml (checked by `cargo make check_toolchain_pins`).
+# Baked in so jobs do not download the toolchain on every run.
+ARG RUST_VERSION=1.98.1
+FROM rust:${RUST_VERSION}-slim-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git pkg-config ca-certificates curl wget file \
@@ -27,6 +30,8 @@ RUN cargo install cargo-deb --locked
 RUN cargo install cargo-generate-rpm --locked
 RUN cargo install cargo-packager --locked
 RUN cargo install tauri-cli --locked
-RUN cargo install dioxus-cli --locked
+# dx must match the dioxus crate version in Cargo.lock.
+ARG DX_VERSION=0.7.10
+RUN cargo install dioxus-cli --version ${DX_VERSION} --locked
 RUN cargo install cargo-make --locked
 

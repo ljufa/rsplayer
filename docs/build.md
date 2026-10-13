@@ -25,6 +25,12 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
+The Rust version is pinned in `rust-toolchain.toml` at the repository root: inside
+the repository, `cargo` and `dx` use that version (rustup installs it on first use),
+whatever your default toolchain is. Newer compilers can break the release web UI
+build, so the pin is deliberate; `cargo make check_toolchain_pins` checks that the
+CI images and the Android build use the same version.
+
 ### 2. Docker or Podman
 
 The `cross` tool uses a container engine to manage the cross-compilation environment. You must have Docker or Podman installed and running.
@@ -212,8 +218,8 @@ winget install --id LLVM.LLVM -e                   # libclang for bindgen (ASIO)
 winget install --id Microsoft.VisualStudio.2022.BuildTools -e `
   --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
 
-# Rust toolchain + MSVC target
-rustup toolchain install stable
+# rustup itself; the toolchain version comes from rust-toolchain.toml in the
+# checkout and is installed on the first build
 rustup target add x86_64-pc-windows-msvc
 
 # Optional: pre-install so it isn't rebuilt every run

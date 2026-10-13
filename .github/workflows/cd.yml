@@ -401,10 +401,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Same version as rust-toolchain.toml (checked by cargo make
+      # check_toolchain_pins): the targets must land on the toolchain that
+      # file selects, not on whatever "stable" is today.
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
-          targets: ${{ matrix.rust_target }}
+          toolchain: 1.98.1
+          targets: ${{ matrix.rust_target }}, wasm32-unknown-unknown
 
       # - uses: Swatinem/rust-cache@v2
       #   with:

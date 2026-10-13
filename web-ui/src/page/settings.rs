@@ -1,7 +1,10 @@
 use api_models::podcast::PodcastDirectory;
 use api_models::{
     common::{MetadataCommand, StorageCommand, SystemRequest, UserCommand, VolumeCrtlType},
-    settings::{DspFilter, FilterConfig, NetworkMountConfig, NetworkMountType, NormalizationSource, Settings},
+    settings::{
+        DspFilter, FilterConfig, NetworkMountConfig, NetworkMountType, NormalizationSource, RemoteLibrary, RemoteLibraryKind,
+        Settings,
+    },
 };
 use dioxus::prelude::*;
 use gloo_net::http::Request;
@@ -1463,6 +1466,8 @@ fn MusicLibraryContent(
             }
         }
 
+        RemoteLibrariesSection { settings, ws, saving }
+
         // Collapsible Network Mounts subsection
         if settings.read().network_mounts_available {
             div { class: "mt-3",
@@ -1662,37 +1667,269 @@ fn MusicLibraryContent(
             },
         }
 
-        // Scan status message
+        // Scan status: progress while a scan runs, else the last summary.
         {
-            let msg = state.metadata_scan_msg.read().clone();
-            msg.map_or_else(
-                || rsx! {},
-                |m| {
+            let progress = state.scan_progress.read().clone();
+            let summary = state.metadata_scan_msg.read().clone();
+            match (progress, summary) {
+                (Some(progress), _) => {
+                    let (label, percent) = crate::scan_status_label(&progress);
                     rsx! {
-                        p { class: "text-xs text-base-content/60 mt-2 truncate", "{m}" }
+                        div { class: "mt-3 p-3 bg-base-200 rounded space-y-1",
+                            div { class: "flex items-center gap-2 text-sm",
+                                span { class: "loading loading-spinner loading-xs shrink-0" }
+                                span { class: "font-medium", "{label}" }
+                            }
+                            if let Some(percent) = percent {
+                                progress { class: "progress progress-primary w-full", value: "{percent}", max: "100" }
+                            } else {
+                                progress { class: "progress progress-primary w-full" }
+                            }
+                            p { class: "text-xs text-base-content/60 truncate", "{progress.current}" }
+                        }
                     }
+                }
+                (None, Some(summary)) => rsx! {
+                    p { class: "text-xs text-base-content/60 mt-2 truncate", "Last update: {summary}" }
                 },
-            )
+                (None, None) => rsx! {},
+            }
         }
 
         div { class: "flex gap-2 mt-3 justify-end",
             button {
                 class: "btn btn-sm",
+                disabled: state.scan_progress.read().is_some(),
                 onclick: move |_| {
                     ws_send(
                         &ws,
                         &UserCommand::Metadata(MetadataCommand::RescanMetadata(String::new(), false)),
                     );
                 },
-                "Update library"
+                if state.scan_progress.read().is_some() { "Updating…" } else { "Update library" }
             }
             button {
                 class: "btn btn-sm btn-warning",
+                disabled: state.scan_progress.read().is_some(),
                 onclick: move |_| *confirm.write() = Some(ConfirmAction::FullRescan),
                 "Full rescan"
             }
         }
     }
+}
+
+/// Libraries on S3-compatible storage (a NAS behind `rclone serve s3`, B2,
+/// R2, MinIO…), read over the network without mounting anything.
+#[component]
+fn RemoteLibrariesSection(settings: Signal<Settings>, ws: Signal<Option<WebSocket>>, saving: Signal<bool>) -> Element {
+    let mut open = use_signal(|| false);
+    let mut advanced_open = use_signal(|| false);
+    let name = use_signal(String::new);
+    let url = use_signal(String::new);
+    let region = use_signal(String::new);
+    let access_key = use_signal(String::new);
+    let secret_key = use_signal(String::new);
+
+    let mut auto_save = move || {
+        *saving.write() = true;
+        let s = settings.read().clone();
+        spawn(async move {
+            let _ = Request::post(API_SETTINGS_PATH).json(&s).expect("serialize settings").send().await;
+            *saving.write() = false;
+        });
+    };
+
+    // Everything but the keys comes from the URL; an explicit region (Advanced)
+    // overrides the one derived from the host, empty means detect on connect.
+    let parsed = use_memo(move || {
+        if url().trim().is_empty() {
+            return None;
+        }
+        Some(RemoteLibraryKind::from_url(&url(), &access_key(), &secret_key()).map(|mut kind| {
+            let RemoteLibraryKind::S3 { region: r, .. } = &mut kind;
+            if !region().trim().is_empty() {
+                *r = region().trim().to_string();
+            }
+            kind
+        }))
+    });
+    let form_library = move || {
+        let kind = parsed().and_then(Result::ok)?;
+        let name = if name().trim().is_empty() { kind.default_name() } else { name().trim().to_string() };
+        let existing: Vec<String> = settings.read().metadata_settings.remote_libraries.iter().map(|l| l.id.clone()).collect();
+        Some(RemoteLibrary {
+            id: unique_library_id(&name, &existing),
+            name,
+            enabled: true,
+            kind,
+        })
+    };
+    let form_valid = matches!(parsed(), Some(Ok(_)));
+    let url_error = parsed().and_then(Result::err);
+    let libraries = settings.read().metadata_settings.remote_libraries.clone();
+
+    rsx! {
+        div { class: "mt-3",
+            div {
+                class: "flex items-center justify-between cursor-pointer select-none py-2 border-b border-base-300",
+                onclick: move |_| open.set(!open()),
+                span { class: "text-sm font-medium", "Remote Libraries (S3)" }
+                i {
+                    class: "material-icons text-sm transition-transform",
+                    style: if open() { "transform: rotate(180deg)" } else { "" },
+                    "expand_more"
+                }
+            }
+            for (i , lib) in libraries.into_iter().enumerate() {
+                {
+                    let location = lib.kind.url();
+                    let test_lib = lib.clone();
+                    rsx! {
+                        div { class: "flex items-center gap-2 py-1.5 border-b border-base-300",
+                            input {
+                                r#type: "checkbox",
+                                class: "toggle toggle-sm toggle-primary shrink-0",
+                                title: "Enabled",
+                                checked: lib.enabled,
+                                onclick: move |_| {
+                                    let enabled = !settings.read().metadata_settings.remote_libraries[i].enabled;
+                                    settings.write().metadata_settings.remote_libraries[i].enabled = enabled;
+                                    auto_save();
+                                },
+                            }
+                            div { class: "flex-1 min-w-0",
+                                p { class: "text-sm font-medium truncate", "{lib.name}" }
+                                p { class: "text-xs text-base-content/50 truncate", "{location}" }
+                            }
+                            button {
+                                class: "btn btn-ghost btn-xs",
+                                title: "Test connection",
+                                onclick: move |_| ws_send(&ws, &UserCommand::Storage(StorageCommand::TestRemoteLibrary(test_lib.clone()))),
+                                i { class: "material-icons text-sm", "network_check" }
+                            }
+                            button {
+                                class: "btn btn-ghost btn-xs text-error",
+                                title: "Remove (its songs leave the library on the next update)",
+                                onclick: move |_| {
+                                    settings.write().metadata_settings.remote_libraries.remove(i);
+                                    auto_save();
+                                },
+                                i { class: "material-icons text-sm", "delete" }
+                            }
+                        }
+                    }
+                }
+            }
+            if open() {
+                div { class: "mt-3 p-3 bg-base-200 rounded space-y-2",
+                    p { class: "text-sm font-medium", "Add Remote Library" }
+                    p { class: "text-xs text-base-content/60", "Any S3-compatible storage." }
+                    div { class: "flex flex-col gap-1",
+                        label { class: "text-xs text-base-content/60", "URL *" }
+                        input {
+                            class: if url_error.is_some() { "input input-sm input-bordered input-error w-full" } else { "input input-sm input-bordered w-full" },
+                            r#type: "text",
+                            placeholder: "https://host/bucket/folder  or  s3://bucket/folder",
+                            value: "{url}",
+                            oninput: move |e| { let mut url = url; url.set(e.value()); },
+                        }
+                        if let Some(err) = &url_error {
+                            p { class: "text-xs text-error", "{err}" }
+                        } else {
+                            p { class: "text-xs text-base-content/50",
+                                "Bucket first in the path; s3:// means a bucket on AWS."
+                            }
+                        }
+                    }
+                    div { class: "flex flex-wrap gap-2",
+                        TextField { label: "Access key", placeholder: "", value: access_key, password: false }
+                        TextField { label: "Secret key", placeholder: "", value: secret_key, password: true }
+                        TextField { label: "Name", placeholder: "auto from URL", value: name, password: false }
+                    }
+                    div {
+                        class: "flex items-center gap-1 text-xs text-base-content/60 cursor-pointer select-none",
+                        onclick: move |_| advanced_open.set(!advanced_open()),
+                        i {
+                            class: "material-icons text-sm transition-transform",
+                            style: if advanced_open() { "transform: rotate(90deg)" } else { "" },
+                            "chevron_right"
+                        }
+                        "Advanced"
+                    }
+                    if advanced_open() {
+                        div { class: "flex flex-wrap gap-2",
+                            TextField { label: "Region", placeholder: "auto", value: region, password: false }
+                        }
+                    }
+                    div { class: "flex gap-2 justify-end",
+                        button {
+                            class: "btn btn-sm",
+                            disabled: !form_valid,
+                            onclick: move |_| {
+                                if let Some(library) = form_library() {
+                                    ws_send(&ws, &UserCommand::Storage(StorageCommand::TestRemoteLibrary(library)));
+                                }
+                            },
+                            "Test connection"
+                        }
+                        button {
+                            class: "btn btn-sm btn-primary",
+                            disabled: !form_valid,
+                            onclick: move |_| {
+                                let Some(library) = form_library() else { return };
+                                settings.write().metadata_settings.remote_libraries.push(library);
+                                auto_save();
+                                for mut field in [name, url, region, access_key, secret_key] {
+                                    field.set(String::new());
+                                }
+                            },
+                            "Add"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn TextField(label: &'static str, placeholder: &'static str, value: Signal<String>, password: bool) -> Element {
+    let mut value = value;
+    rsx! {
+        div { class: "flex flex-col gap-1",
+            label { class: "text-xs text-base-content/60", "{label}" }
+            input {
+                class: "input input-sm input-bordered",
+                r#type: if password { "password" } else { "text" },
+                placeholder,
+                value: "{value}",
+                oninput: move |e| value.set(e.value()),
+            }
+        }
+    }
+}
+
+/// Stable id for a new remote library: the slugged name, made unique. It
+/// becomes part of every song key of the library, so it never changes.
+fn unique_library_id(name: &str, existing: &[String]) -> String {
+    let slug: String = name
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|p| !p.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    let base = if slug.is_empty() { "remote".to_string() } else { slug };
+    let mut id = base.clone();
+    let mut n = 1;
+    while existing.contains(&id) {
+        n += 1;
+        id = format!("{base}-{n}");
+    }
+    id
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────

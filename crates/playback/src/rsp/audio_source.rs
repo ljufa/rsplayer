@@ -15,13 +15,14 @@ use symphonia::core::formats::probe::Hint;
 use symphonia::core::io::{MediaSource, ReadOnlySource};
 use tokio::sync::broadcast::Sender;
 
+use api_models::settings::MetadataStoreSettings;
 use api_models::state::StateChangeEvent;
 use log::info;
 use metadata::icy_reader::IcyMetadataReader;
 use metadata::radio_meta::{self, RadioMeta};
 use metadata::radio_providers::{NowPlayingPoller, PolledReader};
 
-use crate::rsp::http_range_source::HttpRangeSource;
+use metadata::http_range_source::HttpRangeSource;
 
 /// HTTP agent for long-lived audio bodies: bounded connect/response-header
 /// waits, but no global or per-call deadline — those also cover body reads
@@ -138,6 +139,15 @@ pub fn probe_local_file(path_str: &str, music_dirs: &[String], hint: &mut Hint) 
         }
     }
     Err(format_err!("Unable to open file: {path_str}"))
+}
+
+/// Opens a song from a remote library (`rs3:` key) as a seekable range source.
+pub fn probe_remote_file(key: &str, library: &MetadataStoreSettings, hint: &mut Hint) -> Result<(Box<dyn MediaSource>, Option<RadioMeta>)> {
+    if let Some(extension) = Path::new(key).extension().and_then(|e| e.to_str()) {
+        hint.with_extension(&extension.to_lowercase());
+    }
+    let source = metadata::remote_store::open(library, key)?;
+    Ok((Box::new(source), None))
 }
 
 /// Resolve an APE file path across music directories.

@@ -260,7 +260,13 @@ impl MountService {
         // when authorization is denied; anything else is the helper's error.
         match output.status.code() {
             Some(126) => Err(format!("{action} cancelled: authorization dialog was dismissed")),
-            Some(127) => Err(format!("{action} not authorized by system policy: {stderr}")),
+            // The polkit policy only allows active local sessions, so this is
+            // what an app started over SSH or remote desktop gets.
+            Some(127) => Err(format!(
+                "{action} not authorized by system policy. RSPlayer Desktop must be started from the \
+                 computer's own desktop session (not over SSH or remote desktop) to mount network shares. \
+                 Details: {stderr}"
+            )),
             _ => Err(if stderr.is_empty() {
                 format!("{action} helper failed")
             } else {

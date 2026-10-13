@@ -34,6 +34,19 @@ pub struct HttpRangeSource {
 }
 
 impl HttpRangeSource {
+    /// Opens `url` with `Range: bytes=0-`; fails unless the server supports
+    /// byte ranges (object storage always does).
+    pub fn open(agent: Agent, url: &str) -> io::Result<Self> {
+        let resp = agent
+            .get(url)
+            .header("accept", "*/*")
+            .header("Range", "bytes=0-")
+            .call()
+            .map_err(io::Error::other)?;
+        Self::try_from_response(agent, url, resp)
+            .map_err(|resp| io::Error::other(format!("server does not support byte ranges (status {})", resp.status())))
+    }
+
     /// Wraps `resp` (the answer to a `GET` carrying `Range: bytes=0-`) when
     /// the server proved it supports byte ranges and disclosed the total
     /// length. Returns the response back otherwise so the caller can fall
@@ -53,7 +66,9 @@ impl HttpRangeSource {
     }
 
     fn open_at(&self, offset: u64) -> io::Result<BodyReader> {
-        debug!("Opening {} at byte offset {offset}", self.url);
+        // The query string may carry a presigned signature; keep it out of logs.
+        let shown = self.url.split('?').next().unwrap_or_default();
+        debug!("Opening {shown} at byte offset {offset}");
         let resp = self
             .agent
             .get(&self.url)
@@ -62,9 +77,16 @@ impl HttpRangeSource {
             .call()
             .map_err(io::Error::other)?;
         let status = resp.status().as_u16();
+        // Some servers (rclone's S3 gateway) answer a range with `200` but a
+        // correct `Content-Range`; accept it when it starts where we asked.
+        let range_honoured = resp
+            .headers()
+            .get("content-range")
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| content_range_start(v) == Some(offset));
         match status {
             206 => Ok(Box::new(resp.into_body().into_reader())),
-            200 if offset == 0 => Ok(Box::new(resp.into_body().into_reader())),
+            200 if offset == 0 || range_honoured => Ok(Box::new(resp.into_body().into_reader())),
             _ => Err(io::Error::other(format!(
                 "server ignored range request at offset {offset} (status {status})"
             ))),
@@ -91,6 +113,13 @@ fn seekable_length(status: u16, headers: &HeaderMap) -> Option<u64> {
         _ => None,
     }?;
     (len > 0).then_some(len)
+}
+
+/// `bytes 100-1023/4096` → `Some(100)`.
+fn content_range_start(value: &str) -> Option<u64> {
+    let rest = value.trim().strip_prefix("bytes")?.trim_start();
+    let (start, _) = rest.split_once('-')?;
+    start.trim().parse().ok()
 }
 
 /// `bytes 0-1023/4096` → `Some(4096)`; an unknown total (`*`) yields `None`.
@@ -303,6 +332,13 @@ mod tests {
         );
         assert_eq!(seekable_length(200, &header_map(&[("icy-metaint", "16000")])), None);
         assert_eq!(seekable_length(404, &header_map(&[("content-range", "bytes 0-9/4096")])), None);
+    }
+
+    #[test]
+    fn content_range_start_parses() {
+        assert_eq!(content_range_start("bytes 100-1023/4096"), Some(100));
+        assert_eq!(content_range_start("bytes 0-9/*"), Some(0));
+        assert_eq!(content_range_start("items 1-2/3"), None);
     }
 
     #[test]

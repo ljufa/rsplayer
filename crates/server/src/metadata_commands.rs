@@ -97,6 +97,11 @@ pub fn handle_metadata_command(cmd: MetadataCommand, ctx: &CommandContext) {
             stats.songs_loudness_analysed = ctx.loudness_repository.count_analysed();
             ctx.send_event(StateChangeEvent::LibraryStatsEvent(stats));
         }
+        MetadataCommand::QueryScanStatus => {
+            if let Some(progress) = ctx.metadata_service.scan_progress() {
+                ctx.send_event(StateChangeEvent::MetadataScanProgress(progress));
+            }
+        }
     }
 }
 

@@ -30,6 +30,8 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v7
+      - name: Check toolchain pins
+        run: cargo make check_toolchain_pins
       - uses: Swatinem/rust-cache@v2
       - name: Run tests
         run: cargo make test_ci

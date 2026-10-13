@@ -23,6 +23,10 @@
 - README.md
 - Release notes are here `docs/release_notes.md`
 
+### Rust toolchain
+- pinned in `rust-toolchain.toml` (newer rustc breaks `build_ui_release` via wasm-bindgen); `cargo`/`dx` in the repo use it automatically
+- bump all pins together (`Dockerfile.builder`, `Dockerfile.android`, `android-build-env.sh`, macOS job in `cd.yml`) and run `cargo make check_toolchain_pins` (CI runs it)
+
 ### Versioning
 - version is centralized in root `Cargo.toml` under `[workspace.package]`; crates inherit it via `version.workspace = true` and code reads it via `env!("CARGO_PKG_VERSION")`
 - `Makefile.toml` derives `RELEASE_VERSION` from `Cargo.toml` at runtime

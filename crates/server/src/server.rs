@@ -285,7 +285,9 @@ async fn get_settings(State(state): State<AppState>, Query(query): Query<HashMap
         settings.network_mounts_available = false;
     }
 
-    Json(settings.clone())
+    let mut response = settings.clone();
+    response.metadata_settings.mask_secrets();
+    Json(response)
 }
 
 /// Return the cached audio-device list, enumerating (once) if the cache is
@@ -398,9 +400,17 @@ fn get_cpal_audio_cards() -> Vec<api_models::common::AudioCard> {
 async fn save_settings(
     State(state): State<AppState>,
     Query(query): Query<HashMap<String, String>>,
-    Json(settings): Json<Settings>,
+    Json(mut settings): Json<Settings>,
 ) -> StatusCode {
-    debug!("Settings to save {settings:?} and reload {query:?}");
+    // The UI only ever sees masked secrets; keep the stored ones it sent back.
+    settings
+        .metadata_settings
+        .unmask_secrets(&state.config.get_settings().metadata_settings);
+    if log::log_enabled!(log::Level::Debug) {
+        let mut shown = settings.clone();
+        shown.metadata_settings.mask_secrets();
+        debug!("Settings to save {shown:?} and reload {query:?}");
+    }
     state.config.save_settings(&settings);
     crate::set_desktop_settings(&settings.desktop_settings);
     let reload = query.get("reload").map_or("false", String::as_str);
@@ -417,6 +427,17 @@ const STREAM_CHUNK: u64 = 300 * 1024; // 300 KB per chunk
 async fn serve_music(State(state): State<AppState>, AxumPath(path): AxumPath<String>, headers: HeaderMap) -> Response {
     if path.contains("..") {
         return StatusCode::FORBIDDEN.into_response();
+    }
+    // Remote-library songs: the client fetches them straight from the storage.
+    if metadata::remote_store::is_remote_key(&path) {
+        let settings = state.config.get_settings().metadata_settings;
+        return match metadata::remote_store::resolve_url(&settings, &path) {
+            Ok(url) => (StatusCode::TEMPORARY_REDIRECT, [(header::LOCATION, url)]).into_response(),
+            Err(e) => {
+                warn!("Cannot resolve remote song {path}: {e}");
+                StatusCode::NOT_FOUND.into_response()
+            }
+        };
     }
     let range_hdr = headers
         .get(header::RANGE)
@@ -611,7 +632,12 @@ async fn user_connected(ws: WebSocket, mut ws_rx: broadcast::Receiver<WsEvent>, 
                         if cmd.is_empty() {
                             continue;
                         }
-                        info!("Got command from user {user_id}: {cmd:?}");
+                        // Remote-library commands carry credentials.
+                        if cmd.contains("TestRemoteLibrary") {
+                            info!("Got command from user {user_id}: TestRemoteLibrary");
+                        } else {
+                            info!("Got command from user {user_id}: {cmd:?}");
+                        }
                         match serde_json::from_str::<UserCommand>(cmd) {
                             Ok(UserCommand::SubscribeVuEvents(on)) => wants_vu = on,
                             Ok(pc) => {

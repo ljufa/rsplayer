@@ -11,12 +11,13 @@
 //! [`api_models::stat::LibraryStats`].
 
 use std::{
+    cell::Cell,
     cmp::Reverse,
     collections::HashSet,
     fs::File,
     path::Path,
     sync::{
-        Arc, RwLock,
+        Arc, Mutex, RwLock,
         atomic::{AtomicBool, Ordering},
     },
     time,
@@ -28,7 +29,7 @@ use fjall::{Database, Keyspace, KeyspaceCreateOptions, PersistMode};
 use log::{debug, info, warn};
 use symphonia::core::{
     formats::{FormatOptions, probe::Hint},
-    io::MediaSourceStream,
+    io::{MediaSource, MediaSourceStream},
     meta::MetadataOptions,
 };
 use tokio::sync::broadcast::Sender;
@@ -40,20 +41,91 @@ use api_models::{
     radio::RadioStation,
     settings::MetadataStoreSettings,
     stat::{LibraryStats, PlayItemStatistics},
-    state::StateChangeEvent,
+    state::{ScanPhase, ScanProgress, StateChangeEvent},
 };
 
 use crate::audio_metadata_extractor::AudioMetadataExtractor;
 use crate::ports::{
     album_repository::ArcAlbumRepository, play_statistics_repository::ArcPlayStatisticsRepository, song_repository::ArcSongRepository,
 };
+use crate::remote_store::{self, REMOTE_KEY_PREFIX};
 use crate::sacd_bundle::{SACD_TRACK_MARKER, detect_sector_mode, read_areas, read_tracks};
 
 const ARTWORK_DIR: &str = "artwork";
 
+/// Minimum time between two progress events of a running scan.
+const PROGRESS_INTERVAL: time::Duration = time::Duration::from_millis(500);
+
+/// Publishes scan progress: keeps the latest state for late clients
+/// (`MetadataCommand::QueryScanStatus`) and sends it at most every
+/// [`PROGRESS_INTERVAL`], plus whenever the phase changes.
+struct ScanReporter<'a> {
+    sender: &'a Sender<StateChangeEvent>,
+    latest: &'a Mutex<Option<ScanProgress>>,
+    last_sent: Cell<Option<time::Instant>>,
+    last_phase: Cell<Option<ScanPhase>>,
+}
+
+impl<'a> ScanReporter<'a> {
+    const fn new(sender: &'a Sender<StateChangeEvent>, latest: &'a Mutex<Option<ScanProgress>>) -> Self {
+        Self {
+            sender,
+            latest,
+            last_sent: Cell::new(None),
+            last_phase: Cell::new(None),
+        }
+    }
+
+    fn report(&self, phase: ScanPhase, done: usize, total: usize, current: &str) {
+        let due = self.last_phase.get() != Some(phase) || self.last_sent.get().is_none_or(|t| t.elapsed() >= PROGRESS_INTERVAL);
+        if !due {
+            return;
+        }
+        let progress = ScanProgress {
+            phase,
+            done: u32::try_from(done).unwrap_or(u32::MAX),
+            total: u32::try_from(total).unwrap_or(u32::MAX),
+            current: current.to_string(),
+        };
+        if let Ok(mut latest) = self.latest.lock() {
+            *latest = Some(progress.clone());
+        }
+        self.last_sent.set(Some(time::Instant::now()));
+        self.last_phase.set(Some(phase));
+        self.sender.send(StateChangeEvent::MetadataScanProgress(progress)).ok();
+    }
+}
+
+/// Last two path segments ("Album/01 Track.flac"), enough to recognise the file.
+fn short_file_name(path: &str) -> String {
+    let mut parts = path.rsplit('/').filter(|p| !p.is_empty());
+    match (parts.next(), parts.next()) {
+        (Some(file), Some(dir)) => format!("{dir}/{file}"),
+        (Some(file), None) => file.to_string(),
+        _ => path.to_string(),
+    }
+}
+
+/// `75` -> "75 s", `130` -> "2 min 10 s".
+fn format_duration(d: time::Duration) -> String {
+    let secs = d.as_secs();
+    if secs < 60 { format!("{secs} s") } else { format!("{} min {} s", secs / 60, secs % 60) }
+}
+
+/// Result of comparing the libraries with the database.
+struct LibraryDiff {
+    /// Full paths of new local files.
+    added_files: Vec<String>,
+    /// Database keys of new remote objects, with their modification time.
+    added_remote: Vec<(String, DateTime<Utc>)>,
+    deleted_keys: Vec<String>,
+}
+
 pub struct MetadataService {
     settings: RwLock<MetadataStoreSettings>,
     scan_running: AtomicBool,
+    /// Latest progress of the running scan, `None` when idle.
+    scan_progress: Mutex<Option<ScanProgress>>,
     song_repository: ArcSongRepository,
     album_repository: ArcAlbumRepository,
     statistic_repository: ArcPlayStatisticsRepository,
@@ -83,6 +155,7 @@ impl MetadataService {
         Ok(Arc::new(Self {
             settings: RwLock::new(settings),
             scan_running: AtomicBool::new(false),
+            scan_progress: Mutex::new(None),
             song_repository,
             album_repository,
             statistic_repository,
@@ -118,6 +191,10 @@ impl MetadataService {
 
     pub fn update_settings(&self, settings: MetadataStoreSettings) {
         *self.settings.write().expect("settings lock poisoned") = settings;
+    }
+
+    pub fn settings(&self) -> MetadataStoreSettings {
+        self.settings.read().expect("settings lock poisoned").clone()
     }
 
     pub fn effective_directories(&self) -> Vec<String> {
@@ -395,6 +472,11 @@ impl MetadataService {
         unique
     }
 
+    /// Progress of the running scan, `None` when no scan runs.
+    pub fn scan_progress(&self) -> Option<ScanProgress> {
+        self.scan_progress.lock().ok().and_then(|p| p.clone())
+    }
+
     pub fn scan_music_dir(&self, full_scan: bool, state_changes_sender: &Sender<StateChangeEvent>) {
         if self.scan_running.load(Ordering::Relaxed) {
             return;
@@ -405,6 +487,8 @@ impl MetadataService {
         if let Err(e) = state_changes_sender.send(StateChangeEvent::MetadataSongScanStarted) {
             warn!("Failed to send scan started event: {e}");
         }
+        let reporter = ScanReporter::new(state_changes_sender, &self.scan_progress);
+        reporter.report(ScanPhase::Listing, 0, 0, "");
         if full_scan {
             self.song_repository.delete_all();
             self.album_repository.delete_all();
@@ -413,18 +497,25 @@ impl MetadataService {
         if !Path::new(ARTWORK_DIR).exists() {
             _ = std::fs::create_dir(ARTWORK_DIR);
         }
-        let (new_files, deleted_db_keys) = self.get_diff(&settings);
+        let LibraryDiff {
+            added_files,
+            added_remote,
+            deleted_keys: deleted_db_keys,
+        } = self.get_diff(&settings, &reporter);
         info!("Scanning directories: {:?}", settings.effective_directories());
         info!(
-            "New files found: {} / Deleted files found: {}",
-            new_files.len(),
+            "New files found: {} local, {} remote / Deleted files found: {}",
+            added_files.len(),
+            added_remote.len(),
             deleted_db_keys.len()
         );
-        let count = self.add_songs_to_db(&new_files, state_changes_sender, &settings);
+        let (count, failed) = self.add_songs_to_db(&added_files, &added_remote, &reporter, &settings);
 
+        let removed = if full_scan { 0 } else { deleted_db_keys.len() };
         if !full_scan {
             info!("Deleting {} files from database", deleted_db_keys.len());
-            for db_key in &deleted_db_keys {
+            for (i, db_key) in deleted_db_keys.iter().enumerate() {
+                reporter.report(ScanPhase::Removing, i, deleted_db_keys.len(), db_key);
                 if let Some(song) = self.song_repository.find_by_id(db_key)
                     && let Err(e) = self.album_repository.remove_from_song(&song)
                 {
@@ -433,20 +524,25 @@ impl MetadataService {
                 if let Err(e) = self.song_repository.delete(db_key) {
                     warn!("Failed to delete song '{db_key}' from db: {e}");
                 }
-                if let Err(e) =
-                    state_changes_sender.send(StateChangeEvent::MetadataSongScanned(format!("Key {db_key} deleted from database")))
-                {
-                    warn!("Failed to send scan status event: {e}");
-                }
             }
         }
-        if let Err(e) = state_changes_sender.send(StateChangeEvent::MetadataSongScanFinished(format!(
-            "Music directory scan finished: {count} files scanned in {} seconds",
-            start_time.elapsed().as_secs()
-        ))) {
+        let added = count - failed;
+        let mut summary = if added == 0 && removed == 0 && failed == 0 {
+            "Library is up to date".to_string()
+        } else {
+            format!("Library updated: {added} new, {removed} removed")
+        };
+        if failed > 0 {
+            summary.push_str(&format!(", {failed} unreadable"));
+        }
+        summary.push_str(&format!(" ({})", format_duration(start_time.elapsed())));
+        if let Ok(mut latest) = self.scan_progress.lock() {
+            *latest = None;
+        }
+        if let Err(e) = state_changes_sender.send(StateChangeEvent::MetadataSongScanFinished(summary.clone())) {
             warn!("Failed to send scan finished event: {e}");
         }
-        info!("Scanning of {} files finished in {}s", count, start_time.elapsed().as_secs());
+        info!("Scan finished: {summary}");
         self.scan_running.store(false, Ordering::Relaxed);
         if let Err(e) = self.db.persist(PersistMode::SyncData) {
             warn!("Failed to persist database after scan: {e}");
@@ -476,15 +572,17 @@ impl MetadataService {
         input.to_string()
     }
 
-    fn get_diff(&self, settings: &MetadataStoreSettings) -> (Vec<String>, Vec<String>) {
+    fn get_diff(&self, settings: &MetadataStoreSettings, reporter: &ScanReporter) -> LibraryDiff {
         let mut added_files: Vec<String> = Vec::new();
         let mut deleted_keys: Vec<String> = Vec::new();
-        let mut unchanged_keys: Vec<String> = Vec::new();
+        let mut unchanged_keys: HashSet<String> = HashSet::new();
 
         let supported_exts = MetadataStoreSettings::default().supported_extensions;
         debug!("Supported extensions: {supported_exts:?}");
 
+        let mut checked = 0usize;
         for music_dir in &settings.effective_directories() {
+            reporter.report(ScanPhase::Listing, checked, 0, music_dir);
             if !Path::new(music_dir).exists() {
                 warn!("Music directory does not exist, skipping: {music_dir}");
                 continue;
@@ -505,13 +603,9 @@ impl MetadataService {
                     de.file_type().is_file()
                 })
                 .filter(|de| {
-                    let ext = de
-                        .path()
-                        .extension()
-                        .map_or_else(|| "no_ext".to_string(), |ex| ex.to_str().unwrap_or("no_ext").to_lowercase());
-                    let is_supported = MetadataStoreSettings::default().supported_extensions.contains(&ext);
+                    let is_supported = is_supported_file(de.path(), &supported_exts);
                     if !is_supported {
-                        debug!("File {} has unsupported extension: {}", de.path().display(), ext);
+                        debug!("File {} has unsupported extension", de.path().display());
                     }
                     is_supported
                 })
@@ -521,6 +615,8 @@ impl MetadataService {
                 })
             {
                 debug!("Processing file: {} -> key: {}", entry.0, entry.1);
+                checked += 1;
+                reporter.report(ScanPhase::Listing, checked, 0, music_dir);
                 let is_iso = entry.0.to_lowercase().ends_with(".iso");
                 if is_iso {
                     // SACD ISO: each track is stored as a virtual key "{iso_key}#SACD_{idx}".
@@ -541,37 +637,114 @@ impl MetadataService {
                     }
                 } else if self.song_repository.find_by_id(&entry.1).is_some() {
                     debug!("File {} already in database (unchanged)", entry.0);
-                    unchanged_keys.push(entry.1.clone());
+                    unchanged_keys.insert(entry.1.clone());
                 } else {
                     debug!("File {} is NEW", entry.0);
                     added_files.push(entry.0.clone());
                 }
             }
         }
+        let added_remote = self.remote_diff(settings, &supported_exts, &mut unchanged_keys, reporter, checked);
         for song in self.song_repository.find_all() {
             if !unchanged_keys.contains(&song.file) {
                 deleted_keys.push(song.file);
             }
         }
-        (added_files, deleted_keys)
+        LibraryDiff {
+            added_files,
+            added_remote,
+            deleted_keys,
+        }
     }
 
-    fn add_songs_to_db(&self, files: &[String], state_changes_sender: &Sender<StateChangeEvent>, settings: &MetadataStoreSettings) -> u32 {
-        let mut count = 0u32;
-        for file in files {
-            if let Err(e) = self.scan_single_file(Path::new(file), settings) {
-                log::error!("Unable to scan file {file}. Error: {e}");
+    /// Lists every enabled remote library; returns the keys of new objects
+    /// and records existing ones in `unchanged_keys`. When a listing fails
+    /// (server offline, VPS down) the library's songs are kept as they are
+    /// instead of being treated as deleted.
+    fn remote_diff(
+        &self,
+        settings: &MetadataStoreSettings,
+        supported_exts: &[String],
+        unchanged_keys: &mut HashSet<String>,
+        reporter: &ScanReporter,
+        mut checked: usize,
+    ) -> Vec<(String, DateTime<Utc>)> {
+        let mut added = Vec::new();
+        for library in settings.remote_libraries.iter().filter(|l| l.enabled) {
+            reporter.report(ScanPhase::Listing, checked, 0, &library.name);
+            let listing = remote_store::store_for(library).and_then(|store| store.list());
+            let objects = match listing {
+                Ok(objects) => objects,
+                Err(e) => {
+                    warn!("Remote library '{}' unavailable, keeping its songs: {e:#}", library.name);
+                    let prefix = format!("{REMOTE_KEY_PREFIX}{}/", library.id);
+                    unchanged_keys.extend(
+                        self.song_repository
+                            .find_by_key_prefix(&prefix)
+                            .into_iter()
+                            .map(|(k, _)| String::from_utf8_lossy(&k).to_string()),
+                    );
+                    continue;
+                }
+            };
+            info!("Remote library '{}': {} objects listed", library.name, objects.len());
+            checked += objects.len();
+            reporter.report(ScanPhase::Listing, checked, 0, &library.name);
+            for object in objects {
+                let path = Path::new(&object.path);
+                // APE fast path and SACD ISO need a local file.
+                let local_only = path
+                    .extension()
+                    .is_some_and(|e| e.eq_ignore_ascii_case("ape") || e.eq_ignore_ascii_case("iso"));
+                if local_only || !is_supported_file(path, supported_exts) {
+                    continue;
+                }
+                let key = remote_store::remote_key(&library.id, &object.path);
+                if self.song_repository.find_by_id(&key).is_some() {
+                    unchanged_keys.insert(key);
+                } else {
+                    added.push((key, object.last_modified.unwrap_or_else(Utc::now)));
+                }
             }
-            count += 1;
-            if count.is_multiple_of(100) {
+        }
+        added
+    }
+
+    /// Reads tags of the new files; returns (files handled, files that failed).
+    fn add_songs_to_db(
+        &self,
+        files: &[String],
+        remote: &[(String, DateTime<Utc>)],
+        reporter: &ScanReporter,
+        settings: &MetadataStoreSettings,
+    ) -> (usize, usize) {
+        let total = files.len() + remote.len();
+        let mut failed = 0;
+        let local = files.iter().map(|f| (f.as_str(), None));
+        let remote = remote.iter().map(|(key, modified)| (key.as_str(), Some(*modified)));
+        for (done, (file, remote_modified)) in local.chain(remote).enumerate() {
+            reporter.report(ScanPhase::Reading, done, total, &short_file_name(file));
+            let result = match remote_modified {
+                Some(modified) => self.scan_remote_file(file, modified, settings),
+                None => self.scan_single_file(Path::new(file), settings),
+            };
+            if let Err(e) = result {
+                log::error!("Unable to scan file {file}. Error: {e}");
+                failed += 1;
+            }
+            if (done + 1).is_multiple_of(100) {
                 self.song_repository.flush();
-                state_changes_sender
-                    .send(StateChangeEvent::MetadataSongScanned(format!("Scanning: {count} files processed")))
-                    .ok();
             }
         }
         self.song_repository.flush();
-        count
+        (total, failed)
+    }
+
+    fn scan_remote_file(&self, key: &str, modified: DateTime<Utc>, settings: &MetadataStoreSettings) -> Result<()> {
+        info!("Scanning remote file:\t{key}");
+        let source = remote_store::open(settings, key)?;
+        let ext = Path::new(key).extension().and_then(|e| e.to_str());
+        self.probe_and_save(Box::new(source), ext, key, modified)
     }
 
     /// Fast metadata extraction for APE files using the `ape_decoder` crate directly.
@@ -735,19 +908,22 @@ impl MetadataService {
 
         let file = Box::new(File::open(file_path)?);
         let file_modification_date: DateTime<Utc> = file.as_ref().metadata()?.modified()?.into();
+        let path_str = file_path.to_str().ok_or_else(|| Error::msg("File path is not valid UTF-8"))?;
+        let file_p = Self::full_path_to_database_key(settings, path_str);
+        let ext = file_path.extension().and_then(|e| e.to_str());
+        self.probe_and_save(file, ext, &file_p, file_modification_date)
+    }
 
-        let mss = MediaSourceStream::new(file, symphonia::core::io::MediaSourceStreamOptions::default());
+    /// Probes `source` with Symphonia and stores the song (and its artwork) under `file_p`.
+    fn probe_and_save(&self, source: Box<dyn MediaSource>, ext: Option<&str>, file_p: &str, file_modification_date: DateTime<Utc>) -> Result<()> {
+        let mss = MediaSourceStream::new(source, symphonia::core::io::MediaSourceStreamOptions::default());
 
         let mut hint = Hint::new();
-        if let Some(ext) = file_path.extension()
-            && let Some(ext_str) = ext.to_str()
-        {
+        if let Some(ext_str) = ext {
             hint.with_extension(&ext_str.to_lowercase());
         }
         let format_opts = FormatOptions::default();
         let metadata_opts = MetadataOptions::default();
-        let path_str = file_path.to_str().ok_or_else(|| Error::msg("File path is not valid UTF-8"))?;
-        let file_p = &Self::full_path_to_database_key(settings, path_str);
 
         info!("Scanning file:\t{file_p}");
         let probe_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -767,7 +943,7 @@ impl MetadataService {
                     }
                 }
 
-                song.file.clone_from(file_p);
+                song.file = file_p.to_string();
                 song.file_date = file_modification_date;
                 log::debug!("Add/update song in database: {song:?}");
                 self.song_repository.save(&song)?;
@@ -781,6 +957,12 @@ impl MetadataService {
             }
         }
     }
+}
+
+fn is_supported_file(path: &Path, supported_exts: &[String]) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| supported_exts.contains(&e.to_lowercase()))
 }
 
 /// Key of a favorite station record in the `radio_stations` keyspace; kept

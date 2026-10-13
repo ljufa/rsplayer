@@ -170,6 +170,8 @@ fn request_current_state(ws: &WebSocket) {
         UserCommand::Metadata(MetadataCommand::QueryFavoriteRadioStations),
         UserCommand::System(SystemRequest::QueryCurrentVolume),
         UserCommand::Multiroom(MultiroomCommand::QueryState),
+        // A library scan may already be running: show its progress right away.
+        UserCommand::Metadata(MetadataCommand::QueryScanStatus),
     ];
     for cmd in &commands {
         if let Ok(json) = serde_json::to_string(cmd) {

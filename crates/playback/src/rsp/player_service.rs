@@ -521,7 +521,6 @@ impl PlayerService {
         let queue = self.queue_service.clone();
         let audio_device = self.audio_device.clone();
         let playback_thread_prio = self.rsp_settings.player_threads_priority;
-        let music_dirs = self.metadata_service.effective_directories();
         let changes_tx = self.changes_tx.clone();
         let rsp_settings = self.rsp_settings.clone();
         let metadata_service = self.metadata_service.clone();
@@ -659,7 +658,7 @@ impl PlayerService {
                     #[allow(clippy::cast_possible_truncation)]
                     let normalization_gain_hundredths = normalization_gain_db.map(|g| (g * 100.0) as i32);
 
-                    let config = PlaybackConfig::new(audio_device.clone(), rsp_settings.clone(), music_dirs.clone());
+                    let config = PlaybackConfig::new(audio_device.clone(), rsp_settings.clone(), metadata_service.settings());
 
                     let mut context = PlaybackContext::new(
                         stop_signal.clone(),
@@ -693,7 +692,8 @@ impl PlayerService {
                             if attempt_started.elapsed() >= STREAM_RETRY_RESET {
                                 retry_count = 0;
                             }
-                            let retryable = is_http_stream(&song.file) && !err.is::<OutputUnavailable>();
+                            let is_network = is_http_stream(&song.file) || metadata::remote_store::is_remote_key(&song.file);
+                            let retryable = is_network && !err.is::<OutputUnavailable>();
                             if retryable && retry_count < MAX_STREAM_RETRIES && !stop_signal.load(Ordering::Relaxed) {
                                 retry_count += 1;
                                 let delay_secs = 1u64 << (retry_count - 1);

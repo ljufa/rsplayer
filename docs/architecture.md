@@ -161,6 +161,16 @@ Key points:
   connections, so Symphonia reports a real duration and user seeks work;
   anything else plays as a plain non-seekable stream. Stream agents carry no
   global timeout (it would also bound body reads and cut long tracks).
+- **Remote libraries** (`metadata::remote_store`): S3-compatible storage
+  configured in `MetadataStoreSettings.remote_libraries`. Nothing is mounted:
+  the scanner lists objects (ListObjectsV2, via the sans-IO `rusty-s3`) and
+  reads tags through presigned `GET` URLs wrapped in `HttpRangeSource`;
+  playback opens the same way, with a fresh presigned URL per attempt (24 h
+  expiry). A failed listing keeps the library's songs instead of deleting
+  them. APE and SACD ISO are skipped (their readers need a file), and remote
+  songs are not loudness-analysed (that would download them in full).
+  `/music/<rs3 key>` answers with a 307 to the presigned URL, and secrets are
+  masked (`SECRET_MASK`) in `GET /api/settings` and restored on POST.
 - **Playback source**: `PlayerService` plays from a `PlaybackSource`
   (`api_models::playback_source`): `Queue`, `Radio(RadioStation)` or
   `Podcast { podcast_id, episode_id }`. Stations and episodes are played
@@ -214,7 +224,7 @@ concern:
 | Keyspace | Contents |
 |----------|----------|
 | `configuration` | `Settings` as one JSON value (see below) |
-| `songs` | `Song` JSON keyed by library-relative path |
+| `songs` | `Song` JSON keyed by library-relative path; songs from a remote library are keyed `rs3:<library id>/<path below prefix>` |
 | `albums` | Albums keyed by normalized `artist\|album` |
 | `play_statistics` | Play/skip/like counters per song key; `radio_uuid_*` keys hold the liked radio-browser stations |
 | `radio_stations` | Stations added by hand in the UI (`RadioStation` JSON keyed by a generated uuid), plus the details of liked radio-browser stations (keyed `fav_{stationuuid}`, `radio_browser_uuid` set) so Next/Prev can switch between favorites |

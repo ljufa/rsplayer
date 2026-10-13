@@ -195,8 +195,10 @@ parts:
       fi
       # The Tauri window first loads loading.html from the frontend dist.
       cp crates/desktop/loading.html dist/web-ui/loading.html
+      # No default toolchain: cargo in this source tree installs and uses the
+      # version pinned in rust-toolchain.toml.
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-        | sh -s -- -y --default-toolchain stable --profile minimal
+        | sh -s -- -y --default-toolchain none --profile minimal
       export PATH="$HOME/.cargo/bin:$PATH"
       # Compile and link against the Ubuntu archive only (build-packages), not
       # the gnome SDK snap the extension puts first on PATH (its ld/cc) and on

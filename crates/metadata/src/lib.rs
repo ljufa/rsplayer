@@ -20,6 +20,7 @@ pub mod audio_metadata_extractor;
 pub mod dsd_bundle;
 pub mod error;
 pub mod genre_utils;
+pub mod http_range_source;
 pub mod icy_reader;
 pub mod loudness_analyzer;
 pub mod loudness_repository;
@@ -31,6 +32,7 @@ pub mod ports;
 pub mod queue_service;
 pub mod radio_meta;
 pub mod radio_providers;
+pub mod remote_store;
 pub mod sacd_bundle;
 pub mod song_repository;
 #[cfg(test)]

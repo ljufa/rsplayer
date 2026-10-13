@@ -9,8 +9,8 @@ use api_models::{
     settings::Settings,
     stat::LibraryStats,
     state::{
-        DirectoryListing, ExternalMount, MountStatus, MultiroomGroupState, MultiroomPeer, MusicDirStatus, PlayerInfo, PlayerState, SongProgress,
-        StateChangeEvent,
+        DirectoryListing, ExternalMount, MountStatus, MultiroomGroupState, MultiroomPeer, MusicDirStatus, PlayerInfo, PlayerState, ScanPhase,
+        ScanProgress, SongProgress, StateChangeEvent,
     },
 };
 use dioxus::prelude::*;
@@ -39,7 +39,10 @@ pub struct AppState {
     pub playlists: Signal<Option<Playlists>>,
     pub library_stats: Signal<Option<LibraryStats>>,
     pub playlist_items: Signal<Vec<Song>>,
+    /// Summary of the last finished library scan.
     pub metadata_scan_msg: Signal<Option<String>>,
+    /// Progress of the running library scan, `None` when none runs.
+    pub scan_progress: Signal<Option<ScanProgress>>,
     pub notification: Signal<Option<StateChangeEvent>>,
     pub current_theme: Signal<String>,
     pub global_settings: Signal<Option<Settings>>,
@@ -112,6 +115,7 @@ impl AppState {
             library_stats: Signal::new(None),
             playlist_items: Signal::new(Vec::new()),
             metadata_scan_msg: Signal::new(None),
+            scan_progress: Signal::new(None),
             notification: Signal::new(None),
             // index.html has already applied the last used theme; start from it so the first
             // render doesn't flip back to dark until /api/settings arrives.
@@ -211,10 +215,20 @@ impl AppState {
                 }
             }
             StateChangeEvent::MetadataSongScanStarted => {
-                *self.metadata_scan_msg.write() = Some("Music directory scanning started.".to_string());
+                *self.scan_progress.write() = Some(ScanProgress {
+                    phase: ScanPhase::Listing,
+                    done: 0,
+                    total: 0,
+                    current: String::new(),
+                });
             }
-            StateChangeEvent::MetadataSongScanned(info) | StateChangeEvent::MetadataSongScanFinished(info) => {
-                *self.metadata_scan_msg.write() = Some(info);
+            StateChangeEvent::MetadataScanProgress(progress) => {
+                *self.scan_progress.write() = Some(progress);
+            }
+            StateChangeEvent::MetadataSongScanFinished(summary) => {
+                *self.scan_progress.write() = None;
+                *self.metadata_scan_msg.write() = Some(summary.clone());
+                *self.notification.write() = Some(StateChangeEvent::NotificationSuccess(summary));
             }
             StateChangeEvent::CurrentQueueEvent(page) => {
                 *self.current_queue.write() = page;

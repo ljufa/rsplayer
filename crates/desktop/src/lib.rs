@@ -329,9 +329,21 @@ async fn stop_backend(backend: &mut BackendRun, shutdown: &ShutdownSlot) {
 }
 
 /// Wait for a restart request, shut the backend down (database persisted)
-/// and relaunch the whole app.
+/// and relaunch the whole app. If the backend stops on its own instead
+/// (SIGTERM or Ctrl-C, which it handles itself), quit the app too: a window
+/// and tray icon without a backend are useless and keep `pkill` from working.
 async fn restart_loop(mut backend: BackendRun, shutdown: ShutdownSlot, app_handle: AppHandle) {
-    if backend.restart_rx.recv().await.is_none() {
+    let restart_requested = tokio::select! {
+        biased;
+        req = backend.restart_rx.recv() => req.is_some(),
+        _ = &mut backend.handle => false,
+    };
+    if !restart_requested {
+        #[cfg(not(target_os = "android"))]
+        {
+            info!("Backend stopped, quitting the app");
+            app_handle.exit(0);
+        }
         return;
     }
     info!("Restart requested — relaunching the app");

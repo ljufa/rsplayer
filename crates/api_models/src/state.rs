@@ -59,6 +59,29 @@ pub struct PlayerInfo {
     pub normalization_gain_db: Option<i32>,
 }
 
+/// Where a running library scan is.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScanProgress {
+    pub phase: ScanPhase,
+    /// Files handled in this phase.
+    pub done: u32,
+    /// Files in this phase; 0 while unknown (listing).
+    pub total: u32,
+    /// What is being worked on: a folder or remote library while listing,
+    /// the file while reading tags.
+    pub current: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ScanPhase {
+    /// Walking music folders and listing remote libraries.
+    Listing,
+    /// Reading tags of new files.
+    Reading,
+    /// Dropping songs whose files are gone.
+    Removing,
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StateChangeEvent {
@@ -75,7 +98,10 @@ pub enum StateChangeEvent {
     /// Albums for a specific decade, returned on demand. (`decade_label`, albums)
     DecadeAlbumsEvent(String, Vec<Album>),
     MetadataSongScanStarted,
-    MetadataSongScanned(String),
+    /// Sent about twice a second while a library scan runs (and on
+    /// `MetadataCommand::QueryScanStatus`).
+    MetadataScanProgress(ScanProgress),
+    /// Human-readable summary of the finished scan.
     MetadataSongScanFinished(String),
     MetadataLocalItems(Vec<MetadataLibraryItem>),
     NotificationSuccess(String),

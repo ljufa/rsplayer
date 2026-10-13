@@ -1,0 +1,3 @@
+Remote music libraries: play a library stored on S3-compatible storage (Amazon S3, Backblaze B2, Cloudflare R2, MinIO, or a NAS folder published with rclone serve s3), without mounting anything. Add it in Settings, Music Library, Remote Libraries (S3).
+
+Library scans now show their progress under the navigation bar, with a summary when done.

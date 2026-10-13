@@ -1,8 +1,9 @@
 //! Storage commands.
 //!
 //! SMB/NFS mount/unmount via `MountService`, persisting successful mounts
-//! into settings, reporting mount/music-dir status, and server-side folder
-//! listings for the settings folder picker.
+//! into settings, reporting mount/music-dir status, server-side folder
+//! listings for the settings folder picker, and remote-library connection
+//! checks.
 
 use api_models::common::StorageCommand;
 use api_models::settings::MetadataStoreSettings;
@@ -113,6 +114,24 @@ pub fn handle_storage_command(cmd: StorageCommand, ctx: &CommandContext) {
                 let extensions = MetadataStoreSettings::default().supported_extensions;
                 let listing = directory_listing::list(&path, &roots, &extensions);
                 let _ = sender.send(StateChangeEvent::DirectoryListingEvent(listing));
+            });
+        }
+        StorageCommand::TestRemoteLibrary(library) => {
+            let stored = ctx.config_store.get_settings().metadata_settings;
+            let mut probe = MetadataStoreSettings {
+                remote_libraries: vec![library],
+                ..Default::default()
+            };
+            probe.unmask_secrets(&stored);
+            let library = probe.remote_libraries.remove(0);
+            let sender = ctx.state_changes_sender.clone();
+            // Listing a large bucket over the internet takes a while.
+            tokio::task::spawn_blocking(move || {
+                let event = match metadata::remote_store::test_connection(&library) {
+                    Ok(count) => StateChangeEvent::NotificationSuccess(format!("Remote library '{}': {count} files found", library.name)),
+                    Err(e) => StateChangeEvent::NotificationError(format!("Remote library '{}': {e:#}", library.name)),
+                };
+                let _ = sender.send(event);
             });
         }
         StorageCommand::SaveExternalMount(mount_point) => {

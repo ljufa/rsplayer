@@ -36,7 +36,9 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::{Time, TimeBase, Timestamp};
 
 use crate::rsp::audio_output::AudioOutput;
-use crate::rsp::audio_source::{is_http_stream, probe_http_source, probe_local_file, resolve_ape_path, resolve_sacd_iso_path};
+use crate::rsp::audio_source::{
+    is_http_stream, probe_http_source, probe_local_file, probe_remote_file, resolve_ape_path, resolve_sacd_iso_path,
+};
 use crate::rsp::device_capabilities::{DeviceCapabilities, fallback_rate_candidates};
 use crate::rsp::playback_config::PlaybackConfig;
 use crate::rsp::playback_context::PlaybackContext;
@@ -77,23 +79,25 @@ pub fn play_file(
 
     // HTTP sources decide seekability themselves (range-capable hosts are
     // seekable, live streams are not); everything local is seekable.
+    let is_remote = metadata::remote_store::is_remote_key(path_str);
+    let is_local = !is_http_stream(path_str) && !is_remote;
     let mut is_seekable = !is_http_stream(path_str);
 
     // For APE files: open the file directly and construct ApeReader without
     // reading the entire file into memory. Only headers + seek table are read
     // upfront (~1KB); frame data is read on demand during playback.
-    let ape_path = if is_http_stream(path_str) {
-        None
-    } else {
+    let ape_path = if is_local {
         resolve_ape_path(path_str, &config.music_dirs)
+    } else {
+        None
     };
 
     // For SACD ISO virtual paths (e.g. "album.iso#SACD_0002"): open the ISO directly
     // and construct a SacdIsoReader for the specified track index.
-    let sacd_path = if is_http_stream(path_str) {
-        None
-    } else {
+    let sacd_path = if is_local {
         resolve_sacd_iso_path(path_str, &config.music_dirs)
+    } else {
+        None
     };
 
     let mut radio_meta: Option<RadioMeta> = None;
@@ -112,7 +116,9 @@ pub fn play_file(
         let file = std::io::BufReader::with_capacity(1024 * 1024, std::fs::File::open(&ape_path)?);
         Box::new(ApeReader::try_new_from_reader(file)?)
     } else {
-        let (source, rm) = if is_http_stream(path_str) {
+        let (source, rm) = if is_remote {
+            probe_remote_file(path_str, &config.library, &mut hint)?
+        } else if is_http_stream(path_str) {
             probe_http_source(path_str, &mut hint, &context.changes_tx)?
         } else {
             probe_local_file(path_str, &config.music_dirs, &mut hint)?

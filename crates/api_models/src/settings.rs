@@ -471,6 +471,315 @@ pub struct MetadataStoreSettings {
     #[serde(default, skip_serializing)]
     pub supported_extensions: Vec<String>,
     pub db_path: String,
+    /// Libraries read over the network (S3-compatible object storage).
+    #[serde(default)]
+    pub remote_libraries: Vec<RemoteLibrary>,
+}
+
+/// Placeholder sent to the UI instead of stored secrets; posting it back
+/// keeps the stored value.
+pub const SECRET_MASK: &str = "********";
+
+/// A music library that lives on remote storage instead of a local path.
+/// Songs from it are stored under keys `rs3:<id>/<object key>`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct RemoteLibrary {
+    pub id: String,
+    pub name: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub kind: RemoteLibraryKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum RemoteLibraryKind {
+    S3 {
+        /// e.g. `https://music.example.com` or `https://s3.eu-central-1.amazonaws.com`
+        endpoint: String,
+        bucket: String,
+        /// Signing region. Empty means detect it on connect (the server's
+        /// `x-amz-bucket-region` header), falling back to `us-east-1`.
+        #[serde(default = "default_s3_region")]
+        region: String,
+        /// Only objects under this prefix are part of the library.
+        #[serde(default)]
+        prefix: String,
+        access_key: String,
+        secret_key: String,
+        /// Path-style URLs (`endpoint/bucket/key`); needed by rclone, `MinIO`, Garage.
+        #[serde(default = "default_true")]
+        path_style: bool,
+    },
+}
+
+impl Default for RemoteLibraryKind {
+    fn default() -> Self {
+        Self::S3 {
+            endpoint: String::new(),
+            bucket: String::new(),
+            region: default_s3_region(),
+            prefix: String::new(),
+            access_key: String::new(),
+            secret_key: String::new(),
+            path_style: true,
+        }
+    }
+}
+
+impl RemoteLibraryKind {
+    pub fn secret(&self) -> &str {
+        match self {
+            Self::S3 { secret_key, .. } => secret_key,
+        }
+    }
+
+    pub const fn secret_mut(&mut self) -> &mut String {
+        match self {
+            Self::S3 { secret_key, .. } => secret_key,
+        }
+    }
+}
+
+/// Host of AWS's global S3 endpoint, used for `s3://bucket/prefix` URLs.
+pub const AWS_S3_HOST: &str = "s3.amazonaws.com";
+
+impl RemoteLibraryKind {
+    /// Parses the single URL the settings page asks for into an S3 library.
+    ///
+    /// * `s3://bucket/prefix`: a bucket on AWS (region detected on connect).
+    /// * `https://bucket.s3.<region>.amazonaws.com/prefix`: AWS, virtual-host style.
+    /// * `https://host[:port]/bucket/prefix`: any other S3 server, path style
+    ///   (rclone, `MinIO`, Garage, Cloudflare R2, Backblaze B2, Wasabi...).
+    ///
+    /// The region comes from the host where providers put it there; otherwise it
+    /// stays empty, which means "detect on connect" (see `region`).
+    pub fn from_url(url: &str, access_key: &str, secret_key: &str) -> Result<Self, String> {
+        let url = url.trim();
+        let (scheme, rest) = url
+            .split_once("://")
+            .ok_or_else(|| "URL must start with https://, http:// or s3://".to_string())?;
+        let (authority, path) = rest.split_once('/').unwrap_or((rest, ""));
+        if authority.is_empty() {
+            return Err("URL has no host or bucket".to_string());
+        }
+        let path = path.trim_matches('/');
+        let kind = |endpoint: String, bucket: &str, region: String, prefix: &str, path_style: bool| Self::S3 {
+            endpoint,
+            bucket: bucket.to_string(),
+            region,
+            prefix: prefix.to_string(),
+            access_key: access_key.trim().to_string(),
+            secret_key: secret_key.to_string(),
+            path_style,
+        };
+        match scheme.to_ascii_lowercase().as_str() {
+            "s3" => Ok(kind(format!("https://{AWS_S3_HOST}"), authority, String::new(), path, false)),
+            "http" | "https" => {
+                let host = authority.split(':').next().unwrap_or_default().to_ascii_lowercase();
+                if let Some((bucket, region)) = aws_virtual_host(&host) {
+                    let endpoint_host = if region.is_empty() {
+                        AWS_S3_HOST.to_string()
+                    } else {
+                        format!("s3.{region}.amazonaws.com")
+                    };
+                    return Ok(kind(format!("{scheme}://{endpoint_host}"), bucket, region, path, false));
+                }
+                let (bucket, prefix) = path.split_once('/').unwrap_or((path, ""));
+                if bucket.is_empty() {
+                    return Err("Add the bucket to the URL: https://host/bucket".to_string());
+                }
+                Ok(kind(format!("{scheme}://{authority}"), bucket, region_from_host(&host), prefix, true))
+            }
+            other => Err(format!("Unsupported URL scheme \"{other}\": use https://, http:// or s3://")),
+        }
+    }
+
+    /// The URL shown for this library; `from_url` parses it back.
+    pub fn url(&self) -> String {
+        let Self::S3 {
+            endpoint,
+            bucket,
+            prefix,
+            path_style,
+            ..
+        } = self;
+        let endpoint = endpoint.trim_end_matches('/');
+        let prefix = prefix.trim_matches('/');
+        let tail = if prefix.is_empty() { String::new() } else { format!("/{prefix}") };
+        if *path_style {
+            return format!("{endpoint}/{bucket}{tail}");
+        }
+        let (scheme, host) = endpoint.split_once("://").unwrap_or(("https", endpoint));
+        if host == AWS_S3_HOST || (host.ends_with(".amazonaws.com") && scheme == "https") {
+            format!("s3://{bucket}{tail}")
+        } else {
+            format!("{scheme}://{bucket}.{host}{tail}")
+        }
+    }
+
+    /// Name used when none is given: bucket and prefix, `/` replaced by `_`
+    /// (like network mounts, named after their share).
+    pub fn default_name(&self) -> String {
+        let Self::S3 { bucket, prefix, .. } = self;
+        let prefix = prefix.trim_matches('/');
+        let raw = if prefix.is_empty() { bucket.clone() } else { format!("{bucket}/{prefix}") };
+        raw.replace('/', "_")
+    }
+}
+
+/// `bucket.s3.<region>.amazonaws.com`, `bucket.s3-<region>.amazonaws.com` or
+/// `bucket.s3.amazonaws.com` -> (bucket, region or "").
+fn aws_virtual_host(host: &str) -> Option<(&str, String)> {
+    let rest = host.strip_suffix(".amazonaws.com")?;
+    let (bucket, service) = rest.split_once(".s3")?;
+    if bucket.is_empty() {
+        return None;
+    }
+    let region = service.trim_start_matches(['.', '-']);
+    Some((bucket, region.to_string()))
+}
+
+/// Region encoded in a provider's path-style endpoint host, "" when unknown.
+fn region_from_host(host: &str) -> String {
+    if host.ends_with(".r2.cloudflarestorage.com") {
+        return "auto".to_string();
+    }
+    for suffix in [".amazonaws.com", ".backblazeb2.com", ".wasabisys.com"] {
+        if let Some(rest) = host.strip_suffix(suffix)
+            && let Some(region) = rest.strip_prefix("s3.").or_else(|| rest.strip_prefix("s3-"))
+            && !region.is_empty()
+            && !region.contains('.')
+        {
+            return region.to_string();
+        }
+    }
+    String::new()
+}
+
+#[cfg(test)]
+mod remote_url_tests {
+    use super::*;
+
+    fn parts(kind: &RemoteLibraryKind) -> (&str, &str, &str, &str, bool) {
+        let RemoteLibraryKind::S3 {
+            endpoint,
+            bucket,
+            region,
+            prefix,
+            path_style,
+            ..
+        } = kind;
+        (endpoint, bucket, region, prefix, *path_style)
+    }
+
+    fn parse(url: &str) -> RemoteLibraryKind {
+        RemoteLibraryKind::from_url(url, " key ", "secret").unwrap()
+    }
+
+    #[test]
+    fn path_style_server() {
+        let k = parse("https://music.ljufa.iz.rs/music");
+        assert_eq!(parts(&k), ("https://music.ljufa.iz.rs", "music", "", "", true));
+        assert_eq!(k.url(), "https://music.ljufa.iz.rs/music");
+        assert_eq!(k.default_name(), "music");
+        let RemoteLibraryKind::S3 { access_key, .. } = &k;
+        assert_eq!(access_key, "key");
+    }
+
+    #[test]
+    fn path_style_with_port_and_prefix() {
+        let k = parse("http://192.168.5.2:8333/music/Jazz/Live/");
+        assert_eq!(parts(&k), ("http://192.168.5.2:8333", "music", "", "Jazz/Live", true));
+        assert_eq!(k.url(), "http://192.168.5.2:8333/music/Jazz/Live");
+        assert_eq!(k.default_name(), "music_Jazz_Live");
+    }
+
+    #[test]
+    fn s3_scheme_is_aws_with_detected_region() {
+        let k = parse("s3://my-music/lossless");
+        assert_eq!(parts(&k), ("https://s3.amazonaws.com", "my-music", "", "lossless", false));
+        assert_eq!(k.url(), "s3://my-music/lossless");
+    }
+
+    #[test]
+    fn aws_virtual_host_urls() {
+        let k = parse("https://my-music.s3.eu-central-1.amazonaws.com/lossless");
+        assert_eq!(parts(&k), ("https://s3.eu-central-1.amazonaws.com", "my-music", "eu-central-1", "lossless", false));
+        assert_eq!(k.url(), "s3://my-music/lossless");
+        let k = parse("https://my-music.s3.amazonaws.com");
+        assert_eq!(parts(&k), ("https://s3.amazonaws.com", "my-music", "", "", false));
+    }
+
+    #[test]
+    fn regions_from_provider_hosts() {
+        assert_eq!(parts(&parse("https://s3.eu-west-2.amazonaws.com/b")).2, "eu-west-2");
+        assert_eq!(parts(&parse("https://s3.eu-central-003.backblazeb2.com/b")).2, "eu-central-003");
+        assert_eq!(parts(&parse("https://s3.eu-central-1.wasabisys.com/b")).2, "eu-central-1");
+        assert_eq!(parts(&parse("https://abc123.r2.cloudflarestorage.com/b")).2, "auto");
+        assert_eq!(parts(&parse("https://minio.example.com/b")).2, "");
+    }
+
+    #[test]
+    fn invalid_urls() {
+        for url in ["music.ljufa.iz.rs/music", "https://music.ljufa.iz.rs", "https://music.ljufa.iz.rs/", "ftp://host/b", "s3://", ""] {
+            assert!(RemoteLibraryKind::from_url(url, "k", "s").is_err(), "{url}");
+        }
+    }
+
+    #[test]
+    fn existing_library_round_trips() {
+        let stored = RemoteLibraryKind::S3 {
+            endpoint: "https://music.ljufa.iz.rs".into(),
+            bucket: "music".into(),
+            region: "us-east-1".into(),
+            prefix: String::new(),
+            access_key: "rsplayer".into(),
+            secret_key: "x".into(),
+            path_style: true,
+        };
+        assert_eq!(stored.url(), "https://music.ljufa.iz.rs/music");
+    }
+}
+
+const fn default_true() -> bool {
+    true
+}
+
+fn default_s3_region() -> String {
+    "us-east-1".to_string()
+}
+
+impl MetadataStoreSettings {
+    /// Replaces stored secrets with [`SECRET_MASK`] before settings leave the server.
+    pub fn mask_secrets(&mut self) {
+        for lib in &mut self.remote_libraries {
+            let secret = lib.kind.secret_mut();
+            if !secret.is_empty() {
+                *secret = SECRET_MASK.to_string();
+            }
+        }
+    }
+
+    /// Restores secrets the UI sent back masked from `stored`, matched by library id.
+    pub fn unmask_secrets(&mut self, stored: &Self) {
+        for lib in &mut self.remote_libraries {
+            if lib.kind.secret_mut() != SECRET_MASK {
+                continue;
+            }
+            let previous = stored
+                .remote_libraries
+                .iter()
+                .find(|s| s.id == lib.id)
+                .map(|s| s.kind.secret().to_string())
+                .unwrap_or_default();
+            *lib.kind.secret_mut() = previous;
+        }
+    }
+
+    pub fn find_remote_library(&self, id: &str) -> Option<&RemoteLibrary> {
+        self.remote_libraries.iter().find(|l| l.id == id)
+    }
 }
 
 impl MetadataStoreSettings {
@@ -549,6 +858,7 @@ impl Default for MetadataStoreSettings {
             .map(std::borrow::ToOwned::to_owned)
             .collect(),
             db_path: "ignored_files.db".to_string(),
+            remote_libraries: vec![],
         }
     }
 }

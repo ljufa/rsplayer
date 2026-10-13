@@ -23,7 +23,7 @@ use api_models::{
     common::{dur_to_string, MetadataCommand, PlayerCommand, PlaylistCommand, QueueCommand, SystemRequest, UserCommand},
     playback_source::PlaybackSource,
     settings::{InstallMethod, Settings},
-    state::{CurrentQueueQuery, PlayerState, StateChangeEvent},
+    state::{CurrentQueueQuery, PlayerState, ScanPhase, ScanProgress, StateChangeEvent},
 };
 use dioxus::prelude::*;
 use gloo_net::http::Request;
@@ -1114,8 +1114,65 @@ fn NavBar() -> Element {
                     WindowButton { title: "Close", icon: "close", action: "close" }
                 }
             }
+            ScanStatusBar {}
         }
     }
+}
+
+/// Library scan status under the navigation, on every page while a scan runs.
+#[component]
+fn ScanStatusBar() -> Element {
+    let state = use_context::<AppState>();
+    let Some(progress) = state.scan_progress.read().clone() else {
+        return rsx! {};
+    };
+    let (label, percent) = scan_status_label(&progress);
+    rsx! {
+        div { class: "scan-status", role: "status",
+            div { class: "flex items-center gap-2 px-3 py-1 text-xs",
+                span { class: "loading loading-spinner loading-xs shrink-0" }
+                span { class: "font-medium shrink-0", "{label}" }
+                span { class: "truncate min-w-0 text-base-content/60", "{progress.current}" }
+            }
+            if let Some(percent) = percent {
+                progress { class: "progress progress-primary scan-status__bar", value: "{percent}", max: "100" }
+            } else {
+                // Indeterminate while the total is unknown.
+                progress { class: "progress progress-primary scan-status__bar" }
+            }
+        }
+    }
+}
+
+/// Status text and, once the total is known, the percentage done.
+pub fn scan_status_label(progress: &ScanProgress) -> (String, Option<u32>) {
+    let percent = (progress.total > 0).then(|| progress.done.saturating_mul(100) / progress.total);
+    let label = match progress.phase {
+        ScanPhase::Listing if progress.done > 0 => {
+            format!("Looking for new music: {} files checked", thousands(progress.done))
+        }
+        ScanPhase::Listing => "Looking for new music…".to_string(),
+        ScanPhase::Reading => {
+            format!("Reading new songs {} / {}", thousands(progress.done), thousands(progress.total))
+        }
+        ScanPhase::Removing => {
+            format!("Removing missing songs {} / {}", thousands(progress.done), thousands(progress.total))
+        }
+    };
+    (label, percent)
+}
+
+/// `15600` -> "15,600".
+fn thousands(n: u32) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }
 
 #[component]

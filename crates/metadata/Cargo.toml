@@ -19,6 +19,8 @@ ape-decoder = "0.3"
 chrono.workspace = true
 uuid.workspace = true
 ureq.workspace = true
+rusty-s3 = { version = "0.10", default-features = false, features = ["rustcrypto", "xml"] }
+url = "2"
 
 api_models = { path = "../api_models" }
 walkdir = "2"

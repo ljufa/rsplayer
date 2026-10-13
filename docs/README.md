@@ -24,6 +24,7 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 - **Fixed Output Sample Rate**: Optionally lock the output to a specific sample rate, overriding automatic detection.
 - **Multiple Music Sources**: Configure multiple local directories and network mounts as music sources, all scanned together.
 - **Network Storage Management**: Discover, mount, and manage SMB/CIFS and NFS shares directly from the settings page.
+- **Remote Libraries (S3)**: Play a library stored on S3-compatible storage (Amazon S3, Backblaze B2, Cloudflare R2, MinIO, Garage, or a NAS folder published with `rclone serve s3`) without mounting anything: enter its URL and access key, songs are scanned and streamed over the network. Works in the Android app too, which cannot mount network shares, so a home library is playable from anywhere. See [Remote Library](remote_library.md).
 - **Adjustable Playback Thread Priority**: Customize the priority of the playback thread up to a real-time rating of 99 via the settings page.
 - **Dedicated CPU Core for Playback**: By default, the playback thread is pinned to a single CPU core for optimized performance.
 - **Web UI Remote Control**: Manage your playback remotely with an intuitive web interface.
@@ -56,6 +57,7 @@ FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE (Monkey's Audio),
 - **Radio streams**: Loudness normalization is not applied to internet radio streams — it requires pre-scanned file metadata. Seeking is not supported for streams.
 - **Unsupported formats**: Opus, WMA, WavPack, and TTA are not supported.
 - **Local Browser Playback**: In this mode the browser's native audio engine plays files directly. DSP, loudness normalization, resampling, visualization, and DSD playback are all unavailable — format support is limited to what the browser itself can decode. Podcast resume positions are not saved in this mode.
+- **Remote libraries (S3)**: APE files and SACD ISO images on remote storage are skipped, and loudness normalization does not analyse remote songs (it would download them in full). The first scan reads the beginning of every file over the network, so a large library takes a while.
 - **Non-Linux builds**: On macOS and Windows, network share mounting, ALSA/PipeWire volume, IR remote, system poweroff/reboot, and firmware USB integration are unavailable.
 
 ## How does RSPlayer compare?
@@ -70,6 +72,7 @@ FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE (Monkey's Audio),
 | Native desktop app variant | Linux, macOS, Windows, Android | — | — | — |
 | Web UI | ✓ | ✓ | ✓ | 3rd party |
 | Local browser playback | ✓ | — | — | — |
+| Library on S3 storage (no mount) | ✓ | No | No | No |
 | Parametric EQ / DSP | ✓ built-in | paid tier | ✓ (CamillaDSP) | via plugins |
 | Multi-room | ✓ | paid tier | ✓ | via plugins |
 | DSD playback | ✓ | ✓ | ✓ | ✓ |

@@ -56,6 +56,16 @@
   backdrop-filter: blur(8px);
   transform: translateZ(0);
 }
+/* Library scan status: second row of the nav while a scan runs. */
+.scan-status {
+  border-top: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
+}
+.scan-status__bar {
+  display: block;
+  width: 100%;
+  height: 3px;
+  border-radius: 0;
+}
 .app-nav__items {
   display: flex;
   list-style: none;
