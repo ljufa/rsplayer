@@ -563,6 +563,8 @@ impl RemoteLibraryKind {
         if authority.is_empty() {
             return Err("URL has no host or bucket".to_string());
         }
+        // Copied from a browser, spaces and the like arrive as %20 etc.
+        let path = percent_decode(path);
         let path = path.trim_matches('/');
         let kind = |endpoint: String, bucket: &str, region: String, prefix: &str, path_style: bool| Self::S3 {
             endpoint,
@@ -626,6 +628,26 @@ impl RemoteLibraryKind {
         let raw = if prefix.is_empty() { bucket.clone() } else { format!("{bucket}/{prefix}") };
         raw.replace('/', "_")
     }
+}
+
+/// Decodes `%XX` escapes; anything that is not a valid escape stays as is.
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && let Some(hex) = s.get(i + 1..i + 3)
+            && let Ok(byte) = u8::from_str_radix(hex, 16)
+        {
+            out.push(byte);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).unwrap_or_else(|_| s.to_string())
 }
 
 /// `bucket.s3.<region>.amazonaws.com`, `bucket.s3-<region>.amazonaws.com` or
@@ -718,6 +740,14 @@ mod remote_url_tests {
         assert_eq!(parts(&parse("https://s3.eu-central-1.wasabisys.com/b")).2, "eu-central-1");
         assert_eq!(parts(&parse("https://abc123.r2.cloudflarestorage.com/b")).2, "auto");
         assert_eq!(parts(&parse("https://minio.example.com/b")).2, "");
+    }
+
+    #[test]
+    fn percent_encoded_path_is_decoded() {
+        let k = parse("https://music.ljufa.iz.rs/music/COMPILATIONS/Cafe%20Del%20Mar%20(2004,%202012)%2Bmore/%C5%A0ar");
+        assert_eq!(parts(&k).3, "COMPILATIONS/Cafe Del Mar (2004, 2012)+more/Šar");
+        let k = parse("https://host/b/100%25%20done%zz");
+        assert_eq!(parts(&k).3, "100% done%zz");
     }
 
     #[test]

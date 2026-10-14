@@ -18,7 +18,7 @@ use std::{
     path::Path,
     sync::{
         Arc, Mutex, RwLock,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time,
 };
@@ -96,6 +96,27 @@ impl<'a> ScanReporter<'a> {
     }
 }
 
+/// Most local files read in parallel (capped by the CPU count): local
+/// reads are mostly disk bound, and a single-core Pi stays sequential.
+const LOCAL_SCAN_WORKERS: usize = 4;
+
+/// A file whose tags a scan reads.
+enum ScanJob {
+    /// Full path of a local file.
+    Local(String),
+    /// Database key of a remote object, with its modification time and size.
+    Remote { key: String, modified: DateTime<Utc>, size: u64 },
+}
+
+impl ScanJob {
+    fn label(&self) -> &str {
+        match self {
+            Self::Local(path) => path,
+            Self::Remote { key, .. } => key,
+        }
+    }
+}
+
 /// Last two path segments ("Album/01 Track.flac"), enough to recognise the file.
 fn short_file_name(path: &str) -> String {
     let mut parts = path.rsplit('/').filter(|p| !p.is_empty());
@@ -116,8 +137,8 @@ fn format_duration(d: time::Duration) -> String {
 struct LibraryDiff {
     /// Full paths of new local files.
     added_files: Vec<String>,
-    /// Database keys of new remote objects, with their modification time.
-    added_remote: Vec<(String, DateTime<Utc>)>,
+    /// Database keys of new remote objects, with modification time and size.
+    added_remote: Vec<(String, DateTime<Utc>, u64)>,
     deleted_keys: Vec<String>,
 }
 
@@ -527,15 +548,15 @@ impl MetadataService {
             }
         }
         let added = count - failed;
-        let mut summary = if added == 0 && removed == 0 && failed == 0 {
-            "Library is up to date".to_string()
+        let unreadable = if failed > 0 { format!(", {failed} unreadable") } else { String::new() };
+        let summary = if added == 0 && removed == 0 && failed == 0 {
+            format!("Library is up to date ({})", format_duration(start_time.elapsed()))
         } else {
-            format!("Library updated: {added} new, {removed} removed")
+            format!(
+                "Library updated: {added} new, {removed} removed{unreadable} ({})",
+                format_duration(start_time.elapsed())
+            )
         };
-        if failed > 0 {
-            summary.push_str(&format!(", {failed} unreadable"));
-        }
-        summary.push_str(&format!(" ({})", format_duration(start_time.elapsed())));
         if let Ok(mut latest) = self.scan_progress.lock() {
             *latest = None;
         }
@@ -668,7 +689,7 @@ impl MetadataService {
         unchanged_keys: &mut HashSet<String>,
         reporter: &ScanReporter,
         mut checked: usize,
-    ) -> Vec<(String, DateTime<Utc>)> {
+    ) -> Vec<(String, DateTime<Utc>, u64)> {
         let mut added = Vec::new();
         for library in settings.remote_libraries.iter().filter(|l| l.enabled) {
             reporter.report(ScanPhase::Listing, checked, 0, &library.name);
@@ -703,7 +724,7 @@ impl MetadataService {
                 if self.song_repository.find_by_id(&key).is_some() {
                     unchanged_keys.insert(key);
                 } else {
-                    added.push((key, object.last_modified.unwrap_or_else(Utc::now)));
+                    added.push((key, object.last_modified.unwrap_or_else(Utc::now), object.size));
                 }
             }
         }
@@ -711,41 +732,116 @@ impl MetadataService {
     }
 
     /// Reads tags of the new files; returns (files handled, files that failed).
+    ///
+    /// Workers read files in parallel (open, tags, artwork); every song is
+    /// saved here on the scanner thread, so album updates never race. APE and
+    /// SACD ISO files (local only) keep their special readers, one at a time.
     fn add_songs_to_db(
         &self,
         files: &[String],
-        remote: &[(String, DateTime<Utc>)],
+        remote: &[(String, DateTime<Utc>, u64)],
         reporter: &ScanReporter,
         settings: &MetadataStoreSettings,
     ) -> (usize, usize) {
         let total = files.len() + remote.len();
+        let mut done = 0;
         let mut failed = 0;
-        let local = files.iter().map(|f| (f.as_str(), None));
-        let remote = remote.iter().map(|(key, modified)| (key.as_str(), Some(*modified)));
-        for (done, (file, remote_modified)) in local.chain(remote).enumerate() {
+
+        let (special, plain): (Vec<&String>, Vec<&String>) = files.iter().partition(|f| {
+            Path::new(f.as_str())
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("ape") || e.eq_ignore_ascii_case("iso"))
+        });
+        for file in special {
             reporter.report(ScanPhase::Reading, done, total, &short_file_name(file));
-            let result = match remote_modified {
-                Some(modified) => self.scan_remote_file(file, modified, settings),
-                None => self.scan_single_file(Path::new(file), settings),
-            };
-            if let Err(e) = result {
+            if let Err(e) = self.scan_single_file(Path::new(file), settings) {
                 log::error!("Unable to scan file {file}. Error: {e}");
                 failed += 1;
             }
-            if (done + 1).is_multiple_of(100) {
-                self.song_repository.flush();
-            }
+            done += 1;
         }
+
+        let jobs: Vec<ScanJob> = plain
+            .into_iter()
+            .map(|f| ScanJob::Local(f.clone()))
+            .chain(remote.iter().map(|(key, modified, size)| ScanJob::Remote {
+                key: key.clone(),
+                modified: *modified,
+                size: *size,
+            }))
+            .collect();
+        let workers = if remote.is_empty() {
+            std::thread::available_parallelism().map_or(1, usize::from).min(LOCAL_SCAN_WORKERS)
+        } else {
+            remote_store::SCAN_WORKERS
+        }
+        .min(jobs.len());
+        info!("Reading {} files with {workers} workers", jobs.len());
+
+        let next = AtomicUsize::new(0);
+        let (tx, rx) = std::sync::mpsc::channel::<(usize, Result<Song>)>();
+        std::thread::scope(|scope| {
+            for _ in 0..workers {
+                let tx = tx.clone();
+                let (next, jobs) = (&next, &jobs);
+                scope.spawn(move || {
+                    loop {
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(job) = jobs.get(i) else { break };
+                        if tx.send((i, Self::read_song(job, settings))).is_err() {
+                            break;
+                        }
+                    }
+                });
+            }
+            drop(tx);
+            for (i, result) in rx {
+                let label = jobs[i].label();
+                if let Err(e) = result.and_then(|song| self.save_song(song)) {
+                    log::error!("Unable to scan file {label}. Error: {e}");
+                    failed += 1;
+                }
+                done += 1;
+                reporter.report(ScanPhase::Reading, done, total, &short_file_name(label));
+                if done.is_multiple_of(100) {
+                    self.song_repository.flush();
+                }
+            }
+        });
         self.song_repository.flush();
         (total, failed)
     }
 
-    fn scan_remote_file(&self, key: &str, modified: DateTime<Utc>, settings: &MetadataStoreSettings) -> Result<()> {
-        info!("Scanning remote file:\t{key}");
-        let source = remote_store::open(settings, key)?;
-        let ext = Path::new(key).extension().and_then(|e| e.to_str());
-        self.probe_and_save(Box::new(source), ext, key, modified)
+    /// Reads one file's song (tags and artwork); no database access, so it
+    /// runs on scan workers. A panic in a decoder fails just this file.
+    fn read_song(job: &ScanJob, settings: &MetadataStoreSettings) -> Result<Song> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match job {
+            ScanJob::Local(path) => {
+                let file_path = Path::new(path);
+                info!("Scanning file:\t{path}");
+                let file = File::open(file_path)?;
+                let modified: DateTime<Utc> = file.metadata()?.modified()?.into();
+                let key = Self::full_path_to_database_key(settings, path);
+                let ext = file_path.extension().and_then(|e| e.to_str());
+                Self::probe_song(Box::new(file), ext, &key, modified)
+            }
+            ScanJob::Remote { key, modified, size } => {
+                info!("Scanning remote file:\t{key}");
+                let source = remote_store::open_for_scan(settings, key, *size)?;
+                let ext = Path::new(key).extension().and_then(|e| e.to_str());
+                Self::probe_song(Box::new(source), ext, key, *modified)
+            }
+        }))
+        .map_err(|_| Error::msg(format!("panicked while reading {}", job.label())))?
     }
+
+    fn save_song(&self, song: Song) -> Result<()> {
+        log::debug!("Add/update song in database: {song:?}");
+        self.song_repository.save(&song)?;
+        self.album_repository.update_from_song(song)?;
+        Ok(())
+    }
+
 
     /// Fast metadata extraction for APE files using the `ape_decoder` crate directly.
     /// Reads only header + seek table + tags from disk, avoiding loading the entire file.
@@ -906,16 +1002,14 @@ impl MetadataService {
             return self.scan_sacd_iso_file(file_path, settings, file_modification_date);
         }
 
-        let file = Box::new(File::open(file_path)?);
-        let file_modification_date: DateTime<Utc> = file.as_ref().metadata()?.modified()?.into();
         let path_str = file_path.to_str().ok_or_else(|| Error::msg("File path is not valid UTF-8"))?;
-        let file_p = Self::full_path_to_database_key(settings, path_str);
-        let ext = file_path.extension().and_then(|e| e.to_str());
-        self.probe_and_save(file, ext, &file_p, file_modification_date)
+        let song = Self::read_song(&ScanJob::Local(path_str.to_string()), settings)?;
+        self.save_song(song)
     }
 
-    /// Probes `source` with Symphonia and stores the song (and its artwork) under `file_p`.
-    fn probe_and_save(&self, source: Box<dyn MediaSource>, ext: Option<&str>, file_p: &str, file_modification_date: DateTime<Utc>) -> Result<()> {
+    /// Probes `source` with Symphonia and returns its song keyed `file_p`,
+    /// with the artwork written to [`ARTWORK_DIR`].
+    fn probe_song(source: Box<dyn MediaSource>, ext: Option<&str>, file_p: &str, file_modification_date: DateTime<Utc>) -> Result<Song> {
         let mss = MediaSourceStream::new(source, symphonia::core::io::MediaSourceStreamOptions::default());
 
         let mut hint = Hint::new();
@@ -925,7 +1019,6 @@ impl MetadataService {
         let format_opts = FormatOptions::default();
         let metadata_opts = MetadataOptions::default();
 
-        info!("Scanning file:\t{file_p}");
         let probe_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             crate::build_probe().probe(&hint, mss, format_opts, metadata_opts)
         }))
@@ -945,11 +1038,7 @@ impl MetadataService {
 
                 song.file = file_p.to_string();
                 song.file_date = file_modification_date;
-                log::debug!("Add/update song in database: {song:?}");
-                self.song_repository.save(&song)?;
-                self.album_repository.update_from_song(song)?;
-
-                Ok(())
+                Ok(song)
             }
             Err(err) => {
                 warn!("{err}");

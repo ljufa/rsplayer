@@ -172,6 +172,7 @@ pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Out
 
     let app = Router::new()
         .route("/api/settings", get(get_settings).post(save_settings))
+        .route("/api/settings/ui", axum::routing::post(save_ui_preferences))
         .route(
             "/api/start_error",
             get({
@@ -212,6 +213,7 @@ fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/api/ws", get(ws_handler))
         .route("/api/settings", get(get_settings).post(save_settings))
+        .route("/api/settings/ui", axum::routing::post(save_ui_preferences))
         .route("/music/{*path}", get(serve_music))
         .nest_service(
             "/artwork",
@@ -395,6 +397,18 @@ fn get_cpal_audio_cards() -> Vec<api_models::common::AudioCard> {
     }
 
     cards
+}
+
+/// Stores only the UI preferences (theme, visualizer, background, welcome
+/// screen) into the current settings. The UI changes them from any page with
+/// a settings snapshot taken at startup; posting that whole snapshot to
+/// `/api/settings` erased everything added since, such as music folders and
+/// remote libraries.
+async fn save_ui_preferences(State(state): State<AppState>, Json(prefs): Json<api_models::settings::UiPreferences>) -> StatusCode {
+    let mut settings = state.config.get_settings();
+    settings.ui_preferences = prefs;
+    state.config.save_settings(&settings);
+    StatusCode::NO_CONTENT
 }
 
 async fn save_settings(

@@ -54,10 +54,11 @@ rclone serve s3 /volume1 \
   --auth-key "rsplayer,<a long random secret>" \
   --addr 10.8.0.2:8333 \
   --read-only \
-  --etag-hash=
+  --etag-hash= \
+  --buffer-size 0
 ```
 
-`--etag-hash=` matters: by default rclone computes an MD5 of every file it lists, which reads the whole library from disk on each update (a 19,000-file library did not finish listing in 10 minutes; without hashing it took 36 seconds). RSPlayer does not use ETags. If your music folder is a symlink inside the served directory, add `--copy-links`.
+`--etag-hash=` matters: by default rclone computes an MD5 of every file it lists, which reads the whole library from disk on each update (a 19,000-file library did not finish listing in 10 minutes; without hashing it took 36 seconds). RSPlayer does not use ETags. `--buffer-size 0` turns off rclone's read-ahead (16 MB per opened file by default): a library scan reads only the tags at the start and end of each file, several files at once, and with read-ahead rclone read about 13 times more from disk than asked, which made scanning a disk shared with other services about 4 times slower. If your music folder is a symlink inside the served directory, add `--copy-links`.
 
 `10.8.0.2` is the NAS's WireGuard address, so the gateway is not reachable from the home LAN or the internet directly. Run it as a service (systemd unit or the NAS's task scheduler).
 

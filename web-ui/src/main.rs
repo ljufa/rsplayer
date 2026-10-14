@@ -22,7 +22,7 @@ pub mod vumeter;
 use api_models::{
     common::{dur_to_string, MetadataCommand, PlayerCommand, PlaylistCommand, QueueCommand, SystemRequest, UserCommand},
     playback_source::PlaybackSource,
-    settings::{InstallMethod, Settings},
+    settings::{InstallMethod, Settings, UiPreferences},
     state::{CurrentQueueQuery, PlayerState, ScanPhase, ScanProgress, StateChangeEvent},
 };
 use dioxus::prelude::*;
@@ -161,17 +161,32 @@ pub fn ws_system(ws: &Signal<Option<WebSocket>>, req: SystemRequest) {
     hooks::ws_send(ws, &UserCommand::System(req));
 }
 
-/// POST updated ui preferences back via the existing /api/settings endpoint.
+/// Saves the current ui preferences and marks the welcome dialog as seen.
 pub fn save_ui_prefs(state: &AppState) {
-    let Some(mut settings) = state.global_settings.peek().clone() else {
-        return;
+    let visualizer = state.visualizer_type.peek().as_str().to_string();
+    let theme = state.current_theme.peek().clone();
+    let show_bg_image = *state.show_bg_image.peek();
+    save_ui_prefs_with(state.global_settings, move |prefs| {
+        prefs.welcome_shown = true;
+        prefs.visualizer = visualizer;
+        prefs.theme = theme;
+        prefs.show_bg_image = show_bg_image;
+    });
+}
+
+/// Changes ui preferences in the startup settings snapshot and saves only
+/// them (`/api/settings/ui`). Never post that snapshot whole to
+/// `/api/settings`: it predates everything changed since, and posting it
+/// erased music folders and remote libraries added in the settings page.
+pub fn save_ui_prefs_with(mut global: Signal<Option<Settings>>, update: impl FnOnce(&mut UiPreferences)) {
+    let prefs = {
+        let mut guard = global.write();
+        let Some(settings) = guard.as_mut() else { return };
+        update(&mut settings.ui_preferences);
+        settings.ui_preferences.clone()
     };
-    settings.ui_preferences.welcome_shown = true;
-    settings.ui_preferences.visualizer = state.visualizer_type.peek().as_str().to_string();
-    settings.ui_preferences.theme.clone_from(&state.current_theme.peek());
-    settings.ui_preferences.show_bg_image = *state.show_bg_image.peek();
     spawn_local(async move {
-        let _ = Request::post("/api/settings").json(&settings).unwrap().send().await;
+        let _ = Request::post("/api/settings/ui").json(&prefs).unwrap().send().await;
     });
 }
 
@@ -511,12 +526,7 @@ fn setup_keyboard_shortcuts(path: Signal<String>, ws: Signal<Option<WebSocket>>,
                     let current = *app_state.visualizer_type.peek();
                     let next = current.cycle();
                     app_state.visualizer_type.set(next);
-                    if let Some(mut settings) = app_state.global_settings.peek().clone() {
-                        settings.ui_preferences.visualizer = next.as_str().to_string();
-                        spawn_local(async move {
-                            let _ = Request::post("/api/settings").json(&settings).unwrap().send().await;
-                        });
-                    }
+                    save_ui_prefs_with(app_state.global_settings, |prefs| prefs.visualizer = next.as_str().to_string());
                 }
                 _ => {}
             }

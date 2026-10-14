@@ -21,7 +21,7 @@ use log::{info, warn};
 use rusty_s3::actions::ListObjectsV2;
 use rusty_s3::{Bucket, Credentials, S3Action, UrlStyle};
 
-use crate::http_range_source::HttpRangeSource;
+use crate::http_range_source::{ChunkedRangeSource, HttpRangeSource};
 
 /// Prefix of database keys of songs from a remote library.
 pub const REMOTE_KEY_PREFIX: &str = "rs3:";
@@ -80,6 +80,34 @@ pub fn open(settings: &MetadataStoreSettings, db_key: &str) -> Result<HttpRangeS
     let url = resolve_url(settings, db_key)?;
     HttpRangeSource::open(http_agent(), &url).with_context(|| format!("Failed to open {db_key}"))
 }
+
+/// Opens the song stored under `db_key` for a library scan: bounded chunked
+/// reads over one shared keep-alive agent, no request until data is read.
+/// `len` is the object size from the listing.
+pub fn open_for_scan(settings: &MetadataStoreSettings, db_key: &str, len: u64) -> Result<ChunkedRangeSource> {
+    let url = resolve_url(settings, db_key)?;
+    Ok(ChunkedRangeSource::new(scan_agent().clone(), &url, len))
+}
+
+/// Agent shared by all scan reads. ureq keeps idle connections per host, so
+/// parallel scan workers reuse their TLS connections across files.
+fn scan_agent() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| {
+        ureq::Agent::config_builder()
+            .timeout_connect(Some(Duration::from_secs(10)))
+            .timeout_recv_response(Some(Duration::from_secs(30)))
+            // A chunk is at most a few MB.
+            .timeout_recv_body(Some(Duration::from_secs(120)))
+            .max_idle_connections_per_host(SCAN_WORKERS * 2)
+            .build()
+            .into()
+    })
+}
+
+/// Files read in parallel when scanning remote libraries: requests are
+/// latency bound, so the line idles with one file at a time.
+pub const SCAN_WORKERS: usize = 8;
 
 /// Checks credentials and reachability; returns the number of objects found.
 pub fn test_connection(library: &RemoteLibrary) -> Result<usize> {
@@ -304,7 +332,11 @@ mod tests {
     /// Against a real endpoint, e.g.
     /// `rclone serve s3 <root> --auth-key key,secret --addr 127.0.0.1:8333`
     /// with a `music` folder under `<root>`:
-    /// `RSP_S3_TEST_ENDPOINT=http://127.0.0.1:8333 cargo test -p metadata -- --ignored live_s3`
+    /// `RSP_S3_TEST_URL=http://127.0.0.1:8333/music cargo test -p metadata -- --ignored live_s3 --nocapture`
+    /// Optional: `RSP_S3_TEST_KEY` / `RSP_S3_TEST_SECRET` (default key/secret),
+    /// `RSP_S3_TEST_SKIP` / `RSP_S3_TEST_LIMIT` (which files to read, default
+    /// all; skip to reach files the server has not cached), `RUST_LOG=debug` to
+    /// see every HTTP request. Prints the time per file, like a scan spends it.
     #[test]
     #[ignore = "needs a live S3 endpoint"]
     fn live_s3_list_and_probe() {
@@ -312,11 +344,12 @@ mod tests {
         use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
         use symphonia::core::meta::MetadataOptions;
 
-        let endpoint = std::env::var("RSP_S3_TEST_ENDPOINT").expect("RSP_S3_TEST_ENDPOINT");
-        let mut kind = s3_kind("");
-        let RemoteLibraryKind::S3 { endpoint: ep, region, .. } = &mut kind;
-        *ep = endpoint;
+        let _ = env_logger::builder().is_test(true).try_init();
+        let env = |name: &str, default: &str| std::env::var(name).unwrap_or_else(|_| default.to_string());
+        let url = std::env::var("RSP_S3_TEST_URL").expect("RSP_S3_TEST_URL");
+        let mut kind = RemoteLibraryKind::from_url(&url, &env("RSP_S3_TEST_KEY", "key"), &env("RSP_S3_TEST_SECRET", "secret")).unwrap();
         // Empty: exercises region detection (rclone names none -> fallback).
+        let RemoteLibraryKind::S3 { region, .. } = &mut kind;
         region.clear();
         let library = RemoteLibrary {
             id: "t".into(),
@@ -324,24 +357,39 @@ mod tests {
             enabled: true,
             kind,
         };
+        let started = std::time::Instant::now();
         let objects = store_for(&library).unwrap().list().unwrap();
+        println!("listed {} objects in {:?}", objects.len(), started.elapsed());
         assert!(!objects.is_empty());
         let settings = MetadataStoreSettings {
             remote_libraries: vec![library],
             ..Default::default()
         };
-        let audio = objects.iter().filter(|o| o.path.ends_with(".flac") || o.path.ends_with(".mp3"));
+        let limit: usize = env("RSP_S3_TEST_LIMIT", "1000000").parse().unwrap();
+        let skip: usize = env("RSP_S3_TEST_SKIP", "0").parse().unwrap();
+        let audio = objects
+            .iter()
+            .filter(|o| o.path.ends_with(".flac") || o.path.ends_with(".mp3"))
+            .skip(skip)
+            .take(limit);
         let mut probed_count = 0;
+        let started = std::time::Instant::now();
         for object in audio {
-            let source = open(&settings, &remote_key("t", &object.path)).unwrap_or_else(|e| panic!("{}: {e:#}", object.path));
+            let file_started = std::time::Instant::now();
+            let source =
+                open_for_scan(&settings, &remote_key("t", &object.path), object.size).unwrap_or_else(|e| panic!("{}: {e:#}", object.path));
             let mss = MediaSourceStream::new(Box::new(source), MediaSourceStreamOptions::default());
-            let probed = crate::build_probe()
+            let mut probed = crate::build_probe()
                 .probe(&Hint::new(), mss, FormatOptions::default(), MetadataOptions::default())
                 .unwrap();
             assert!(!probed.tracks().is_empty());
+            // Same work as a scan: tags and artwork.
+            let _ = crate::audio_metadata_extractor::AudioMetadataExtractor::extract(&mut *probed);
+            println!("{:>6} ms  {:>9} B  {}", file_started.elapsed().as_millis(), object.size, object.path);
             probed_count += 1;
         }
         assert!(probed_count > 0, "no audio objects");
+        println!("{probed_count} files in {:?}", started.elapsed());
     }
 
     #[test]

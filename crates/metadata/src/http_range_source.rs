@@ -1,4 +1,7 @@
-//! Seekable HTTP media source built on `Range` requests.
+//! Seekable HTTP media sources built on `Range` requests.
+//!
+//! [`HttpRangeSource`] streams with open-ended ranges, for playback.
+//! [`ChunkedRangeSource`] reads bounded chunks, for library scans (below).
 //!
 //! Podcast episodes and other direct file URLs are served by hosts that
 //! support byte ranges. Wrapping them in this source (instead of
@@ -224,6 +227,150 @@ impl MediaSource for HttpRangeSource {
     }
 }
 
+/// First chunk after a seek: covers tags and typical embedded artwork.
+const FIRST_CHUNK: u64 = 256 * 1024;
+/// Sequential reads double the chunk up to this size.
+const MAX_CHUNK: u64 = 4 * 1024 * 1024;
+const CHUNK_ATTEMPTS: u32 = 3;
+
+/// Seekable HTTP source that fetches bounded `Range: bytes=a-b` chunks.
+///
+/// For library scans, which read a few hundred KB of tags and artwork at
+/// the start of a file and jump to its end for trailing tags. An open-ended
+/// range (as [`HttpRangeSource`] uses) makes the server send the whole file
+/// until the connection is dropped, megabytes per file and a new TLS
+/// connection per seek. Here every response is read completely, so only the
+/// needed bytes travel and the agent's keep-alive connection is reused; a
+/// seek costs one small request. The length comes from the caller (a bucket
+/// listing knows it), so opening sends no request.
+pub struct ChunkedRangeSource {
+    agent: Agent,
+    url: String,
+    len: u64,
+    pos: u64,
+    buf: Vec<u8>,
+    buf_start: u64,
+    chunk: u64,
+}
+
+impl ChunkedRangeSource {
+    pub fn new(agent: Agent, url: &str, len: u64) -> Self {
+        Self {
+            agent,
+            url: url.to_string(),
+            len,
+            pos: 0,
+            buf: Vec::new(),
+            buf_start: 0,
+            chunk: FIRST_CHUNK,
+        }
+    }
+
+    const fn buffered(&self) -> bool {
+        self.pos >= self.buf_start && self.pos < self.buf_start + self.buf.len() as u64
+    }
+
+    fn fill(&mut self) -> io::Result<()> {
+        let sequential = !self.buf.is_empty() && self.pos == self.buf_start + self.buf.len() as u64;
+        self.chunk = if sequential { (self.chunk * 2).min(MAX_CHUNK) } else { FIRST_CHUNK };
+        let end = (self.pos + self.chunk).min(self.len) - 1;
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            match self.fetch(self.pos, end) {
+                Ok(data) => {
+                    self.buf = data;
+                    self.buf_start = self.pos;
+                    return Ok(());
+                }
+                Err(e) if attempt < CHUNK_ATTEMPTS => warn!("Range read {}-{end} failed ({attempt}/{CHUNK_ATTEMPTS}): {e}", self.pos),
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    fn fetch(&self, start: u64, end: u64) -> io::Result<Vec<u8>> {
+        let requested = std::time::Instant::now();
+        let resp = self
+            .agent
+            .get(&self.url)
+            .header("accept", "*/*")
+            .header("Range", format!("bytes={start}-{end}"))
+            .call()
+            .map_err(io::Error::other)?;
+        let status = resp.status().as_u16();
+        let range_start = resp
+            .headers()
+            .get("content-range")
+            .and_then(|v| v.to_str().ok())
+            .and_then(content_range_start);
+        let wanted = end + 1 - start;
+        let mut data = Vec::with_capacity(usize::try_from(wanted).unwrap_or_default());
+        let mut body = resp.into_body().into_reader();
+        match (status, range_start) {
+            // Ranged answer (rclone's S3 gateway uses 200 with Content-Range):
+            // read it to the end so the connection goes back to the pool.
+            (206 | 200, Some(s)) if s == start => {
+                body.read_to_end(&mut data)?;
+            }
+            // Ranges ignored, whole file coming: take the start, drop the rest.
+            (200, None) if start == 0 => {
+                body.take(wanted).read_to_end(&mut data)?;
+            }
+            _ => {
+                return Err(io::Error::other(format!("server ignored range {start}-{end} (status {status})")));
+            }
+        }
+        debug!("Range {start}-{end}: {} bytes in {:?}", data.len(), requested.elapsed());
+        if data.len() as u64 != wanted {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                format!("range {start}-{end}: got {} of {wanted} bytes", data.len()),
+            ));
+        }
+        Ok(data)
+    }
+}
+
+impl Read for ChunkedRangeSource {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if buf.is_empty() || self.pos >= self.len {
+            return Ok(0);
+        }
+        if !self.buffered() {
+            self.fill()?;
+        }
+        let offset = usize::try_from(self.pos - self.buf_start).map_err(io::Error::other)?;
+        let n = buf.len().min(self.buf.len() - offset);
+        buf[..n].copy_from_slice(&self.buf[offset..offset + n]);
+        self.pos += n as u64;
+        Ok(n)
+    }
+}
+
+impl Seek for ChunkedRangeSource {
+    fn seek(&mut self, from: SeekFrom) -> io::Result<u64> {
+        let target = match from {
+            SeekFrom::Start(offset) => Some(offset),
+            SeekFrom::End(offset) => self.len.checked_add_signed(offset),
+            SeekFrom::Current(offset) => self.pos.checked_add_signed(offset),
+        }
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "seek before start of HTTP source"))?;
+        self.pos = target;
+        Ok(target)
+    }
+}
+
+impl MediaSource for ChunkedRangeSource {
+    fn is_seekable(&self) -> bool {
+        true
+    }
+
+    fn byte_len(&self) -> Option<u64> {
+        Some(self.len)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,34 +421,38 @@ mod tests {
     fn handle(mut stream: TcpStream, data: &[u8], ranges: bool, drop_after: Option<usize>) {
         let mut reader = BufReader::new(stream.try_clone().unwrap());
         let mut line = String::new();
-        let mut range: Option<u64> = None;
+        let mut range: Option<(u64, Option<u64>)> = None;
         loop {
             line.clear();
             if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
                 break;
             }
-            if let Some(v) = line.to_ascii_lowercase().strip_prefix("range: bytes=") {
-                range = v.trim().trim_end_matches('-').parse().ok();
+            if let Some(v) = line.to_ascii_lowercase().strip_prefix("range: bytes=")
+                && let Some((a, b)) = v.trim().split_once('-')
+            {
+                range = a.parse().ok().map(|a| (a, b.parse().ok()));
             }
         }
         let total = data.len();
-        let (status, start) = match range {
-            Some(start) if ranges && (start as usize) < total => (206, start as usize),
-            _ => (200, 0),
+        let (status, start, end) = match range {
+            Some((start, end)) if ranges && (start as usize) < total => {
+                (206, start as usize, end.map_or(total - 1, |e| (e as usize).min(total - 1)))
+            }
+            _ => (200, 0, total - 1),
         };
-        let mut body = &data[start..];
+        let mut body = &data[start..=end];
         if let Some(limit) = drop_after {
             body = &body[..body.len().min(limit)];
         }
         let mut head = format!("HTTP/1.1 {status} OK\r\nContent-Type: application/octet-stream\r\nConnection: close\r\n");
         if status == 206 {
-            head.push_str(&format!("Content-Range: bytes {start}-{}/{total}\r\n", total - 1));
+            head.push_str(&format!("Content-Range: bytes {start}-{end}/{total}\r\n"));
         } else if ranges {
             head.push_str("Accept-Ranges: bytes\r\n");
         }
         // Advertise the full remaining length even when truncating, so the
         // client sees a premature EOF rather than a clean end.
-        head.push_str(&format!("Content-Length: {}\r\n\r\n", total - start));
+        head.push_str(&format!("Content-Length: {}\r\n\r\n", end + 1 - start));
         let _ = stream.write_all(head.as_bytes());
         let _ = stream.write_all(body);
         let _ = stream.flush();
@@ -332,6 +483,58 @@ mod tests {
         );
         assert_eq!(seekable_length(200, &header_map(&[("icy-metaint", "16000")])), None);
         assert_eq!(seekable_length(404, &header_map(&[("content-range", "bytes 0-9/4096")])), None);
+    }
+
+    fn chunked(server: &FakeServer, len: usize) -> ChunkedRangeSource {
+        let agent: Agent = Agent::config_builder().http_status_as_error(false).build().into();
+        ChunkedRangeSource::new(agent, &server.url, len as u64)
+    }
+
+    #[test]
+    fn chunked_opening_sends_nothing_and_reads_everything() {
+        let data = blob(1_000_000);
+        let server = start_server(data.clone(), true, None);
+        let mut src = chunked(&server, data.len());
+        assert_eq!(server.requests.load(Ordering::SeqCst), 0);
+        let mut out = Vec::new();
+        src.read_to_end(&mut out).unwrap();
+        assert_eq!(out, *data);
+        // 256 KiB, then 512 KiB, then the remaining 232 KiB (chunk capped at the end).
+        assert_eq!(server.requests.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn chunked_tag_reads_fetch_only_what_is_needed() {
+        let data = blob(30_000_000);
+        let server = start_server(data.clone(), true, None);
+        let mut src = chunked(&server, data.len());
+        // Header and a bit of it again: one request.
+        let mut head = [0u8; 4096];
+        src.read_exact(&mut head).unwrap();
+        src.seek(SeekFrom::Start(100)).unwrap();
+        src.read_exact(&mut head[..100]).unwrap();
+        assert_eq!(&head[..100], &data[100..200]);
+        assert_eq!(server.requests.load(Ordering::SeqCst), 1);
+        // Trailing tag (ID3v1 / APE footer), then back to the start: one more.
+        src.seek(SeekFrom::End(-160)).unwrap();
+        let mut tail = [0u8; 160];
+        src.read_exact(&mut tail).unwrap();
+        assert_eq!(&tail[..], &data[data.len() - 160..]);
+        assert_eq!(server.requests.load(Ordering::SeqCst), 2);
+        src.seek(SeekFrom::Start(0)).unwrap();
+        src.read_exact(&mut head).unwrap();
+        assert_eq!(&head[..], &data[..4096]);
+        assert_eq!(server.requests.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn chunked_short_body_is_an_error_not_silent_data_loss() {
+        let data = blob(1_000_000);
+        let server = start_server(data.clone(), true, Some(1000));
+        let mut src = chunked(&server, data.len());
+        let mut buf = [0u8; 4096];
+        assert!(src.read(&mut buf).is_err());
+        assert_eq!(server.requests.load(Ordering::SeqCst), CHUNK_ATTEMPTS as usize);
     }
 
     #[test]

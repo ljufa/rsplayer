@@ -1,5 +1,23 @@
 # Release Notes
 
+## v5.5.1 (2026-10-14)
+
+### Improvements
+
+#### Faster library scans
+
+New songs are now read several at a time, and songs on remote storage are read with small requests that fetch only the tags and artwork instead of streaming the whole file. Over the internet this made reading a song about 15 times faster (from 2 to 5 seconds to about 0.15 seconds each). If you serve a NAS folder with `rclone serve s3`, also add `--buffer-size 0` (see [Remote Library](remote_library.md)): rclone otherwise reads 16 MB ahead for every file, which slowed scans down about 4 times on a busy disk.
+
+### Fixes
+
+#### Settings no longer lost when switching theme or visualizer
+
+Switching the visualizer (button or V key), the theme or the album art background, or closing the welcome dialog saved a copy of all settings taken when the app was opened. Anything added in the settings since then, such as a music folder or a remote library, was quietly removed again. These actions now save only the display preferences. This showed most in the Android app, which stays open for a long time.
+
+#### Remote library URLs copied from a browser
+
+A remote library URL with escaped characters, such as `%20` for spaces in a folder name (as browsers show and copy them), found no files. Such URLs now work as typed.
+
 ## v5.5.0 (2026-10-13)
 
 ### New features

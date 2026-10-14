@@ -2132,12 +2132,7 @@ fn AppearanceSection() -> Element {
                 onclick: move |_| {
                     let next = !*state.show_bg_image.peek();
                     *state.show_bg_image.write() = next;
-                    if let Some(mut settings) = state.global_settings.peek().clone() {
-                        settings.ui_preferences.show_bg_image = next;
-                        spawn(async move {
-                            let _ = Request::post("/api/settings").json(&settings).unwrap().send().await;
-                        });
-                    }
+                    crate::save_ui_prefs_with(state.global_settings, |prefs| prefs.show_bg_image = next);
                 },
             }
         }
@@ -2158,12 +2153,7 @@ fn AppearanceSection() -> Element {
                                 class: if active { "flex flex-col items-center gap-1 p-1 rounded-lg border-2 border-primary cursor-pointer" } else { "flex flex-col items-center gap-1 p-1 rounded-lg border-2 border-transparent cursor-pointer hover:border-base-content/20" }, // Swatch preview — rendered in its own data-theme context so colors
                                 onclick: move |_| {
                                     *state.current_theme.write() = id.to_string();
-                                    if let Some(mut settings) = state.global_settings.peek().clone() {
-                                        settings.ui_preferences.theme = id.to_string();
-                                        spawn(async move {
-                                            let _ = Request::post("/api/settings").json(&settings).unwrap().send().await;
-                                        });
-                                    }
+                                    crate::save_ui_prefs_with(state.global_settings, |prefs| prefs.theme = id.to_string());
                                 },
                                 // Swatch preview — rendered in its own data-theme context so colors
                                 // reflect that theme regardless of the active page theme.

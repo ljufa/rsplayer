@@ -527,16 +527,7 @@ fn Controls(
                                 let current = *vt.read();
                                 let next = current.cycle();
                                 vt.set(next);
-                                if let Some(mut settings) = state.global_settings.peek().clone() {
-                                    settings.ui_preferences.visualizer = next.as_str().to_string();
-                                    spawn(async move {
-                                        let _ = Request::post("/api/settings")
-                                            .json(&settings)
-                                            .unwrap()
-                                            .send()
-                                            .await;
-                                    });
-                                }
+                                crate::save_ui_prefs_with(state.global_settings, |prefs| prefs.visualizer = next.as_str().to_string());
                             }
                         },
                         i { class: "material-icons", "equalizer" }

@@ -1,0 +1,3 @@
+Faster library scans: songs are read several at a time, and remote (S3) libraries fetch only tags and artwork instead of whole files.
+
+Fixed: changing the theme or visualizer no longer removes music folders or remote libraries added since the app was opened.
