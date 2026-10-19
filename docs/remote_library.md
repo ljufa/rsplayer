@@ -27,7 +27,7 @@ URL forms:
 
 The region is taken from the host name where the provider puts it there (AWS, B2, Wasabi; `auto` for R2). Otherwise RSPlayer asks the server when it connects and falls back to `us-east-1`, which rclone, MinIO and Garage accept. Set it under Advanced only for a provider that needs a specific region and does not report it.
 
-Use **Test connection** before adding. Then press **Update library**: the first scan downloads the beginning of every file (tags and embedded artwork), so a large library takes a while over a slow connection. Later updates only read new files.
+Use **Test connection** before adding. Then press **Update library**: the first scan downloads the beginning of every file (tags and embedded artwork), so a large library takes a while over a slow connection. Later updates only read new files. If the connection drops during an update (for example a phone switching networks), the update waits for it to come back and continues. If an update could not finish (the connection stayed down for more than 5 minutes, or the app was closed), Settings, Music Library shows a warning: press **Update library** again and it reads only the songs that are still missing.
 
 Notes:
 

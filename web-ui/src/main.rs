@@ -1265,6 +1265,7 @@ fn FooterPlayer() -> Element {
     let player_state = state.player_state.read().clone();
     let volume = *state.volume.read();
     let playing = player_state == PlayerState::PLAYING;
+    let buffering = *state.buffering.read();
 
     let title = song.as_ref().and_then(|s| s.title.clone()).unwrap_or_default();
     let artist = song.as_ref().and_then(|s| s.artist.clone()).unwrap_or_default();
@@ -1298,11 +1299,15 @@ fn FooterPlayer() -> Element {
                     button {
                         class: "btn btn-primary btn-circle btn-sm",
                         onclick: move |_| ws_user_cmd(&ws, &UserCommand::Player(PlayerCommand::TogglePlay)),
-                        i { class: "material-icons",
-                            if playing {
-                                "pause"
-                            } else {
-                                "play_arrow"
+                        if buffering {
+                            span { class: "loading loading-spinner loading-xs" }
+                        } else {
+                            i { class: "material-icons",
+                                if playing {
+                                    "pause"
+                                } else {
+                                    "play_arrow"
+                                }
                             }
                         }
                     }

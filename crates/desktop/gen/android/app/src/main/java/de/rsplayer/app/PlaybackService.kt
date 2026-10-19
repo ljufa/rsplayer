@@ -86,8 +86,14 @@ class PlaybackService : MediaSessionService() {
         )
 
         scope.launch {
+            var scanRunning = false
             client.state.collect { state ->
                 player.update(state)
+                // A scan just started (Update library, or the startup scan):
+                // keep the process alive until it ends, see ScanService.
+                val running = state.scan.status == ScanState.Status.RUNNING
+                if (running && !scanRunning) ScanService.start(this@PlaybackService)
+                scanRunning = running
                 if (state.isPlaying) wifiLock?.takeIf { !it.isHeld }?.acquire()
                 else wifiLock?.takeIf { it.isHeld }?.release()
             }

@@ -39,6 +39,7 @@ use crate::rsp::audio_output::AudioOutput;
 use crate::rsp::audio_source::{
     is_http_stream, probe_http_source, probe_local_file, probe_remote_file, resolve_ape_path, resolve_sacd_iso_path,
 };
+use crate::rsp::interruptible_source;
 use crate::rsp::device_capabilities::{DeviceCapabilities, fallback_rate_candidates};
 use crate::rsp::playback_config::PlaybackConfig;
 use crate::rsp::playback_context::PlaybackContext;
@@ -117,9 +118,17 @@ pub fn play_file(
         Box::new(ApeReader::try_new_from_reader(file)?)
     } else {
         let (source, rm) = if is_remote {
-            probe_remote_file(path_str, &config.library, &mut hint)?
+            let (key, library) = (path_str.to_string(), config.library.clone());
+            let (source, rm, h) =
+                interruptible_source::open(context.stop_signal.clone(), hint, move |hint| probe_remote_file(&key, &library, hint))?;
+            hint = h;
+            (source, rm)
         } else if is_http_stream(path_str) {
-            probe_http_source(path_str, &mut hint, &context.changes_tx)?
+            let (url, changes_tx) = (path_str.to_string(), context.changes_tx.clone());
+            let (source, rm, h) =
+                interruptible_source::open(context.stop_signal.clone(), hint, move |hint| probe_http_source(&url, hint, &changes_tx))?;
+            hint = h;
+            (source, rm)
         } else {
             probe_local_file(path_str, &config.music_dirs, &mut hint)?
         };
@@ -210,7 +219,9 @@ pub fn play_file(
     // Cloned (not moved) into each open attempt so the meter survives failed
     // attempts and mid-song device reopens.
     let vu_meter = context.take_vu_meter();
-    let mut last_current_time = 0;
+    // Starts out of range so the first packet (0s) is reported too: the UI
+    // shows a buffering spinner until the first position arrives.
+    let mut last_current_time = u64::MAX;
     // Multiroom tee session for this track. Declared before the decode loop
     // so it is dropped (ending the session) only after the drain at the end
     // of this function — followers play out their scheduled tail exactly

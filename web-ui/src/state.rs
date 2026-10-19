@@ -10,7 +10,7 @@ use api_models::{
     stat::LibraryStats,
     state::{
         DirectoryListing, ExternalMount, MountStatus, MultiroomGroupState, MultiroomPeer, MusicDirStatus, PlayerInfo, PlayerState, ScanPhase,
-        ScanProgress, SongProgress, StateChangeEvent,
+        ScanProgress, ScanSummary, SongProgress, StateChangeEvent,
     },
 };
 use dioxus::prelude::*;
@@ -25,6 +25,9 @@ pub struct AppState {
     pub progress: Signal<SongProgress>,
     pub playback_mode: Signal<PlaybackMode>,
     pub player_state: Signal<PlayerState>,
+    /// The server reported PLAYING but no audio position yet: a remote
+    /// stream (radio, podcast, S3) is still connecting and buffering.
+    pub buffering: Signal<bool>,
     pub current_queue: Signal<Option<PlaylistPage>>,
     /// Raw items returned by the last Metadata query (files/artists tree).
     pub metadata_local_items: Signal<Vec<MetadataLibraryItem>>,
@@ -39,8 +42,8 @@ pub struct AppState {
     pub playlists: Signal<Option<Playlists>>,
     pub library_stats: Signal<Option<LibraryStats>>,
     pub playlist_items: Signal<Vec<Song>>,
-    /// Summary of the last finished library scan.
-    pub metadata_scan_msg: Signal<Option<String>>,
+    /// Outcome of the last library scan (kept by the server across restarts).
+    pub metadata_scan_msg: Signal<Option<ScanSummary>>,
     /// Progress of the running library scan, `None` when none runs.
     pub scan_progress: Signal<Option<ScanProgress>>,
     pub notification: Signal<Option<StateChangeEvent>>,
@@ -105,6 +108,7 @@ impl AppState {
             progress: Signal::new(SongProgress::default()),
             playback_mode: Signal::new(PlaybackMode::default()),
             player_state: Signal::new(PlayerState::STOPPED),
+            buffering: Signal::new(false),
             current_queue: Signal::new(None),
             metadata_local_items: Signal::new(Vec::new()),
             favorite_radio_stations: Signal::new(Vec::new()),
@@ -202,12 +206,19 @@ impl AppState {
             StateChangeEvent::SongTimeEvent(st) => {
                 *self.progress.write() = st;
                 *self.player_state.write() = PlayerState::PLAYING;
+                if *self.buffering.peek() {
+                    self.buffering.set(false);
+                }
             }
             StateChangeEvent::PlaybackModeChangedEvent(mode) => {
                 *self.playback_mode.write() = mode;
             }
             StateChangeEvent::PlaybackStateEvent(ps) => {
                 let stopped = !matches!(ps, PlayerState::PLAYING);
+                // The server sends PLAYING before it opens the stream; the
+                // first SongTimeEvent clears this once audio flows. Browser
+                // playback gets its progress from the <audio> element instead.
+                self.buffering.set(!stopped && !*self.local_browser_playback.peek());
                 *self.player_state.write() = ps;
                 if stopped {
                     *self.vu_left.write() = 0;
@@ -227,8 +238,16 @@ impl AppState {
             }
             StateChangeEvent::MetadataSongScanFinished(summary) => {
                 *self.scan_progress.write() = None;
-                *self.metadata_scan_msg.write() = Some(summary.clone());
-                *self.notification.write() = Some(StateChangeEvent::NotificationSuccess(summary));
+                // MetadataScanSummary came just before: songs may be missing.
+                let complete = self.metadata_scan_msg.peek().as_ref().is_none_or(|s| s.complete);
+                *self.notification.write() = Some(if complete {
+                    StateChangeEvent::NotificationSuccess(summary)
+                } else {
+                    StateChangeEvent::NotificationError(summary)
+                });
+            }
+            StateChangeEvent::MetadataScanSummary(summary) => {
+                *self.metadata_scan_msg.write() = Some(summary);
             }
             StateChangeEvent::CurrentQueueEvent(page) => {
                 *self.current_queue.write() = page;

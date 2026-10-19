@@ -197,6 +197,7 @@ pub fn PlayerPage() -> Element {
                         ws,
                         source: state.playback_source.read().clone(),
                         player_state: player_state.read().clone(),
+                        buffering: *state.buffering.read(),
                         playback_mode: *playback_mode.read(),
                         progress: progress.read().clone(),
                         volume: *volume.read(),
@@ -402,6 +403,7 @@ fn Controls(
     ws: Signal<Option<WebSocket>>,
     source: PlaybackSource,
     player_state: PlayerState,
+    buffering: bool,
     playback_mode: PlaybackMode,
     progress: SongProgress,
     volume: Volume,
@@ -473,7 +475,7 @@ fn Controls(
                 }
                 button {
                     class: "btn btn-primary btn-circle btn-lg",
-                    title: if playing { "Pause" } else { "Play" },
+                    title: if buffering { "Buffering (click to stop)" } else if playing { "Pause" } else { "Play" },
                     onclick: {
                         let ws = ws;
                         move |_| ws_send(
@@ -483,11 +485,15 @@ fn Controls(
                             ),
                         )
                     },
-                    i { class: "material-icons text-xl",
-                        if playing {
-                            "pause"
-                        } else {
-                            "play_arrow"
+                    if buffering {
+                        span { class: "loading loading-spinner loading-sm" }
+                    } else {
+                        i { class: "material-icons text-xl",
+                            if playing {
+                                "pause"
+                            } else {
+                                "play_arrow"
+                            }
                         }
                     }
                 }

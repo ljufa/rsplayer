@@ -41,13 +41,14 @@ use api_models::{
     radio::RadioStation,
     settings::MetadataStoreSettings,
     stat::{LibraryStats, PlayItemStatistics},
-    state::{ScanPhase, ScanProgress, StateChangeEvent},
+    state::{ScanPhase, ScanProgress, ScanSummary, StateChangeEvent},
 };
 
 use crate::audio_metadata_extractor::AudioMetadataExtractor;
 use crate::ports::{
     album_repository::ArcAlbumRepository, play_statistics_repository::ArcPlayStatisticsRepository, song_repository::ArcSongRepository,
 };
+use crate::outage_gate::{Check, OutageGate};
 use crate::remote_store::{self, REMOTE_KEY_PREFIX};
 use crate::sacd_bundle::{SACD_TRACK_MARKER, detect_sector_mode, read_areas, read_tracks};
 
@@ -117,6 +118,26 @@ impl ScanJob {
     }
 }
 
+/// Why a file of a scan was not read.
+enum ReadError {
+    /// The file itself failed (bad data, unsupported format…).
+    Unreadable(Error),
+    /// Its remote storage stayed unreachable.
+    Unreached,
+}
+
+/// How long a scan waits for an unreachable remote library (counted in
+/// pauses between checks) before leaving its remaining files for the next
+/// scan.
+const MAX_OUTAGE: time::Duration = time::Duration::from_mins(5);
+/// Reads of a remote file while its storage answers; failures during an
+/// outage don't count.
+const REMOTE_READ_ATTEMPTS: u32 = 3;
+
+/// Keys of the `scan_state` keyspace.
+const SCAN_RUNNING_KEY: &[u8] = b"running";
+const LAST_SUMMARY_KEY: &[u8] = b"last_summary";
+
 /// Last two path segments ("Album/01 Track.flac"), enough to recognise the file.
 fn short_file_name(path: &str) -> String {
     let mut parts = path.rsplit('/').filter(|p| !p.is_empty());
@@ -140,6 +161,8 @@ struct LibraryDiff {
     /// Database keys of new remote objects, with modification time and size.
     added_remote: Vec<(String, DateTime<Utc>, u64)>,
     deleted_keys: Vec<String>,
+    /// Remote libraries whose listing failed (their songs are kept).
+    unavailable: Vec<String>,
 }
 
 pub struct MetadataService {
@@ -153,6 +176,8 @@ pub struct MetadataService {
     db: Arc<Database>,
     /// `station_id` -> [`RadioStation`] JSON, for stations entered by hand.
     radio_stations: Keyspace,
+    /// A marker while a scan runs, and the last scan's [`ScanSummary`].
+    scan_state: Keyspace,
 }
 
 impl MetadataService {
@@ -172,6 +197,10 @@ impl MetadataService {
         let radio_stations = db
             .keyspace("radio_stations", KeyspaceCreateOptions::default)
             .expect("Failed to open radio_stations keyspace");
+        let scan_state = db
+            .keyspace("scan_state", KeyspaceCreateOptions::default)
+            .expect("Failed to open scan_state keyspace");
+        Self::note_interrupted_scan(&scan_state);
 
         Ok(Arc::new(Self {
             settings: RwLock::new(settings),
@@ -182,7 +211,43 @@ impl MetadataService {
             statistic_repository,
             db,
             radio_stations,
+            scan_state,
         }))
+    }
+
+    /// A scan marker left from the last run means the process ended
+    /// mid-scan (closed, killed, or frozen and killed in the background on
+    /// Android): files not read by then are missing until the next scan.
+    fn note_interrupted_scan(scan_state: &Keyspace) {
+        if scan_state.get(SCAN_RUNNING_KEY).ok().flatten().is_none() {
+            return;
+        }
+        warn!("The last library scan did not finish");
+        Self::save_summary(
+            scan_state,
+            &ScanSummary {
+                text: "Interrupted before it finished".to_string(),
+                complete: false,
+            },
+        );
+        _ = scan_state.remove(SCAN_RUNNING_KEY);
+    }
+
+    fn save_summary(scan_state: &Keyspace, summary: &ScanSummary) {
+        match serde_json::to_vec(summary) {
+            Ok(json) => {
+                if let Err(e) = scan_state.insert(LAST_SUMMARY_KEY, json) {
+                    warn!("Failed to save scan summary: {e}");
+                }
+            }
+            Err(e) => warn!("Failed to serialize scan summary: {e}"),
+        }
+    }
+
+    /// Outcome of the last scan, also of one before a restart.
+    pub fn last_scan_summary(&self) -> Option<ScanSummary> {
+        let bytes = self.scan_state.get(LAST_SUMMARY_KEY).ok().flatten()?;
+        serde_json::from_slice(&bytes).ok()
     }
 
     fn run_migration_if_needed(db: &Database, song_repository: &ArcSongRepository, album_repository: &ArcAlbumRepository) {
@@ -508,6 +573,11 @@ impl MetadataService {
         if let Err(e) = state_changes_sender.send(StateChangeEvent::MetadataSongScanStarted) {
             warn!("Failed to send scan started event: {e}");
         }
+        _ = self.scan_state.insert(SCAN_RUNNING_KEY, b"1");
+        // Durable now: a scan killed early must still be noticed.
+        if let Err(e) = self.db.persist(PersistMode::SyncData) {
+            warn!("Failed to persist scan marker: {e}");
+        }
         let reporter = ScanReporter::new(state_changes_sender, &self.scan_progress);
         reporter.report(ScanPhase::Listing, 0, 0, "");
         if full_scan {
@@ -522,6 +592,7 @@ impl MetadataService {
             added_files,
             added_remote,
             deleted_keys: deleted_db_keys,
+            unavailable,
         } = self.get_diff(&settings, &reporter);
         info!("Scanning directories: {:?}", settings.effective_directories());
         info!(
@@ -530,7 +601,7 @@ impl MetadataService {
             added_remote.len(),
             deleted_db_keys.len()
         );
-        let (count, failed) = self.add_songs_to_db(&added_files, &added_remote, &reporter, &settings);
+        let (count, failed, unreached) = self.add_songs_to_db(&added_files, &added_remote, &reporter, &settings);
 
         let removed = if full_scan { 0 } else { deleted_db_keys.len() };
         if !full_scan {
@@ -547,16 +618,31 @@ impl MetadataService {
                 }
             }
         }
-        let added = count - failed;
-        let unreadable = if failed > 0 { format!(", {failed} unreadable") } else { String::new() };
-        let summary = if added == 0 && removed == 0 && failed == 0 {
+        let added = count - failed - unreached;
+        let mut problems = Vec::new();
+        if failed > 0 {
+            problems.push(format!("{failed} unreadable"));
+        }
+        if unreached > 0 {
+            problems.push(format!("{unreached} not read (storage unreachable)"));
+        }
+        problems.extend(unavailable.iter().map(|name| format!("{name} could not be reached")));
+        let problems = if problems.is_empty() { String::new() } else { format!(", {}", problems.join(", ")) };
+        let summary = if added == 0 && removed == 0 && problems.is_empty() {
             format!("Library is up to date ({})", format_duration(start_time.elapsed()))
         } else {
             format!(
-                "Library updated: {added} new, {removed} removed{unreadable} ({})",
+                "Library updated: {added} new, {removed} removed{problems} ({})",
                 format_duration(start_time.elapsed())
             )
         };
+        let scan_summary = ScanSummary {
+            text: summary.clone(),
+            complete: problems.is_empty(),
+        };
+        Self::save_summary(&self.scan_state, &scan_summary);
+        _ = self.scan_state.remove(SCAN_RUNNING_KEY);
+        state_changes_sender.send(StateChangeEvent::MetadataScanSummary(scan_summary)).ok();
         if let Ok(mut latest) = self.scan_progress.lock() {
             *latest = None;
         }
@@ -665,7 +751,8 @@ impl MetadataService {
                 }
             }
         }
-        let added_remote = self.remote_diff(settings, &supported_exts, &mut unchanged_keys, reporter, checked);
+        let mut unavailable = Vec::new();
+        let added_remote = self.remote_diff(settings, &supported_exts, &mut unchanged_keys, &mut unavailable, reporter, checked);
         for song in self.song_repository.find_all() {
             if !unchanged_keys.contains(&song.file) {
                 deleted_keys.push(song.file);
@@ -675,6 +762,7 @@ impl MetadataService {
             added_files,
             added_remote,
             deleted_keys,
+            unavailable,
         }
     }
 
@@ -687,6 +775,7 @@ impl MetadataService {
         settings: &MetadataStoreSettings,
         supported_exts: &[String],
         unchanged_keys: &mut HashSet<String>,
+        unavailable: &mut Vec<String>,
         reporter: &ScanReporter,
         mut checked: usize,
     ) -> Vec<(String, DateTime<Utc>, u64)> {
@@ -698,6 +787,7 @@ impl MetadataService {
                 Ok(objects) => objects,
                 Err(e) => {
                     warn!("Remote library '{}' unavailable, keeping its songs: {e:#}", library.name);
+                    unavailable.push(library.name.clone());
                     let prefix = format!("{REMOTE_KEY_PREFIX}{}/", library.id);
                     unchanged_keys.extend(
                         self.song_repository
@@ -731,7 +821,9 @@ impl MetadataService {
         added
     }
 
-    /// Reads tags of the new files; returns (files handled, files that failed).
+    /// Reads tags of the new files; returns (files handled, files that
+    /// failed, remote files not read because their storage stayed
+    /// unreachable).
     ///
     /// Workers read files in parallel (open, tags, artwork); every song is
     /// saved here on the scanner thread, so album updates never race. APE and
@@ -742,10 +834,11 @@ impl MetadataService {
         remote: &[(String, DateTime<Utc>, u64)],
         reporter: &ScanReporter,
         settings: &MetadataStoreSettings,
-    ) -> (usize, usize) {
+    ) -> (usize, usize, usize) {
         let total = files.len() + remote.len();
         let mut done = 0;
         let mut failed = 0;
+        let mut unreached = 0;
 
         let (special, plain): (Vec<&String>, Vec<&String>) = files.iter().partition(|f| {
             Path::new(f.as_str())
@@ -779,27 +872,51 @@ impl MetadataService {
         info!("Reading {} files with {workers} workers", jobs.len());
 
         let next = AtomicUsize::new(0);
-        let (tx, rx) = std::sync::mpsc::channel::<(usize, Result<Song>)>();
+        let gate = OutageGate::new(MAX_OUTAGE);
+        let (tx, rx) = std::sync::mpsc::channel::<(usize, std::result::Result<Song, ReadError>)>();
         std::thread::scope(|scope| {
             for _ in 0..workers {
                 let tx = tx.clone();
-                let (next, jobs) = (&next, &jobs);
+                let (next, jobs, gate) = (&next, &jobs, &gate);
                 scope.spawn(move || {
                     loop {
                         let i = next.fetch_add(1, Ordering::Relaxed);
                         let Some(job) = jobs.get(i) else { break };
-                        if tx.send((i, Self::read_song(job, settings))).is_err() {
+                        let result = match job {
+                            ScanJob::Local(_) => Self::read_song(job, settings).map_err(ReadError::Unreadable),
+                            ScanJob::Remote { key, .. } => Self::read_remote_song(job, key, settings, gate),
+                        };
+                        if tx.send((i, result)).is_err() {
                             break;
                         }
                     }
                 });
             }
             drop(tx);
-            for (i, result) in rx {
+            loop {
+                let (i, result) = match rx.recv_timeout(time::Duration::from_secs(1)) {
+                    Ok(received) => received,
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                        if gate.is_down() {
+                            reporter.report(ScanPhase::Reading, done, total, "Connection lost, waiting for it to come back…");
+                        }
+                        continue;
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                };
                 let label = jobs[i].label();
-                if let Err(e) = result.and_then(|song| self.save_song(song)) {
-                    log::error!("Unable to scan file {label}. Error: {e}");
-                    failed += 1;
+                match result {
+                    Ok(song) => {
+                        if let Err(e) = self.save_song(song) {
+                            log::error!("Unable to save song {label}. Error: {e}");
+                            failed += 1;
+                        }
+                    }
+                    Err(ReadError::Unreadable(e)) => {
+                        log::error!("Unable to scan file {label}. Error: {e}");
+                        failed += 1;
+                    }
+                    Err(ReadError::Unreached) => unreached += 1,
                 }
                 done += 1;
                 reporter.report(ScanPhase::Reading, done, total, &short_file_name(label));
@@ -809,7 +926,40 @@ impl MetadataService {
             }
         });
         self.song_repository.flush();
-        (total, failed)
+        if unreached > 0 {
+            warn!("{unreached} remote files not read: storage unreachable for over {} min", MAX_OUTAGE.as_secs() / 60);
+        }
+        (total, failed, unreached)
+    }
+
+    /// Reads a remote file, waiting out network outages together with the
+    /// other scan workers (see [`OutageGate`]). Only failures while the
+    /// storage answers count against the file.
+    fn read_remote_song(job: &ScanJob, key: &str, settings: &MetadataStoreSettings, gate: &OutageGate) -> std::result::Result<Song, ReadError> {
+        // Bounds retries if the connection keeps flapping.
+        const MAX_READS: u32 = 10;
+        let mut attempts = 0;
+        for _ in 0..MAX_READS {
+            if !gate.wait() {
+                return Err(ReadError::Unreached);
+            }
+            let err = match Self::read_song(job, settings) {
+                Ok(song) => return Ok(song),
+                Err(e) => e,
+            };
+            match gate.after_failure(|| remote_store::is_reachable(settings, key), std::thread::sleep) {
+                Check::Unreachable => return Err(ReadError::Unreached),
+                Check::CameBack => warn!("Reading {key} failed during an outage, retrying: {err:#}"),
+                Check::Reachable => {
+                    attempts += 1;
+                    if attempts >= REMOTE_READ_ATTEMPTS {
+                        return Err(ReadError::Unreadable(err));
+                    }
+                    warn!("Reading {key} failed ({attempts}/{REMOTE_READ_ATTEMPTS}), retrying: {err:#}");
+                }
+            }
+        }
+        Err(ReadError::Unreached)
     }
 
     /// Reads one file's song (tags and artwork); no database access, so it
@@ -1058,4 +1208,28 @@ fn is_supported_file(path: &Path, supported_exts: &[String]) -> bool {
 /// apart from the uuid keys of hand-added stations.
 fn favorite_station_key(uuid: &str) -> String {
     format!("fav_{uuid}")
+}
+
+#[cfg(test)]
+mod scan_state_tests {
+    use super::*;
+
+    #[test]
+    fn a_leftover_scan_marker_becomes_an_interrupted_summary() {
+        let dir = format!("/tmp/rsptest_scan_state_{}", random_string::generate(12, "abcdefghijklmnop"));
+        {
+            let db = Database::builder(&dir).open().expect("open test db");
+            let scan_state = db.keyspace("scan_state", KeyspaceCreateOptions::default).expect("keyspace");
+            MetadataService::note_interrupted_scan(&scan_state);
+            assert!(scan_state.get(LAST_SUMMARY_KEY).unwrap().is_none(), "no marker, nothing to note");
+
+            scan_state.insert(SCAN_RUNNING_KEY, b"1").unwrap();
+            MetadataService::note_interrupted_scan(&scan_state);
+            let summary: ScanSummary = serde_json::from_slice(&scan_state.get(LAST_SUMMARY_KEY).unwrap().unwrap()).unwrap();
+            assert!(!summary.complete);
+            assert!(summary.text.contains("Interrupted"), "{}", summary.text);
+            assert!(scan_state.get(SCAN_RUNNING_KEY).unwrap().is_none(), "marker cleared");
+        }
+        _ = std::fs::remove_dir_all(&dir);
+    }
 }

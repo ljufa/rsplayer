@@ -161,13 +161,29 @@ Key points:
   connections, so Symphonia reports a real duration and user seeks work;
   anything else plays as a plain non-seekable stream. Stream agents carry no
   global timeout (it would also bound body reads and cut long tracks).
+  Instead, network sources (HTTP and remote-library) are opened and read on
+  a `source-io` worker thread (`interruptible_source`): the playback thread
+  waits for each open/read/seek in 100 ms slices, so Stop/Next interrupt a
+  connecting or stalled stream at once, and an operation that takes over
+  20 s fails as a stall and goes through the stream retry path.
+  `stop_current_song` waits at most 3 s for the playback thread (it runs
+  on the async command handler); each thread has its own stop flag, so one
+  left behind stays stopped and does not report state once a newer one runs.
 - **Remote libraries** (`metadata::remote_store`): S3-compatible storage
   configured in `MetadataStoreSettings.remote_libraries`. Nothing is mounted:
   the scanner lists objects (ListObjectsV2, via the sans-IO `rusty-s3`) and
   reads tags through presigned `GET` URLs wrapped in `HttpRangeSource`;
   playback opens the same way, with a fresh presigned URL per attempt (24 h
-  expiry). A failed listing keeps the library's songs instead of deleting
-  them. APE and SACD ISO are skipped (their readers need a file), and remote
+  expiry). A listing page gets three tries; a listing that still fails keeps
+  the library's songs instead of deleting them and is named in the scan
+  summary. Scan reads ride out network outages: chunk reads retry after a
+  short pause, and after a failed file read the workers share an
+  `OutageGate` (`metadata::outage_gate`). One worker checks whether the
+  storage answers at all (`remote_store::is_reachable`) and, while it does
+  not, keeps checking with growing pauses (up to 10 s apart, 5 min in all)
+  while the others wait instead of failing the rest of the file list; only
+  failures while the storage answers count against a file. Files left
+  unread are reported as "not read (storage unreachable)". APE and SACD ISO are skipped (their readers need a file), and remote
   songs are not loudness-analysed (that would download them in full).
   `/music/<rs3 key>` answers with a 307 to the presigned URL, and secrets are
   masked (`SECRET_MASK`) in `GET /api/settings` and restored on POST.
@@ -229,6 +245,7 @@ concern:
 | `play_statistics` | Play/skip/like counters per song key; `radio_uuid_*` keys hold the liked radio-browser stations |
 | `radio_stations` | Stations added by hand in the UI (`RadioStation` JSON keyed by a generated uuid), plus the details of liked radio-browser stations (keyed `fav_{stationuuid}`, `radio_browser_uuid` set) so Next/Prev can switch between favorites |
 | `loudness` | Integrated LUFS per song key |
+| `scan_state` | `running` marker while a library scan runs (a leftover one at startup means the scan was interrupted) and the last scan's `ScanSummary` JSON, sent to clients on `QueryScanStatus` |
 | `queue`, `queue_status`, `queue_random_history` | Queue items (insertion-ordered ids), current position/mode, random-mode history |
 | `playlist`, `playlist_list` | Saved playlist items (`{name}_{index}`) and headers |
 | `player_state` | Pause flag + last position for resume-on-restart, current `PlaybackSource`, queue progress saved when switching to radio/podcast |

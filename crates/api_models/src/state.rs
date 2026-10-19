@@ -72,6 +72,17 @@ pub struct ScanProgress {
     pub current: String,
 }
 
+/// Outcome of the last library scan, kept across restarts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScanSummary {
+    pub text: String,
+    /// False when songs may be missing: files that could not be read, a
+    /// remote library that could not be listed, or a scan that was
+    /// interrupted (app closed or killed) before it finished. Running the
+    /// scan again picks up what is missing.
+    pub complete: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ScanPhase {
     /// Walking music folders and listing remote libraries.
@@ -103,6 +114,9 @@ pub enum StateChangeEvent {
     MetadataScanProgress(ScanProgress),
     /// Human-readable summary of the finished scan.
     MetadataSongScanFinished(String),
+    /// The last scan's outcome: sent when a scan ends and, while no scan
+    /// runs, on `MetadataCommand::QueryScanStatus`.
+    MetadataScanSummary(ScanSummary),
     MetadataLocalItems(Vec<MetadataLibraryItem>),
     NotificationSuccess(String),
     NotificationError(String),

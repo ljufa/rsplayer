@@ -1061,6 +1061,8 @@ pub fn SettingsPage() -> Element {
             SettingsSection {
                 title: "Music Library",
                 icon: "library_music",
+                // Visible while collapsed: the last scan left songs out.
+                warning: state.metadata_scan_msg.read().as_ref().is_some_and(|s| !s.complete),
                 content: rsx! {
                     MusicLibraryContent {
                         settings,
@@ -1689,8 +1691,19 @@ fn MusicLibraryContent(
                         }
                     }
                 }
+                (None, Some(summary)) if summary.complete => rsx! {
+                    p { class: "text-xs text-base-content/60 mt-2 truncate", "Last update: {summary.text}" }
+                },
                 (None, Some(summary)) => rsx! {
-                    p { class: "text-xs text-base-content/60 mt-2 truncate", "Last update: {summary}" }
+                    div { class: "alert alert-warning mt-3 py-2 text-sm", role: "status",
+                        i { class: "material-icons", aria_hidden: "true", "warning" }
+                        div {
+                            p { "Last update: {summary.text}" }
+                            p { class: "text-xs opacity-80",
+                                "Some songs may be missing. Run Update library again to read them."
+                            }
+                        }
+                    }
                 },
                 (None, None) => rsx! {},
             }
@@ -1935,7 +1948,14 @@ fn unique_library_id(name: &str, existing: &[String]) -> String {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 #[component]
-fn SettingsSection(title: &'static str, icon: &'static str, content: Element) -> Element {
+fn SettingsSection(
+    title: &'static str,
+    icon: &'static str,
+    content: Element,
+    /// Shows a warning icon in the header.
+    #[props(default)]
+    warning: bool,
+) -> Element {
     let mut open = use_signal(|| false);
     rsx! {
         div { class: "border border-base-300 rounded-lg overflow-hidden",
@@ -1944,6 +1964,9 @@ fn SettingsSection(title: &'static str, icon: &'static str, content: Element) ->
                 onclick: move |_| open.toggle(),
                 i { class: "material-icons text-base text-primary", "{icon}" }
                 span { class: "flex-1 font-medium", "{title}" }
+                if warning {
+                    i { class: "material-icons text-base text-warning", title: "Needs attention", "warning" }
+                }
                 i { class: if open() { "material-icons text-base transition-transform rotate-180" } else { "material-icons text-base transition-transform" },
                     "expand_more"
                 }

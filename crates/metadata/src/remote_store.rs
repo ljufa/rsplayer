@@ -89,6 +89,30 @@ pub fn open_for_scan(settings: &MetadataStoreSettings, db_key: &str, len: u64) -
     Ok(ChunkedRangeSource::new(scan_agent().clone(), &url, len))
 }
 
+/// Whether the storage behind `db_key` answers at all.
+///
+/// Any HTTP response counts, even an error status: only a failed
+/// connection means the network or the server is down. The scanner asks
+/// this after a failed read to tell an outage (wait and retry) from an
+/// unreadable file.
+#[must_use]
+pub fn is_reachable(settings: &MetadataStoreSettings, db_key: &str) -> bool {
+    // A configuration error is no outage; the file fails as unreadable.
+    let Ok(url) = resolve_url(settings, db_key) else { return true };
+    match scan_agent().get(&url).header("Range", "bytes=0-0").call() {
+        Ok(mut resp) => {
+            // Read the byte so the connection goes back to the pool.
+            _ = resp.body_mut().read_to_vec();
+            true
+        }
+        Err(ureq::Error::StatusCode(_)) => true,
+        Err(e) => {
+            warn!("Remote storage unreachable: {e}");
+            false
+        }
+    }
+}
+
 /// Agent shared by all scan reads. ureq keeps idle connections per host, so
 /// parallel scan workers reuse their TLS connections across files.
 fn scan_agent() -> &'static ureq::Agent {
@@ -191,6 +215,24 @@ impl S3Store {
         action.sign(LIST_EXPIRY)
     }
 
+    /// A listing that fails part way would make the scan skip the
+    /// library's new files, so a page gets a few tries.
+    fn list_page_with_retry(&self, agent: &ureq::Agent, continuation: Option<&str>) -> Result<(Vec<RemoteObject>, Option<String>)> {
+        const ATTEMPTS: u32 = 3;
+        let mut attempt = 1;
+        loop {
+            match self.list_page(agent, continuation) {
+                Err(e) if attempt < ATTEMPTS => {
+                    let delay = Duration::from_secs(2u64.pow(attempt));
+                    warn!("{e:#} ({attempt}/{ATTEMPTS}), retrying in {}s", delay.as_secs());
+                    std::thread::sleep(delay);
+                    attempt += 1;
+                }
+                result => return result,
+            }
+        }
+    }
+
     fn list_page(&self, agent: &ureq::Agent, continuation: Option<&str>) -> Result<(Vec<RemoteObject>, Option<String>)> {
         let url = self.list_url(continuation);
         let body = agent
@@ -226,7 +268,7 @@ impl RemoteStore for S3Store {
         let mut all = Vec::new();
         let mut token: Option<String> = None;
         loop {
-            let (objects, next) = self.list_page(&agent, token.as_deref())?;
+            let (objects, next) = self.list_page_with_retry(&agent, token.as_deref())?;
             all.extend(objects);
             match next {
                 Some(t) if !t.is_empty() => token = Some(t),

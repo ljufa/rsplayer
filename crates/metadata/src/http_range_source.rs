@@ -232,6 +232,9 @@ const FIRST_CHUNK: u64 = 256 * 1024;
 /// Sequential reads double the chunk up to this size.
 const MAX_CHUNK: u64 = 4 * 1024 * 1024;
 const CHUNK_ATTEMPTS: u32 = 3;
+/// Pause before the second attempt, doubled before the third: rides out a
+/// short network blip. Longer outages are the scanner's to wait out.
+const CHUNK_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// Seekable HTTP source that fetches bounded `Range: bytes=a-b` chunks.
 ///
@@ -283,7 +286,10 @@ impl ChunkedRangeSource {
                     self.buf_start = self.pos;
                     return Ok(());
                 }
-                Err(e) if attempt < CHUNK_ATTEMPTS => warn!("Range read {}-{end} failed ({attempt}/{CHUNK_ATTEMPTS}): {e}", self.pos),
+                Err(e) if attempt < CHUNK_ATTEMPTS => {
+                    warn!("Range read {}-{end} failed ({attempt}/{CHUNK_ATTEMPTS}): {e}", self.pos);
+                    std::thread::sleep(CHUNK_RETRY_DELAY * 2u32.pow(attempt - 1));
+                }
                 Err(e) => return Err(e),
             }
         }

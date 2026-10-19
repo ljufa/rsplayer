@@ -100,6 +100,8 @@ pub fn handle_metadata_command(cmd: MetadataCommand, ctx: &CommandContext) {
         MetadataCommand::QueryScanStatus => {
             if let Some(progress) = ctx.metadata_service.scan_progress() {
                 ctx.send_event(StateChangeEvent::MetadataScanProgress(progress));
+            } else if let Some(summary) = ctx.metadata_service.last_scan_summary() {
+                ctx.send_event(StateChangeEvent::MetadataScanSummary(summary));
             }
         }
     }

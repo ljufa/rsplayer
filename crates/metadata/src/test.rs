@@ -466,6 +466,13 @@ mod metadata {
             other => panic!("expected the scan summary last, got {other:?}"),
         }
         assert_eq!(context.metadata_service.scan_progress(), None);
+        let summary = context.metadata_service.last_scan_summary().expect("summary saved");
+        assert!(summary.complete, "{summary:?}");
+        assert!(summary.text.starts_with("Library updated: 2 new, 1 removed ("), "{}", summary.text);
+        assert!(
+            events.iter().any(|ev| matches!(ev, StateChangeEvent::MetadataScanSummary(s) if s == &summary)),
+            "summary event sent"
+        );
     }
 
     #[test]

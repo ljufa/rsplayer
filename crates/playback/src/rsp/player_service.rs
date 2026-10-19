@@ -28,6 +28,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU8, AtomicU16, AtomicU32, Ordering},
 };
 use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 use thread_priority::{ThreadBuilder, ThreadPriority};
 use tokio::sync::broadcast::{Sender, error::RecvError};
 
@@ -112,7 +113,10 @@ pub struct PlayerService {
     queue_service: Arc<QueueService>,
     metadata_service: Arc<MetadataService>,
     playback_thread_handle: Arc<Mutex<Option<JoinHandle<PlaybackResult>>>>,
-    stop_signal: Arc<AtomicBool>,
+    /// Stop flag of the current playback thread. Each thread gets its own,
+    /// so one that `stop_current_song` gave up waiting for stays stopped
+    /// when the next one starts.
+    stop_signal: Arc<Mutex<Arc<AtomicBool>>>,
     /// Set when the playback thread ran off the end of the queue: the
     /// STOPPED it sends marks the song paused, but there is nothing to resume.
     queue_finished: Arc<AtomicBool>,
@@ -292,7 +296,7 @@ impl PlayerService {
             queue_service,
             metadata_service,
             playback_thread_handle: Arc::new(Mutex::new(None)),
-            stop_signal: Arc::new(AtomicBool::new(false)),
+            stop_signal: Arc::new(Mutex::new(Arc::new(AtomicBool::new(true)))),
             queue_finished: Arc::new(AtomicBool::new(false)),
             skip_to_time: Arc::new(AtomicU16::new(0)),
             last_known_time,
@@ -465,10 +469,25 @@ impl PlayerService {
         self.play_current();
     }
 
+    /// Stops the playback thread and waits for it, but at most
+    /// `STOP_WAIT`: this runs on the async command handler, and a thread
+    /// stuck in blocking I/O (network sources are interruptible, a hung
+    /// network mount is not) must not freeze the server. A thread given up on
+    /// keeps its own, set stop flag and exits when the I/O returns.
     pub fn stop_current_song(&self) -> Option<PlaybackResult> {
-        self.stop_signal.store(true, Ordering::Relaxed);
-        let handle = self.playback_thread_handle.lock().expect("lock poisoned").take();
-        handle.and_then(|h| h.join().ok())
+        const STOP_WAIT: Duration = Duration::from_secs(3);
+        self.stop_signal.lock().expect("lock poisoned").store(true, Ordering::Relaxed);
+        let handle = self.playback_thread_handle.lock().expect("lock poisoned").take()?;
+        let deadline = Instant::now() + STOP_WAIT;
+        while !handle.is_finished() {
+            if Instant::now() >= deadline {
+                warn!("Playback thread did not stop within {}s, leaving it behind", STOP_WAIT.as_secs());
+                self.changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
+                return None;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        handle.join().ok()
     }
 
     pub fn toggle_play_pause(&self) {
@@ -513,9 +532,10 @@ impl PlayerService {
 
     #[allow(clippy::too_many_lines)]
     fn play_all_in_queue(&self) -> JoinHandle<PlaybackResult> {
-        self.stop_signal.store(false, Ordering::Relaxed);
+        let stop_signal = Arc::new(AtomicBool::new(false));
+        *self.stop_signal.lock().expect("lock poisoned") = stop_signal.clone();
+        let current_stop_signal = self.stop_signal.clone();
         self.queue_finished.store(false, Ordering::Relaxed);
-        let stop_signal = self.stop_signal.clone();
         let queue_finished = self.queue_finished.clone();
         let skip_to_time = self.skip_to_time.clone();
         let queue = self.queue_service.clone();
@@ -570,6 +590,15 @@ impl PlayerService {
                 }
                 let mut retry_count = 0;
                 let mut consecutive_failures = 0;
+                // A thread that stop_current_song gave up waiting for must
+                // stay quiet once a newer one runs: its late STOPPED would
+                // override the new song's PLAYING.
+                let superseded = || !Arc::ptr_eq(&current_stop_signal.lock().expect("lock poisoned"), &stop_signal);
+                let send_stopped = || {
+                    if !superseded() {
+                        changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
+                    }
+                };
                 let result = loop {
                     let current_source = source.get();
                     let song = if current_source.is_queue() {
@@ -578,7 +607,7 @@ impl PlayerService {
                         source_navigator.as_ref().and_then(|n| n.song_for(&current_source))
                     };
                     let Some(song) = song else {
-                        changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
+                        send_stopped();
                         break PlaybackResult::QueueFinished;
                     };
 
@@ -684,7 +713,13 @@ impl PlayerService {
                     };
                     match play_result {
                         Ok(PlaybackResult::PlaybackStopped) => {
-                            changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
+                            send_stopped();
+                            break PlaybackResult::PlaybackStopped;
+                        }
+                        // Stop/Next/Prev interrupted opening or reading the
+                        // source; not a failure.
+                        Err(_) if stop_signal.load(Ordering::Relaxed) => {
+                            send_stopped();
                             break PlaybackResult::PlaybackStopped;
                         }
                         Err(err) => {
@@ -715,7 +750,7 @@ impl PlayerService {
                                     std::thread::sleep(std::time::Duration::from_millis(100));
                                 }
                                 if stop_signal.load(Ordering::Relaxed) {
-                                    changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
+                                    send_stopped();
                                     break PlaybackResult::PlaybackStopped;
                                 }
                                 // Resume where it dropped (podcasts); sources that
@@ -729,7 +764,7 @@ impl PlayerService {
                             // Stop/Next/Prev arrived meanwhile: the command side
                             // moves the queue, skipping here would advance twice.
                             if stop_signal.load(Ordering::Relaxed) {
-                                changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
+                                send_stopped();
                                 break PlaybackResult::PlaybackStopped;
                             }
                             consecutive_failures += 1;
@@ -775,11 +810,13 @@ impl PlayerService {
                     };
                     if !advanced {
                         queue_finished.store(true, Ordering::Relaxed);
-                        changes_tx.send(StateChangeEvent::PlaybackStateEvent(PlayerState::STOPPED)).ok();
+                        send_stopped();
                         break PlaybackResult::QueueFinished;
                     }
                 };
-                loudness_service.set_playback_active(false);
+                if !superseded() {
+                    loudness_service.set_playback_active(false);
+                }
                 result
             })
             .expect("failed to spawn playback thread")

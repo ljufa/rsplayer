@@ -4,7 +4,8 @@
 //! `player_service` (thread lifecycle, queue advance) → `symphonia`
 //! (`play_file` decode loop) → `audio_output` (`AudioOutput`: ring buffer +
 //! cpal stream, resampling, EQ, VU, software volume) → device.
-//! `audio_source` resolves paths/URLs into probed readers; `dsd` bypasses
+//! `audio_source` resolves paths/URLs into probed readers
+//! (`interruptible_source` runs network ones on a worker thread); `dsd` bypasses
 //! the PCM chain entirely; `tee`/`sync_sink` are the multiroom taps
 //! (documented in `docs/multiroom_architecture.md`).
 
@@ -13,6 +14,7 @@ pub mod audio_host;
 mod audio_source;
 mod device_capabilities;
 mod dsd;
+mod interruptible_source;
 mod playback_config;
 mod playback_context;
 pub mod player_service;

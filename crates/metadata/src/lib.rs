@@ -26,6 +26,7 @@ pub mod loudness_analyzer;
 pub mod loudness_repository;
 pub mod loudness_service;
 pub mod metadata_service;
+pub mod outage_gate;
 pub mod play_statistic_repository;
 pub mod playlist_service;
 pub mod ports;
