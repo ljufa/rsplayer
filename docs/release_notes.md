@@ -1,5 +1,35 @@
 # Release Notes
 
+## v5.5.2 (2026-10-19)
+
+### Improvements
+
+#### Remote library updates survive network drops
+
+When the connection to a remote (S3) library dropped during an update, for example a phone switching networks or Wi-Fi going to sleep, every song read at that moment failed, and a few seconds offline could mark hundreds of songs as unreadable. Now the update notices the outage, shows "Connection lost, waiting for it to come back…" and waits up to 5 minutes, then continues where it stopped. A remote library that cannot be listed is named in the update summary instead of being silently skipped.
+
+#### Incomplete library updates are shown
+
+If an update did not finish (the app was closed, or the connection stayed down) or some songs could not be read, Settings, Music Library shows a warning, and a warning icon appears on the section header even while it is collapsed. Press **Update library** again and only the missing songs are read. The result of the last update is now kept across restarts.
+
+#### Android: library updates keep running in the background
+
+With nothing playing, Android froze the app soon after it left the screen, so a large library update stopped half way and the rest of the songs stayed missing. Updates now keep running with the screen off or another app open, with a notification showing their progress; it disappears when the update is done.
+
+#### The play button shows when a stream is buffering
+
+Starting a radio station, podcast or remote song can take a few seconds while it connects. The play button now shows a spinner until the music starts, instead of looking like nothing happened. Clicking it stops the stream.
+
+### Fixes
+
+#### Stop and Next respond while a stream is connecting
+
+Pressing pause, stop or next while a radio, podcast or remote song was still connecting did nothing until the connection succeeded or failed, and meanwhile the player ignored all other commands. A stream that stopped sending data could even freeze the player completely. These now respond at once.
+
+#### Streams that stop sending data reconnect
+
+A stream whose connection stays open but stops delivering audio is now treated as dropped after 20 seconds and reconnected, instead of staying silent forever.
+
 ## v5.5.1 (2026-10-14)
 
 ### Improvements

@@ -1,0 +1,3 @@
+Library updates keep running in the background with a progress notification, and wait out network drops instead of failing songs. An unfinished update is shown in Settings; Update library reads only what is missing.
+
+The play button shows a spinner while a stream connects, and Stop and Next now respond at once.
