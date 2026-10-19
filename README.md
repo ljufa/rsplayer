@@ -150,6 +150,14 @@ volumes:
 
 Control RSPlayer from [Home Assistant](https://www.home-assistant.io/) with the [rsplayer_hacs_plugin](https://github.com/ljufa/rsplayer_hacs_plugin). For DIY builds, see [rsplayer_hardware](https://github.com/ljufa/rsplayer_hardware) and [rsplayer_firmware](https://github.com/ljufa/rsplayer_firmware).
 
+## AI notice
+
+RSPlayer is built by a human maintainer who uses generative AI as a development tool. The maintainer decides what gets built, reviews the results, tests every release and signs off on everything that ships.
+
+RSPlayer itself contains no AI and makes no requests to AI services.
+
+Bug reports and pull requests are welcome whether or not AI tools were involved in making them. Everything that gets merged is reviewed by a person.
+
 ## Contributing
 
 Contributions are welcome - open an issue or a pull request. See [Building from source](https://docs.rsplayer.de/#/build).
