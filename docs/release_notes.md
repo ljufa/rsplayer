@@ -10,7 +10,7 @@ When the connection to a remote (S3) library dropped during an update, for examp
 
 #### Incomplete library updates are shown
 
-If an update did not finish (the app was closed, or the connection stayed down) or some songs could not be read, Settings, Music Library shows a warning, and a warning icon appears on the section header even while it is collapsed. Press **Update library** again and only the missing songs are read. The result of the last update is now kept across restarts.
+If an update did not finish (the app was closed, or the connection stayed down), Settings, Music Library shows a warning, and a warning icon appears on the section header even while it is collapsed. Press **Update library** again and only the missing songs are read. Files that cannot be read at all (for example a damaged file) are now named in the update summary, up to three of them, so you can find and fix them. The result of the last update is now kept across restarts.
 
 #### Android: library updates keep running in the background
 

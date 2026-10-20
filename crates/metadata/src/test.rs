@@ -402,6 +402,25 @@ mod metadata {
     }
 
     #[test]
+    fn an_unreadable_file_is_named_but_does_not_make_the_scan_incomplete() {
+        let context = TestContext::new();
+        let music_dir = format!("{}/music", context.db_dir);
+        std::fs::create_dir_all(format!("{music_dir}/album")).expect("failed to create dir");
+        fs::copy("assets/aa/music.flac", format!("{music_dir}/album/good.flac")).expect("Failed to copy file");
+        fs::write(format!("{music_dir}/album/broken.flac"), b"not audio at all").expect("Failed to write file");
+        context.metadata_service.update_settings(MetadataStoreSettings {
+            music_directory: music_dir,
+            ..Default::default()
+        });
+
+        context.metadata_service.scan_music_dir(false, &context.sender);
+        let summary = context.metadata_service.last_scan_summary().expect("summary saved");
+        assert!(summary.complete, "a rescan cannot fix a broken file: {summary:?}");
+        assert!(summary.text.contains("1 new, 0 removed, 1 unreadable"), "{}", summary.text);
+        assert!(summary.text.ends_with(". Unreadable: album/broken.flac"), "{}", summary.text);
+    }
+
+    #[test]
     fn should_incrementally_scan_music_dir_add_2_new_files() {
         let mut context = TestContext::new();
         std::fs::create_dir_all(&context.db_dir).expect("failed to create dir");

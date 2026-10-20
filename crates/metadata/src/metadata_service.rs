@@ -601,7 +601,7 @@ impl MetadataService {
             added_remote.len(),
             deleted_db_keys.len()
         );
-        let (count, failed, unreached) = self.add_songs_to_db(&added_files, &added_remote, &reporter, &settings);
+        let (count, unreadable, unreached) = self.add_songs_to_db(&added_files, &added_remote, &reporter, &settings);
 
         let removed = if full_scan { 0 } else { deleted_db_keys.len() };
         if !full_scan {
@@ -618,17 +618,21 @@ impl MetadataService {
                 }
             }
         }
-        let added = count - failed - unreached;
+        let added = count - unreadable.len() - unreached;
+        // What another update can fix: these make the summary incomplete.
         let mut problems = Vec::new();
-        if failed > 0 {
-            problems.push(format!("{failed} unreadable"));
-        }
         if unreached > 0 {
             problems.push(format!("{unreached} not read (storage unreachable)"));
         }
         problems.extend(unavailable.iter().map(|name| format!("{name} could not be reached")));
+        let complete = problems.is_empty();
+        // A broken file fails the same way every time, so it doesn't make the
+        // update incomplete; it is named, as the log may not show it.
+        if !unreadable.is_empty() {
+            problems.insert(0, format!("{} unreadable", unreadable.len()));
+        }
         let problems = if problems.is_empty() { String::new() } else { format!(", {}", problems.join(", ")) };
-        let summary = if added == 0 && removed == 0 && problems.is_empty() {
+        let mut summary = if added == 0 && removed == 0 && problems.is_empty() {
             format!("Library is up to date ({})", format_duration(start_time.elapsed()))
         } else {
             format!(
@@ -636,9 +640,17 @@ impl MetadataService {
                 format_duration(start_time.elapsed())
             )
         };
+        if !unreadable.is_empty() {
+            const SHOWN: usize = 3;
+            let mut names = unreadable[..unreadable.len().min(SHOWN)].join(", ");
+            if unreadable.len() > SHOWN {
+                names = format!("{names} and {} more", unreadable.len() - SHOWN);
+            }
+            summary = format!("{summary}. Unreadable: {names}");
+        }
         let scan_summary = ScanSummary {
             text: summary.clone(),
-            complete: problems.is_empty(),
+            complete,
         };
         Self::save_summary(&self.scan_state, &scan_summary);
         _ = self.scan_state.remove(SCAN_RUNNING_KEY);
@@ -821,9 +833,9 @@ impl MetadataService {
         added
     }
 
-    /// Reads tags of the new files; returns (files handled, files that
-    /// failed, remote files not read because their storage stayed
-    /// unreachable).
+    /// Reads tags of the new files; returns (files handled, library paths
+    /// of the files that could not be read, remote files not read because
+    /// their storage stayed unreachable).
     ///
     /// Workers read files in parallel (open, tags, artwork); every song is
     /// saved here on the scanner thread, so album updates never race. APE and
@@ -834,11 +846,16 @@ impl MetadataService {
         remote: &[(String, DateTime<Utc>, u64)],
         reporter: &ScanReporter,
         settings: &MetadataStoreSettings,
-    ) -> (usize, usize, usize) {
+    ) -> (usize, Vec<String>, usize) {
         let total = files.len() + remote.len();
         let mut done = 0;
-        let mut failed = 0;
+        let mut unreadable = Vec::new();
         let mut unreached = 0;
+        // Shown in the scan summary: no music-directory prefix, no `rs3:<id>/`.
+        let library_path = |label: &str| {
+            remote_store::split_remote_key(label)
+                .map_or_else(|| Self::full_path_to_database_key(settings, label), |(_, path)| path.to_string())
+        };
 
         let (special, plain): (Vec<&String>, Vec<&String>) = files.iter().partition(|f| {
             Path::new(f.as_str())
@@ -849,7 +866,7 @@ impl MetadataService {
             reporter.report(ScanPhase::Reading, done, total, &short_file_name(file));
             if let Err(e) = self.scan_single_file(Path::new(file), settings) {
                 log::error!("Unable to scan file {file}. Error: {e}");
-                failed += 1;
+                unreadable.push(library_path(file));
             }
             done += 1;
         }
@@ -909,12 +926,12 @@ impl MetadataService {
                     Ok(song) => {
                         if let Err(e) = self.save_song(song) {
                             log::error!("Unable to save song {label}. Error: {e}");
-                            failed += 1;
+                            unreadable.push(library_path(label));
                         }
                     }
                     Err(ReadError::Unreadable(e)) => {
                         log::error!("Unable to scan file {label}. Error: {e}");
-                        failed += 1;
+                        unreadable.push(library_path(label));
                     }
                     Err(ReadError::Unreached) => unreached += 1,
                 }
@@ -929,7 +946,8 @@ impl MetadataService {
         if unreached > 0 {
             warn!("{unreached} remote files not read: storage unreachable for over {} min", MAX_OUTAGE.as_secs() / 60);
         }
-        (total, failed, unreached)
+        unreadable.sort();
+        (total, unreadable, unreached)
     }
 
     /// Reads a remote file, waiting out network outages together with the

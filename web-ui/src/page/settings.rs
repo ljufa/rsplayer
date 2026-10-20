@@ -1692,7 +1692,8 @@ fn MusicLibraryContent(
                     }
                 }
                 (None, Some(summary)) if summary.complete => rsx! {
-                    p { class: "text-xs text-base-content/60 mt-2 truncate", "Last update: {summary.text}" }
+                    // Wraps: it may name unreadable files.
+                    p { class: "text-xs text-base-content/60 mt-2 break-words", "Last update: {summary.text}" }
                 },
                 (None, Some(summary)) => rsx! {
                     div { class: "alert alert-warning mt-3 py-2 text-sm", role: "status",
