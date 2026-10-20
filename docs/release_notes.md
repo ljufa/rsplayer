@@ -20,6 +20,10 @@ With nothing playing, Android froze the app soon after it left the screen, so a 
 
 Starting a radio station, podcast or remote song can take a few seconds while it connects. The play button now shows a spinner until the music starts, instead of looking like nothing happened. Clicking it stops the stream.
 
+#### Bigger, easier to use mini player
+
+The player bar at the bottom of the Queue, Library and Settings pages is now taller and shows the album cover, with larger previous, play and next buttons that are easier to hit on a touchscreen. On wider screens the volume slider is much wider and gets a mute button and the volume in percent, and the elapsed and total time of the song are shown under the title.
+
 ### Fixes
 
 #### Stop and Next respond while a stream is connecting

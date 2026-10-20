@@ -1270,39 +1270,67 @@ fn FooterPlayer() -> Element {
     let title = song.as_ref().and_then(|s| s.title.clone()).unwrap_or_default();
     let artist = song.as_ref().and_then(|s| s.artist.clone()).unwrap_or_default();
     let album = song.as_ref().and_then(|s| s.album.clone()).unwrap_or_default();
+    let subtitle = match (artist.is_empty(), album.is_empty()) {
+        (false, false) => format!("{artist} · {album}"),
+        (false, true) => artist,
+        _ => album,
+    };
+    let cover = state.album_image.read().clone();
     let cur = progress.current_time.as_secs();
     let tot = progress.total_time.as_secs();
     let pct = if tot > 0 { (cur as f64 / tot as f64 * 100.0) as u8 } else { 0 };
+    let is_muted = volume.current == 0;
+    let vol_pct = if volume.max > 0 {
+        (f32::from(volume.current) / f32::from(volume.max) * 100.0) as u8
+    } else {
+        0
+    };
 
     rsx! {
         div { class: "player-footer",
-            div { class: "w-full bg-base-300 h-0.5",
-                div { class: "bg-primary h-0.5", style: "width:{pct}%" }
+            div { class: "w-full bg-base-content/10 h-1",
+                div { class: "bg-primary h-1 transition-[width] duration-500", style: "width:{pct}%" }
             }
-            div { class: "flex items-center gap-3 px-3 py-3",
+            div { class: "flex items-center gap-3 px-3 py-2.5 sm:gap-4 sm:px-4 sm:py-3",
                 a {
-                    class: "flex-1 min-w-0 cursor-pointer",
+                    class: "flex flex-1 min-w-0 items-center gap-3 cursor-pointer",
                     href: "/",
                     onclick: move |e| {
                         e.prevent_default();
                         navigate(path_sig, "/");
                     },
-                    p { class: "text-sm font-medium truncate", "{title}" }
-                    p { class: "text-xs text-base-content/50 truncate", "{artist}  {album}" }
+                    div { class: "player-footer__cover",
+                        if let Some(src) = cover {
+                            img { src, alt: "", class: "w-full h-full object-cover" }
+                        } else {
+                            i { class: "material-icons text-base-content/40", "music_note" }
+                        }
+                    }
+                    div { class: "min-w-0",
+                        p { class: "text-sm sm:text-base font-medium truncate", "{title}" }
+                        p { class: "text-xs sm:text-sm text-base-content/60 truncate", "{subtitle}" }
+                        if tot > 0 {
+                            p { class: "hidden sm:block text-xs text-base-content/50 tabular-nums",
+                                "{page::player::format_time(cur)} / {page::player::format_time(tot)}"
+                            }
+                        }
+                    }
                 }
-                div { class: "flex items-center gap-2",
+                div { class: "flex items-center sm:gap-2",
                     button {
-                        class: "btn btn-ghost btn-xs",
+                        class: "btn btn-ghost btn-circle btn-md",
+                        title: "Previous",
                         onclick: move |_| ws_user_cmd(&ws, &UserCommand::Player(PlayerCommand::Prev)),
                         i { class: "material-icons", "skip_previous" }
                     }
                     button {
-                        class: "btn btn-primary btn-circle btn-sm",
+                        class: "btn btn-primary btn-circle btn-md",
+                        title: if playing { "Pause" } else { "Play" },
                         onclick: move |_| ws_user_cmd(&ws, &UserCommand::Player(PlayerCommand::TogglePlay)),
                         if buffering {
-                            span { class: "loading loading-spinner loading-xs" }
+                            span { class: "loading loading-spinner loading-sm" }
                         } else {
-                            i { class: "material-icons",
+                            i { class: "material-icons text-3xl",
                                 if playing {
                                     "pause"
                                 } else {
@@ -1312,24 +1340,40 @@ fn FooterPlayer() -> Element {
                         }
                     }
                     button {
-                        class: "btn btn-ghost btn-xs",
+                        class: "btn btn-ghost btn-circle btn-md",
+                        title: "Next",
                         onclick: move |_| ws_user_cmd(&ws, &UserCommand::Player(PlayerCommand::Next)),
                         i { class: "material-icons", "skip_next" }
                     }
                 }
-                div { class: "hidden sm:flex items-center gap-1 w-24",
-                    i { class: "material-icons text-xs text-base-content/50", "volume_down" }
+                div { class: "hidden sm:flex items-center gap-1 w-44 md:w-52",
+                    button {
+                        class: "btn btn-ghost btn-circle btn-sm",
+                        title: if is_muted { "Unmute" } else { "Mute" },
+                        onclick: move |_| ws_system(&ws, SystemRequest::ToggleMute),
+                        i { class: "material-icons text-base-content/70",
+                            if is_muted {
+                                "volume_off"
+                            } else if vol_pct < 50 {
+                                "volume_down"
+                            } else {
+                                "volume_up"
+                            }
+                        }
+                    }
                     range::RangeSlider {
-                        class: "range range-xs flex-1",
+                        class: "range range-primary range-sm flex-1",
                         min: i64::from(volume.min),
                         max: i64::from(volume.max),
                         value: i64::from(volume.current),
+                        aria_label: "Volume",
                         on_commit: move |v: String| {
                             if let Ok(v) = v.parse::<u8>() {
                                 ws_system(&ws, SystemRequest::SetVol(v));
                             }
                         },
                     }
+                    span { class: "w-9 text-right text-xs text-base-content/60 tabular-nums", "{vol_pct}%" }
                 }
             }
         }
