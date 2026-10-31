@@ -11,6 +11,8 @@ RSPlayer is an open-source music player written in Rust, with a bit-perfect play
 
 The app runs the player engine on the device itself. The same engine can also run as a headless server on a NAS or Raspberry Pi.
 
+The player has a web interface, which by default only the phone itself can reach. Settings, Remote Access can open it to other devices on the same network; there is no login then, so anyone on that network can control playback and read your music. Multiroom uses its own connection and works either way.
+
 Online services, all contacted directly from the device:
 <ul>
 <li>radio-browser.info: station search and discovery on the Radio page</li>
@@ -19,4 +21,4 @@ Online services, all contacted directly from the device:
 <li>Apple Podcasts (iTunes Search) or Podcast Index: podcast search, only when chosen as the search directory in Settings, Podcasts (off by default; podcasts can always be added by feed URL)</li>
 </ul>
 
-Music access is limited to audio files in shared storage (permission to read audio and images). Optional battery optimization exemption keeps playback alive with the screen off.
+Music access is limited to audio files in shared storage (permission to read audio files only). Optional battery optimization exemption keeps playback alive with the screen off.

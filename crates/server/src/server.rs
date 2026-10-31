@@ -11,11 +11,11 @@
 use std::collections::HashMap;
 use std::env;
 use std::future::Future;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use axum::{
     body::Body,
@@ -128,12 +128,12 @@ pub fn start(
         }
     };
 
-    let (http_port, https_port, bind_addr) = get_server_config();
+    let (http_port, https_port, bind_addr) = get_server_config(config);
 
     let http_app = app.clone();
     let http_handle = async move {
         let addr = SocketAddr::new(bind_addr, http_port);
-        info!("HTTP is listening on port {http_port}");
+        info!("HTTP is listening on {bind_addr} port {http_port}");
         if let Err(e) = axum_server::bind(addr).serve(http_app.into_make_service()).await {
             error!("HTTP server exited with error: {e}");
         }
@@ -191,7 +191,7 @@ pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Out
         })
         .layer(cors);
 
-    let (http_port, _, bind_addr) = get_server_config();
+    let (http_port, _, bind_addr) = get_server_config(config);
 
     async move {
         let addr = SocketAddr::new(bind_addr, http_port);
@@ -238,7 +238,10 @@ async fn get_settings(State(state): State<AppState>, Query(query): Query<HashMap
     settings.demo_mode = env::var("DEMO_MODE").is_ok();
     settings.desktop_mode = env::var("RSPLAYER_DESKTOP").is_ok();
     settings.install_method = hardware::platform::detect_install_method();
-    if settings.desktop_mode {
+    // Only while the server really listens on the network: a changed allow_remote_access
+    // takes effect after the restart.
+    settings.remote_access_url = None;
+    if settings.desktop_mode && LISTEN_ADDR.get().is_some_and(IpAddr::is_unspecified) {
         let port = env::var("PORT").unwrap_or_else(|_| "8000".to_string());
         settings.remote_access_url = local_ip().map(|ip| format!("http://{ip}:{port}"));
     }
@@ -613,7 +616,7 @@ async fn spa_or_static_fallback(uri: Uri, _req: Request) -> Response {
             .unwrap(),
         None => Response::builder()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Body::from("index.html not embedded — run `cargo make build_ui_release` first"))
+            .body(Body::from("index.html not embedded: run `cargo make build_ui_release` first"))
             .unwrap(),
     }
 }
@@ -714,7 +717,10 @@ fn user_disconnected(my_id: usize) {
     info!("Number of active websockets is: {current_users}");
 }
 
-fn get_server_config() -> (u16, u16, IpAddr) {
+/// The address the HTTP server listens on, chosen at startup.
+static LISTEN_ADDR: OnceLock<IpAddr> = OnceLock::new();
+
+fn get_server_config(config: &Config) -> (u16, u16, IpAddr) {
     let http_port = env::var("PORT")
         .unwrap_or_else(|_| "8000".to_string())
         .parse::<u16>()
@@ -725,12 +731,24 @@ fn get_server_config() -> (u16, u16, IpAddr) {
         .parse::<u16>()
         .expect("TLS_PORT is not a valid port number");
 
-    let bind_addr = env::var("BIND_ADDR")
-        .unwrap_or_else(|_| "0.0.0.0".to_string())
-        .parse::<IpAddr>()
-        .expect("BIND_ADDR is not a valid IP address");
+    let bind_addr = env::var("BIND_ADDR").map_or_else(
+        |_| default_bind_addr(env::var_os("RSPLAYER_DESKTOP").is_some(), config.get_settings().allow_remote_access),
+        |addr| addr.parse::<IpAddr>().expect("BIND_ADDR is not a valid IP address"),
+    );
+    _ = LISTEN_ADDR.set(bind_addr);
 
     (http_port, https_port, bind_addr)
+}
+
+/// The headless server always listens on the network: other devices are what it is for. The
+/// desktop and Android app only do when `allow_remote_access` is on, because nothing in front
+/// of the API asks for a login.
+const fn default_bind_addr(desktop_mode: bool, allow_remote_access: bool) -> IpAddr {
+    if desktop_mode && !allow_remote_access {
+        IpAddr::V4(Ipv4Addr::LOCALHOST)
+    } else {
+        IpAddr::V4(Ipv4Addr::UNSPECIFIED)
+    }
 }
 
 /// Returns the machine's outbound local IPv4 address by briefly connecting a
@@ -739,4 +757,17 @@ fn local_ip() -> Option<IpAddr> {
     let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
     socket.connect("8.8.8.8:80").ok()?;
     Some(socket.local_addr().ok()?.ip())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn app_listens_on_localhost_unless_remote_access_is_allowed() {
+        assert_eq!(default_bind_addr(true, false), IpAddr::V4(Ipv4Addr::LOCALHOST));
+        assert_eq!(default_bind_addr(true, true), IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+        // The headless server ignores the setting.
+        assert_eq!(default_bind_addr(false, false), IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+    }
 }

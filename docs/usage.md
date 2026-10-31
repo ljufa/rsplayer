@@ -251,6 +251,7 @@ Configure RSPlayer settings. For detailed configuration options, see the [Config
 | Section | Description |
 |---------|-------------|
 | Appearance | Theme selection, album art background and cover download (Last.fm) |
+| Remote Access | Desktop app and Android: allow other devices on the network to open the player (off by default on Android) |
 | Playback | Audio interface, auto-resume |
 | Volume Control | Volume backend, mixer, step |
 | Visualization & Normalization | Visualization, loudness normalization |

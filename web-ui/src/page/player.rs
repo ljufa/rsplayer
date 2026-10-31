@@ -307,7 +307,7 @@ fn TrackInfo(song: Option<Song>, player_info: Option<PlayerInfo>) -> Element {
                     div { class: "skeleton skeleton-player-artist" }
                 }
                 p { class: "text-base-content/30 text-sm mt-5",
-                    "Ready to play — add songs from your library"
+                    "Ready to play: add songs from your library"
                 }
             }
         },
@@ -629,7 +629,7 @@ fn FollowerBanner(ws: Signal<Option<WebSocket>>, group: Signal<api_models::state
     rsx! {
         div { class: "alert alert-info shadow-sm mb-4",
             i { class: "material-icons text-lg", "speaker_group" }
-            span { "Grouped with '{leader}' — playback is controlled by the leader." }
+            span { "Grouped with '{leader}': playback is controlled by the leader." }
             button {
                 class: "btn btn-sm btn-outline",
                 onclick: move |_| ws_send(&ws, &UserCommand::Multiroom(MultiroomCommand::LeaveGroup)),

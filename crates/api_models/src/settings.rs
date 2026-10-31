@@ -49,6 +49,13 @@ pub struct Settings {
     pub desktop_mode: bool,
     #[serde(default)]
     pub remote_access_url: Option<String>,
+    /// Desktop app and Android: listen on all network interfaces so other devices can
+    /// open the web UI. Off: localhost only. The server has no login, so this is off by
+    /// default on Android, where the phone often joins networks it doesn't trust. Ignored
+    /// by the headless server, which always listens on the network (`BIND_ADDR` overrides
+    /// both). Takes effect after a restart.
+    #[serde(default = "default_allow_remote_access")]
+    pub allow_remote_access: bool,
     #[serde(default)]
     pub ui_preferences: UiPreferences,
     #[serde(default)]
@@ -919,6 +926,12 @@ impl Default for UsbCmdChannelSettings {
 pub const DEFAULT_ALSA_PCM_DEVICE: &str = "hw:0";
 pub const DEFAULT_ALSA_MIXER: &str = "0,Master";
 
+/// Off on Android (the binary the phone runs), on elsewhere. Evaluated where the settings
+/// are deserialized, so Android installs that predate the field get it off too.
+const fn default_allow_remote_access() -> bool {
+    !cfg!(target_os = "android")
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -941,6 +954,7 @@ impl Default for Settings {
             demo_mode: false,
             desktop_mode: false,
             remote_access_url: None,
+            allow_remote_access: default_allow_remote_access(),
             ui_preferences: UiPreferences::default(),
             multiroom_settings: MultiroomSettings::default(),
             install_method: InstallMethod::default(),

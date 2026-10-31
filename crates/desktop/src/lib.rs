@@ -260,14 +260,30 @@ fn maximize_on_small_monitor(window: &WebviewWindow) {
 fn data_dir() -> PathBuf {
     #[cfg(target_os = "android")]
     {
-        env::var_os("RSPLAYER_DATA_DIR")
-            .map(PathBuf::from)
-            .expect("RSPLAYER_DATA_DIR must be set by the Android host before the Rust entry point runs")
+        env::var_os("RSPLAYER_DATA_DIR").map_or_else(android_files_dir, PathBuf::from)
     }
     #[cfg(not(target_os = "android"))]
     {
         dirs::config_dir().map(|p| p.join("rsplayer")).unwrap_or_else(|| PathBuf::from("."))
     }
+}
+
+/// The Kotlin host's `filesDir/rsplayer`, for when `RSPLAYER_DATA_DIR` did not
+/// arrive. That happens when an arm64 build runs under ARM translation on an
+/// x86 device (emulator, Chromebook): `Os.setenv` writes the host libc's
+/// environment, and the translated code reads its own copy.
+#[cfg(target_os = "android")]
+fn android_files_dir() -> PathBuf {
+    use std::os::unix::fs::MetadataExt;
+    // The process name is the package, optionally followed by `:<process>`.
+    let cmdline = std::fs::read("/proc/self/cmdline").expect("read /proc/self/cmdline");
+    let name = cmdline.split(|&b| b == 0).next().unwrap_or_default();
+    let package = String::from_utf8_lossy(name).split(':').next().unwrap_or_default().to_string();
+    // Android user id (0 = owner, others for work profiles and secondary users).
+    let user = std::fs::metadata("/proc/self").map_or(0, |m| m.uid() / 100_000);
+    let dir = PathBuf::from(format!("/data/user/{user}/{package}/files/rsplayer"));
+    warn!("RSPLAYER_DATA_DIR not set (ARM translation?), using {}", dir.display());
+    dir
 }
 
 /// Start the backend as a tokio task and arm `shutdown` for it.

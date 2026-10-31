@@ -292,7 +292,7 @@ cargo make run_android_dev
 # Debug-signed universal APK (arm64 + x86_64) for `adb install`
 cargo make build_android_dev
 
-# Release APK + AAB (arm64 + armv7; x86_64 is left out) into target/android/pkg/
+# Release APK + AAB (arm64 + armv7) and one APK per ABI (arm64, armv7, x86_64) into target/android/pkg/
 # (signed when crates/desktop/gen/android/keystore.properties exists — see
 # https://tauri.app/distribute/sign/android/)
 cargo make build_android_release
@@ -302,7 +302,8 @@ cargo make build_android_release
 
 The "Full release" workflow builds the Android app in the `build_android` job and attaches
 to the draft release the universal `rsplayer_<version>_android.apk`, plus one signed APK per
-ABI: `rsplayer_<version>_android_arm64-v8a.apk` and `rsplayer_<version>_android_armeabi-v7a.apk`.
+ABI: `rsplayer_<version>_android_arm64-v8a.apk`, `rsplayer_<version>_android_armeabi-v7a.apk` and
+`rsplayer_<version>_android_x86_64.apk` (emulators and x86 Chromebooks).
 The job runs on a self-hosted runner carrying the `android` label, as a job `container:` on
 `ghcr.io/ljufa/rsplayer-android-builder:latest` (built from `docker/Dockerfile.android` by
 `build-images.yml`), so the runner itself needs only Docker — none of the SDK/NDK/JDK/rustup
@@ -374,10 +375,15 @@ fails with a clear message if the values and `Cargo.toml` disagree.
 
 The APK's own version code adds one digit for the ABI: `10 * versionCode + abi`. The F-Droid
 recipe builds one APK per ABI and sets `RSPLAYER_ABI_CODE` (armeabi-v7a 1, arm64-v8a 2, x86 3,
-x86_64 4; unset gives 0, e.g. the universal APK). F-Droid ships armeabi-v7a and arm64-v8a only,
-so 5.0.0 becomes 50000001 and 50000002. F-Droid takes the changelog from
+x86_64 4; unset gives 0, e.g. the universal APK). F-Droid ships armeabi-v7a, arm64-v8a and
+x86_64, so 5.0.0 becomes 50000001, 50000002 and 50000004. F-Droid takes the changelog from
 `fastlane/metadata/android/en-US/changelogs/` named after the highest of these
-(`50000002.txt`), so add a new file per release.
+(`50000004.txt` since 5.6.0, `…2.txt` before), so add a new file per release.
+
+x86_64 exists for emulators and x86 Chromebooks. The arm64 build does run there under ARM
+translation, but the translated code reads its own copy of the environment, so the variables
+the Kotlin host sets with `Os.setenv` never arrive (the Rust side falls back to defaults for
+all of them, including the data dir).
 
 ## Output
 

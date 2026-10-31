@@ -1,5 +1,31 @@
 # Release Notes
 
+## v5.6.0 (2026-10-31)
+
+### Improvements
+
+#### Remote access is a setting, off by default on Android
+
+The player has no login, so whoever can reach its web interface can control playback, change settings and download the music. The desktop and Android apps used to listen on the whole network. They now listen only on the device itself unless "Allow access from other devices" is turned on in Settings, Remote Access (takes effect after Restart RSPlayer). On Android it is off, including on existing installations, because a phone often joins networks it doesn't trust; the desktop app keeps it on, as before. The "Open on another device" address is shown only while the setting is on. Multiroom has its own connection and works either way. The headless server still listens on the network, and `BIND_ADDR` still overrides all of this.
+
+#### No photo permission on Android
+
+The app asked for access to photos and videos at first start. Covers come from the music files' own tags, so the permission was never used, and granting it gave access to every photo on the phone. The app now asks only for audio files and notifications.
+
+#### Android app for x86_64
+
+A new `rsplayer_<version>_android_x86_64.apk` runs on emulators and x86 Chromebooks. The ARM app crashed at start there: under ARM translation it could not see the folder the Android side hands it. It now finds the folder on its own in that case as well.
+
+### Fixes
+
+#### Cover art setting described correctly
+
+The hint under "Album art background and cover download" said that with the setting off, covers stored next to your music are shown. Only covers embedded in the music files are; the hint and the documentation now say so.
+
+#### Clearer messages
+
+Some messages in the app were reworded to read more plainly, among them the welcome dialog, the folder picker, the multiroom group notice and the restart confirmation.
+
 ## v5.5.2 (2026-10-19)
 
 ### Improvements

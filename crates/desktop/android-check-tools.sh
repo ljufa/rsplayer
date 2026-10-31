@@ -21,7 +21,7 @@ check rustc "$ANDROID_RUST_VERSION" "$(rustc --version 2>&1)"
 check dioxus-cli "$ANDROID_DX_VERSION" "$(dx --version 2>&1 | head -n 1)"
 check tauri-cli "$ANDROID_TAURI_CLI_VERSION" "$(cargo tauri --version 2>&1 | head -n 1)"
 
-for target in aarch64-linux-android armv7-linux-androideabi wasm32-unknown-unknown; do
+for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android wasm32-unknown-unknown; do
   if rustup target list --installed | grep -qx "$target"; then
     echo "ok      rust target $target"
   else

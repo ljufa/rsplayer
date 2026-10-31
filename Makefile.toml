@@ -347,7 +347,7 @@ description = "Release UI built with the Android reproducible-build environment 
 script = [". ./crates/desktop/android-build-env.sh && cargo make build_ui_wasm_release"]
 
 [tasks.build_android_release]
-description = "Build release UI + universal APK/AAB + one APK per ABI (arm64 + armv7, no x86_64) into target/android/pkg"
+description = "Build release UI + universal APK/AAB (arm64 + armv7) + one APK per ABI (arm64, armv7, x86_64) into target/android/pkg"
 dependencies = ["build_ui_android", "bundle_android_release", "bundle_android_abi_release"]
 
 [tasks.bundle_android_release]
@@ -368,8 +368,9 @@ script = [
     "set -e",
     "cp crates/desktop/loading.html dist/web-ui/loading.html",
     "mkdir -p target/android/pkg",
-    "# RSPLAYER_ABI_CODE (1 armv7, 2 arm64) is the last digit of the APK versionCode, see app/build.gradle.kts",
-    "for spec in aarch64:2:arm64-v8a armv7:1:armeabi-v7a; do",
+    "# RSPLAYER_ABI_CODE (1 armv7, 2 arm64, 4 x86_64) is the last digit of the APK versionCode, see app/build.gradle.kts.",
+    "# x86_64 is for emulators and x86 Chromebooks: under ARM translation the arm64 library cannot see the environment the Kotlin host sets.",
+    "for spec in aarch64:2:arm64-v8a armv7:1:armeabi-v7a x86_64:4:x86_64; do",
     "  target=${spec%%:*}; rest=${spec#*:}; code=${rest%%:*}; abi=${rest#*:}",
     "  (cd crates/desktop && . ./android-build-env.sh && RSPLAYER_ABI_CODE=$code cargo tauri android build --apk --target $target --ci)",
     "  cp crates/desktop/gen/android/app/build/outputs/apk/universal/release/app-universal-release*.apk target/android/pkg/rsplayer_${RELEASE_VERSION}_android_${abi}.apk",

@@ -583,7 +583,7 @@ fn WelcomeModal() -> Element {
                     div {
                         p { class: "font-semibold", "Ready to Play" }
                         p { class: "text-sm",
-                            "RSPlayer picked a working audio output for this system — add your music and start listening."
+                            "RSPlayer picked a working audio output for this system. Add your music and start listening."
                         }
                     }
                 }
@@ -1488,7 +1488,7 @@ fn UpdateAvailableBanner() -> Element {
                 p { class: "font-semibold", "Update available" }
                 p { class: "text-sm", "RSPlayer {latest} has been released." }
                 if method == InstallMethod::Snap {
-                    p { class: "text-xs opacity-70", "Snap updates install automatically — or update now:" }
+                    p { class: "text-xs opacity-70", "Snap updates install automatically, or update now:" }
                 }
                 if let Some(cmd) = command {
                     div { class: "flex items-center gap-1 mt-1",

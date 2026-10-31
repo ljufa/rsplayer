@@ -269,7 +269,7 @@ impl PodcastService {
             return;
         };
         if fell_back {
-            self.notify_error("Podcast Index credentials missing — searching iTunes instead");
+            self.notify_error("Podcast Index credentials missing, searching iTunes instead");
         }
         match directory.search(term) {
             Ok(results) => self.emit(StateChangeEvent::PodcastSearchResultsEvent(results)),

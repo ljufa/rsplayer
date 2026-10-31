@@ -155,7 +155,7 @@ Audio uses WASAPI by default. Installed **ASIO** drivers can be selected in Sett
 
 ## Android
 
-The Android app is the desktop app on a phone or tablet: the RSPlayer server runs inside the app and plays through the device's audio output (AAudio), so it works offline with music stored on the device. Download `rsplayer_<version>_android.apk` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest) and open it on the device (allow installs from unknown sources when asked). Android 8.0 or newer on an ARM phone or tablet (64-bit ARM, or 32-bit ARMv7 on older devices). There is no x86_64 build; to run it on an emulator or a Chromebook, build it from source (see the build guide).
+The Android app is the desktop app on a phone or tablet: the RSPlayer server runs inside the app and plays through the device's audio output (AAudio), so it works offline with music stored on the device. Download `rsplayer_<version>_android.apk` from the [latest release](https://github.com/ljufa/rsplayer/releases/latest) and open it on the device (allow installs from unknown sources when asked). Android 8.0 or newer on an ARM phone or tablet (64-bit ARM, or 32-bit ARMv7 on older devices). For an emulator or an x86 Chromebook, take `rsplayer_<version>_android_x86_64.apk`.
 
 On first start the app asks for **music and notification** permissions. Put your music in the shared **Music** folder (`/storage/emulated/0/Music`, what a computer shows as `Music` over USB) — it is scanned automatically once the permission is granted; more folders can be added in Settings → Music library. Playback keeps going with the screen off and is controllable from the lock screen, the notification and headset buttons.
 

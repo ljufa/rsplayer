@@ -16,8 +16,10 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 /**
- * Runtime permissions: media (audio + cover images) so the library scan can
- * read the shared Music folder, and notifications for the playback controls.
+ * Runtime permissions: audio so the library scan can read the shared Music
+ * folder, and notifications for the playback controls. No image access: cover
+ * art comes from the audio files' own tags, and READ_MEDIA_IMAGES would cover
+ * every photo on the phone.
  * No "all files" access — Play policy, and the media grant is enough for
  * audio files reached by path.
  *
@@ -35,7 +37,7 @@ object PermissionGate {
 
     private val storagePermissions: List<String>
         get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            listOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_IMAGES)
+            listOf(Manifest.permission.READ_MEDIA_AUDIO)
         } else {
             listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }

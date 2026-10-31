@@ -48,7 +48,7 @@ pub fn DirPicker(ws: Signal<Option<WebSocket>>, on_select: EventHandler<String>,
         }
         Some(l) if l.entries.is_empty() => rsx! {
             div { class: "p-4 text-sm text-base-content/60",
-                if at_roots { "No locations found — type a path instead." } else { "No sub-folders here." }
+                if at_roots { "No locations found. Type a path instead." } else { "No sub-folders here." }
             }
         },
         Some(l) => {

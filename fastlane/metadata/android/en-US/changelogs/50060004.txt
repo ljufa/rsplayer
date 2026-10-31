@@ -1,0 +1,5 @@
+The player's web interface is now reachable only from the phone itself. To open it from other devices, turn on Settings, Remote Access. Multiroom works either way.
+
+No more request for access to photos: covers come from the music files themselves.
+
+New x86_64 build for emulators and x86 Chromebooks.

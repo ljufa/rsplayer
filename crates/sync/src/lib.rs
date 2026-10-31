@@ -346,7 +346,7 @@ impl Service {
                 connect_to_follower(&endpoint, addr, &our_name),
             )
             .await
-            .unwrap_or_else(|_| Err(anyhow::anyhow!("connection timed out — peer offline or unreachable?")));
+            .unwrap_or_else(|_| Err(anyhow::anyhow!("connection timed out (peer offline or unreachable?)")));
             match dial {
                 Ok((connected, mut recv)) => {
                     let connected = FollowerConnected { id: id.clone(), ..connected };

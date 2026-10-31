@@ -259,7 +259,7 @@ pub fn SettingsPage() -> Element {
             if settings.read().demo_mode {
                 div { class: "alert alert-warning shadow-sm",
                     i { class: "material-icons text-lg", "info" }
-                    span { "Demo mode — some features are not available." }
+                    span { "Demo mode: some features are not available." }
                 }
             }
 
@@ -310,6 +310,28 @@ pub fn SettingsPage() -> Element {
                             p { class: "text-xs opacity-60",
                                 "Replaces the desktop's title bar with the navigation bar, which then holds the window buttons and can be dragged. Off: the desktop's own title bar."
                             }
+                        }
+                    },
+                }
+            }
+
+            // ── Remote access (desktop app and Android; the headless server always listens) ──
+            if settings.read().desktop_mode {
+                SettingsSection {
+                    title: "Remote Access",
+                    icon: "devices",
+                    content: rsx! {
+                        ToggleRow {
+                            label: "Allow access from other devices",
+                            checked: settings.read().allow_remote_access,
+                            onchange: move |_| {
+                                let v = !settings.read().allow_remote_access;
+                                settings.write().allow_remote_access = v;
+                                auto_save_restart();
+                            },
+                        }
+                        p { class: "text-xs opacity-60",
+                            "Lets phones, tablets and browsers on the same network open RSPlayer, at the address shown at the bottom of this page. There is no login: anyone on that network can then control playback, change settings and download your music, so leave it off on networks you don't trust. Off: only this device can reach the player. Multiroom works either way. Takes effect after Restart RSPlayer."
                         }
                     },
                 }
@@ -771,7 +793,7 @@ pub fn SettingsPage() -> Element {
                                 },
                             }
                             p { class: "text-xs opacity-60",
-                                "Instances with multiroom enabled discover each other automatically on the local network. Group rooms from the player page. Changes take effect after a restart. Multiroom is in beta — if sync misbehaves on your hardware or network, please report it on GitHub."
+                                "Instances with multiroom enabled discover each other automatically on the local network. Group rooms from the player page. Changes take effect after a restart. Multiroom is in beta. If sync misbehaves on your hardware or network, please report it on GitHub."
                             }
                         }
                     }
@@ -1209,7 +1231,7 @@ pub fn SettingsPage() -> Element {
                                 "Perform a full rescan of the music library? This may take a while."
                             }
                             Some(ConfirmAction::RestartPlayer) if settings.read().desktop_mode => {
-                                "Restart RSPlayer? The app will close and will NOT restart automatically — you need to start it again yourself."
+                                "Restart RSPlayer? The app will close and will NOT restart automatically. You need to start it again yourself."
                             }
                             Some(ConfirmAction::RestartPlayer) => "Restart RSPlayer service?",
                             Some(ConfirmAction::RestartSystem) => "Restart the system?",
@@ -2161,7 +2183,7 @@ fn AppearanceSection() -> Element {
             }
         }
         p { class: "text-xs opacity-60 mb-3",
-            "Downloads covers missing from your files from Last.fm (sends artist and album or song title) and shows the cover behind the page. Off: only covers embedded in or next to your music are shown, and nothing is sent to Last.fm."
+            "Downloads covers missing from your files from Last.fm (sends artist and album or song title) and shows the cover behind the page. Off: only covers embedded in your music files are shown, and nothing is sent to Last.fm."
         }
         div { class: "flex flex-wrap gap-3",
             {

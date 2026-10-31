@@ -11,7 +11,7 @@ To configure `rsplayer`, navigate to the settings page in the web UI. Settings a
 ![Appearance Settings](/_assets/settings_appearance.png)
 
 - **Theme:** Select a visual theme for the web UI. Available themes: Dark, Light, Synthwave, Dracula, Nord, Dim, Aqua, Coffee, Caramel, and Black.
-- **Album art background and cover download:** Shows the album artwork as the page background, and downloads covers missing from your files from Last.fm (sending artist and album or song title). Off: only covers embedded in or next to your music are shown and nothing is sent to Last.fm. Off by default on a new Android installation.
+- **Album art background and cover download:** Shows the album artwork as the page background, and downloads covers missing from your files from Last.fm (sending artist and album or song title). Off: only covers embedded in your music files are shown and nothing is sent to Last.fm. Off by default on a new Android installation.
 
 ## Desktop App
 
@@ -21,6 +21,13 @@ Shown only in the desktop app (Linux, Windows, macOS).
 - **Compact title bar** (Linux only): On by default. The desktop's title bar is removed and the navigation bar takes its place: drag its empty space to move the window, double-click it to maximize, and use the minimize / maximize / close buttons on its right. Turn it off to get the desktop's own title bar back; the change applies immediately.
 
 ?> **Linux:** the tray icon needs `libayatana-appindicator3` (recommended by the deb and rpm packages, an optional dependency of the Arch package). Without it there is no tray and closing the window quits, whatever the setting. Stock GNOME shows no tray icons unless the *AppIndicator and KStatusNotifierItem Support* extension is installed; turn the setting off there, or install the extension. The Flatpak and Snap apps have no tray icon yet.
+
+
+## Remote Access
+
+Shown in the desktop app and on Android.
+
+- **Allow access from other devices:** Lets phones, tablets and browsers on the same network open RSPlayer; the address appears at the bottom of the Settings page. Off: the player listens only on the device itself (`127.0.0.1`). There is no login, so with this on anyone on the network can control playback, change settings and download your music. Off by default on Android (including existing installations), on in the desktop app. Takes effect after **Restart RSPlayer**. Multiroom uses its own connection (UDP 47800) and works either way. The headless server ignores this setting and always listens on the network; `BIND_ADDR` overrides both.
 
 ## Playback
 

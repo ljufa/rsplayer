@@ -53,7 +53,7 @@ USER vagrant
 ARG RUST_VERSION=1.98.1
 RUN rustup toolchain install "${RUST_VERSION}" --profile minimal \
     && rustup default "${RUST_VERSION}" \
-    && rustup target add aarch64-linux-android armv7-linux-androideabi wasm32-unknown-unknown
+    && rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android wasm32-unknown-unknown
 
 # Android SDK + NDK. compileSdk/build-tools/ndkVersion must match app/build.gradle.kts. Kept
 # above the Rust tools because it is a 2.2 GB download that changes far less often than they do.

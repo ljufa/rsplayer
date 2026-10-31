@@ -16,9 +16,9 @@
          blocks background network (streams) and forbids starting the
          foreground service when playback is started remotely -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <!-- library scan of the shared Music folder (+ cover art) -->
+    <!-- library scan of the shared Music folder. No READ_MEDIA_IMAGES: covers come from
+         the audio files' own tags, and that grant would expose every photo on the phone -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
     <!-- AndroidTV support -->
