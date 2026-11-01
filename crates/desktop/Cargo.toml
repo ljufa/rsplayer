@@ -51,14 +51,14 @@ env_logger = { workspace = true }
 # neither applies on Android, where the Kotlin media session and the app's
 # private files dir take over.
 [target.'cfg(not(target_os = "android"))'.dependencies]
-souvlaki = "0.8"
+souvlaki = "0.9"
 dirs = "7"
 # With the window hidden to the tray, a second launch must show it instead
 # of starting another backend.
 tauri-plugin-single-instance = "2"
 # Remembers the window's size, position and maximized state between runs.
 # 2.5 requires tauri 2.12; stay on 2.4 until tauri itself is upgraded.
-tauri-plugin-window-state = "~2.4.1"
+tauri-plugin-window-state = "~2.5.0"
 
 # Android: logcat logger and the ndk-context registration that cpal's AAudio
 # host and iroh's interface discovery require.
