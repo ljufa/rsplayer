@@ -19,7 +19,7 @@ Repo: https://github.com/ljufa/rsplayer.git
 Builds:
   - versionName: 5.6.0
     versionCode: 50060001
-    commit: REPLACE_WITH_FULL_HASH_OF_TAG_5.6.0
+    commit: 5d65b0e8456df7160649565e0cbd9bc90e9f76b1
     subdir: crates/desktop/gen/android/app
     sudo:
       - apt-get update
@@ -52,7 +52,7 @@ Builds:
 
   - versionName: 5.6.0
     versionCode: 50060002
-    commit: REPLACE_WITH_FULL_HASH_OF_TAG_5.6.0
+    commit: 5d65b0e8456df7160649565e0cbd9bc90e9f76b1
     subdir: crates/desktop/gen/android/app
     sudo:
       - apt-get update
@@ -85,7 +85,7 @@ Builds:
 
   - versionName: 5.6.0
     versionCode: 50060004
-    commit: REPLACE_WITH_FULL_HASH_OF_TAG_5.6.0
+    commit: 5d65b0e8456df7160649565e0cbd9bc90e9f76b1
     subdir: crates/desktop/gen/android/app
     sudo:
       - apt-get update

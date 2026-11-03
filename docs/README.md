@@ -62,7 +62,7 @@ FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE (Monkey's Audio),
 
 ## How does RSPlayer compare?
 
-> Approximate comparison as of early 2026. Features change frequently. See [Feature Parity](feature_parity.md) for a detailed comparison against Volumio, Roon, MPD, Navidrome, LMS, moOde, Daphile, and piCorePlayer.
+> Approximate comparison as of November 2026. Features change frequently. See [Feature Parity](feature_parity.md) for a detailed comparison against Volumio, Roon, MPD, Navidrome, Lyrion (LMS), moOde, Daphile, and piCorePlayer.
 
 | Feature | RSPlayer | Volumio | Moode Audio | MPD |
 |---|---|---|---|---|
@@ -73,16 +73,18 @@ FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE (Monkey's Audio),
 | Web UI | ✓ | ✓ | ✓ | 3rd party |
 | Local browser playback | ✓ | — | — | — |
 | Library on S3 storage (no mount) | ✓ | No | No | No |
-| Parametric EQ / DSP | ✓ built-in | paid tier | ✓ (CamillaDSP) | via plugins |
+| Parametric EQ / DSP | ✓ built-in | plugin (FusionDSP) | ✓ (CamillaDSP) | via plugins |
 | Multi-room | ✓ | paid tier | ✓ | via plugins |
 | DSD playback | ✓ | ✓ | ✓ | ✓ |
-| Loudness normalization (EBU R128) | ✓ | — | — | — |
-| Synchronized lyrics | ✓ | — | — | — |
+| Loudness normalization | ✓ EBU R128 (built-in analysis, no tags needed) | ReplayGain (manual MPD config) | ReplayGain | ReplayGain |
+| Synchronized lyrics | ✓ | plugin (beta) | — | client dependent |
 | Docker | ✓ | ✓ | — | ✓ |
 | RISC-V 64 | ✓ | — | — | — |
-| Home Assistant integration | ✓ | ✓ | — | ✓ |
+| Home Assistant integration | ✓ | ✓ | ✓ (via MPD) | ✓ |
 | DIY hardware integration | optional | — | — | — |
 | License | MIT | GPL | GPL | GPL |
+
+<sub>Based on publicly available information as of November 2026; other products change often and may have added features since. Product names are trademarks of their respective owners. Spotted an error? [Open an issue](https://github.com/ljufa/rsplayer/issues) and it will be corrected.</sub>
 
 ## Home Assistant Integration
 
