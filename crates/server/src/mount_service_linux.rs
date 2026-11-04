@@ -26,6 +26,7 @@ const NFS_IO_TIMEOUT_DECISECONDS: u32 = 50;
 const NFS_RETRIES: u32 = 2;
 const SMB_PORT: u16 = 445;
 const SMB_CONNECT_TIMEOUT_SECS: u64 = 3;
+const DIR_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub struct MountService;
 
@@ -283,7 +284,7 @@ impl MountService {
                 let mount_point = m.mount_point.clone().unwrap_or_else(|| format!("{MOUNT_BASE}/{}", m.name));
                 let mounted = Self::is_mounted(&mount_point);
                 let path = std::path::Path::new(&mount_point);
-                let readable = mounted && path.is_dir();
+                let readable = mounted && Self::is_listable(&mount_point);
                 let writable = if readable {
                     let test_file = path.join(".rsplayer_write_test");
                     let w = fs::write(&test_file, b"").is_ok();
@@ -313,7 +314,7 @@ impl MountService {
             .iter()
             .map(|dir| {
                 let path = std::path::Path::new(dir);
-                let readable = path.is_dir();
+                let readable = Self::is_listable(dir);
                 let writable = if readable {
                     let test_file = path.join(".rsplayer_write_test");
                     let w = fs::write(&test_file, b"").is_ok();
@@ -397,7 +398,7 @@ impl MountService {
                 }
 
                 let path = std::path::Path::new(mount_point);
-                let readable = path.is_dir();
+                let readable = Self::is_listable(mount_point);
                 let writable = if readable {
                     let test_file = path.join(".rsplayer_write_test");
                     let w = fs::write(&test_file, b"").is_ok();
@@ -486,6 +487,21 @@ impl MountService {
             domain: None,
             mount_point: Some(ext.mount_point.clone()),
         })
+    }
+
+    /// Whether the directory can actually be listed. `/proc/mounts` keeps
+    /// listing a dead network mount (server gone, NFS version no longer
+    /// offered) and `stat` may still answer from the attribute cache, so
+    /// only reading the directory tells. Runs on a helper thread with a
+    /// timeout: a hung mount must not block the command loop.
+    fn is_listable(path: &str) -> bool {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let path = path.to_owned();
+        let probe = std::thread::Builder::new().name("dir_probe".to_string()).spawn(move || {
+            let listable = fs::read_dir(&path).is_ok_and(|mut entries| entries.next().is_none_or(|e| e.is_ok()));
+            let _ = tx.send(listable);
+        });
+        probe.is_ok() && rx.recv_timeout(DIR_PROBE_TIMEOUT).unwrap_or(false)
     }
 
     fn is_mounted(mount_point: &str) -> bool {

@@ -420,6 +420,95 @@ mod metadata {
         assert!(summary.text.ends_with(". Unreadable: album/broken.flac"), "{}", summary.text);
     }
 
+    /// A music dir with two songs in `album/`, already scanned.
+    fn scanned_two_song_library(context: &TestContext) -> String {
+        let music_dir = format!("{}/music", context.db_dir);
+        std::fs::create_dir_all(format!("{music_dir}/album")).expect("failed to create dir");
+        fs::copy("assets/aa/music.flac", format!("{music_dir}/album/one.flac")).expect("Failed to copy file");
+        fs::copy("assets/aa/music.flac", format!("{music_dir}/album/two.flac")).expect("Failed to copy file");
+        context.metadata_service.update_settings(MetadataStoreSettings {
+            music_directory: music_dir.clone(),
+            ..Default::default()
+        });
+        context.metadata_service.scan_music_dir(false, &context.sender);
+        assert_eq!(context.song_repository.find_all().len(), 2);
+        music_dir
+    }
+
+    #[test]
+    fn an_unreachable_music_dir_keeps_its_songs() {
+        let context = TestContext::new();
+        let music_dir = scanned_two_song_library(&context);
+        fs::remove_dir_all(&music_dir).expect("failed to remove dir");
+
+        context.metadata_service.scan_music_dir(false, &context.sender);
+        assert_eq!(context.song_repository.find_all().len(), 2);
+        let summary = context.metadata_service.last_scan_summary().expect("summary saved");
+        assert!(!summary.complete, "{summary:?}");
+        assert!(summary.text.contains("0 removed"), "{}", summary.text);
+        assert!(
+            summary.text.contains(&format!("{music_dir} could not be reached")),
+            "{}",
+            summary.text
+        );
+    }
+
+    #[test]
+    fn a_full_scan_of_an_unreachable_music_dir_keeps_its_songs() {
+        let context = TestContext::new();
+        let music_dir = scanned_two_song_library(&context);
+        fs::remove_dir_all(&music_dir).expect("failed to remove dir");
+
+        context.metadata_service.scan_music_dir(true, &context.sender);
+        assert_eq!(context.song_repository.find_all().len(), 2);
+        assert!(!context.metadata_service.last_scan_summary().expect("summary saved").complete);
+    }
+
+    #[test]
+    fn an_empty_music_dir_is_treated_as_not_mounted() {
+        let context = TestContext::new();
+        let music_dir = scanned_two_song_library(&context);
+        fs::remove_dir_all(format!("{music_dir}/album")).expect("failed to remove dir");
+
+        context.metadata_service.scan_music_dir(false, &context.sender);
+        assert_eq!(context.song_repository.find_all().len(), 2);
+        let summary = context.metadata_service.last_scan_summary().expect("summary saved");
+        assert!(!summary.complete, "{summary:?}");
+        assert!(summary.text.contains("is empty (not mounted?)"), "{}", summary.text);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_subfolder_keeps_its_songs_and_others_are_still_removed() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let context = TestContext::new();
+        let music_dir = scanned_two_song_library(&context);
+        std::fs::create_dir_all(format!("{music_dir}/locked")).expect("failed to create dir");
+        fs::copy("assets/aa/music.flac", format!("{music_dir}/locked/three.flac")).expect("Failed to copy file");
+        context.metadata_service.scan_music_dir(false, &context.sender);
+        assert_eq!(context.song_repository.find_all().len(), 3);
+
+        fs::remove_file(format!("{music_dir}/album/two.flac")).expect("Failed to delete file");
+        let locked = format!("{music_dir}/locked");
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).expect("chmod");
+        if fs::read_dir(&locked).is_ok() {
+            // Running as root: permissions don't lock anything.
+            fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).expect("chmod");
+            return;
+        }
+        context.metadata_service.scan_music_dir(false, &context.sender);
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).expect("chmod");
+
+        let mut keys: Vec<String> = context.song_repository.find_all().into_iter().map(|s| s.file).collect();
+        keys.sort();
+        assert_eq!(keys, vec!["album/one.flac", "locked/three.flac"]);
+        let summary = context.metadata_service.last_scan_summary().expect("summary saved");
+        assert!(!summary.complete, "{summary:?}");
+        assert!(summary.text.contains("1 removed"), "{}", summary.text);
+        assert!(summary.text.contains("1 folder(s) in"), "{}", summary.text);
+    }
+
     #[test]
     fn should_incrementally_scan_music_dir_add_2_new_files() {
         let mut context = TestContext::new();

@@ -1,5 +1,21 @@
 # Release Notes
 
+## Unreleased
+
+### Fixes
+
+#### Update library no longer empties the library when the music folder can't be read
+
+When a network share stopped answering but stayed mounted (for example after the NAS restarted with NFSv4 turned off), "Update library" found no files and removed every song. Now a music folder that can't be read, or that is empty (what an unmounted share looks like), keeps its songs, and the scan summary names it, for example "/mnt/rsplayer/music could not be reached". A subfolder that can't be read keeps only its own songs. A full rescan of an unreachable folder runs as a normal update instead of clearing the library first. Remount the share, then update the library again.
+
+#### Dead network shares show as "Not accessible"
+
+Settings showed such a share as mounted. It now shows "Not accessible", because RSPlayer checks that the folder can actually be listed instead of only that it is mounted.
+
+#### Library scan messages in the system log
+
+The default log settings of the Linux packages left out the library scanner and the other parts of the player, so scan results and warnings never reached the journal. Installations that never changed `/opt/rsplayer/env` pick up the new defaults when they update.
+
 ## v5.6.0 (2026-10-31)
 
 ### Improvements

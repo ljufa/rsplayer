@@ -13,7 +13,7 @@
 use std::{
     cell::Cell,
     cmp::Reverse,
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs::File,
     path::Path,
     sync::{
@@ -161,8 +161,44 @@ struct LibraryDiff {
     /// Database keys of new remote objects, with modification time and size.
     added_remote: Vec<(String, DateTime<Utc>, u64)>,
     deleted_keys: Vec<String>,
-    /// Remote libraries whose listing failed (their songs are kept).
+    /// What could not be listed (its songs are kept), as summary phrases
+    /// like "NAS could not be reached".
     unavailable: Vec<String>,
+}
+
+/// Why a local music directory cannot be listed, `None` when it can.
+///
+/// An empty directory counts as unavailable too: it is what an unmounted
+/// mount point looks like, and treating it as "every song was deleted"
+/// would wipe the library. A dead network mount fails `read_dir` (EIO,
+/// ESTALE, timeouts) while `/proc/mounts` still lists it.
+fn local_dir_problem(dir: &str) -> Option<&'static str> {
+    match std::fs::read_dir(dir) {
+        Err(e) => {
+            warn!("Music directory {dir} cannot be read: {e}");
+            Some("could not be reached")
+        }
+        Ok(mut entries) => match entries.next() {
+            None => {
+                warn!("Music directory {dir} is empty, treating it as not mounted");
+                Some("is empty (not mounted?)")
+            }
+            Some(Err(e)) => {
+                warn!("Music directory {dir} cannot be listed: {e}");
+                Some("could not be reached")
+            }
+            Some(Ok(_)) => None,
+        },
+    }
+}
+
+/// The music directories that cannot be listed, with the reason.
+fn local_dir_problems(settings: &MetadataStoreSettings) -> HashMap<String, &'static str> {
+    settings
+        .effective_directories()
+        .into_iter()
+        .filter_map(|dir| local_dir_problem(&dir).map(|reason| (dir, reason)))
+        .collect()
 }
 
 pub struct MetadataService {
@@ -580,6 +616,15 @@ impl MetadataService {
         }
         let reporter = ScanReporter::new(state_changes_sender, &self.scan_progress);
         reporter.report(ScanPhase::Listing, 0, 0, "");
+        // Checked before anything is deleted: a full scan of an unreachable
+        // directory would otherwise empty the library.
+        let dir_problems = local_dir_problems(&settings);
+        let full_scan = if full_scan && !dir_problems.is_empty() {
+            warn!("Music directories unavailable {dir_problems:?}, running an incremental scan instead of a full one");
+            false
+        } else {
+            full_scan
+        };
         if full_scan {
             self.song_repository.delete_all();
             self.album_repository.delete_all();
@@ -593,7 +638,7 @@ impl MetadataService {
             added_remote,
             deleted_keys: deleted_db_keys,
             unavailable,
-        } = self.get_diff(&settings, &reporter);
+        } = self.get_diff(&settings, &dir_problems, &reporter);
         info!("Scanning directories: {:?}", settings.effective_directories());
         info!(
             "New files found: {} local, {} remote / Deleted files found: {}",
@@ -624,7 +669,7 @@ impl MetadataService {
         if unreached > 0 {
             problems.push(format!("{unreached} not read (storage unreachable)"));
         }
-        problems.extend(unavailable.iter().map(|name| format!("{name} could not be reached")));
+        problems.extend(unavailable);
         let complete = problems.is_empty();
         // A broken file fails the same way every time, so it doesn't make the
         // update incomplete; it is named, as the log may not show it.
@@ -691,10 +736,26 @@ impl MetadataService {
         input.to_string()
     }
 
-    fn get_diff(&self, settings: &MetadataStoreSettings, reporter: &ScanReporter) -> LibraryDiff {
+    /// Compares the libraries with the database.
+    ///
+    /// Songs are only reported as deleted when their directory was listed
+    /// successfully: a directory in `dir_problems`, or one whose listing
+    /// failed at its root, keeps every local song (keys are relative to the
+    /// music directory, so with several directories a song can't be tied
+    /// to one), and an unreadable subfolder keeps the songs below it.
+    fn get_diff(
+        &self,
+        settings: &MetadataStoreSettings,
+        dir_problems: &HashMap<String, &'static str>,
+        reporter: &ScanReporter,
+    ) -> LibraryDiff {
         let mut added_files: Vec<String> = Vec::new();
         let mut deleted_keys: Vec<String> = Vec::new();
         let mut unchanged_keys: HashSet<String> = HashSet::new();
+        let mut unavailable = Vec::new();
+        let mut keep_all_local = false;
+        // Key prefixes of subfolders that could not be read.
+        let mut kept_prefixes: Vec<String> = Vec::new();
 
         let supported_exts = MetadataStoreSettings::default().supported_extensions;
         debug!("Supported extensions: {supported_exts:?}");
@@ -702,10 +763,14 @@ impl MetadataService {
         let mut checked = 0usize;
         for music_dir in &settings.effective_directories() {
             reporter.report(ScanPhase::Listing, checked, 0, music_dir);
-            if !Path::new(music_dir).exists() {
-                warn!("Music directory does not exist, skipping: {music_dir}");
+            if let Some(reason) = dir_problems.get(music_dir) {
+                warn!("Music directory {music_dir} {reason}, keeping its songs");
+                unavailable.push(format!("{music_dir} {reason}"));
+                keep_all_local = true;
                 continue;
             }
+            let kept_before = kept_prefixes.len();
+            let mut root_failed = false;
             for entry in WalkDir::new(music_dir)
                 .follow_links(settings.follow_links)
                 .sort_by_file_name()
@@ -714,6 +779,15 @@ impl MetadataService {
                     Ok(entry) => Some(entry),
                     Err(err) => {
                         warn!("WalkDir error in {music_dir}: {err}");
+                        // A symlink loop says nothing about missing files.
+                        if err.loop_ancestor().is_none() {
+                            match err.path().and_then(Path::to_str) {
+                                Some(path) if err.depth() > 0 => {
+                                    kept_prefixes.push(Self::full_path_to_database_key_for_dir(music_dir, path));
+                                }
+                                _ => root_failed = true,
+                            }
+                        }
                         None
                     }
                 })
@@ -736,45 +810,63 @@ impl MetadataService {
                 debug!("Processing file: {} -> key: {}", entry.0, entry.1);
                 checked += 1;
                 reporter.report(ScanPhase::Listing, checked, 0, music_dir);
-                let is_iso = entry.0.to_lowercase().ends_with(".iso");
-                if is_iso {
-                    // SACD ISO: each track is stored as a virtual key "{iso_key}#SACD_{idx}".
-                    // Treat the ISO as unchanged if any such tracks are already in the database.
-                    let sacd_prefix = format!("{}{}", entry.1, SACD_TRACK_MARKER);
-                    let existing: Vec<String> = self
-                        .song_repository
-                        .find_by_key_prefix(&sacd_prefix)
-                        .into_iter()
-                        .map(|(k, _)| String::from_utf8_lossy(&k).to_string())
-                        .collect();
-                    if existing.is_empty() {
-                        debug!("SACD ISO {} is NEW", entry.0);
-                        added_files.push(entry.0.clone());
-                    } else {
-                        debug!("SACD ISO {} already scanned ({} tracks)", entry.0, existing.len());
-                        unchanged_keys.extend(existing);
-                    }
-                } else if self.song_repository.find_by_id(&entry.1).is_some() {
-                    debug!("File {} already in database (unchanged)", entry.0);
-                    unchanged_keys.insert(entry.1.clone());
-                } else {
-                    debug!("File {} is NEW", entry.0);
-                    added_files.push(entry.0.clone());
-                }
+                self.classify_local_file(&entry.0, &entry.1, &mut added_files, &mut unchanged_keys);
+            }
+            if root_failed {
+                warn!("Music directory {music_dir} could not be listed, keeping its songs");
+                unavailable.push(format!("{music_dir} could not be reached"));
+                keep_all_local = true;
+            } else if kept_prefixes.len() > kept_before {
+                let n = kept_prefixes.len() - kept_before;
+                warn!("{n} folder(s) in {music_dir} could not be read, keeping their songs");
+                unavailable.push(format!("{n} folder(s) in {music_dir} could not be read"));
             }
         }
-        let mut unavailable = Vec::new();
         let added_remote = self.remote_diff(settings, &supported_exts, &mut unchanged_keys, &mut unavailable, reporter, checked);
         for song in self.song_repository.find_all() {
-            if !unchanged_keys.contains(&song.file) {
-                deleted_keys.push(song.file);
+            if unchanged_keys.contains(&song.file) {
+                continue;
             }
+            let local = !song.file.starts_with(REMOTE_KEY_PREFIX);
+            if local && (keep_all_local || kept_prefixes.iter().any(|p| song.file.starts_with(p.as_str()))) {
+                continue;
+            }
+            deleted_keys.push(song.file);
         }
         LibraryDiff {
             added_files,
             added_remote,
             deleted_keys,
             unavailable,
+        }
+    }
+
+    /// Records a listed local file as new or already in the database.
+    fn classify_local_file(&self, path: &str, key: &str, added_files: &mut Vec<String>, unchanged_keys: &mut HashSet<String>) {
+        let is_iso = path.to_lowercase().ends_with(".iso");
+        if is_iso {
+            // SACD ISO: each track is stored as a virtual key "{iso_key}#SACD_{idx}".
+            // Treat the ISO as unchanged if any such tracks are already in the database.
+            let sacd_prefix = format!("{key}{SACD_TRACK_MARKER}");
+            let existing: Vec<String> = self
+                .song_repository
+                .find_by_key_prefix(&sacd_prefix)
+                .into_iter()
+                .map(|(k, _)| String::from_utf8_lossy(&k).to_string())
+                .collect();
+            if existing.is_empty() {
+                debug!("SACD ISO {path} is NEW");
+                added_files.push(path.to_owned());
+            } else {
+                debug!("SACD ISO {path} already scanned ({} tracks)", existing.len());
+                unchanged_keys.extend(existing);
+            }
+        } else if self.song_repository.find_by_id(key).is_some() {
+            debug!("File {path} already in database (unchanged)");
+            unchanged_keys.insert(key.to_owned());
+        } else {
+            debug!("File {path} is NEW");
+            added_files.push(path.to_owned());
         }
     }
 
@@ -799,7 +891,7 @@ impl MetadataService {
                 Ok(objects) => objects,
                 Err(e) => {
                     warn!("Remote library '{}' unavailable, keeping its songs: {e:#}", library.name);
-                    unavailable.push(library.name.clone());
+                    unavailable.push(format!("{} could not be reached", library.name));
                     let prefix = format!("{REMOTE_KEY_PREFIX}{}/", library.id);
                     unchanged_keys.extend(
                         self.song_repository
