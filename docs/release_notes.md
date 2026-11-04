@@ -16,6 +16,13 @@ Settings showed such a share as mounted. It now shows "Not accessible", because 
 
 The default log settings of the Linux packages left out the library scanner and the other parts of the player, so scan results and warnings never reached the journal. Installations that never changed `/opt/rsplayer/env` pick up the new defaults when they update.
 
+### Dependencies
+
+- **Rust 1.99.1** (was 1.98.1) for every build, including the Android app and its F-Droid build. Since this version, the web UI is built without stripping, because stripping now also removes data that the web UI build needs.
+- **tauri 2.12.5** with **tauri-plugin-window-state 2.5** (desktop and Android app), **iroh 1.4.1** and **iroh-mdns-address-lookup 0.6** (multiroom), **souvlaki 0.9** (desktop media keys), **rusty-s3 0.11** (remote S3 libraries), **tokio 1.54.1**, **rustls 0.23.46**, **wasm-bindgen 0.2.130** and smaller updates.
+- **feed-rs** (podcast feeds) stays at 2.4: version 3.0.0 drops the episode duration and artwork of many podcast feeds.
+- Web UI build tools: **Tailwind CSS 4.3.4** and **daisyUI 5.7.50**.
+
 ## v5.6.0 (2026-10-31)
 
 ### Improvements
