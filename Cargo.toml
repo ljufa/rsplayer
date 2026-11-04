@@ -104,6 +104,16 @@ lto = "thin"
 opt-level = "s"
 debug = false
 
+# The profile `dx build --release` uses for the web UI. Without one here dx
+# derives it from [profile.release], strip = true included, and since LLVM
+# 23 (rustc 1.99) stripping a .wasm removes every custom section, among them
+# the one wasm-bindgen reads ("the `__wasm_bindgen_unstable` custom section
+# is missing"). dx runs wasm-opt on the wasm-bindgen output, which drops
+# what isn't needed.
+[profile.wasm-release]
+inherits = "release"
+strip = false
+
 # Cold multiroom transport plumbing: iroh 1.0 unconditionally links its relay
 # and DNS clients, but rsplayer runs LAN-only (RelayMode::Disabled) so these
 # never execute — optimize them for size.

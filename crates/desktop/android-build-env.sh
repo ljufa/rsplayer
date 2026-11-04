@@ -6,9 +6,9 @@
 # in fdroiddata) installs exactly these, so keep both in sync: a different rustc, dx or tauri-cli
 # can change the output and the F-Droid build would no longer match our signed APK.
 # android-check-tools.sh fails the release job when the runner differs.
-ANDROID_RUST_VERSION=1.98.1
+ANDROID_RUST_VERSION=1.99.1
 ANDROID_DX_VERSION=0.7.10
-ANDROID_TAURI_CLI_VERSION=2.11.4
+ANDROID_TAURI_CLI_VERSION=2.12.4
 
 # dx must not download wasm-bindgen, wasm-opt or esbuild (F-Droid requires every build tool to
 # come from source or the distro): take them from PATH instead, i.e. cargo-installed

@@ -1,8 +1,9 @@
 # The Rust toolchain for every rustup-based build: local, CI, cross, snap.
 #
-# Pinned because the release web UI does not build with newer compilers:
-# rustc 1.99 + wasm-bindgen 0.2.127 fails in `cargo make build_ui_release`
-# ("import of `__wbg_new_…` doesn't have an adapter listed").
+# Pinned so every build uses the same compiler: a new rustc can break the
+# release web UI. rustc 1.99 (LLVM 23) did: stripping a .wasm now removes
+# every custom section, wasm-bindgen's included, which is why Cargo.toml
+# defines [profile.wasm-release] with strip = false.
 #
 # Bumping it: change every pin together, then run `cargo make
 # check_toolchain_pins` (CI runs it too). The pins are this file,
@@ -16,6 +17,6 @@
 # set, and listing them here would make rustup download extras there.
 # For local lints: rustup component add clippy rustfmt
 [toolchain]
-channel = "1.98.1"
+channel = "1.99.1"
 targets = ["wasm32-unknown-unknown"]
 profile = "minimal"

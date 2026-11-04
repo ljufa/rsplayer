@@ -50,7 +50,7 @@ USER vagrant
 
 # Rust toolchain. The version must match ANDROID_RUST_VERSION in android-build-env.sh, which
 # fails the build (android-check-tools.sh) if it doesn't.
-ARG RUST_VERSION=1.98.1
+ARG RUST_VERSION=1.99.1
 RUN rustup toolchain install "${RUST_VERSION}" --profile minimal \
     && rustup default "${RUST_VERSION}" \
     && rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android wasm32-unknown-unknown
@@ -83,8 +83,8 @@ RUN mkdir -p "${ANDROID_HOME}/cmdline-tools" \
 # interchangeable is the paths above; see that comment.
 ARG CARGO_MAKE_VERSION=0.37.24
 ARG DIOXUS_CLI_VERSION=0.7.10
-ARG WASM_BINDGEN_VERSION=0.2.127
-ARG TAURI_CLI_VERSION=2.11.4
+ARG WASM_BINDGEN_VERSION=0.2.130
+ARG TAURI_CLI_VERSION=2.12.4
 RUN curl -L --proto '=https' --tlsv1.2 -sSf \
       https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash \
     && cargo binstall --no-confirm --locked \

@@ -601,7 +601,7 @@ script = [
 # ═══════════════════════════════════════════
 
 [tasks.check_toolchain_pins]
-description = "Fail when the pinned Rust / dx versions disagree (rust-toolchain.toml, builder + android images, android-build-env.sh, macOS job, Cargo.lock)"
+description = "Fail when the pinned Rust / dx / wasm-bindgen versions disagree (rust-toolchain.toml, builder + android images, android-build-env.sh, macOS job, Cargo.lock)"
 script = '''
 status=0
 check() {
@@ -625,6 +625,11 @@ dx=$(awk '/^name = "dioxus"$/ {getline; gsub(/version = |"/, ""); print; exit}' 
 echo "dioxus (Cargo.lock): $dx"
 check docker/Dockerfile.builder "$dx" "$(sed -n 's/^ARG DX_VERSION=//p' docker/Dockerfile.builder)"
 check crates/desktop/android-build-env.sh "$dx" "$(sed -n 's/^ANDROID_DX_VERSION=//p' crates/desktop/android-build-env.sh)"
+
+# The Android image installs wasm-bindgen-cli itself (NO_DOWNLOADS); it must equal the crate exactly.
+wb=$(awk '/^name = "wasm-bindgen"$/ {getline; gsub(/version = |"/, ""); print; exit}' Cargo.lock)
+echo "wasm-bindgen (Cargo.lock): $wb"
+check docker/Dockerfile.android "$wb" "$(sed -n 's/^ARG WASM_BINDGEN_VERSION=//p' docker/Dockerfile.android)"
 exit $status
 '''
 

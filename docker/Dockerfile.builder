@@ -1,6 +1,6 @@
 # Must match rust-toolchain.toml (checked by `cargo make check_toolchain_pins`).
 # Baked in so jobs do not download the toolchain on every run.
-ARG RUST_VERSION=1.98.1
+ARG RUST_VERSION=1.99.1
 FROM rust:${RUST_VERSION}-slim-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

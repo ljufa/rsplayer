@@ -5,6 +5,11 @@
 //! types and naming mirror `CamillaDSP`, which this is a trimmed-down port
 //! of, so its filter documentation applies here too.
 
+// The cookbook formulas stay as written instead of `mul_add`: on CPUs
+// without FMA (the Raspberry Pi Zero's ARMv6) `mul_add` is a slow software
+// call, and it would change the coefficients `cargo clippy --fix` touches.
+#![allow(clippy::suboptimal_flops)]
+
 use std::f32::consts::PI;
 
 // ── Public configuration types ──────────────────────────────────────────────

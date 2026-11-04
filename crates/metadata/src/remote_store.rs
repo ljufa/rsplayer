@@ -251,10 +251,16 @@ impl S3Store {
                 if path.is_empty() || path.ends_with('/') {
                     return None;
                 }
+                // S3 always sends the size; reading needs it, so an object
+                // without one can't be played.
                 Some(RemoteObject {
                     path,
-                    size: c.size,
-                    last_modified: DateTime::parse_from_rfc3339(&c.last_modified).ok().map(|d| d.with_timezone(&Utc)),
+                    size: c.size?,
+                    last_modified: c
+                        .last_modified
+                        .as_deref()
+                        .and_then(|d| DateTime::parse_from_rfc3339(d).ok())
+                        .map(|d| d.with_timezone(&Utc)),
                 })
             })
             .collect();
