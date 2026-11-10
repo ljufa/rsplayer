@@ -1,0 +1,5 @@
+Android Auto: browse playlists, artists, radio stations and podcasts, see the queue, search and switch the playback mode from the car. Turn on "Unknown sources" in Android Auto's developer settings to see the app there.
+
+The media notification has a new button for the playback mode.
+
+Play from a headset works right after the app starts.

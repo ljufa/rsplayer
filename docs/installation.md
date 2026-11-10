@@ -159,6 +159,8 @@ The Android app is the desktop app on a phone or tablet: the RSPlayer server run
 
 On first start the app asks for **music and notification** permissions. Put your music in the shared **Music** folder (`/storage/emulated/0/Music`, what a computer shows as `Music` over USB) — it is scanned automatically once the permission is granted; more folders can be added in Settings → Music library. Playback keeps going with the screen off and is controllable from the lock screen, the notification and headset buttons.
 
+**Android Auto:** the app appears in Android Auto with your playlists, artists, radio stations and podcasts, the play queue and search. Because the app does not come from the Play Store, Android Auto lists it only after you turn on "Unknown sources": on the phone open Android Auto's settings, tap "Version" ten times to turn on developer mode, then enable "Unknown sources" in the three-dot menu under Developer settings.
+
 ### Automatic updates with Obtainium
 
 [Obtainium](https://obtainium.imranr.dev/) installs the app straight from GitHub releases and keeps it updated. Install Obtainium, then open this badge on the phone:

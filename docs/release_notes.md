@@ -1,6 +1,26 @@
 # Release Notes
 
-## Unreleased
+## v5.7.0 (2026-11-10)
+
+### New features
+
+#### Android Auto
+
+The Android app now shows up in Android Auto. Its four tabs are Playlists (your playlists, Most Played, Liked, and the Recently added and Latest releases albums), Artists (one alphabetical list, with Android Auto's A-Z button to jump), Radio (your stations) and Podcasts (your subscriptions and their episodes). Tapping a song loads its album or playlist into the queue and starts at that song. The player screen has play, pause, next, previous and seek, a button that switches the playback mode (in order, shuffle, repeat song, repeat queue) and the upcoming queue. Search finds artists, albums and songs, and "play ... on RSPlayer" works by voice.
+
+The app does not have to be open on the phone: Android Auto starts the player by itself.
+
+Android Auto lists apps from outside the Play Store only when "Unknown sources" is turned on. On the phone open Android Auto's settings, tap "Version" ten times to turn on developer mode, then enable "Unknown sources" in the three-dot menu under Developer settings. Lists show no cover art yet.
+
+### Improvements
+
+#### Playback mode button in the Android notification
+
+The media notification and the lock screen controls of the Android app have a new button that shows the playback mode and switches to the next one.
+
+#### Play works right after the Android app starts
+
+A press on play from a headset or from Android's media controls, before the app had loaded the current song, did nothing. It now continues what was playing last.
 
 ### Fixes
 
