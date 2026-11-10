@@ -9,12 +9,15 @@ import android.media.AudioManager
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Process
 import android.util.Log
 import androidx.core.content.ContextCompat
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaConstants
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
@@ -29,7 +32,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Foreground media service: owns the [MediaSession] for lock-screen /
@@ -50,6 +57,7 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var client: BackendClient
     private lateinit var player: BackendPlayer
     private val library = MediaLibrary()
+    private lateinit var openApp: PendingIntent
     private var session: MediaLibrarySession? = null
     private var multicastLock: WifiManager.MulticastLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
@@ -70,7 +78,7 @@ class PlaybackService : MediaLibraryService() {
         client = BackendClient(scope)
         player = BackendPlayer(this, mainLooper, client, ::play)
 
-        val openApp = PendingIntent.getActivity(
+        openApp = PendingIntent.getActivity(
             this,
             0,
             Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
@@ -78,6 +86,9 @@ class PlaybackService : MediaLibraryService() {
         )
         session = MediaLibrarySession.Builder(this, player, LibraryCallback())
             .setSessionActivity(openApp)
+            // A message for the user (see phoneActionNeeded) must not turn a
+            // session that may be playing into a failed one.
+            .setLibraryErrorReplicationMode(MediaLibrarySession.LIBRARY_ERROR_REPLICATION_MODE_NON_FATAL)
             .setMediaButtonPreferences(ImmutableList.of(playbackModeButton(client.state.value.playbackMode)))
             .build()
             .also { addSession(it) } // sessions built outside onGetSession must be registered explicitly
@@ -138,17 +149,34 @@ class PlaybackService : MediaLibraryService() {
 
     /**
      * Serves the browse tree ([MediaLibrary]) to media browsers such as
-     * Android Auto. TODO: restrict who may connect.
+     * Android Auto.
      */
     private inner class LibraryCallback : MediaLibrarySession.Callback {
-        override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult =
-            MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+        /**
+         * The service is exported so that Android Auto can bind to it, which
+         * lets any installed app try. Only these may browse the library and
+         * control playback: this app, Android Auto and Android Automotive,
+         * and what the system itself trusts with media sessions (System UI,
+         * Bluetooth, the assistant, enabled notification listeners).
+         */
+        override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
+            val allowed = controller.uid == Process.myUid() ||
+                controller.isTrusted ||
+                session.isMediaNotificationController(controller) ||
+                session.isAutoCompanionController(controller) ||
+                session.isAutomotiveController(controller)
+            if (!allowed) {
+                Log.w(TAG, "Rejected media controller ${controller.packageName} (uid ${controller.uid})")
+                return MediaSession.ConnectionResult.reject()
+            }
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(
                     MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
                         .add(CYCLE_PLAYBACK_MODE)
                         .build(),
                 )
                 .build()
+        }
 
         override fun onCustomCommand(
             session: MediaSession,
@@ -180,7 +208,25 @@ class PlaybackService : MediaLibraryService() {
             pageSize: Int,
             params: LibraryParams?,
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-            return paged(library.children(parentId), page, pageSize, params)
+            val children = library.children(parentId)
+            if (parentId != MediaLibrary.ARTISTS_TAB || PermissionGate.hasAudioAccess(this@PlaybackService)) {
+                return paged(children, page, pageSize, params)
+            }
+            // No artists and no access to the phone's music: say why. (With
+            // access denied the tab can still have artists, from a remote library.)
+            return Futures.transformAsync(
+                children,
+                { artists ->
+                    if (artists.isEmpty()) {
+                        Futures.immediateFuture(
+                            phoneActionNeeded("Allow RSPlayer to access your music: open the app on your phone", params),
+                        )
+                    } else {
+                        paged(children, page, pageSize, params)
+                    }
+                },
+                MoreExecutors.directExecutor(),
+            )
         }
 
         override fun onSearch(
@@ -213,6 +259,22 @@ class PlaybackService : MediaLibraryService() {
             pageSize: Int,
             params: LibraryParams?,
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = paged(library.search(query), page, pageSize, params)
+
+        /**
+         * "Play" with nothing loaded: a media button, the system's resume
+         * card, or a browser asking for the most recent item. The backend
+         * remembers what it played last, so this resumes it.
+         */
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = Futures.immediateFuture(
+            MediaSession.MediaItemsWithStartPosition(
+                listOf(MediaItem.Builder().setMediaId(MediaLibrary.RESUME).build()),
+                0,
+                C.TIME_UNSET,
+            ),
+        )
 
         /**
          * A browser asks to play items it only knows by id, or, for a spoken
@@ -251,12 +313,31 @@ class PlaybackService : MediaLibraryService() {
             ),
             Exception::class.java,
             { e ->
-                LibraryResult.ofError(
-                    if (e is IllegalArgumentException) SessionError.ERROR_BAD_VALUE else SessionError.ERROR_IO,
-                )
+                if (e is IllegalArgumentException) {
+                    LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+                } else {
+                    // The backend did not answer, even after the retries.
+                    phoneActionNeeded("RSPlayer is not ready: open the app on your phone", params)
+                }
             },
             MoreExecutors.directExecutor(),
         )
+
+        /**
+         * A failed browse request with a [message] for the user. Android Auto
+         * shows it, with a button that opens the app on the phone, instead
+         * of an empty list. Of the session errors media3 passes on to such
+         * browsers, "authentication expired" is the one meaning "the user has
+         * to do something in the app"; the next successful request clears it.
+         */
+        private fun <T : Any> phoneActionNeeded(message: String, params: LibraryParams?): LibraryResult<T> {
+            val extras = Bundle().apply {
+                putString(MediaConstants.EXTRAS_KEY_ERROR_RESOLUTION_ACTION_LABEL_COMPAT, "Open RSPlayer")
+                putParcelable(MediaConstants.EXTRAS_KEY_ERROR_RESOLUTION_ACTION_INTENT_COMPAT, openApp)
+            }
+            val error = SessionError(SessionError.ERROR_SESSION_AUTHENTICATION_EXPIRED, message, extras)
+            return if (params == null) LibraryResult.ofError(error) else LibraryResult.ofError(error, params)
+        }
     }
 
     private fun refreshQueue() {
@@ -289,28 +370,44 @@ class PlaybackService : MediaLibraryService() {
             .build()
     }
 
-    /** Tell the backend to play the browse-tree item with this id. */
+    /**
+     * Tell the backend to play the browse-tree item with this id. Right
+     * after a start without an activity the backend may not be connected
+     * yet, so wait for it, bounded.
+     */
     private fun play(mediaId: String) {
-        if (mediaId == MediaLibrary.RESUME) {
-            if (!client.state.value.isPlaying) client.togglePlay()
-            return
+        scope.launch {
+            val connected = withTimeoutOrNull(BACKEND_WAIT_MS) { client.state.first { it.connected } }
+            if (connected == null) {
+                Log.w(TAG, "Backend not connected, cannot play $mediaId")
+                return@launch
+            }
+            if (mediaId == MediaLibrary.RESUME) {
+                // Give a backend that has just started the time to report
+                // whether it already plays (auto-resume): a toggle would pause it.
+                if (!connected.isPlaying) delay(STATE_SETTLE_MS)
+                if (!client.state.value.isPlaying) client.togglePlay()
+                return@launch
+            }
+            val command = try {
+                await(library.playCommand(mediaId))
+            } catch (e: Exception) {
+                Log.w(TAG, "Cannot play $mediaId: ${e.message}")
+                return@launch
+            }
+            if (command == null) Log.w(TAG, "Not playable: $mediaId") else client.send(command)
         }
-        Futures.addCallback(
-            library.playCommand(mediaId),
-            object : FutureCallback<String?> {
-                override fun onSuccess(command: String?) {
-                    if (command == null) {
-                        Log.w(TAG, "Not playable: $mediaId")
-                    } else if (!client.send(command)) {
-                        Log.w(TAG, "Backend not connected, cannot play $mediaId")
-                    }
-                }
+    }
 
-                override fun onFailure(t: Throwable) {
-                    Log.w(TAG, "Cannot play $mediaId: ${t.message}")
-                }
+    private suspend fun <T> await(future: ListenableFuture<T>): T = suspendCancellableCoroutine { continuation ->
+        Futures.addCallback(
+            future,
+            object : FutureCallback<T> {
+                override fun onSuccess(result: T) = continuation.resumeWith(Result.success(result))
+
+                override fun onFailure(t: Throwable) = continuation.resumeWith(Result.failure(t))
             },
-            ContextCompat.getMainExecutor(this),
+            MoreExecutors.directExecutor(),
         )
     }
 
@@ -337,6 +434,8 @@ class PlaybackService : MediaLibraryService() {
 
     private companion object {
         const val TAG = "rsplayer"
+        const val BACKEND_WAIT_MS = 15_000L
+        const val STATE_SETTLE_MS = 500L
 
         /** Custom session command: switch to the next playback mode. */
         val CYCLE_PLAYBACK_MODE = SessionCommand("de.rsplayer.app.CYCLE_PLAYBACK_MODE", Bundle.EMPTY)

@@ -42,6 +42,11 @@ object PermissionGate {
             listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
 
+    /** Whether the library scan may read the shared Music folder. */
+    fun hasAudioAccess(context: Context): Boolean = storagePermissions.all {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    }
+
     /** Requests missing runtime permissions; true when the system dialog was shown. */
     fun request(activity: Activity): Boolean {
         val wanted = storagePermissions.toMutableList()

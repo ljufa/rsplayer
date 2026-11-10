@@ -313,6 +313,8 @@ class MediaLibrary {
         private const val RETRY_DELAY_MS = 500L
 
         const val ROOT = "root"
+        /** Media id of the Artists tab: empty exactly when the local library is. */
+        val ARTISTS_TAB: String get() = id(TAB, "artists")
         const val RESUME = "resume"
         private const val ALBUMS = "albums"
         private const val SONG = "song"
