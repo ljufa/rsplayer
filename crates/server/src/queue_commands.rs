@@ -9,6 +9,7 @@ use api_models::common::QueueCommand::{
 use api_models::player::Song;
 use api_models::state::StateChangeEvent;
 
+use crate::browse_api::{LIKED_ID, MOST_PLAYED_ID};
 use crate::command_context::CommandContext;
 
 fn get_songs_from_album(ctx: &CommandContext, album_id: &str) -> Vec<Song> {
@@ -181,6 +182,24 @@ pub fn handle_queue_command(cmd: QueueCommand, ctx: &CommandContext) {
                 ctx.queue_service.replace_all(songs);
                 ctx.player_service.play_from_beginning();
                 ctx.send_notification("Album loaded into queue");
+            }
+        }
+        QueueCommand::LoadPlaylistInQueueFrom(pl_id, song_id) => {
+            let songs = match pl_id.as_str() {
+                MOST_PLAYED_ID => ctx.metadata_service.get_most_played_songs(100),
+                LIKED_ID => ctx.metadata_service.get_liked_songs(100),
+                id => ctx.playlist_service.get_playlist_page_by_name(id, 0, 20000).items,
+            };
+            ctx.player_service.stop_current_song();
+            ctx.queue_service.replace_all(songs);
+            ctx.player_service.play_song(&song_id);
+        }
+        QueueCommand::LoadAlbumInQueueFrom(album_id, song_id) => {
+            let songs = get_songs_from_album(ctx, &album_id);
+            if !songs.is_empty() {
+                ctx.player_service.stop_current_song();
+                ctx.queue_service.replace_all(songs);
+                ctx.player_service.play_song(&song_id);
             }
         }
         LoadArtistInQueue(name) => {

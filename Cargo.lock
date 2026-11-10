@@ -7133,6 +7133,7 @@ dependencies = [
  "api_models",
  "dirs",
  "env_logger",
+ "jni 0.21.1",
  "log",
  "ndk-context",
  "rsplayer",

@@ -60,10 +60,12 @@ tauri-plugin-single-instance = "2"
 # 2.5 requires tauri 2.12.
 tauri-plugin-window-state = "2.5"
 
-# Android: logcat logger and the ndk-context registration that cpal's AAudio
-# host and iroh's interface discovery require.
+# Android: logcat logger, and the JNI entry points + ndk-context registration
+# for starting the backend without an activity (see src/android.rs). jni must
+# match the version tao uses.
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.15"
+jni = "0.21"
 ndk-context = "0.1"
 
 # ALSA only exists on Linux; on macOS the server is built without default features

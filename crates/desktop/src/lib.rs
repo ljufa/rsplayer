@@ -5,10 +5,11 @@
 //! webview at it, and — on desktop — integrates OS media keys via souvlaki.
 //! On Android the same library is loaded by the generated Kotlin host
 //! (`gen/android`): the `Application` subclass sets `PORT`,
-//! `RSPLAYER_DATA_DIR` and `RSPLAYER_DEFAULT_MUSIC_DIR` before the Rust entry
-//! point runs, `android::early_init` registers the activity with
-//! `ndk-context`, and the Kotlin `PlaybackService` provides the media session
-//! over the backend's WebSocket.
+//! `RSPLAYER_DATA_DIR` and `RSPLAYER_DEFAULT_MUSIC_DIR` before any Rust code
+//! runs, and the Kotlin `PlaybackService` provides the media session over the
+//! backend's WebSocket. The backend there belongs to the process, not to the
+//! Tauri app: the service can start it with no activity (Android Auto), see
+//! [`android`].
 //!
 //! On desktop, closing the window can hide it to the system tray instead of
 //! quitting (`tray`, `desktop_settings.close_to_tray`); the single-instance
@@ -45,10 +46,10 @@ use tokio::sync::{mpsc, oneshot};
 /// Shared slot holding the shutdown trigger of the *current* backend run.
 /// Refilled by [`spawn_backend`] so the window-close handler and the restart
 /// loop always reach the live backend.
-type ShutdownSlot = Arc<Mutex<Option<oneshot::Sender<()>>>>;
+pub(crate) type ShutdownSlot = Arc<Mutex<Option<oneshot::Sender<()>>>>;
 
 /// One backend lifetime: the task plus the channels it reports through.
-struct BackendRun {
+pub(crate) struct BackendRun {
     handle: tokio::task::JoinHandle<()>,
     /// Backend asks the wrapper to restart it ("Restart RSPlayer" in settings).
     restart_rx: mpsc::Receiver<()>,
@@ -61,20 +62,41 @@ struct BackendRun {
 /// Entry point for the desktop binary and the Android host.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Android: the backend lives in `android::backend()`, which the Kotlin
+    // media service may have started long before any activity existed. The
+    // app shares its runtime (`run` is called from tao's own thread).
     #[cfg(target_os = "android")]
-    android::early_init();
-
+    {
+        android::wait_for_activity_context();
+        let backend = android::backend();
+        backend
+            .runtime
+            .block_on(run_app(backend.port, Arc::clone(&backend.shutdown), backend.take_run()));
+    }
     // Multi-thread runtime so Tauri can block this thread with its event
     // loop while the backend runs on worker threads (what `#[tokio::main]`
-    // expanded to before; on Android `run` is called from tao's own thread).
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("failed to build tokio runtime");
-    runtime.block_on(async_main());
+    // expanded to before).
+    #[cfg(not(target_os = "android"))]
+    {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("failed to build tokio runtime");
+        // Desktop starts the backend in `setup`, after the single-instance
+        // check: a second launch must exit before it opens the same database.
+        runtime.block_on(async {
+            let http_port = prepare_environment();
+            run_app(http_port, Arc::new(Mutex::new(None)), None).await;
+        });
+    }
 }
 
-async fn async_main() {
+/// Move into the data directory and pick the backend's port, exported as
+/// `PORT` for the server's own `get_ports()` logic. Returns the port.
+///
+/// Must run before the backend starts and, because it changes the process
+/// environment, before other threads read it.
+pub(crate) fn prepare_environment() -> u16 {
     let data_dir = data_dir();
     if let Err(e) = std::fs::create_dir_all(&data_dir) {
         error!("Failed to create data directory {:?}: {}", data_dir, e);
@@ -88,11 +110,9 @@ async fn async_main() {
         }
     }
 
-    // Find a free port for the backend. Sets PORT env var so the server
-    // picks up the same port via its own get_ports() logic.
-    // SAFETY: called before any threads are spawned — no concurrent
-    // environment access.
     let http_port = find_available_port();
+    // SAFETY: called before the backend and its threads exist, so nothing
+    // reads the environment concurrently.
     unsafe {
         env::set_var("PORT", http_port.to_string());
         env::set_var("RSPLAYER_DESKTOP", "1");
@@ -111,15 +131,13 @@ async fn async_main() {
     if let Err(e) = std::fs::write(data_dir.join("backend.port"), http_port.to_string()) {
         warn!("Failed to write backend.port: {e}");
     }
+    http_port
+}
 
-    let shutdown: ShutdownSlot = Arc::new(Mutex::new(None));
-    // Desktop starts the backend in `setup`, after the single-instance check
-    // below: a second launch must exit before it opens the same database.
-    #[cfg(target_os = "android")]
-    let early_backend = Some(spawn_backend(&shutdown));
-    #[cfg(not(target_os = "android"))]
-    let early_backend: Option<BackendRun> = None;
-
+/// The Tauri app: window, tray and media keys on desktop, the webview on
+/// Android. `early_backend` is a backend that already runs (Android);
+/// without one it is started in `setup`.
+async fn run_app(http_port: u16, shutdown: ShutdownSlot, early_backend: Option<BackendRun>) {
     let shutdown_on_close = Arc::clone(&shutdown);
     let builder = tauri::Builder::default();
     // Registered first so it runs before `setup`: a second launch (e.g. from
@@ -287,7 +305,7 @@ fn android_files_dir() -> PathBuf {
 }
 
 /// Start the backend as a tokio task and arm `shutdown` for it.
-fn spawn_backend(shutdown: &ShutdownSlot) -> BackendRun {
+pub(crate) fn spawn_backend(shutdown: &ShutdownSlot) -> BackendRun {
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     let (cmd_sender_tx, cmd_rx) = oneshot::channel::<mpsc::Sender<UserCommand>>();
     let (restart_tx, restart_rx) = mpsc::channel::<()>(1);

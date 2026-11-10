@@ -2,7 +2,8 @@
 //!
 //! Serves the embedded web UI (rust-embed; from disk in debug builds), the
 //! REST-ish `/api/*` routes (settings, artwork, local-browser audio
-//! streaming with range support) and `/api/ws`, where commands come in as
+//! streaming with range support, the read-only library browse API in
+//! [`crate::browse_api`]) and `/api/ws`, where commands come in as
 //! JSON `UserCommand`s and every `StateChangeEvent` is fanned out to all
 //! connected clients through one broadcast channel. Audio-card enumeration
 //! is cached at startup because probing drivers (ASIO especially) can
@@ -83,6 +84,7 @@ pub fn start(
     mut state_changes_rx: broadcast::Receiver<StateChangeEvent>,
     user_commands_tx: UserCommandSender,
     config: &Config,
+    browse: crate::browse_api::BrowseState,
 ) -> (impl Future<Output = ()>, Option<impl Future<Output = ()>>, impl Future<Output = ()>) {
     // VU (20/s) and time events fill a small buffer within a second or two
     // on a throttled client (backgrounded Android WebView, slow Wi-Fi).
@@ -96,7 +98,7 @@ pub fn start(
         audio_cards_cache: Arc::new(Mutex::new(Some(enumerate_audio_cards()))),
     };
 
-    let app = build_router(state);
+    let app = build_router(state, browse);
 
     let ws_handle = {
         let ws_broadcast = ws_broadcast;
@@ -201,7 +203,7 @@ pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Out
     }
 }
 
-fn build_router(state: AppState) -> Router {
+fn build_router(state: AppState, browse: crate::browse_api::BrowseState) -> Router {
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::DELETE])
         .allow_origin(Any);
@@ -223,9 +225,10 @@ fn build_router(state: AppState) -> Router {
                 .service(artwork),
         )
         .fallback(spa_or_static_fallback)
+        .with_state(state)
+        .merge(crate::browse_api::router(browse))
         .layer(CompressionLayer::new())
         .layer(cors)
-        .with_state(state)
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {

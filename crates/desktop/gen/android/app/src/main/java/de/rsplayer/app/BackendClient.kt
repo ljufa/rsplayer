@@ -36,6 +36,8 @@ data class BackendState(
     val connected: Boolean = false,
     /** PLAYING / PAUSED / STOPPED / ERROR, as the backend reports it. */
     val playbackState: String = "STOPPED",
+    /** Id of the current song (its file key), null when there is none. */
+    val file: String? = null,
     val title: String? = null,
     val artist: String? = null,
     val album: String? = null,
@@ -44,6 +46,8 @@ data class BackendState(
     val positionMs: Long = 0,
     /** [SystemClock.elapsedRealtime] when [positionMs] was received. */
     val positionAtElapsedMs: Long = 0,
+    /** Sequential / Random / LoopSingle / LoopQueue. */
+    val playbackMode: String = "Sequential",
     val scan: ScanState = ScanState(),
 ) {
     val isPlaying: Boolean get() = playbackState == "PLAYING"
@@ -88,7 +92,11 @@ class BackendClient(private val scope: CoroutineScope) {
     fun togglePlay() = send(TOGGLE_PLAY)
     fun next() = send("""{"Player":"Next"}""")
     fun prev() = send("""{"Player":"Prev"}""")
+    /** No-op when nothing plays, unlike [togglePlay]. */
+    fun pause() = send("""{"Player":"Pause"}""")
     fun stop() = send("""{"Player":"Stop"}""")
+    fun playItem(file: String) = send(JSONObject().put("Player", JSONObject().put("PlayItem", file)).toString())
+    fun cyclePlaybackMode() = send("""{"Player":"CyclePlaybackMode"}""")
     fun seek(seconds: Int) = send("""{"Player":{"Seek":$seconds}}""")
     fun setVolume(percent: Int) = send("""{"System":{"SetVol":${percent.coerceIn(0, 100)}}}""")
 
@@ -164,6 +172,10 @@ class BackendClient(private val scope: CoroutineScope) {
             event.has("MetadataSongScanFinished") || event.has("MetadataScanSummary") -> {
                 _state.update { it.copy(scan = ScanState(status = ScanState.Status.IDLE)) }
             }
+            event.has("PlaybackModeChangedEvent") -> {
+                val mode = event.optString("PlaybackModeChangedEvent")
+                if (mode.isNotEmpty()) _state.update { it.copy(playbackMode = mode) }
+            }
             event.has("PlaybackStateEvent") -> {
                 val value = event.get("PlaybackStateEvent")
                 val playback = if (value is JSONObject) "ERROR" else value.toString()
@@ -177,6 +189,7 @@ class BackendClient(private val scope: CoroutineScope) {
                     ?: song.optString("image_id").ifBlank { null }?.let { "${BackendConfig.baseUrl}/artwork/$it" }
                 _state.update {
                     it.copy(
+                        file = file.ifBlank { null },
                         title = title,
                         artist = song.optString("artist").ifBlank { null },
                         album = song.optString("album").ifBlank { null },

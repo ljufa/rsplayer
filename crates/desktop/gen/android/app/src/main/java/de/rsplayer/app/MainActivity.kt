@@ -19,6 +19,9 @@ class MainActivity : TauriActivity() {
     // the ordering guarantee even if the process was resurrected for the
     // activity alone.
     BackendConfig.ensureInitialized(this)
+    // The media service may have started the backend before any activity
+    // existed; the Tauri runtime takes over the Android context in super.onCreate.
+    NativeBackend.activityCreating()
     // Transparent system bars with light icons: the window background behind
     // them is the UI's dark base colour (see themes.xml).
     enableEdgeToEdge(

@@ -86,9 +86,12 @@ the Tauri mobile entry point for Android:
 - `run_backend` is idempotent about process-global setup (crypto provider,
   logger) because "Restart RSPlayer" relaunches the executable on desktop but
   restarts the backend **in-process** on Android.
-- Android: `android::early_init` installs a logcat logger and registers the
-  activity with `ndk-context` (cpal's AAudio host and iroh's interface
-  discovery need it). Media keys come from souvlaki on desktop; on Android
+- Android: the backend is process-wide (`android::backend()`), started by
+  the Tauri entry point or, with no activity (Android Auto, media button),
+  by the Kotlin `PlaybackService` through `NativeBackend.start`. Whoever is
+  first registers the app context with `ndk-context` (cpal's AAudio host and
+  iroh's interface discovery need it): tao when an activity exists, else
+  `android.rs`, which hands over to tao when an activity appears later. Media keys come from souvlaki on desktop; on Android
   the Kotlin `PlaybackService` (media3 `MediaSessionService`, foreground
   while playing) mirrors the backend over its WebSocket — the same JSON
   `UserCommand`/`StateChangeEvent` frames the web UI uses — and handles

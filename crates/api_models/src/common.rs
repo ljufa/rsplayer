@@ -268,6 +268,12 @@ pub enum PlaylistCommand {
 pub enum QueueCommand {
     LoadPlaylistInQueue(String),
     LoadAlbumInQueue(String),
+    /// Replace the queue with the playlist (first id; also `most_played` and
+    /// `liked`) and start at the song with the second id.
+    LoadPlaylistInQueueFrom(String, String),
+    /// Replace the queue with the album (first id) and start at the song
+    /// with the second id.
+    LoadAlbumInQueueFrom(String, String),
     LoadArtistInQueue(String),
     LoadSongToQueue(String),
     LoadLocalLibDirectory(String),

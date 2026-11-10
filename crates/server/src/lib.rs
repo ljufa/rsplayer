@@ -16,6 +16,7 @@
 //! aborted — so a "Restart `RSPlayer`" must restart the whole process.
 
 extern crate log;
+pub mod browse_api;
 pub mod command_context;
 pub mod command_handler;
 pub mod composition_root;
@@ -171,7 +172,19 @@ async fn run(
     }
 
     let (http_server_future, https_server_future, websocket_future) =
-        server::start(state_changes_tx.subscribe(), player_commands_tx.clone(), config);
+        server::start(
+            state_changes_tx.subscribe(),
+            player_commands_tx.clone(),
+            config,
+            browse_api::BrowseState {
+                album_repository: album_repository.clone(),
+                song_repository: song_repository.clone(),
+                metadata_service: metadata_service.clone(),
+                playlist_service: playlist_service.clone(),
+                podcast_service: podcast_service.clone(),
+                queue_service: queue_service.clone(),
+            },
+        );
     info!("HTTP servers started.");
 
     if let Some(service) = usb_service.clone() {
