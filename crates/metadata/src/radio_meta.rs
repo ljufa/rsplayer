@@ -24,7 +24,7 @@ pub struct RadioMeta {
     pub samplerate: Option<u32>,
     pub channels: Option<usize>,
     pub bitrate: Option<u32>,
-    /// Current track from the station's metadata service (QuantumCast, Radiosphere).
+    /// Current track from the station's metadata service (`QuantumCast`, Radiosphere).
     pub now_playing: Option<NowPlaying>,
     /// That service's now-playing URL. When set, it is polled during playback
     /// and the stream's own ICY titles (often just the channel name) are ignored.

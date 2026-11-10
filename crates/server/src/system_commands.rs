@@ -1,5 +1,5 @@
 //! System commands: volume (through the hardware audio service), mute,
-//! power-off/reboot (disabled in demo and desktop modes), RSPlayer restart
+//! power-off/reboot (disabled in demo and desktop modes), `RSPlayer` restart
 //! (exit for systemd headless, restart signal to the desktop wrapper) and
 //! front-panel firmware power.
 

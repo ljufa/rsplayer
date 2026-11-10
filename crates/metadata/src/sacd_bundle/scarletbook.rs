@@ -85,11 +85,11 @@ impl SacdTrack {
     }
 }
 
-fn read_u16_be(data: &[u8], offset: usize) -> u16 {
+const fn read_u16_be(data: &[u8], offset: usize) -> u16 {
     u16::from_be_bytes([data[offset], data[offset + 1]])
 }
 
-fn read_u32_be(data: &[u8], offset: usize) -> u32 {
+const fn read_u32_be(data: &[u8], offset: usize) -> u32 {
     u32::from_be_bytes([data[offset], data[offset + 1], data[offset + 2], data[offset + 3]])
 }
 

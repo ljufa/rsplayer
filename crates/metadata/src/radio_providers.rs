@@ -1,5 +1,5 @@
 //! Per-provider API lookups for richer radio metadata (Radiosphere and
-//! QuantumCast: now-playing track and channel artwork), keyed off the stream
+//! `QuantumCast`: now-playing track and channel artwork), keyed off the stream
 //! response. [`NowPlayingPoller`] keeps asking the provider during playback,
 //! since its ICY titles often only name the channel.
 
