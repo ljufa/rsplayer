@@ -799,12 +799,13 @@ mod metadata {
     }
 
     #[test]
-    fn test_no_gain_tags_for_mp3() {
+    fn test_mp3_gain_tags_from_txxx_frames() {
+        // ID3 stores ReplayGain in TXXX frames, which all share the frame id.
         let ctx = TestContext::new();
         ctx.metadata_service.scan_music_dir(true, &ctx.sender);
         let song = ctx.song_repository.find_by_id("ab/music.mp3").expect("song not found");
-        assert!(song.file_tag_track_gain().is_none(), "mp3 has no gain tags");
-        assert!(song.file_tag_album_gain().is_none(), "mp3 has no gain tags");
+        assert_eq!(song.file_tag_track_gain(), Some(2.63));
+        assert_eq!(song.file_tag_album_gain(), Some(2.63));
     }
 
     #[test]

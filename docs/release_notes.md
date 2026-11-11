@@ -39,6 +39,14 @@ Albums are no longer told apart by the artist of each track:
 
 Albums are regrouped automatically the first time the new version starts; no rescan is needed. The compilation flag and MusicBrainz id are read during a scan, so run "Full rescan" for them to apply to songs already in your library.
 
+#### All tags are kept
+
+A library scan used to keep only the main tags (title, artist, album, date, track and so on) and a few others, and dropped the rest. It now stores every text tag of a file: sort names, track and disc totals, conductor, lyrics, original release date, MusicBrainz ids, ISRC and more. They are stored under the same names whatever the file format, ready for features that use them. Each custom MP3 (ID3 `TXXX`) tag is now kept separately under its description, instead of only the first one.
+
+This also fixes ReplayGain in MP3 files: their gain tags were not picked up, so loudness normalization could not use them (the file-tag sources skipped MP3s, and "Auto" fell back to measuring them).
+
+Run "Full rescan" (Settings) to read the extra tags of songs already in your library.
+
 ## v5.7.0 (2026-11-10)
 
 ### New features

@@ -59,6 +59,10 @@ pub struct Song {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image_id: Option<String>,
 
+    /// Lyrics are left out when a song is sent to clients (no client shows
+    /// them, and they would make every queue and album list larger); the
+    /// library database keeps them, see [`Song::to_json_string_bytes`].
+    #[serde(serialize_with = "serialize_tags_without_lyrics")]
     pub tags: HashMap<String, String>,
 
     pub file: String,
@@ -70,9 +74,16 @@ pub struct Song {
 }
 
 impl Song {
+    /// The song as stored in the database: unlike the serde form sent to
+    /// clients, it keeps the lyrics tags.
     #[must_use]
     pub fn to_json_string_bytes(&self) -> Vec<u8> {
-        serde_json::to_vec(self).expect("Song serialization failed!")
+        if !self.tags.keys().any(|k| is_lyrics_tag(k)) {
+            return serde_json::to_vec(self).expect("Song serialization failed!");
+        }
+        let mut value = serde_json::to_value(self).expect("Song serialization failed!");
+        value["tags"] = serde_json::to_value(&self.tags).expect("Song serialization failed!");
+        serde_json::to_vec(&value).expect("Song serialization failed!")
     }
 
     #[must_use]
@@ -185,9 +196,37 @@ fn parse_replaygain(tags: &HashMap<String, String>, key: &str) -> Option<f64> {
         .ok()
 }
 
+/// Whether a `Song.tags` key holds lyrics: `Lyrics` (the scanner's name for
+/// the standard tag), and raw `LYRICS`/`UNSYNCEDLYRICS`/ID3 `USLT` keys.
+#[must_use]
+pub fn is_lyrics_tag(key: &str) -> bool {
+    let name = key.rsplit(':').next().unwrap_or(key);
+    ["lyrics", "unsyncedlyrics", "uslt"]
+        .iter()
+        .any(|l| name.eq_ignore_ascii_case(l) || key.eq_ignore_ascii_case(l))
+}
+
+fn serialize_tags_without_lyrics<S: serde::Serializer>(
+    tags: &HashMap<String, String>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.collect_map(tags.iter().filter(|(k, _)| !is_lyrics_tag(k)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lyrics_reach_the_database_but_not_clients() {
+        let song = song_with_tags(&[("Lyrics", "la la la"), ("TXXX:USLT", "lo"), ("SortArtist", "A, B")]);
+        let sent = serde_json::to_string(&song).unwrap();
+        assert!(!sent.contains("la la la") && !sent.contains("USLT"));
+        assert!(sent.contains("SortArtist"));
+        let stored = Song::bytes_to_song(&song.to_json_string_bytes()).unwrap();
+        assert_eq!(stored, song);
+        assert!(!is_lyrics_tag("LyricsWriter") && !is_lyrics_tag("Lyricist"));
+    }
 
     fn song_with_tags(pairs: &[(&str, &str)]) -> Song {
         let mut song = Song::default();
