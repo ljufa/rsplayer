@@ -2,7 +2,7 @@
 //! playback thread.
 //!
 //! Probes the source (local file, HTTP/ICY radio, seekable HTTP file, APE,
-//! SACD ISO track),
+//! SACD ISO track, cue sheet track),
 //! opens the matching [`AudioOutput`] (PCM at source rate, or the DSD path),
 //! then packet-by-packet: decode → multiroom tee → write. Handles seeks
 //! (`skip_to_time`), mid-track format changes (rate/channel switch reopens
@@ -103,7 +103,17 @@ pub fn play_file(
 
     let mut radio_meta: Option<RadioMeta> = None;
 
-    let mut reader: Box<dyn FormatReader + '_> = if let Some((iso_path, track_idx)) = sacd_path {
+    // Cue sheet tracks ("album.cue#CUE_03"): a window onto the album file.
+    // `Some(len)` (track length, `None` = to the end of the file) also means
+    // the decoder must cut the boundary packets.
+    let mut cue_len: Option<Option<u64>> = None;
+
+    let mut reader: Box<dyn FormatReader + '_> = if is_local && metadata::cue_bundle::is_cue_key(path_str) {
+        let cue_reader =
+            metadata::cue_bundle::open_track(path_str, &config.music_dirs).map_err(|e| format_err!("Failed to open cue track: {e:#}"))?;
+        cue_len = Some(cue_reader.track_len());
+        Box::new(cue_reader)
+    } else if let Some((iso_path, track_idx)) = sacd_path {
         debug!("SACD ISO: {} track {}", iso_path.display(), track_idx);
         let file = std::fs::File::open(&iso_path).map_err(|e| format_err!("Failed to open SACD ISO {}: {e}", iso_path.display()))?;
         Box::new(
@@ -215,6 +225,9 @@ pub fn play_file(
     let is_dsd = audio_params.codec == CODEC_TYPE_DSD_LSBF || audio_params.codec == CODEC_TYPE_DSD_MSBF;
 
     let mut decoder = codec_registry.make_audio_decoder(audio_params, &AudioDecoderOptions::default())?;
+    if let Some(len) = cue_len {
+        decoder = Box::new(metadata::cue_bundle::CueTrimDecoder::new(decoder, len));
+    }
     let mut audio_output: Option<AudioOutput> = None;
     // Cloned (not moved) into each open attempt so the meter survives failed
     // attempts and mid-song device reopens.
@@ -247,6 +260,10 @@ pub fn play_file(
             if let Err(err) = seek_result {
                 warn!("Seek failed: {err}");
             }
+            // Drop decoder state carried over from before the jump (MP3 bit
+            // reservoir, Opus/Vorbis overlap) so it is not mixed into the
+            // first packets after the seek.
+            decoder.reset();
             // While streaming to a group, a seek must flush everywhere at
             // once: end the session (followers flush on SessionEnd) and drop
             // the local output so the pre-seek ring content is discarded and

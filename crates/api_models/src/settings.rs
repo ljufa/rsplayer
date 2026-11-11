@@ -885,7 +885,7 @@ impl Default for MetadataStoreSettings {
             supported_extensions: vec![
                 // Lossless
                 "flac", "wav", "aiff", "aif", "ape", // Lossy
-                "mp3", "mp2", "mp1", "m4a", "ogg", "oga", // Lossless containers
+                "mp3", "mp2", "mp1", "m4a", "ogg", "oga", "opus", // Lossless containers
                 "caf", // Matroska / WebM (audio-only containers)
                 "mka", "weba", // DSD
                 "dsf", "dff", // SACD disc image

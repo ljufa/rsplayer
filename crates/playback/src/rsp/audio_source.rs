@@ -6,7 +6,8 @@
 //! updates flow out as events, hosts that honour byte ranges (podcast
 //! episodes, direct file links) become a seekable [`HttpRangeSource`], and
 //! anything else is a plain non-seekable stream. APE and SACD-ISO keys
-//! (`…#SACD_<n>`) get their special readers.
+//! (`…#SACD_<n>`) get their special readers; cue sheet tracks (`…#CUE_<nn>`)
+//! are opened by `metadata::cue_bundle::open_track`.
 
 use std::path::{Path, PathBuf};
 
@@ -79,7 +80,7 @@ pub fn probe_http_source(
     let ext = match ct_str.split(';').next().unwrap_or("").trim() {
         "audio/mpeg" | "audio/mp3" => Some("mp3"),
         "audio/aac" | "audio/aacp" | "audio/x-aac" => Some("aac"),
-        "audio/ogg" | "application/ogg" => Some("ogg"),
+        "audio/ogg" | "application/ogg" | "audio/opus" => Some("ogg"),
         "audio/flac" | "audio/x-flac" => Some("flac"),
         "audio/wav" | "audio/x-wav" => Some("wav"),
         "audio/mp4" | "audio/x-m4a" | "audio/m4a" => Some("m4a"),

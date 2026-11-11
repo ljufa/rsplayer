@@ -465,6 +465,9 @@ async fn serve_music(State(state): State<AppState>, AxumPath(path): AxumPath<Str
         .map(std::borrow::ToOwned::to_owned);
 
     let music_dirs = state.config.get_settings().metadata_settings.effective_directories();
+    if metadata::cue_bundle::is_cue_key(&path) {
+        return serve_cue_track(path, range_hdr, music_dirs).await;
+    }
     let file_path = music_dirs
         .iter()
         .map(|dir| PathBuf::from(dir).join(&path))
@@ -534,6 +537,65 @@ async fn serve_music(State(state): State<AppState>, AxumPath(path): AxumPath<Str
         builder = builder.header(header::CONTENT_RANGE, content_range);
     }
     builder.body(Body::from(chunk)).unwrap()
+}
+
+/// One response's worth of a cue track served as WAV.
+struct CueChunk {
+    bytes: Vec<u8>,
+    start: u64,
+    end: u64,
+    size: u64,
+    is_range: bool,
+}
+
+/// A cue sheet track for browser playback: decoded on demand and served as
+/// WAV in the same bounded chunks as files, so the `<audio>` element can
+/// buffer and seek with ordinary range requests.
+async fn serve_cue_track(key: String, range_hdr: Option<String>, music_dirs: Vec<String>) -> Response {
+    let result = tokio::task::spawn_blocking(move || -> anyhow::Result<Option<CueChunk>> {
+        let mut track = metadata::cue_bundle::wav::WavTrack::open(&key, &music_dirs)?;
+        let size = track.total_size();
+        let (start, end, is_range) = match range_hdr.as_deref().map(|r| parse_range(r, size)) {
+            Some(Some((a, b))) => (a, b.min(a.saturating_add(STREAM_CHUNK - 1)), true),
+            Some(None) => return Ok(None),
+            None => (0, STREAM_CHUNK.min(size) - 1, false),
+        };
+        let bytes = track.read_range(start, end)?;
+        Ok(Some(CueChunk {
+            bytes,
+            start,
+            end,
+            size,
+            is_range,
+        }))
+    })
+    .await;
+    match result {
+        Ok(Ok(Some(chunk))) => {
+            let mut builder = Response::builder()
+                .status(if chunk.is_range {
+                    StatusCode::PARTIAL_CONTENT
+                } else {
+                    StatusCode::OK
+                })
+                .header(header::ACCEPT_RANGES, "bytes")
+                .header(header::CONTENT_TYPE, "audio/wav")
+                .header(header::CONTENT_LENGTH, chunk.bytes.len().to_string());
+            if chunk.is_range {
+                builder = builder.header(header::CONTENT_RANGE, format!("bytes {}-{}/{}", chunk.start, chunk.end, chunk.size));
+            }
+            builder.body(Body::from(chunk.bytes)).unwrap()
+        }
+        Ok(Ok(None)) => StatusCode::RANGE_NOT_SATISFIABLE.into_response(),
+        Ok(Err(e)) => {
+            warn!("Cannot serve cue track: {e:#}");
+            StatusCode::NOT_FOUND.into_response()
+        }
+        Err(e) => {
+            warn!("Cue track task failed: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
 }
 
 fn range_not_satisfiable(file_size: u64) -> Response {

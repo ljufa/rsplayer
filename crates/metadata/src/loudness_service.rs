@@ -116,17 +116,23 @@ impl LoudnessService {
                         return;
                     }
 
-                    let full_path = self
-                        .music_dirs
-                        .iter()
-                        .map(|dir| format!("{dir}/{file_key}"))
-                        .find(|p| Path::new(p).exists());
-                    let Some(full_path) = full_path else {
-                        warn!("Loudness scan: file not found in any music directory: {file_key}");
-                        return;
+                    let measured = if crate::cue_bundle::is_cue_key(file_key) {
+                        debug!("Loudness scan: analysing cue track {file_key}");
+                        LoudnessAnalyzer::measure_cue_track(file_key, &self.music_dirs)
+                    } else {
+                        let full_path = self
+                            .music_dirs
+                            .iter()
+                            .map(|dir| format!("{dir}/{file_key}"))
+                            .find(|p| Path::new(p).exists());
+                        let Some(full_path) = full_path else {
+                            warn!("Loudness scan: file not found in any music directory: {file_key}");
+                            return;
+                        };
+                        debug!("Loudness scan: analysing {file_key}");
+                        LoudnessAnalyzer::measure_file(Path::new(&full_path))
                     };
-                    debug!("Loudness scan: analysing {file_key}");
-                    if let Some(lufs) = LoudnessAnalyzer::measure_file(Path::new(&full_path)) {
+                    if let Some(lufs) = measured {
                         #[allow(clippy::cast_possible_truncation)]
                         let stored = (lufs * 100.0).round() as i32;
                         debug!("Loudness scan: {file_key} => {lufs:.2} LUFS");

@@ -1,8 +1,10 @@
 //! Fjall-backed [`AlbumRepository`].
 //!
-//! Albums are keyed by [`FjallAlbumRepository::album_db_key`] — normalized
-//! `artist|album` (see `genre_utils::normalize_name`) so tag-case and
-//! diacritic variants of the same album merge into one entry.
+//! Albums are keyed by [`album_identity::album_key`]: the `MusicBrainz` album
+//! id, or the normalized album folder, album-artist tag and title (see
+//! `genre_utils::normalize_name`), so tag-case and diacritic variants of the
+//! same album merge into one entry. Songs without an album tag are grouped
+//! per artist under `__singletons__<artist>`.
 
 use std::cmp::Reverse;
 
@@ -12,6 +14,7 @@ use log::error;
 
 use api_models::{player::Song, playlist::Album};
 
+use crate::album_identity;
 use crate::error::{RepoError, RepoResult};
 use crate::genre_utils::{is_junk_genre, normalize_genre_key, normalize_name, resolve_id3v1_genre, title_case_genre};
 pub use crate::ports::album_repository::{AlbumRepository, ArcAlbumRepository};
@@ -37,12 +40,6 @@ impl FjallAlbumRepository {
                 .keyspace("albums", KeyspaceCreateOptions::default)
                 .expect("Failed to open albums keyspace"),
         }
-    }
-
-    pub fn album_db_key(artist: &str, album: &str) -> String {
-        let na = normalize_name(artist);
-        let nb = normalize_name(album);
-        if na.is_empty() { nb } else { format!("{na}|{nb}") }
     }
 }
 
@@ -230,31 +227,19 @@ impl AlbumRepository for FjallAlbumRepository {
                 return Ok(());
             }
         };
-        let artist_for_key = song.album_artist.as_deref().or(song.artist.as_deref()).unwrap_or("");
-        let key = Self::album_db_key(artist_for_key, &raw_album);
-        if key.is_empty() {
-            return Ok(());
-        }
+        let key = album_identity::album_key(&song, &raw_album);
         let existing_album = self
             .albums_db
             .get(key.as_bytes())
             .map_err(|e| RepoError::Storage(format!("read album '{raw_album}': {e}")))?;
         let mut album = existing_album.and_then(|bytes| Album::from_bytes(&bytes)).unwrap_or_default();
+        album.artist = album_identity::album_display_artist(album.artist.as_deref(), &song);
 
         if !album.song_keys.contains(&song.file) {
             album.song_keys.push(song.file);
         }
         if song.image_id.is_some() {
             album.image_id = song.image_id;
-        }
-        let effective_artist = song
-            .album_artist
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .or_else(|| song.artist.as_deref().map(str::trim).filter(|s| !s.is_empty()));
-        if let Some(artist) = effective_artist {
-            album.artist = Some(artist.to_owned());
         }
         if let Some(date) = song.date {
             if date.len() == 4
@@ -322,11 +307,7 @@ impl AlbumRepository for FjallAlbumRepository {
             }
         };
 
-        let artist_for_key = song.album_artist.as_deref().or(song.artist.as_deref()).unwrap_or("");
-        let key = Self::album_db_key(artist_for_key, &raw_album);
-        if key.is_empty() {
-            return Ok(());
-        }
+        let key = album_identity::album_key(song, &raw_album);
 
         let existing = self
             .albums_db
@@ -388,6 +369,15 @@ mod test {
     use crate::test::test_shared;
     use api_models::playlist::Album;
     use chrono::{Months, Utc};
+
+    /// Id of the album titled `title` (case-insensitive).
+    fn key_of(repo: &FjallAlbumRepository, title: &str) -> String {
+        repo.find_all()
+            .into_iter()
+            .find(|a| a.title.eq_ignore_ascii_case(title))
+            .expect("album not found")
+            .id
+    }
 
     macro_rules! insert_albums_with_date {
         ($repo:expr, $($key:expr, $title:expr, $artist:expr, $added_offset:expr, $published_offset:expr),* $(,)?) => {
@@ -539,7 +529,7 @@ mod test {
         let all = repo.find_all();
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].title, "Dark Side of the Moon");
-        let key = FjallAlbumRepository::album_db_key("Pink Floyd", "Dark Side of the Moon");
+        let key = key_of(&repo, "Dark Side of the Moon");
         let full = repo.find_by_id(&key).expect("album not found");
         assert_eq!(full.song_keys.len(), 3);
     }
@@ -758,7 +748,7 @@ mod test {
         })
         .expect("update_from_song failed");
 
-        let key = FjallAlbumRepository::album_db_key("Test Artist", "Test Album");
+        let key = key_of(&repo, "Test Album");
         let album = repo.find_by_id(&key).expect("album should exist");
         assert_eq!(album.song_keys.len(), 2);
 
@@ -789,7 +779,7 @@ mod test {
         })
         .expect("update_from_song failed");
 
-        let key = FjallAlbumRepository::album_db_key("Test Artist", "Lone Album");
+        let key = key_of(&repo, "Lone Album");
         assert!(repo.find_by_id(&key).is_some());
 
         repo.remove_from_song(&Song {
@@ -817,7 +807,7 @@ mod test {
         })
         .expect("update_from_song failed");
 
-        let key = FjallAlbumRepository::album_db_key("Artist", "Album");
+        let key = key_of(&repo, "Album");
         let album = repo.find_by_id(&key).expect("album should exist");
         assert_eq!(album.song_keys.len(), 1);
 
@@ -1048,7 +1038,7 @@ mod test {
         })
         .expect("update_from_song failed");
 
-        let key = FjallAlbumRepository::album_db_key("Artist", "Album");
+        let key = key_of(&repo, "Album");
         let album = repo.find_by_id(&key).expect("album should exist");
         assert_eq!(album.song_keys.len(), 2);
 
@@ -1075,7 +1065,7 @@ mod test {
         })
         .expect("update_from_song failed");
 
-        let key = FjallAlbumRepository::album_db_key("Artist", "Ghost");
+        let key = key_of(&repo, "Ghost");
         assert!(repo.find_by_id(&key).is_some());
 
         let valid = HashSet::<String>::new();
@@ -1099,7 +1089,7 @@ mod test {
         })
         .expect("update_from_song failed");
 
-        let key = FjallAlbumRepository::album_db_key("Artist", "Valid Album");
+        let key = key_of(&repo, "Valid Album");
         assert!(repo.find_by_id(&key).is_some());
 
         let valid = HashSet::from_iter(["track1.flac".to_string()]);

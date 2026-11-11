@@ -11,7 +11,7 @@ To configure `rsplayer`, navigate to the settings page in the web UI. Settings a
 ![Appearance Settings](/_assets/settings_appearance.png)
 
 - **Theme:** Select a visual theme for the web UI. Available themes: Dark, Light, Synthwave, Dracula, Nord, Dim, Aqua, Coffee, Caramel, and Black.
-- **Album art background and cover download:** Shows the album artwork as the page background, and downloads covers missing from your files from Last.fm (sending artist and album or song title). Off: only covers embedded in your music files are shown and nothing is sent to Last.fm. Off by default on a new Android installation.
+- **Album art background and cover download:** Shows the album artwork as the page background, and downloads covers missing from your files from Last.fm (sending artist and album or song title). Off: only covers embedded in your music files or stored next to them (`cover.jpg`, `folder.jpg`, ...) are shown and nothing is sent to Last.fm. Off by default on a new Android installation.
 
 ## Desktop App
 
@@ -108,7 +108,9 @@ DSP also supports loading built-in presets and importing CamillaDSP configuratio
 
 The Music Sources section manages where rsplayer looks for your music files. You can combine multiple local directories and network shares.
 
-Supported file extensions: `.flac`, `.wav`, `.aiff`, `.aif`, `.ape`, `.mp3`, `.mp2`, `.mp1`, `.m4a`, `.ogg`, `.oga`, `.caf`, `.mka`, `.weba`, `.dsf`, `.dff`, `.iso` (SACD disc images)
+Supported file extensions: `.flac`, `.wav`, `.aiff`, `.aif`, `.ape`, `.mp3`, `.mp2`, `.mp1`, `.m4a`, `.ogg`, `.oga`, `.opus`, `.caf`, `.mka`, `.weba`, `.dsf`, `.dff`, `.iso` (SACD disc images)
+
+**Cue sheets:** an album ripped to one audio file with a `.cue` sheet (for example `Album.flac` + `Album.cue`, or `CDImage.ape` + `CDImage.ape.cue`) shows up as its separate tracks, with titles, artists and track numbers from the sheet. The album file itself is not listed. Sheets embedded in the file's `CUESHEET` tag work too. The sheet's `FILE` line may name a different extension than the actual file (a sheet written for `CD.wav` next to `CD.flac` is fine), and sheets in non-UTF-8 encodings such as Windows-1250 are read correctly. A sheet whose audio file is missing is ignored. When the folder already holds one file per track and the sheet just lists them (as EAC writes for split rips), the files are used as normal songs with their own tags; if a sheet places a track's start inside its file (a pregap at the start of the file), the tracks come from the sheet and the pregap is cut off. Cue sheets in remote (S3) libraries are not supported yet.
 
 ### Local Directories
 

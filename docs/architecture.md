@@ -14,7 +14,7 @@ carries the per-file detail — this page is the map.
 | `crates/server` | The `rsplayer` binary: composition root, axum HTTP/WS server, command dispatch, network mounts |
 | `crates/config` | `Settings` persistence (one JSON blob in fjall) with in-memory cache and schema migrations; first launch persists platform-aware defaults supplied by the server (from `hardware::platform`) |
 | `crates/playback` | The audio engine: Symphonia decode loop, cpal output (`AudioOutput`), DSD path, VU, multiroom tee/sink |
-| `crates/metadata` | Library scanner, fjall repositories (songs/albums/stats/loudness), queue, playlists, radio metadata and saved radio stations, APE/DSF/SACD Symphonia plugins |
+| `crates/metadata` | Library scanner, fjall repositories (songs/albums/stats/loudness), queue, playlists, radio metadata and saved radio stations, APE/DSF/DFF/SACD/Opus Symphonia plugins |
 | `crates/podcast` | Podcast subscriptions: directory search (iTunes / Podcast Index), RSS/Atom feed refresh (`feed-rs`), episode cache in fjall, per-episode resume position and played state |
 | `crates/dsp` | Parametric EQ (biquads, CamillaDSP-derived) with a lock-free config handoff to the audio thread |
 | `crates/sync` | Multiroom leader/follower over iroh QUIC — see the dedicated doc |
@@ -153,7 +153,8 @@ Key points:
   `alsa_output.rs` was retired in 2026-07 — it is pure cpal.
 - **Source resolution** (`audio_source.rs`): local paths against the music
   dirs; APE and SACD-ISO virtual tracks (`…#SACD_<n>`) via the custom readers
-  in the metadata crate. HTTP URLs are fetched once with `Icy-Metadata: 1`
+  in the metadata crate; cue sheet tracks (`…#CUE_<nn>`, see below) via
+  `metadata::cue_bundle::open_track`. HTTP URLs are fetched once with `Icy-Metadata: 1`
   and `Range: bytes=0-`: a response carrying `icy-*` headers is a live radio
   stream (ICY title updates flow out as events, not seekable; stations with a
   metadata service, QuantumCast and Radiosphere, are polled by
@@ -221,6 +222,30 @@ Key points:
   it supports it, otherwise the resampler targets an integer multiple
   (cleanest ratio) or the closest supported rate; retry ladders handle
   drivers that reject advertised configs.
+- **Opus** is decoded by `metadata::opus_bundle` (Symphonia ships no Opus
+  decoder) on top of the pure-Rust `opus-rs` crate; Symphonia's Ogg, MKV and
+  MP4 readers do the demuxing. Output is always 48 kHz f32. Symphonia exposes
+  the Opus pre-skip only as `Track::delay`, so the decoder drops it itself
+  from the first packet (pts <= 0) unless the container already marks a start
+  trim; it also applies the header output gain. The decode loop resets the
+  decoder after every seek (for all codecs), so a seek in Opus fades in over
+  ~200 ms (no pre-roll).
+- **Cue sheets** (`metadata::cue_bundle`): each track of a sheet is a
+  virtual song keyed `{base}#CUE_{nn}`, `base` being the `.cue` file (or the
+  audio file for a sheet embedded in its `CUESHEET` tag). The key has no
+  offsets: `open_track` re-reads the sheet, so keys survive fixed sheets.
+  The scanner parses every `.cue` it lists; a sheet whose audio is found
+  claims that file, which is then not a song of its own (a leftover sheet
+  without audio, or a second sheet for the same file, is ignored).
+  Playback wraps the file's reader in `CueTrackReader` (seeks to the track,
+  stops at its end, pts rebased to 0) and the decoder in `CueTrimDecoder`,
+  which cuts the boundary packets (a FLAC block is ~93 ms, an APE frame
+  ~1.7 s) to the exact sample; Symphonia's FLAC decoder ignores packet
+  trims. Track boundaries are `INDEX 01`, so a pregap plays at the end of the
+  previous track. Loudness analysis opens tracks the same way. In browser
+  playback, `/music/<cue key>` serves the track as a WAV decoded per range
+  request (`cue_bundle::wav`). Tracks of one file are separate songs to the
+  player, so the usual track change happens between them.
 - **DSD** never touches the PCM chain (no EQ, no VU, no software volume, no
   multiroom): `dsd.rs` types pass the raw bit stream to native-DSD cpal
   formats.
@@ -244,7 +269,7 @@ concern:
 |----------|----------|
 | `configuration` | `Settings` as one JSON value (see below) |
 | `songs` | `Song` JSON keyed by library-relative path; songs from a remote library are keyed `rs3:<library id>/<path below prefix>` |
-| `albums` | Albums keyed by normalized `artist\|album` |
+| `albums` | Albums keyed by `mb\|<MusicBrainz album id>`, else normalized `folder\|album artist tag\|album` (disc folders folded in, track artist not used; see `album_identity.rs`). Rebuilt from songs once by the `album_identity_v2` migration |
 | `play_statistics` | Play/skip/like counters per song key; `radio_uuid_*` keys hold the liked radio-browser stations |
 | `radio_stations` | Stations added by hand in the UI (`RadioStation` JSON keyed by a generated uuid), plus the details of liked radio-browser stations (keyed `fav_{stationuuid}`, `radio_browser_uuid` set) so Next/Prev can switch between favorites |
 | `loudness` | Integrated LUFS per song key |

@@ -394,8 +394,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Apple Silicon (macos-14) and Intel (macos-15-intel); a single-target dispatch builds one of them
-        include: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.target == 'macos-aarch64' && '[{"platform":"macos-14","rust_target":"aarch64-apple-darwin","bin_suffix":"darwin_arm64"}]') || (github.event_name == 'workflow_dispatch' && inputs.target == 'macos-x86_64' && '[{"platform":"macos-15-intel","rust_target":"x86_64-apple-darwin","bin_suffix":"darwin_amd64"}]') || '[{"platform":"macos-14","rust_target":"aarch64-apple-darwin","bin_suffix":"darwin_arm64"},{"platform":"macos-15-intel","rust_target":"x86_64-apple-darwin","bin_suffix":"darwin_amd64"}]') }}
+        # Apple Silicon (macos-15) and Intel (macos-15-intel); a single-target dispatch builds one of them
+        include: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.target == 'macos-aarch64' && '[{"platform":"macos-15","rust_target":"aarch64-apple-darwin","bin_suffix":"darwin_arm64"}]') || (github.event_name == 'workflow_dispatch' && inputs.target == 'macos-x86_64' && '[{"platform":"macos-15-intel","rust_target":"x86_64-apple-darwin","bin_suffix":"darwin_amd64"}]') || '[{"platform":"macos-15","rust_target":"aarch64-apple-darwin","bin_suffix":"darwin_arm64"},{"platform":"macos-15-intel","rust_target":"x86_64-apple-darwin","bin_suffix":"darwin_amd64"}]') }}
 
     runs-on: ${{ matrix.platform }}
     steps:

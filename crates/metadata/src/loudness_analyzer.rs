@@ -7,7 +7,10 @@
 use std::{fs::File, path::Path};
 
 use symphonia::core::{
-    codecs::{CodecParameters, audio::AudioDecoderOptions},
+    codecs::{
+        CodecParameters,
+        audio::{AudioDecoder, AudioDecoderOptions},
+    },
     errors::Error as SymphoniaError,
     formats::probe::Hint,
     formats::{FormatOptions, FormatReader, TrackType},
@@ -33,10 +36,25 @@ impl LoudnessAnalyzer {
         let probe = build_probe();
         let mut format = probe.probe(&hint, mss, FormatOptions::default(), MetadataOptions::default()).ok()?;
 
-        Self::measure_from_format(&mut *format)
+        Self::measure_from_format(&mut *format, |decoder| decoder)
     }
 
-    fn measure_from_format(format: &mut dyn FormatReader) -> Option<f64> {
+    /// Loudness of one cue track (`…#CUE_nn` key), found in `music_dirs`.
+    pub fn measure_cue_track(key: &str, music_dirs: &[String]) -> Option<f64> {
+        let mut reader = crate::cue_bundle::open_track(key, music_dirs)
+            .inspect_err(|e| log::warn!("Loudness: cannot open cue track {key}: {e:#}"))
+            .ok()?;
+        let len = reader.track_len();
+        Self::measure_from_format(&mut reader, |decoder| {
+            Box::new(crate::cue_bundle::CueTrimDecoder::new(decoder, len))
+        })
+    }
+
+    /// `wrap_decoder` adapts the file's decoder (cue tracks cut theirs to the track).
+    fn measure_from_format(
+        format: &mut dyn FormatReader,
+        wrap_decoder: impl FnOnce(Box<dyn AudioDecoder>) -> Box<dyn AudioDecoder>,
+    ) -> Option<f64> {
         let track = format.default_track(TrackType::Audio)?;
         let track_id = track.id;
 
@@ -53,9 +71,11 @@ impl LoudnessAnalyzer {
         let sample_rate = audio_params.sample_rate?;
 
         let codec_registry = build_codec_registry();
-        let mut decoder = codec_registry
-            .make_audio_decoder(audio_params, &AudioDecoderOptions::default())
-            .ok()?;
+        let mut decoder = wrap_decoder(
+            codec_registry
+                .make_audio_decoder(audio_params, &AudioDecoderOptions::default())
+                .ok()?,
+        );
 
         let mut meter = ebur128::EbuR128::new(channels, sample_rate, ebur128::Mode::I).ok()?;
         let mut sample_vec: Vec<f32> = Vec::new();

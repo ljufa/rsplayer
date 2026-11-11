@@ -1,5 +1,44 @@
 # Release Notes
 
+## Unreleased
+
+### New features
+
+#### Opus playback
+
+RSPlayer now plays Opus: `.opus` files, and Opus inside Ogg (`.ogg`, `.oga`), Matroska/WebM (`.mka`, `.weba`) and MP4 (`.m4a`) files. Mono, stereo and surround (up to 7.1) are supported, albums play gaplessly, and the volume adjustment stored in the file header is applied. Internet radio stations that stream Opus play as well. After adding Opus files, run "Update library" so they show up.
+
+The decoder is written in Rust like the rest of the player, so no extra system library is needed.
+
+#### Cue sheets
+
+Albums ripped to a single file with a cue sheet (`Album.flac` + `Album.cue`, `CDImage.ape` + `CDImage.ape.cue`, or a sheet embedded in the file) now show up as their separate tracks, with titles, artists, track numbers, genre and year taken from the sheet. Each track starts and stops at exactly the right sample, can be seeked, liked, added to playlists and loudness-normalized like any other song, and plays in browser playback mode too. The single album file is no longer listed as one long song. Cue sheets written in older Windows encodings (for example Central European Windows-1250) show their accented characters correctly. Run "Update library" to split albums that are already in your library.
+
+### Improvements
+
+#### DFF (DSDIFF) files play
+
+`.dff` files were listed as supported but had no reader, so a library update reported them as unreadable. They are now scanned (length, and tags from the file's ID3 chunk) and played like DSF files: native DSD or DoP, seekable, mono, stereo and multichannel. DST-compressed DFF files (often marked "DST" or "DST64/128" in rip names) are not supported: they are listed as unreadable, and the update summary says how many of them are DST-compressed. Run "Update library" to add DFF files that were skipped before.
+
+#### Cover images from the album folder
+
+Songs without an embedded cover now use an image stored next to them: `cover`, `folder`, `front`, `album`, `albumart` or `albumartsmall` with a `.jpg`, `.jpeg`, `.png`, `.webp`, `.gif` or `.bmp` extension (upper or lower case). For albums split into disc folders (`CD1`, `Disc 2`, ...) the image in the album folder above is found too. One copy is stored per image, shared by all tracks of the album. Cue sheet albums, APE files and SACD ISO images get the folder image as well. Remote (S3) libraries still use embedded covers only.
+
+When a file holds several pictures, the front cover is now used instead of whichever picture comes first (often the back cover or a booklet page).
+
+Run "Full rescan" (Settings) to pick up covers for songs already in your library.
+
+#### Albums grouped by folder
+
+Albums are no longer told apart by the artist of each track:
+
+- A compilation without an "album artist" tag now shows as one album under "Various Artists" instead of one album per track artist. The compilation flag (iTunes "part of a compilation") shows it under "Various Artists" too.
+- Two releases with the same title and artist (for example an original and a remaster) stay separate albums when they are in different folders.
+- Multi-disc albums still show as one album when the discs are in folders like `CD1`, `Disc 2` or `Album (Disc 1)`.
+- Files tagged with a MusicBrainz album id (for example by Picard) are grouped by that id, wherever they are stored.
+
+Albums are regrouped automatically the first time the new version starts; no rescan is needed. The compilation flag and MusicBrainz id are read during a scan, so run "Full rescan" for them to apply to songs already in your library.
+
 ## v5.7.0 (2026-11-10)
 
 ### New features

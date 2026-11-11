@@ -7,7 +7,8 @@
 //! song/album repositories. Scans run on a background thread guarded by
 //! `scan_running`; progress streams to clients as `MetadataSongScan*` events.
 //! SACD ISOs expand into one virtual song per track (`#SACD_` marker in the
-//! file key). Also answers browse/search queries and computes
+//! file key), and so do cue sheets (`#CUE_`, see [`crate::cue_bundle`]): the
+//! audio file a sheet splits is not listed as a song of its own. Also answers browse/search queries and computes
 //! [`api_models::stat::LibraryStats`].
 
 use std::{
@@ -15,7 +16,7 @@ use std::{
     cmp::Reverse,
     collections::{HashMap, HashSet},
     fs::File,
-    path::Path,
+    path::{Path, PathBuf},
     sync::{
         Arc, Mutex, RwLock,
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -45,6 +46,8 @@ use api_models::{
 };
 
 use crate::audio_metadata_extractor::AudioMetadataExtractor;
+use crate::cue_bundle::{self, CueSheet};
+use crate::folder_art;
 use crate::ports::{
     album_repository::ArcAlbumRepository, play_statistics_repository::ArcPlayStatisticsRepository, song_repository::ArcSongRepository,
 };
@@ -218,6 +221,9 @@ pub struct MetadataService {
 
 impl MetadataService {
     const MIGRATION_MARKER: &'static [u8] = b"cleanup_orphaned_albums_v3_5_5";
+    /// Albums keyed by folder / album artist / MusicBrainz id instead of
+    /// `artist|album` (see `album_identity`): rebuilt once from the songs.
+    const ALBUM_IDENTITY_MARKER: &'static [u8] = b"album_identity_v2";
 
     pub fn new(
         db: Arc<Database>,
@@ -229,6 +235,7 @@ impl MetadataService {
         let settings = settings.clone();
 
         Self::run_migration_if_needed(&db, &song_repository, &album_repository);
+        Self::rebuild_albums_if_needed(&db, &song_repository, &album_repository);
 
         let radio_stations = db
             .keyspace("radio_stations", KeyspaceCreateOptions::default)
@@ -308,6 +315,35 @@ impl MetadataService {
             warn!("Migration: failed to persist after migration: {e}");
         } else {
             info!("Migration: cleanup orphaned albums completed");
+        }
+    }
+
+    /// Regroups every song into albums under the current album keys, once.
+    fn rebuild_albums_if_needed(db: &Database, song_repository: &ArcSongRepository, album_repository: &ArcAlbumRepository) {
+        let migrations = db
+            .keyspace("_migrations", KeyspaceCreateOptions::default)
+            .expect("Failed to open _migrations keyspace");
+        if migrations.get(Self::ALBUM_IDENTITY_MARKER).ok().flatten().is_some() {
+            return;
+        }
+        info!("Running one-shot migration: rebuild albums with the new album identity");
+        let songs = song_repository.find_all();
+        album_repository.delete_all();
+        let mut failed = 0;
+        for song in &songs {
+            if album_repository.update_from_song(song.clone()).is_err() {
+                failed += 1;
+            }
+        }
+        if failed > 0 {
+            warn!("Migration: {failed} of {} songs could not be added to their album", songs.len());
+        }
+        if let Err(e) = migrations.insert(Self::ALBUM_IDENTITY_MARKER, b"1") {
+            warn!("Migration: failed to store migration marker: {e}");
+        } else if let Err(e) = db.persist(PersistMode::SyncData) {
+            warn!("Migration: failed to persist after migration: {e}");
+        } else {
+            info!("Migration: rebuilt albums from {} songs", songs.len());
         }
     }
 
@@ -646,7 +682,7 @@ impl MetadataService {
             added_remote.len(),
             deleted_db_keys.len()
         );
-        let (count, unreadable, unreached) = self.add_songs_to_db(&added_files, &added_remote, &reporter, &settings);
+        let (count, unreadable, dst, unreached) = self.add_songs_to_db(&added_files, &added_remote, &reporter, &settings);
 
         let removed = if full_scan { 0 } else { deleted_db_keys.len() };
         if !full_scan {
@@ -674,7 +710,8 @@ impl MetadataService {
         // A broken file fails the same way every time, so it doesn't make the
         // update incomplete; it is named, as the log may not show it.
         if !unreadable.is_empty() {
-            problems.insert(0, format!("{} unreadable", unreadable.len()));
+            let why = if dst > 0 { format!(" ({dst} DST-compressed DFF, not supported)") } else { String::new() };
+            problems.insert(0, format!("{} unreadable{why}", unreadable.len()));
         }
         let problems = if problems.is_empty() { String::new() } else { format!(", {}", problems.join(", ")) };
         let mut summary = if added == 0 && removed == 0 && problems.is_empty() {
@@ -771,6 +808,7 @@ impl MetadataService {
             }
             let kept_before = kept_prefixes.len();
             let mut root_failed = false;
+            let mut entries: Vec<(String, String)> = Vec::new();
             for entry in WalkDir::new(music_dir)
                 .follow_links(settings.follow_links)
                 .sort_by_file_name()
@@ -796,7 +834,7 @@ impl MetadataService {
                     de.file_type().is_file()
                 })
                 .filter(|de| {
-                    let is_supported = is_supported_file(de.path(), &supported_exts);
+                    let is_supported = is_supported_file(de.path(), &supported_exts) || cue_bundle::is_cue_file(de.path());
                     if !is_supported {
                         debug!("File {} has unsupported extension", de.path().display());
                     }
@@ -810,7 +848,17 @@ impl MetadataService {
                 debug!("Processing file: {} -> key: {}", entry.0, entry.1);
                 checked += 1;
                 reporter.report(ScanPhase::Listing, checked, 0, music_dir);
-                self.classify_local_file(&entry.0, &entry.1, &mut added_files, &mut unchanged_keys);
+                entries.push(entry);
+            }
+            // Cue sheets first: the audio files they split are not songs of their own.
+            let (cues, files): (Vec<_>, Vec<_>) = entries.into_iter().partition(|(path, _)| cue_bundle::is_cue_file(Path::new(path)));
+            let split_files = self.classify_cue_sheets(&cues, &mut added_files, &mut unchanged_keys);
+            for (path, key) in files {
+                if split_files.contains(Path::new(&path)) {
+                    debug!("File {path} is split by a cue sheet");
+                    continue;
+                }
+                self.classify_local_file(&path, &key, &mut added_files, &mut unchanged_keys);
             }
             if root_failed {
                 warn!("Music directory {music_dir} could not be listed, keeping its songs");
@@ -865,9 +913,71 @@ impl MetadataService {
             debug!("File {path} already in database (unchanged)");
             unchanged_keys.insert(key.to_owned());
         } else {
-            debug!("File {path} is NEW");
-            added_files.push(path.to_owned());
+            // A file with an embedded cue sheet is stored as its tracks only.
+            let tracks = self.cue_track_keys(key);
+            if tracks.is_empty() {
+                debug!("File {path} is NEW");
+                added_files.push(path.to_owned());
+            } else {
+                debug!("File {path} already in database ({} cue tracks)", tracks.len());
+                unchanged_keys.extend(tracks);
+            }
         }
+    }
+
+    /// Keys of the cue tracks stored for `base_key` (a sheet or an audio file).
+    fn cue_track_keys(&self, base_key: &str) -> Vec<String> {
+        self.song_repository
+            .find_by_key_prefix(&format!("{base_key}{}", cue_bundle::CUE_TRACK_MARKER))
+            .into_iter()
+            .map(|(k, _)| String::from_utf8_lossy(&k).to_string())
+            .collect()
+    }
+
+    /// Records the usable cue sheets of a folder walk as new or unchanged and
+    /// returns the audio files they split. A sheet is skipped when none of
+    /// its audio files exists (e.g. a leftover sheet of the original rip) or
+    /// when another sheet already splits the same files.
+    fn classify_cue_sheets(
+        &self,
+        cues: &[(String, String)],
+        added_files: &mut Vec<String>,
+        unchanged_keys: &mut HashSet<String>,
+    ) -> HashSet<PathBuf> {
+        let mut split_files: HashSet<PathBuf> = HashSet::new();
+        for (path, key) in cues {
+            let cue_path = Path::new(path);
+            let sheet = match CueSheet::read(cue_path) {
+                Ok(sheet) => sheet,
+                Err(e) => {
+                    info!("Ignoring cue sheet {path}: {e:#}");
+                    continue;
+                }
+            };
+            if sheet.is_one_file_per_track() {
+                debug!("Ignoring cue sheet {path}: its album is already split into one file per track");
+                continue;
+            }
+            let audio: Vec<PathBuf> = cue_bundle::resolve_audio_files(cue_path, &sheet).into_iter().flatten().collect();
+            if audio.is_empty() {
+                info!("Ignoring cue sheet {path}: its audio file was not found");
+                continue;
+            }
+            if audio.iter().all(|a| split_files.contains(a)) {
+                info!("Ignoring cue sheet {path}: another cue sheet already splits its audio file");
+                continue;
+            }
+            split_files.extend(audio);
+            let tracks = self.cue_track_keys(key);
+            if tracks.is_empty() {
+                debug!("Cue sheet {path} is NEW");
+                added_files.push(path.clone());
+            } else {
+                debug!("Cue sheet {path} already scanned ({} tracks)", tracks.len());
+                unchanged_keys.extend(tracks);
+            }
+        }
+        split_files
     }
 
     /// Lists every enabled remote library; returns the keys of new objects
@@ -926,8 +1036,9 @@ impl MetadataService {
     }
 
     /// Reads tags of the new files; returns (files handled, library paths
-    /// of the files that could not be read, remote files not read because
-    /// their storage stayed unreachable).
+    /// of the files that could not be read, how many of those are
+    /// DST-compressed DFF, remote files not read because their storage
+    /// stayed unreachable).
     ///
     /// Workers read files in parallel (open, tags, artwork); every song is
     /// saved here on the scanner thread, so album updates never race. APE and
@@ -938,10 +1049,11 @@ impl MetadataService {
         remote: &[(String, DateTime<Utc>, u64)],
         reporter: &ScanReporter,
         settings: &MetadataStoreSettings,
-    ) -> (usize, Vec<String>, usize) {
+    ) -> (usize, Vec<String>, usize, usize) {
         let total = files.len() + remote.len();
         let mut done = 0;
         let mut unreadable = Vec::new();
+        let mut dst = 0;
         let mut unreached = 0;
         // Shown in the scan summary: no music-directory prefix, no `rs3:<id>/`.
         let library_path = |label: &str| {
@@ -958,6 +1070,7 @@ impl MetadataService {
             reporter.report(ScanPhase::Reading, done, total, &short_file_name(file));
             if let Err(e) = self.scan_single_file(Path::new(file), settings) {
                 log::error!("Unable to scan file {file}. Error: {e}");
+                dst += usize::from(is_dst_error(&e));
                 unreadable.push(library_path(file));
             }
             done += 1;
@@ -982,7 +1095,7 @@ impl MetadataService {
 
         let next = AtomicUsize::new(0);
         let gate = OutageGate::new(MAX_OUTAGE);
-        let (tx, rx) = std::sync::mpsc::channel::<(usize, std::result::Result<Song, ReadError>)>();
+        let (tx, rx) = std::sync::mpsc::channel::<(usize, std::result::Result<Vec<Song>, ReadError>)>();
         std::thread::scope(|scope| {
             for _ in 0..workers {
                 let tx = tx.clone();
@@ -992,7 +1105,7 @@ impl MetadataService {
                         let i = next.fetch_add(1, Ordering::Relaxed);
                         let Some(job) = jobs.get(i) else { break };
                         let result = match job {
-                            ScanJob::Local(_) => Self::read_song(job, settings).map_err(ReadError::Unreadable),
+                            ScanJob::Local(_) => Self::read_songs(job, settings).map_err(ReadError::Unreadable),
                             ScanJob::Remote { key, .. } => Self::read_remote_song(job, key, settings, gate),
                         };
                         if tx.send((i, result)).is_err() {
@@ -1015,14 +1128,15 @@ impl MetadataService {
                 };
                 let label = jobs[i].label();
                 match result {
-                    Ok(song) => {
-                        if let Err(e) = self.save_song(song) {
+                    Ok(songs) => {
+                        if let Err(e) = songs.into_iter().try_for_each(|song| self.save_song(song)) {
                             log::error!("Unable to save song {label}. Error: {e}");
                             unreadable.push(library_path(label));
                         }
                     }
                     Err(ReadError::Unreadable(e)) => {
                         log::error!("Unable to scan file {label}. Error: {e}");
+                        dst += usize::from(is_dst_error(&e));
                         unreadable.push(library_path(label));
                     }
                     Err(ReadError::Unreached) => unreached += 1,
@@ -1039,13 +1153,18 @@ impl MetadataService {
             warn!("{unreached} remote files not read: storage unreachable for over {} min", MAX_OUTAGE.as_secs() / 60);
         }
         unreadable.sort();
-        (total, unreadable, unreached)
+        (total, unreadable, dst, unreached)
     }
 
     /// Reads a remote file, waiting out network outages together with the
     /// other scan workers (see [`OutageGate`]). Only failures while the
     /// storage answers count against the file.
-    fn read_remote_song(job: &ScanJob, key: &str, settings: &MetadataStoreSettings, gate: &OutageGate) -> std::result::Result<Song, ReadError> {
+    fn read_remote_song(
+        job: &ScanJob,
+        key: &str,
+        settings: &MetadataStoreSettings,
+        gate: &OutageGate,
+    ) -> std::result::Result<Vec<Song>, ReadError> {
         // Bounds retries if the connection keeps flapping.
         const MAX_READS: u32 = 10;
         let mut attempts = 0;
@@ -1053,7 +1172,7 @@ impl MetadataService {
             if !gate.wait() {
                 return Err(ReadError::Unreached);
             }
-            let err = match Self::read_song(job, settings) {
+            let err = match Self::read_songs(job, settings) {
                 Ok(song) => return Ok(song),
                 Err(e) => e,
             };
@@ -1072,10 +1191,33 @@ impl MetadataService {
         Err(ReadError::Unreached)
     }
 
-    /// Reads one file's song (tags and artwork); no database access, so it
-    /// runs on scan workers. A panic in a decoder fails just this file.
-    fn read_song(job: &ScanJob, settings: &MetadataStoreSettings) -> Result<Song> {
+    /// Reads one file's songs (tags and artwork): one song per file, one per
+    /// track for a cue sheet or a file with an embedded sheet. No database
+    /// access, so it runs on scan workers. A panic in a decoder fails just
+    /// this file. Local songs without embedded artwork get the folder image
+    /// (`cover.jpg`, `folder.jpg`, ...), see [`folder_art`].
+    fn read_songs(job: &ScanJob, settings: &MetadataStoreSettings) -> Result<Vec<Song>> {
+        let mut songs = Self::read_tagged_songs(job, settings)?;
+        if let ScanJob::Local(path) = job {
+            Self::fill_folder_artwork(Path::new(path), &mut songs);
+        }
+        Ok(songs)
+    }
+
+    /// Gives songs without artwork the folder image next to `file`, if any.
+    /// The directory is searched at most once per call.
+    fn fill_folder_artwork(file: &Path, songs: &mut [Song]) {
+        let mut folder_id: Option<Option<String>> = None;
+        for song in songs.iter_mut().filter(|s| s.image_id.is_none()) {
+            song.image_id = folder_id
+                .get_or_insert_with(|| folder_art::artwork_id_for(file, Path::new(ARTWORK_DIR)))
+                .clone();
+        }
+    }
+
+    fn read_tagged_songs(job: &ScanJob, settings: &MetadataStoreSettings) -> Result<Vec<Song>> {
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match job {
+            ScanJob::Local(path) if cue_bundle::is_cue_file(Path::new(path)) => Self::read_cue_songs(path, settings),
             ScanJob::Local(path) => {
                 let file_path = Path::new(path);
                 info!("Scanning file:\t{path}");
@@ -1083,16 +1225,80 @@ impl MetadataService {
                 let modified: DateTime<Utc> = file.metadata()?.modified()?.into();
                 let key = Self::full_path_to_database_key(settings, path);
                 let ext = file_path.extension().and_then(|e| e.to_str());
-                Self::probe_song(Box::new(file), ext, &key, modified)
+                let song = Self::probe_song(Box::new(file), ext, &key, modified)?;
+                if let Some(sheet) = cue_bundle::embedded_sheet(&song.tags) {
+                    let tracks = cue_bundle::track_songs(&sheet, &key, &[Some(song.clone())]);
+                    if !tracks.is_empty() {
+                        info!("{path}: {} tracks from its embedded cue sheet", tracks.len());
+                        return Ok(tracks);
+                    }
+                }
+                Ok(vec![song])
             }
             ScanJob::Remote { key, modified, size } => {
                 info!("Scanning remote file:\t{key}");
                 let source = remote_store::open_for_scan(settings, key, *size)?;
                 let ext = Path::new(key).extension().and_then(|e| e.to_str());
-                Self::probe_song(Box::new(source), ext, key, *modified)
+                Ok(vec![Self::probe_song(Box::new(source), ext, key, *modified)?])
             }
         }))
         .map_err(|_| Error::msg(format!("panicked while reading {}", job.label())))?
+    }
+
+    /// The tracks of an external cue sheet, with tags, artwork and the last
+    /// track's length taken from the audio files it names.
+    fn read_cue_songs(path: &str, settings: &MetadataStoreSettings) -> Result<Vec<Song>> {
+        info!("Scanning cue sheet:\t{path}");
+        let cue_path = Path::new(path);
+        let sheet = CueSheet::read(cue_path)?;
+        let key = Self::full_path_to_database_key(settings, path);
+        let file_songs = cue_bundle::resolve_audio_files(cue_path, &sheet)
+            .into_iter()
+            .map(|audio| {
+                let audio = audio?;
+                let modified: DateTime<Utc> = audio.metadata().and_then(|m| m.modified()).ok()?.into();
+                match Self::read_audio_song(&audio, modified) {
+                    Ok(song) => Some(song),
+                    Err(e) => {
+                        warn!("Cue sheet {path}: cannot read {}: {e:#}", audio.display());
+                        None
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+        let songs = cue_bundle::track_songs(&sheet, &key, &file_songs);
+        if songs.is_empty() {
+            return Err(Error::msg(format!("no playable tracks in cue sheet {path}")));
+        }
+        Ok(songs)
+    }
+
+    /// Tags, artwork and duration of an audio file named by a cue sheet. Goes
+    /// through [`cue_bundle::open_audio`] so APE images are not read whole.
+    fn read_audio_song(path: &Path, modified: DateTime<Utc>) -> Result<Song> {
+        let mut reader = cue_bundle::open_audio(path)?;
+        let (song, image) = AudioMetadataExtractor::extract(&mut *reader);
+        Ok(Self::finish_song(song, image.as_ref(), &path.to_string_lossy(), modified))
+    }
+
+    /// Stores the artwork and sets the key and date of a freshly read song.
+    fn finish_song(
+        mut song: Song,
+        image: Option<&symphonia::core::meta::Visual>,
+        file_p: &str,
+        file_modification_date: DateTime<Utc>,
+    ) -> Song {
+        if let Some(image_data) = image {
+            let image_id = uuid::Uuid::new_v4();
+            if let Err(e) = std::fs::write(Path::new(ARTWORK_DIR).join(image_id.to_string()), &image_data.data) {
+                warn!("Error writing image file: {e}");
+            } else {
+                song.image_id = Some(image_id.to_string());
+            }
+        }
+        song.file = file_p.to_string();
+        song.file_date = file_modification_date;
+        song
     }
 
     fn save_song(&self, song: Song) -> Result<()> {
@@ -1177,6 +1383,7 @@ impl MetadataService {
 
         song.file.clone_from(&file_p);
         song.file_date = file_modification_date;
+        Self::fill_folder_artwork(file_path, std::slice::from_mut(&mut song));
         debug!("Add/update song in database: {song:?}");
         self.song_repository.save(&song)?;
         self.album_repository.update_from_song(song)?;
@@ -1226,6 +1433,7 @@ impl MetadataService {
             return Err(Error::msg("SACD ISO contains no tracks"));
         }
 
+        let image_id = folder_art::artwork_id_for(file_path, Path::new(ARTWORK_DIR));
         for (idx, track) in tracks.iter().enumerate() {
             let virtual_key = format!("{iso_key}{SACD_TRACK_MARKER}{idx:04}");
             let duration_secs = track.duration_secs(area.channel_count, area.frame_format);
@@ -1236,6 +1444,7 @@ impl MetadataService {
                 time: Some(std::time::Duration::from_secs_f64(duration_secs)),
                 file: virtual_key.clone(),
                 file_date: file_modification_date,
+                image_id: image_id.clone(),
                 ..Default::default()
             };
 
@@ -1263,8 +1472,8 @@ impl MetadataService {
         }
 
         let path_str = file_path.to_str().ok_or_else(|| Error::msg("File path is not valid UTF-8"))?;
-        let song = Self::read_song(&ScanJob::Local(path_str.to_string()), settings)?;
-        self.save_song(song)
+        let songs = Self::read_songs(&ScanJob::Local(path_str.to_string()), settings)?;
+        songs.into_iter().try_for_each(|song| self.save_song(song))
     }
 
     /// Probes `source` with Symphonia and returns its song keyed `file_p`,
@@ -1286,19 +1495,8 @@ impl MetadataService {
         .and_then(|r| r.map_err(|e| Error::msg(format!("Error:{file_p} {e}"))));
         match probe_result {
             Ok(mut probed) => {
-                let (mut song, image_data) = AudioMetadataExtractor::extract(&mut *probed);
-                if let Some(image_data) = &image_data {
-                    let image_id = uuid::Uuid::new_v4();
-                    if let Err(e) = std::fs::write(Path::new(ARTWORK_DIR).join(image_id.to_string()), &image_data.data) {
-                        warn!("Error writing image file: {e}");
-                    } else {
-                        song.image_id = Some(image_id.to_string());
-                    }
-                }
-
-                song.file = file_p.to_string();
-                song.file_date = file_modification_date;
-                Ok(song)
+                let (song, image_data) = AudioMetadataExtractor::extract(&mut *probed);
+                Ok(Self::finish_song(song, image_data.as_ref(), file_p, file_modification_date))
             }
             Err(err) => {
                 warn!("{err}");
@@ -1306,6 +1504,11 @@ impl MetadataService {
             }
         }
     }
+}
+
+/// A DST-compressed DFF file: readable in principle, but not supported.
+fn is_dst_error(e: &Error) -> bool {
+    format!("{e:#}").contains(crate::dsd_bundle::dff::DST_UNSUPPORTED)
 }
 
 fn is_supported_file(path: &Path, supported_exts: &[String]) -> bool {

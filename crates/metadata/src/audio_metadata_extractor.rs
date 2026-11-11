@@ -1,13 +1,19 @@
 //! Tag → [`Song`] mapping: pulls Symphonia's standard tags, duration and
 //! embedded artwork out of a probed format reader. First occurrence of a
 //! tag wins; non-standard tags land in `Song.tags`.
+//!
+//! Of several embedded pictures the front cover is preferred, then any
+//! picture not marked as something else (back cover, artist photo, ...),
+//! then the first.
 
 use std::time::Duration;
 
 use api_models::player::Song;
+
+use crate::album_identity::{COMPILATION_TAG, MB_ALBUM_ID_TAG};
 use symphonia::core::{
     formats::{FormatReader, TrackType},
-    meta::StandardTag,
+    meta::{StandardTag, StandardVisualKey, Visual},
 };
 
 pub struct AudioMetadataExtractor;
@@ -89,6 +95,17 @@ impl AudioMetadataExtractor {
                             .entry(tag.raw.key.clone())
                             .or_insert_with(|| Self::tag_value_to_option(tag));
                     }
+                    // Album identity (see `album_identity`), under fixed keys.
+                    StandardTag::CompilationFlag(flag) => {
+                        song.tags
+                            .entry(COMPILATION_TAG.to_owned())
+                            .or_insert_with(|| if *flag { "1" } else { "0" }.to_owned());
+                    }
+                    StandardTag::MusicBrainzAlbumId(id) => {
+                        song.tags
+                            .entry(MB_ALBUM_ID_TAG.to_owned())
+                            .or_insert_with(|| id.trim().to_owned());
+                    }
                     _ => {}
                 }
             }
@@ -101,10 +118,24 @@ impl AudioMetadataExtractor {
         }
 
         if image_data.is_none()
-            && let Some(v) = metadata_rev.media.visuals.first()
+            && let Some(v) = Self::pick_visual(&metadata_rev.media.visuals)
         {
             *image_data = Some(v.clone());
         }
+    }
+
+    /// The picture best suited as cover art: front cover, else one without
+    /// a declared usage (or `Other`), else the first.
+    fn pick_visual(visuals: &[Visual]) -> Option<&Visual> {
+        visuals
+            .iter()
+            .find(|v| v.usage == Some(StandardVisualKey::FrontCover))
+            .or_else(|| {
+                visuals
+                    .iter()
+                    .find(|v| matches!(v.usage, None | Some(StandardVisualKey::Other)))
+            })
+            .or_else(|| visuals.first())
     }
 
     fn tag_value_to_option(tag: &symphonia::core::meta::Tag) -> String {

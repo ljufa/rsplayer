@@ -24,7 +24,8 @@ https://github.com/user-attachments/assets/7cf6ef93-2251-4f85-a1cb-be5865a257d5
 ## Highlights
 
 - Pure-Rust playback engine ([Symphonia](https://github.com/pdeljanov/Symphonia) + [cpal](https://github.com/rustaudio/cpal)) with low-latency ALSA / PipeWire output, or play straight in your browser
-- FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE
+- FLAC, MP3, AAC, Opus, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE
+- Cue sheets: albums ripped to a single file play as separate tracks
 - Multiroom: synchronized playback across devices with automatic discovery
 - Parametric EQ and DSP presets, EBU R128 loudness normalization, automatic resampling
 - Internet radio and a podcast client - subscribe to shows and resume episodes where you stopped
