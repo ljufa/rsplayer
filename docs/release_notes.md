@@ -1,6 +1,6 @@
 # Release Notes
 
-## Unreleased
+## v5.8.0 (2026-11-11)
 
 ### New features
 

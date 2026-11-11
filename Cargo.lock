@@ -7112,7 +7112,7 @@ checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
 
 [[package]]
 name = "rsplayer"
-version = "5.7.0"
+version = "5.8.0"
 dependencies = [
  "anyhow",
  "api_models",
@@ -7147,7 +7147,7 @@ dependencies = [
 
 [[package]]
 name = "rsplayer-desktop"
-version = "5.7.0"
+version = "5.8.0"
 dependencies = [
  "android_logger",
  "api_models",
@@ -7169,7 +7169,7 @@ dependencies = [
 
 [[package]]
 name = "rsplayer-mount-helper"
-version = "5.7.0"
+version = "5.8.0"
 dependencies = [
  "nix 0.31.3",
 ]

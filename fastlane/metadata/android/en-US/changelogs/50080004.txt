@@ -1,0 +1,5 @@
+Opus playback: .opus files, and Opus in .ogg, .mka and .m4a files.
+
+Songs without an embedded cover use a cover image from their folder. Compilations show as one album under "Various Artists", and albums with the same title in different folders stay separate.
+
+All tags of a file are now read (sort names, totals, MusicBrainz ids and more), and ReplayGain tags in MP3 files are now used for loudness normalization. Run "Full rescan" in Settings to apply this to songs already in your library.
