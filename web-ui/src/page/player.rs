@@ -217,6 +217,10 @@ pub fn PlayerPage() -> Element {
                 }
             }
             div { class: "player-page__bottom" }
+            // Page level: `.player-controls` (backdrop-filter) would clip a fixed modal.
+            if (ui.sleep_timer_open)() {
+                crate::sleep_timer::SleepTimerMenu { ws }
+            }
             if (ui.lyrics_open)() {
                 LyricsModal {
                     on_close: move |()| ui.lyrics_open.set(false),
@@ -583,6 +587,7 @@ fn Controls(
                         }
                     }
                 }
+                crate::sleep_timer::SleepTimerButton {}
                 button {
                     class: "btn btn-ghost btn-sm",
                     title: "Lyrics",

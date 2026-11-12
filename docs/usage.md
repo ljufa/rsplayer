@@ -57,6 +57,7 @@ The top section displays information about the currently playing track:
 | Shuffle/Repeat | Cycle through: Sequential → Random → Loop Single → Loop Queue |
 | Heart | Like/unlike the current track |
 | Lyrics | Open synchronized lyrics modal |
+| Sleep timer (moon) | Pause playback after a set time or at the end of the track (see below) |
 | Visualizer | Toggle music visualizer (shown when visualization is enabled in Settings) |
 
 ### Progress Bar
@@ -103,6 +104,24 @@ RSPlayer integrates with LRCLIB for synchronized lyrics.
 2. Lyrics sync automatically with playback
 3. Current line is highlighted
 4. Plain lyrics shown if synchronized version not available
+
+### Sleep Timer
+
+Click the moon button on the player to pause playback later:
+
+- **15 to 120 min**, or type any number of minutes (up to 1440) and press **Set**
+- **End of track**: pauses when the current track ends (not offered for live radio, which never ends)
+- **Turn off**: cancels a running timer. Picking another time replaces the running one.
+
+While a timer runs the moon button shows the time left, and the mini player at the bottom of the other pages shows a small moon.
+
+The timer runs on the RSPlayer server, so it keeps counting with the browser or app closed, and every connected device shows the same countdown. When it ends, playback is paused the same way as pressing Pause: press Play to continue where it stopped (a radio station starts the stream again). Good to know:
+
+- Pausing or stopping by hand does not cancel a minutes timer; if playback is already paused when it ends, it just turns off.
+- An **End of track** timer also ends when you skip to another track or pause by hand.
+- The timer is not saved: restarting RSPlayer turns it off.
+- In **Settings → Sleep timer** you can have RSPlayer also power off through the firmware control channel and/or shut down the system after pausing (see [Configuration](configuration.md?id=sleep-timer)). The timer menu then shows a "Then: ..." line, and the steps run even if playback was already paused when the timer ended.
+- In a multiroom group, a timer on the leader pauses the whole group. A follower cannot set one, since its playback is controlled by the leader.
 
 ## Queue Page
 
@@ -258,6 +277,7 @@ Configure RSPlayer settings. For detailed configuration options, see the [Config
 | DSP Equalizer | Parametric EQ, presets, CamillaDSP import |
 | Music Library | Music directories, network storage |
 | Multiroom | Synchronized playback across devices |
+| Scrobbling | ListenBrainz (token, server URL, test) and Last.fm (own API key + secret, connect/disconnect), both off by default |
 | Podcasts | Search directory (Apple Podcasts / Podcast Index + API key / None), feed refresh interval, episodes kept per show, played threshold |
 | Hardware | USB command channel, power control |
 | System | Restart, shutdown |

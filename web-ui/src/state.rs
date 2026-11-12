@@ -7,6 +7,7 @@ use api_models::{
     podcast::{Episode, EpisodePage, Podcast, PodcastSearchResult},
     radio::RadioStation,
     settings::Settings,
+    sleep_timer::SleepTimerState,
     stat::LibraryStats,
     state::{
         DirectoryListing, ExternalMount, MountStatus, MultiroomGroupState, MultiroomPeer, MusicDirStatus, PlayerInfo, PlayerState, ScanPhase,
@@ -97,6 +98,10 @@ pub struct AppState {
     pub podcast_episodes: Signal<HashMap<String, EpisodePage>>,
     /// True while the server's podcast worker runs a search/subscribe/refresh.
     pub podcast_busy: Signal<bool>,
+    /// Server-side sleep timer (see `SleepTimerEvent`).
+    pub sleep_timer: Signal<SleepTimerState>,
+    /// Scrobbling connection state (Last.fm user, pending connect, queued scrobbles).
+    pub scrobble_status: Signal<api_models::scrobble::ScrobbleStatus>,
 }
 
 impl AppState {
@@ -157,6 +162,8 @@ impl AppState {
             podcast_search_results: Signal::new(Vec::new()),
             podcast_episodes: Signal::new(HashMap::new()),
             podcast_busy: Signal::new(false),
+            sleep_timer: Signal::new(SleepTimerState::Off),
+            scrobble_status: Signal::new(api_models::scrobble::ScrobbleStatus::default()),
         }
     }
 
@@ -331,6 +338,12 @@ impl AppState {
             }
             StateChangeEvent::PodcastBusyEvent(busy) => {
                 *self.podcast_busy.write() = busy;
+            }
+            StateChangeEvent::SleepTimerEvent(timer) => {
+                self.sleep_timer.set(timer);
+            }
+            StateChangeEvent::ScrobbleStatusEvent(status) => {
+                *self.scrobble_status.write() = status;
             }
             _ => {}
         }

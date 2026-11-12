@@ -11,6 +11,7 @@ members = [
     "crates/wire",
     "crates/mount_helper",
     "crates/podcast",
+    "crates/scrobble",
     "web-ui", "crates/desktop",
 ]
 default-members = [
@@ -26,6 +27,7 @@ default-members = [
     "crates/wire",
     "crates/mount_helper",
     "crates/podcast",
+    "crates/scrobble",
 ]
 resolver = "2"
 

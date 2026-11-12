@@ -78,6 +78,19 @@ impl SongRepository for FjallSongRepository {
             .collect()
     }
 
+    /// Skipped entries are not decoded.
+    fn find_page(&self, offset: usize, limit: usize) -> Vec<Song> {
+        self.songs_db
+            .iter()
+            .skip(offset)
+            .take(limit)
+            .filter_map(|guard| {
+                let value = guard.value().ok()?;
+                Song::bytes_to_song(&value)
+            })
+            .collect()
+    }
+
     fn find_by_key_contains(&self, search_term: &str) -> Vec<(Vec<u8>, Vec<u8>)> {
         let st = search_term.to_lowercase();
         self.songs_db
@@ -160,5 +173,9 @@ mod test {
         );
         let songs = song_repository.find_all();
         assert_eq!(songs.len(), 4);
+        let page = song_repository.find_page(1, 2);
+        assert_eq!(page.len(), 2);
+        assert_eq!(page[0].file, songs[1].file);
+        assert!(song_repository.find_page(4, 10).is_empty());
     }
 }

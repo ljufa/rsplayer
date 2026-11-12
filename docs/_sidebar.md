@@ -5,6 +5,7 @@
   - [Usage Guide](usage.md)
   - [Multiroom Playback](multiroom.md)
   - [Remote Library (S3)](remote_library.md)
+  - [Subsonic API](subsonic.md)
   - [Troubleshooting](troubleshooting.md)
 - **Development**
   - [Building from Source](build.md)

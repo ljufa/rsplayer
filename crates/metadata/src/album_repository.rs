@@ -199,7 +199,7 @@ impl AlbumRepository for FjallAlbumRepository {
                     .map(str::trim)
                     .filter(|s| !s.is_empty());
                 if let Some(artist) = effective_artist {
-                    let key = normalize_name(&format!("__singletons__{artist}"));
+                    let key = album_identity::singletons_key(artist);
                     if key.is_empty() {
                         return Ok(());
                     }
@@ -532,6 +532,33 @@ mod test {
         let key = key_of(&repo, "Dark Side of the Moon");
         let full = repo.find_by_id(&key).expect("album not found");
         assert_eq!(full.song_keys.len(), 3);
+    }
+
+    #[test]
+    fn song_album_id_finds_the_album_of_the_song() {
+        use api_models::player::Song;
+        use chrono::Utc;
+        let repo = create_album_repo();
+        let with_album = Song {
+            file: "Artist/Album/01.flac".to_string(),
+            album: Some("Album".to_string()),
+            artist: Some("Artist".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        };
+        let single = Song {
+            file: "Loose/01.mp3".to_string(),
+            artist: Some("Loner".to_string()),
+            file_date: Utc::now(),
+            ..Default::default()
+        };
+        for song in [&with_album, &single] {
+            repo.update_from_song(song.clone()).expect("update_from_song failed");
+            let id = crate::album_identity::song_album_id(song).expect("album id");
+            let album = repo.find_by_id(&id).expect("album of the song");
+            assert!(album.song_keys.contains(&song.file));
+        }
+        assert_eq!(crate::album_identity::song_album_id(&Song::default()), None);
     }
 
     #[test]

@@ -32,6 +32,7 @@ use metadata::song_repository::FjallSongRepository;
 use playback::rsp::player_service::{PlayerService, ResumePositionProvider};
 use playback::rsp::tee::{SyncTee, TeeEvent};
 use podcast::PodcastService;
+use scrobble::ScrobbleService;
 
 use crate::source_navigator::AppSourceNavigator;
 
@@ -55,12 +56,14 @@ pub struct AppContainer {
     pub song_repository: ArcSongRepository,
     pub album_repository: ArcAlbumRepository,
     pub loudness_repository: ArcLoudnessRepository,
+    pub play_statistics_repository: ArcPlayStatisticsRepository,
 
     pub metadata_service: Arc<MetadataService>,
     pub playlist_service: Arc<PlaylistService>,
     pub queue_service: Arc<QueueService>,
     pub player_service: Arc<PlayerService>,
     pub podcast_service: Arc<PodcastService>,
+    pub scrobble_service: Arc<ScrobbleService>,
 
     pub audio_service: ArcAudioInterfaceSvc,
     pub usb_service: Option<ArcUsbService>,
@@ -193,6 +196,19 @@ pub fn build_app_container(config: &ArcConfiguration, shared_db: &Arc<fjall::Dat
     );
     info!("Player service successfully created.");
 
+    let scrobble_service = ScrobbleService::new(
+        shared_db,
+        config.clone(),
+        state_changes_tx.clone(),
+        multiroom_follower_active.clone(),
+    )
+    .expect("Failed to start scrobble service");
+    // Never reports demo listeners' plays to anyone's account.
+    if std::env::var("DEMO_MODE").is_err() {
+        scrobble_service.start(&player_service.playback_source());
+        info!("Scrobble service started.");
+    }
+
     let multiroom = match (sync_tee, sync_tee_rx) {
         (Some(tee), Some(tee_rx)) => Some(MultiroomParts {
             tee_rx,
@@ -218,11 +234,13 @@ pub fn build_app_container(config: &ArcConfiguration, shared_db: &Arc<fjall::Dat
         song_repository,
         album_repository,
         loudness_repository,
+        play_statistics_repository,
         metadata_service,
         playlist_service,
         queue_service,
         player_service,
         podcast_service,
+        scrobble_service,
         audio_service,
         usb_service,
         state_changes_tx,

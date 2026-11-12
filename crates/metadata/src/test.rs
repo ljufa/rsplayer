@@ -857,6 +857,17 @@ mod playlist {
         assert_eq!(pl2_page_2.items.len(), 10);
     }
 
+    #[test]
+    fn should_delete_only_the_named_playlist() {
+        let svc = create_pl_service();
+        svc.save_new_playlist("rock", &create_songs(3));
+        svc.save_new_playlist("rock_classics", &create_songs(2));
+        svc.delete_playlist("rock");
+        assert_eq!(svc.get_playlists().items.len(), 1);
+        assert_eq!(svc.get_playlist_page_by_name("rock_classics", 0, 10).total, 2);
+        assert_eq!(svc.get_playlist_page_by_name("rock_", 0, 10).total, 2);
+    }
+
     fn create_songs(number_of_songs: usize) -> Vec<Song> {
         let mut songs = vec![];
         for ext in 0..number_of_songs {

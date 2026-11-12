@@ -172,6 +172,7 @@ fn request_current_state(ws: &WebSocket) {
         UserCommand::Multiroom(MultiroomCommand::QueryState),
         // A library scan may already be running: show its progress right away.
         UserCommand::Metadata(MetadataCommand::QueryScanStatus),
+        UserCommand::Player(PlayerCommand::QuerySleepTimer),
     ];
     for cmd in &commands {
         if let Ok(json) = serde_json::to_string(cmd) {

@@ -3,7 +3,8 @@
 //! Serves the embedded web UI (rust-embed; from disk in debug builds), the
 //! REST-ish `/api/*` routes (settings, artwork, local-browser audio
 //! streaming with range support, the read-only library browse API in
-//! [`crate::browse_api`]) and `/api/ws`, where commands come in as
+//! [`crate::browse_api`]), the Subsonic API under `/rest/` in
+//! [`crate::subsonic`] and `/api/ws`, where commands come in as
 //! JSON `UserCommand`s and every `StateChangeEvent` is fanned out to all
 //! connected clients through one broadcast channel. Audio-card enumeration
 //! is cached at startup because probing drivers (ASIO especially) can
@@ -85,6 +86,7 @@ pub fn start(
     user_commands_tx: UserCommandSender,
     config: &Config,
     browse: crate::browse_api::BrowseState,
+    play_statistics: metadata::ports::play_statistics_repository::ArcPlayStatisticsRepository,
 ) -> (impl Future<Output = ()>, Option<impl Future<Output = ()>>, impl Future<Output = ()>) {
     // VU (20/s) and time events fill a small buffer within a second or two
     // on a throttled client (backgrounded Android WebView, slow Wi-Fi).
@@ -98,7 +100,8 @@ pub fn start(
         audio_cards_cache: Arc::new(Mutex::new(Some(enumerate_audio_cards()))),
     };
 
-    let app = build_router(state, browse);
+    let subsonic = crate::subsonic::SubsonicState::new(browse.clone(), play_statistics, config.clone(), state.user_commands_tx.clone());
+    let app = build_router(state, browse, subsonic);
 
     let ws_handle = {
         let ws_broadcast = ws_broadcast;
@@ -203,7 +206,7 @@ pub fn start_degraded(config: &Config, error: &anyhow::Error) -> impl Future<Out
     }
 }
 
-fn build_router(state: AppState, browse: crate::browse_api::BrowseState) -> Router {
+fn build_router(state: AppState, browse: crate::browse_api::BrowseState, subsonic: crate::subsonic::SubsonicState) -> Router {
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::DELETE])
         .allow_origin(Any);
@@ -228,6 +231,9 @@ fn build_router(state: AppState, browse: crate::browse_api::BrowseState) -> Rout
         .with_state(state)
         .merge(crate::browse_api::router(browse))
         .layer(CompressionLayer::new())
+        // After the compression layer: the Subsonic router compresses its own
+        // responses, but not the streamed audio.
+        .merge(crate::subsonic::router(subsonic))
         .layer(cors)
 }
 
@@ -295,6 +301,8 @@ async fn get_settings(State(state): State<AppState>, Query(query): Query<HashMap
 
     let mut response = settings.clone();
     response.metadata_settings.mask_secrets();
+    response.scrobble_settings.mask_secrets();
+    response.subsonic_settings.mask_secrets();
     Json(response)
 }
 
@@ -426,9 +434,17 @@ async fn save_settings(
     settings
         .metadata_settings
         .unmask_secrets(&state.config.get_settings().metadata_settings);
+    settings
+        .scrobble_settings
+        .restore_secrets(&state.config.get_settings().scrobble_settings);
+    settings
+        .subsonic_settings
+        .unmask_secrets(&state.config.get_settings().subsonic_settings);
     if log::log_enabled!(log::Level::Debug) {
         let mut shown = settings.clone();
         shown.metadata_settings.mask_secrets();
+        shown.scrobble_settings.mask_secrets();
+        shown.subsonic_settings.mask_secrets();
         debug!("Settings to save {shown:?} and reload {query:?}");
     }
     state.config.save_settings(&settings);
@@ -620,7 +636,7 @@ fn mime_for_path(path: &Path) -> &'static str {
     }
 }
 
-fn parse_range(range_str: &str, file_size: u64) -> Option<(u64, u64)> {
+pub(crate) fn parse_range(range_str: &str, file_size: u64) -> Option<(u64, u64)> {
     if file_size == 0 {
         return None;
     }

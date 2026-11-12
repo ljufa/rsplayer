@@ -43,6 +43,30 @@ pub fn album_key(song: &Song, album: &str) -> String {
     format!("{dir}|{album_artist}|{}", normalize_name(album))
 }
 
+/// Key of the album the library files `song` under: [`album_key`] for a
+/// song with an album title, the per-artist singletons album for one
+/// without, `None` when it has neither an album nor an artist.
+#[must_use]
+pub fn song_album_id(song: &Song) -> Option<String> {
+    if let Some(album) = song.album.as_deref().map(str::trim).filter(|a| !a.is_empty()) {
+        return Some(album_key(song, album));
+    }
+    // The same artist choice as `AlbumRepository::update_from_song`.
+    let artist = song
+        .album_artist
+        .as_deref()
+        .or(song.artist.as_deref())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())?;
+    Some(singletons_key(artist)).filter(|k| !k.is_empty())
+}
+
+/// Album key of the songs by `artist` that have no album title.
+#[must_use]
+pub fn singletons_key(artist: &str) -> String {
+    normalize_name(&format!("__singletons__{artist}"))
+}
+
 /// The album-artist tag, trimmed, `None` when missing or blank.
 #[must_use]
 pub fn album_artist_tag(song: &Song) -> Option<&str> {

@@ -7,14 +7,18 @@ use crate::command_context::CommandContext;
 
 pub fn handle_player_command(cmd: api_models::common::PlayerCommand, ctx: &CommandContext) {
     use api_models::common::PlayerCommand::{
-        CyclePlaybackMode, Next, Pause, Play, PlayItem, PlayRadioStation, Prev, QueryCurrentPlayerInfo, QueryPlaybackSource, ReturnToQueue,
-        Seek, SeekBackward, SeekForward, Stop, TogglePlay,
+        CyclePlaybackMode, Next, Pause, Play, PlayItem, PlayRadioStation, Prev, QueryCurrentPlayerInfo, QueryPlaybackSource,
+        QuerySleepTimer, ReturnToQueue, Seek, SeekBackward, SeekForward, SetSleepTimer, Stop, TogglePlay,
     };
     use api_models::playback_source::PlaybackSource;
 
     // A grouped multiroom follower plays what the leader streams; local
     // transport commands would fight over the audio device.
-    let is_transport = !matches!(cmd, QueryCurrentPlayerInfo | QueryPlaybackSource | CyclePlaybackMode);
+    // The sleep timer checks the follower state itself (turning it off is always allowed).
+    let is_transport = !matches!(
+        cmd,
+        QueryCurrentPlayerInfo | QueryPlaybackSource | CyclePlaybackMode | SetSleepTimer(_) | QuerySleepTimer
+    );
     if is_transport && ctx.multiroom_follower_active.load(std::sync::atomic::Ordering::SeqCst) {
         ctx.send_error("Playback is controlled by the multiroom group leader. Leave the group to control it locally.");
         return;
@@ -62,6 +66,8 @@ pub fn handle_player_command(cmd: api_models::common::PlayerCommand, ctx: &Comma
         QueryPlaybackSource => {
             ctx.send_event(StateChangeEvent::PlaybackSourceEvent(ctx.player_service.playback_source()));
         }
+        SetSleepTimer(request) => ctx.sleep_timer.set(request),
+        QuerySleepTimer => ctx.sleep_timer.query(),
         CyclePlaybackMode => {
             ctx.send_event(StateChangeEvent::PlaybackModeChangedEvent(ctx.queue_service.cycle_playback_mode()));
         }

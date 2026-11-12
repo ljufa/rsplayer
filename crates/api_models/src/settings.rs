@@ -68,6 +68,40 @@ pub struct Settings {
     pub podcast_settings: PodcastSettings,
     #[serde(default)]
     pub desktop_settings: DesktopSettings,
+    #[serde(default)]
+    pub sleep_timer_settings: SleepTimerSettings,
+    #[serde(default)]
+    pub scrobble_settings: crate::scrobble::ScrobbleSettings,
+    #[serde(default)]
+    pub subsonic_settings: SubsonicSettings,
+}
+
+/// What happens when the sleep timer ends, besides pausing playback (which
+/// always happens first). Read when the timer fires.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct SleepTimerSettings {
+    /// Then power off through the `RSPlayer` firmware control channel (USB).
+    #[serde(default)]
+    pub firmware_power_off: bool,
+    /// Then shut down the system, like the Shutdown button in Settings.
+    #[serde(default)]
+    pub shutdown_system: bool,
+}
+
+impl Settings {
+    /// Whether the firmware "Power Off" button is offered, so the sleep timer
+    /// may use it: the USB command channel is on, not demo or desktop mode.
+    #[must_use]
+    pub const fn firmware_power_available(&self) -> bool {
+        self.usb_settings.enabled && !self.demo_mode && !self.desktop_mode
+    }
+
+    /// Whether the System "Shutdown" button is offered (not demo or desktop
+    /// mode; the desktop app includes Android).
+    #[must_use]
+    pub const fn system_power_available(&self) -> bool {
+        !self.demo_mode && !self.desktop_mode
+    }
 }
 
 /// How this rsplayer instance was installed — detected by the server at runtime
@@ -228,6 +262,50 @@ impl DesktopSettings {
     }
     const fn default_custom_titlebar() -> bool {
         true
+    }
+}
+
+/// The Subsonic / `OpenSubsonic` compatible API under `/rest/` for
+/// third-party music apps. It answers only while enabled with a password.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubsonicSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "SubsonicSettings::default_username")]
+    pub username: String,
+    /// Kept in plain text: Subsonic token auth needs it to check
+    /// `md5(password + salt)`. Masked whenever settings leave the server.
+    #[serde(default)]
+    pub password: String,
+}
+
+impl SubsonicSettings {
+    fn default_username() -> String {
+        "rsplayer".to_string()
+    }
+
+    /// Replaces the password with [`SECRET_MASK`] before settings leave the server.
+    pub fn mask_secrets(&mut self) {
+        if !self.password.is_empty() {
+            self.password = SECRET_MASK.to_string();
+        }
+    }
+
+    /// Restores the stored password when the UI sent back the masked one.
+    pub fn unmask_secrets(&mut self, stored: &Self) {
+        if self.password == SECRET_MASK {
+            self.password.clone_from(&stored.password);
+        }
+    }
+}
+
+impl Default for SubsonicSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            username: Self::default_username(),
+            password: String::new(),
+        }
     }
 }
 
@@ -960,6 +1038,9 @@ impl Default for Settings {
             install_method: InstallMethod::default(),
             podcast_settings: PodcastSettings::default(),
             desktop_settings: DesktopSettings::default(),
+            sleep_timer_settings: SleepTimerSettings::default(),
+            scrobble_settings: crate::scrobble::ScrobbleSettings::default(),
+            subsonic_settings: SubsonicSettings::default(),
         }
     }
 }

@@ -10,6 +10,10 @@ pub trait SongRepository: Send + Sync {
     fn delete_all(&self);
     fn find_by_id(&self, id: &str) -> Option<Song>;
     fn find_all(&self) -> Vec<Song>;
+    /// `limit` songs in key order, skipping the first `offset`.
+    fn find_page(&self, offset: usize, limit: usize) -> Vec<Song> {
+        self.find_all().into_iter().skip(offset).take(limit).collect()
+    }
     fn find_by_key_contains(&self, search_term: &str) -> Vec<(Vec<u8>, Vec<u8>)>;
     fn find_by_key_prefix(&self, prefix: &str) -> Vec<(Vec<u8>, Vec<u8>)>;
     fn find_songs_by_dir_prefix(&self, prefix: &str) -> Vec<Song>;

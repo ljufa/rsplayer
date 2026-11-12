@@ -29,7 +29,9 @@ https://github.com/user-attachments/assets/7cf6ef93-2251-4f85-a1cb-be5865a257d5
 - Multiroom: synchronized playback across devices with automatic discovery
 - Parametric EQ and DSP presets, EBU R128 loudness normalization, automatic resampling
 - Internet radio and a podcast client - subscribe to shows and resume episodes where you stopped
-- Visualizer, synchronized lyrics, library browsing, dynamic playlists
+- Optional scrobbling to ListenBrainz (or a self-hosted, compatible server) and Last.fm
+- Visualizer, synchronized lyrics, sleep timer, library browsing, dynamic playlists
+- Subsonic-compatible API: browse and stream your library from Subsonic apps (Symfonium, DSub, Amperfy, ...)
 - SMB/NFS network share mounting, Home Assistant integration, DIY hardware control
 
 See the [full feature list](https://docs.rsplayer.de/#/?id=features) and [feature comparison](https://docs.rsplayer.de/#/feature_parity).

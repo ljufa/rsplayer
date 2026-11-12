@@ -11,7 +11,9 @@
 //! [`playlist`], [`stat`] — songs, albums/playlists and library statistics;
 //! [`podcast`] — subscriptions, episodes and their commands; [`radio`] —
 //! hand-added and favorite radio stations; [`playback_source`]: whether the
-//! player plays the queue, a radio station or a podcast episode.
+//! player plays the queue, a radio station or a podcast episode; [`scrobble`]:
+//! ListenBrainz/Last.fm scrobbling settings, commands and status;
+//! [`sleep_timer`]: the server-side "pause after N minutes" timer.
 
 pub mod common;
 pub mod playback_source;
@@ -19,7 +21,9 @@ pub mod player;
 pub mod playlist;
 pub mod podcast;
 pub mod radio;
+pub mod scrobble;
 pub mod settings;
+pub mod sleep_timer;
 pub mod stat;
 pub mod state;
 pub use num_derive;

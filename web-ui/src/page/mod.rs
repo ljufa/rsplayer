@@ -10,3 +10,4 @@ pub mod not_found;
 pub mod player;
 pub mod queue;
 pub mod settings;
+pub mod settings_scrobble;

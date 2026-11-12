@@ -87,6 +87,25 @@ impl PlaylistService {
         }
     }
 
+    /// Removes the saved playlist `playlist_name` and its songs. Only keys
+    /// `{name}_{index}` are touched, not other playlists sharing the prefix.
+    pub fn delete_playlist(&self, playlist_name: &str) {
+        let item_prefix = format!("{playlist_name}_");
+        let keys_to_remove: Vec<Vec<u8>> = self
+            .main_db
+            .prefix(&item_prefix)
+            .filter_map(|guard| guard.key().ok().map(|k| k.to_vec()))
+            .filter(|key| {
+                key.get(item_prefix.len()..)
+                    .is_some_and(|rest| !rest.is_empty() && rest.iter().all(u8::is_ascii_digit))
+            })
+            .collect();
+        for key in keys_to_remove {
+            _ = self.main_db.remove(key);
+        }
+        _ = self.pl_tree.remove(playlist_name);
+    }
+
     pub fn get_playlists(&self) -> Playlists {
         Playlists {
             items: self

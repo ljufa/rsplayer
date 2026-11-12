@@ -30,8 +30,10 @@ pub mod playlist_commands;
 pub mod podcast_commands;
 pub mod queue_commands;
 pub mod server;
+pub mod sleep_timer;
 pub mod source_navigator;
 pub mod storage_commands;
+pub mod subsonic;
 pub mod system_commands;
 
 use fjall::PersistMode;
@@ -146,12 +148,14 @@ async fn run(
     let AppContainer {
         album_repository,
         song_repository,
+        play_statistics_repository,
         loudness_repository,
         metadata_service,
         playlist_service,
         queue_service,
         player_service,
         podcast_service,
+        scrobble_service,
         audio_service,
         usb_service,
         state_changes_tx,
@@ -184,6 +188,7 @@ async fn run(
                 podcast_service: podcast_service.clone(),
                 queue_service: queue_service.clone(),
             },
+            play_statistics_repository,
         );
     info!("HTTP servers started.");
 
@@ -246,6 +251,19 @@ async fn run(
         }
     };
 
+    let (sleep_timer, sleep_timer_rx) = sleep_timer::channel();
+    let sleep_timer_future = sleep_timer::run(
+        Arc::new(sleep_timer::ServerPlayerControl {
+            player_service: player_service.clone(),
+            follower_active: multiroom_follower_active.clone(),
+            commands_tx: player_commands_tx.clone(),
+            system_commands_tx: system_commands_tx.clone(),
+            config: config.clone(),
+        }),
+        sleep_timer_rx,
+        state_changes_tx.clone(),
+    );
+
     let shutdown_fut = async {
         if let Some(rx) = shutdown_rx {
             rx.await.ok();
@@ -261,6 +279,7 @@ async fn run(
                     playlist_service,
                     queue_service,
                     podcast_service,
+                    scrobble_service,
                     album_repository,
                     song_repository,
                     loudness_repository,
@@ -269,10 +288,15 @@ async fn run(
                     system_commands_tx,
                     multiroom_commands_tx,
                     multiroom_follower_active,
-                    state_changes_tx.clone()))
+                    state_changes_tx.clone(),
+                    sleep_timer))
             => {
                 error!("Exit from command handler thread.");
             }
+
+        () = sleep_timer_future => {
+            error!("Exit from sleep timer task.");
+        }
 
         _ = spawn(sync_service_future) => {
             error!("Exit from multiroom sync service.");

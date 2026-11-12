@@ -25,6 +25,7 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 - **Multiple Music Sources**: Configure multiple local directories and network mounts as music sources, all scanned together.
 - **Network Storage Management**: Discover, mount, and manage SMB/CIFS and NFS shares directly from the settings page.
 - **Remote Libraries (S3)**: Play a library stored on S3-compatible storage (Amazon S3, Backblaze B2, Cloudflare R2, MinIO, Garage, or a NAS folder published with `rclone serve s3`) without mounting anything: enter its URL and access key, songs are scanned and streamed over the network. Works in the Android app too, which cannot mount network shares, so a home library is playable from anywhere. See [Remote Library](remote_library.md).
+- **Subsonic API**: Browse and stream the library from third-party Subsonic apps such as Symfonium, DSub, Amperfy, play:Sub, Feishin or Supersonic. Turn it on and set a password in Settings. See [Subsonic API](subsonic.md).
 - **Adjustable Playback Thread Priority**: Customize the priority of the playback thread up to a real-time rating of 99 via the settings page.
 - **Dedicated CPU Core for Playback**: By default, the playback thread is pinned to a single CPU core for optimized performance.
 - **Web UI Remote Control**: Manage your playback remotely with an intuitive web interface.
@@ -39,6 +40,7 @@ Under the hood RSPlayer uses [Symphonia](https://github.com/pdeljanov/Symphonia)
 - **Loudness Normalization**: Per-song EBU R128 loudness normalization, toggleable from the settings page. Analysis runs automatically in the background while playback is stopped and results are stored permanently.
 - **Music Visualizer**: Real-time audio visualization in the web interface, with 13 visualizer styles, including an analog VU meter.
 - **Synchronized Lyrics**: Real-time synchronized lyrics support via LRCLIB integration.
+- **Sleep Timer**: Pause playback after 15 to 120 minutes (or any number you type) or at the end of the current track. The timer runs on the server, so it keeps going with the app closed, and every device shows the same countdown. See [Sleep Timer](usage.md?id=sleep-timer).
 - **Library Statistics**: Dedicated statistics page showing song/album/artist counts, total duration, play history, top genres, albums by decade, and loudness analysis progress.
 - **Web UI Themes**: Support for customizable themes and dark/light modes (10+ built-in themes).
 - **Global Keyboard Shortcuts**: Full keyboard control for playback, navigation, and search (Space, arrows, M, L, Y, S, /, ?, 1-4, F/A/P/R/O/T).
@@ -58,6 +60,7 @@ FLAC, MP3, AAC, OGG Vorbis, WAV, AIFF, CAF, DSD (DSF/DFF), APE (Monkey's Audio),
 - **Unsupported formats**: Opus, WMA, WavPack, and TTA are not supported.
 - **Local Browser Playback**: In this mode the browser's native audio engine plays files directly. DSP, loudness normalization, resampling, visualization, and DSD playback are all unavailable — format support is limited to what the browser itself can decode. Podcast resume positions are not saved in this mode.
 - **Remote libraries (S3)**: APE files and SACD ISO images on remote storage are skipped, and loudness normalization does not analyse remote songs (it would download them in full). The first scan reads the beginning of every file over the network, so a large library takes a while.
+- **Subsonic API**: One user, no transcoding (apps get the original files), no jukebox mode. See [Subsonic API](subsonic.md#limits).
 - **Non-Linux builds**: On macOS and Windows, network share mounting, ALSA/PipeWire volume, IR remote, system poweroff/reboot, and firmware USB integration are unavailable.
 
 ## How does RSPlayer compare?

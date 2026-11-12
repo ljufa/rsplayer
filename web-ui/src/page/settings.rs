@@ -18,6 +18,8 @@ use crate::{hooks::ws_send, page::dir_picker::DirPicker, state::AppState, ws_sys
 
 const API_SETTINGS_PATH: &str = "/api/settings";
 
+mod subsonic;
+
 // ─── Local state helpers ──────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
@@ -335,6 +337,11 @@ pub fn SettingsPage() -> Element {
                         }
                     },
                 }
+            }
+
+            // ── Subsonic API (not Android: the server refuses it there) ──────
+            if settings.read().install_method != api_models::settings::InstallMethod::Android {
+                subsonic::SubsonicSection { settings, on_save: move |()| auto_save() }
             }
 
             // ── Playback section ─────────────────────────────────────────────
@@ -916,6 +923,15 @@ pub fn SettingsPage() -> Element {
                 },
             }
 
+            // ── Scrobbling section ────────────────────────────────────────────
+            SettingsSection {
+                title: "Scrobbling",
+                icon: "history",
+                content: rsx! {
+                    crate::page::settings_scrobble::ScrobbleSection { settings, ws, saving }
+                },
+            }
+
             // ── DSP section ───────────────────────────────────────────────────
             SettingsSection {
                 title: "DSP Equalizer",
@@ -1140,6 +1156,37 @@ pub fn SettingsPage() -> Element {
                         onclick: move |_| *confirm.write() = Some(ConfirmAction::RestartPlayer),
                         "Restart now"
                     }
+                }
+            }
+
+            // ── Sleep timer: extra steps when it ends (same rules as the buttons) ──
+            if settings.read().system_power_available() {
+                SettingsSection {
+                    title: "Sleep timer",
+                    icon: "bedtime",
+                    content: rsx! {
+                        p { class: "text-sm text-base-content/60 mb-1", "When the timer ends, playback is paused. Also:" }
+                        if settings.read().firmware_power_available() {
+                            ToggleRow {
+                                label: "Power off (firmware control channel)",
+                                checked: settings.read().sleep_timer_settings.firmware_power_off,
+                                onchange: move |_| {
+                                    let v = !settings.read().sleep_timer_settings.firmware_power_off;
+                                    settings.write().sleep_timer_settings.firmware_power_off = v;
+                                    auto_save();
+                                },
+                            }
+                        }
+                        ToggleRow {
+                            label: "Shut down the system",
+                            checked: settings.read().sleep_timer_settings.shutdown_system,
+                            onchange: move |_| {
+                                let v = !settings.read().sleep_timer_settings.shutdown_system;
+                                settings.write().sleep_timer_settings.shutdown_system = v;
+                                auto_save();
+                            },
+                        }
+                    },
                 }
             }
 

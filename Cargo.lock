@@ -7118,7 +7118,9 @@ dependencies = [
  "api_models",
  "axum",
  "axum-server",
+ "base64 0.22.1",
  "cfg-if",
+ "chrono",
  "config",
  "console-subscriber",
  "cpal",
@@ -7128,15 +7130,19 @@ dependencies = [
  "futures",
  "hardware",
  "log",
+ "md-5",
  "metadata",
  "mime_guess",
  "nix 0.31.3",
  "percent-encoding",
  "playback",
  "podcast",
+ "rand 0.10.3",
  "rust-embed",
  "rustls",
+ "scrobble",
  "serde",
+ "serde_urlencoded",
  "sync",
  "tempfile",
  "tokio",
@@ -7486,6 +7492,23 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "scrobble"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "api_models",
+ "config",
+ "fjall",
+ "log",
+ "md-5",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "ureq",
+]
 
 [[package]]
 name = "security-framework"

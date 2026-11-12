@@ -15,6 +15,7 @@ mod hooks;
 pub mod lyrics;
 mod page;
 mod range;
+mod sleep_timer;
 mod state;
 mod update;
 pub mod vumeter;
@@ -115,6 +116,7 @@ fn show_panic_overlay(message: &str) {
 #[derive(Clone, Copy)]
 pub struct UiState {
     pub lyrics_open: Signal<bool>,
+    pub sleep_timer_open: Signal<bool>,
     pub shortcuts_open: Signal<bool>,
     pub welcome_open: Signal<bool>,
     pub playlist_modal_open: Signal<bool>,
@@ -205,6 +207,7 @@ fn App() -> Element {
 
     let ui_state = UiState {
         lyrics_open: use_signal(|| false),
+        sleep_timer_open: use_signal(|| false),
         shortcuts_open: use_signal(|| false),
         welcome_open: use_signal(|| false),
         playlist_modal_open: use_signal(|| false),
@@ -473,6 +476,7 @@ fn setup_keyboard_shortcuts(path: Signal<String>, ws: Signal<Option<WebSocket>>,
                     }
                     ui.shortcuts_open.set(false);
                     ui.lyrics_open.set(false);
+                    ui.sleep_timer_open.set(false);
                     ui.playlist_modal_open.set(false);
                     ui.queue_add_url_open.set(false);
                     ui.queue_save_playlist_open.set(false);
@@ -1315,6 +1319,7 @@ fn FooterPlayer() -> Element {
                             }
                         }
                     }
+                    sleep_timer::SleepTimerBadge {}
                 }
                 div { class: "flex items-center sm:gap-2",
                     button {

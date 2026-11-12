@@ -141,6 +141,33 @@ Synchronized playback across multiple RSPlayer devices on the same network. See 
 - **Sync buffer (ms):** How far ahead audio is scheduled (default 750). Higher values are more robust against network jitter and slow CPUs; lower values react faster to play/seek. This delays all rooms equally — it does not shift rooms relative to each other.
 - **Output latency trim (ms):** Per-room constant offset applied when this device plays as a follower. Positive values delay this room. Only needed for audio drivers that misreport their output latency; leave at 0 otherwise.
 
+## Scrobbling
+
+Reports what you play to [ListenBrainz](https://listenbrainz.org) and/or [Last.fm](https://www.last.fm). Both are off by default and can be turned on separately; changes take effect right away.
+
+What is sent: artist, title, album (and album artist, track number, duration and MusicBrainz ids when your files have them), plus the time you started listening. Radio stations and podcast episodes are never scrobbled. A track is shown as "now playing" when it starts and counts as a scrobble once half of it, or 4 minutes, has been played (tracks of 30 seconds or less never count). Skipped-over parts (seeking forward) do not count as listened.
+
+If a service cannot be reached, scrobbles are kept (up to 1000 per service, also across restarts) and sent later. "Now playing" updates are not kept.
+
+### ListenBrainz
+
+1. Log in at [listenbrainz.org](https://listenbrainz.org), open **Settings** and copy your **User token**.
+2. In RSPlayer, paste it into **User token**, press **Test** (it shows the user the token belongs to) and turn **ListenBrainz** on.
+3. **Server URL** stays at `https://api.listenbrainz.org` for the public service. For a self-hosted ListenBrainz or a compatible server such as [Maloja](https://github.com/krateng/maloja), enter its API address instead (for Maloja: `http://<maloja host>/apis/listenbrainz`) and the token that server gives you.
+
+### Last.fm
+
+Last.fm needs an API account of your own (scrobbling requests must be signed with its secret):
+
+1. While logged in to Last.fm, open [last.fm/api/account/create](https://www.last.fm/api/account/create). Enter any application name (for example "RSPlayer at home"); the callback URL and homepage can stay empty.
+2. Copy the **API key** and **Shared secret** into RSPlayer.
+3. Press **Connect**, then **Allow access on Last.fm**: a Last.fm page opens where you allow access for your account.
+4. Back in RSPlayer press **Finish connecting**. It then shows **Connected as** your user name and Last.fm is turned on.
+
+**Disconnect** forgets the session (you can also revoke it on Last.fm under Settings, Applications). If Last.fm reports the session as invalid, RSPlayer disconnects, keeps the pending scrobbles and asks you to connect again.
+
+?> Scrobbling works when RSPlayer plays the audio itself. In browser playback mode, and on a device that plays as a multiroom follower (the leader scrobbles), nothing is sent.
+
 ## Hardware
 
 ![RSPlayer Firmware (Control Board) USB Link](/_assets/settings_hardware.png)
@@ -154,6 +181,15 @@ For DIY enthusiasts looking to integrate `rsplayer` with custom hardware, hardwa
 
 - **Hardware Designs & KiCad Files:** [rsplayer_hardware](https://github.com/ljufa/rsplayer_hardware)
 - **Firmware:** [rsplayer_firmware](https://github.com/ljufa/rsplayer_firmware)
+
+## Sleep Timer
+
+When the [sleep timer](usage.md?id=sleep-timer) ends, playback is always paused first. This section adds optional steps after the pause (both off by default, both may be on):
+
+- **Power off (firmware control channel):** the same as the **Power Off** button under Hardware. Shown only when the USB command channel is enabled.
+- **Shut down the system:** the same as the **Shutdown** button under System.
+
+The choice is read when the timer ends, so a change applies to a timer that is already running. The steps also run when the timer ends while playback is already paused. The section is hidden in the desktop app, on Android and in demo mode, like the System buttons; on non-Linux servers the shutdown step is skipped.
 
 ## System
 

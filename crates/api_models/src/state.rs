@@ -149,6 +149,11 @@ pub enum StateChangeEvent {
     /// Favorite stations whose details the server knows (see
     /// `MetadataCommand::LikeRadioStation`).
     FavoriteRadioStationRecords(Vec<RadioStation>),
+    /// Sleep timer state, sent on every change and on `QuerySleepTimer`.
+    SleepTimerEvent(crate::sleep_timer::SleepTimerState),
+    /// Scrobbling connection state, sent on `ScrobbleCommand::QueryStatus`
+    /// and whenever it changes.
+    ScrobbleStatusEvent(crate::scrobble::ScrobbleStatus),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

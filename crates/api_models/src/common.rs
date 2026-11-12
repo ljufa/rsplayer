@@ -134,6 +134,7 @@ pub enum UserCommand {
     System(SystemRequest),
     Multiroom(MultiroomCommand),
     Podcast(crate::podcast::PodcastCommand),
+    Scrobble(crate::scrobble::ScrobbleCommand),
     /// Whether this websocket client wants `VUEvent`s. Off until a client asks,
     /// so clients that show no visualizer don't get ~10 messages a second.
     /// Handled per connection by the websocket loop, not by the command handler.
@@ -219,6 +220,10 @@ pub enum PlayerCommand {
     ReturnToQueue,
     /// Answered by `PlaybackSourceEvent`.
     QueryPlaybackSource,
+    /// Set, replace or cancel the sleep timer; answered by `SleepTimerEvent`.
+    SetSleepTimer(crate::sleep_timer::SleepTimerRequest),
+    /// Answered by `SleepTimerEvent`.
+    QuerySleepTimer,
 }
 
 pub use wire::PlaybackMode;

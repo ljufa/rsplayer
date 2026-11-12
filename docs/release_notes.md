@@ -1,6 +1,10 @@
 # Release Notes
 
-## v5.8.0 (2026-11-11)
+## v5.8.0 (2026-11-12)
+
+### After updating: full library rescan recommended
+
+Run "Full rescan" (Settings) once after updating. Several changes in this release only apply to songs already in your library after a rescan: cover images from the album folder, the extra tags that are now kept (including ReplayGain in MP3 files, the compilation flag and MusicBrainz ids used for album grouping and scrobbling), cue sheet albums split into tracks, and newly supported Opus and DFF files. Your playlists, likes and play counts are kept.
 
 ### New features
 
@@ -13,6 +17,24 @@ The decoder is written in Rust like the rest of the player, so no extra system l
 #### Cue sheets
 
 Albums ripped to a single file with a cue sheet (`Album.flac` + `Album.cue`, `CDImage.ape` + `CDImage.ape.cue`, or a sheet embedded in the file) now show up as their separate tracks, with titles, artists, track numbers, genre and year taken from the sheet. Each track starts and stops at exactly the right sample, can be seeked, liked, added to playlists and loudness-normalized like any other song, and plays in browser playback mode too. The single album file is no longer listed as one long song. Cue sheets written in older Windows encodings (for example Central European Windows-1250) show their accented characters correctly. Run "Update library" to split albums that are already in your library.
+
+#### Subsonic API
+
+Subsonic music apps such as Symfonium, DSub, Amperfy, play:Sub, Feishin and Supersonic can now browse your RSPlayer library and stream songs from it: artists, albums, folders, genres, search, playlists, likes (stars) and play counts. Turn it on and set a username and password in Settings, Subsonic API. There is a single user, and apps get the original files (no transcoding). On the desktop app, also turn on "Allow access from other devices". The Subsonic API is not available in the RSPlayer Android app. See the new [Subsonic API](subsonic.md) page for the app setup and the list of supported functions.
+
+#### Scrobbling to ListenBrainz and Last.fm
+
+RSPlayer can now report what you play to ListenBrainz and Last.fm. Both are off by default and are turned on separately under Settings, Scrobbling. A track shows as "now playing" when it starts and is scrobbled once half of it, or 4 minutes, has been played (tracks of 30 seconds or less never count, and seeking forward does not count as listening). Only songs from your library are reported: radio stations and podcast episodes are never scrobbled, and in a multiroom group only the leading room scrobbles.
+
+For ListenBrainz, paste your user token from listenbrainz.org/settings and press Test. A different server address can be entered for a self-hosted or compatible server such as Maloja. For Last.fm, create your own free API account at last.fm/api/account/create, enter its API key and shared secret, press Connect, allow access on the Last.fm page and press Finish connecting.
+
+Artist, title and album (plus album artist, track number, length and MusicBrainz ids when your files have them) and the time you listened are sent only to the services you turn on. If a service cannot be reached, scrobbles are kept, also across restarts, and sent later. Scrobbling works when RSPlayer plays the audio itself, not in browser playback mode.
+
+#### Sleep timer
+
+Tap the moon button on the player to pause playback after 15 to 120 minutes (or any number of minutes you type), or at the end of the current track. The timer runs on the RSPlayer server, so it keeps counting with the browser or app closed, and every connected device shows the same countdown; the mini player shows a small moon while it runs. Press Play to continue where it paused. The timer is cleared when RSPlayer restarts.
+
+In Settings, Sleep timer you can also have RSPlayer power off through the firmware control channel and/or shut down the system once playback is paused; the timer menu shows what will happen.
 
 ### Improvements
 

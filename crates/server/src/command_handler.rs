@@ -18,12 +18,13 @@ use metadata::ports::song_repository::ArcSongRepository;
 use metadata::queue_service::QueueService;
 use playback::rsp::player_service::PlayerService;
 use podcast::PodcastService;
+use scrobble::ScrobbleService;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::mpsc::{self, Receiver};
 
 use api_models::common::SystemCommand;
 use api_models::common::UserCommand::{
-    self, Metadata, Multiroom, Player, Playlist, Podcast, Queue, Storage, SubscribeVuEvents, System, UpdateDsp,
+    self, Metadata, Multiroom, Player, Playlist, Podcast, Queue, Scrobble, Storage, SubscribeVuEvents, System, UpdateDsp,
 };
 use api_models::state::StateChangeEvent;
 
@@ -43,6 +44,7 @@ pub async fn handle_user_commands(
     playlist_service: Arc<PlaylistService>,
     queue_service: Arc<QueueService>,
     podcast_service: Arc<PodcastService>,
+    scrobble_service: Arc<ScrobbleService>,
     album_repository: ArcAlbumRepository,
     song_repository: ArcSongRepository,
     loudness_repository: ArcLoudnessRepository,
@@ -52,6 +54,7 @@ pub async fn handle_user_commands(
     multiroom_commands_tx: mpsc::Sender<api_models::common::MultiroomCommand>,
     multiroom_follower_active: std::sync::Arc<std::sync::atomic::AtomicBool>,
     state_changes_sender: Sender<StateChangeEvent>,
+    sleep_timer: crate::sleep_timer::SleepTimerHandle,
 ) {
     let ctx = CommandContext::new(
         player_service,
@@ -65,6 +68,7 @@ pub async fn handle_user_commands(
         config_store,
         multiroom_follower_active,
         state_changes_sender,
+        sleep_timer,
     );
 
     // recv() returns None only when every sender is gone — the process is
@@ -108,6 +112,8 @@ pub async fn handle_user_commands(
             Podcast(podcast_cmd) => {
                 handle_podcast_command(podcast_cmd, &ctx);
             }
+            // Answered by the scrobble worker via events.
+            Scrobble(scrobble_cmd) => scrobble_service.handle_command(scrobble_cmd),
             // Consumed by the websocket connection that sent it.
             SubscribeVuEvents(_) => {}
         }

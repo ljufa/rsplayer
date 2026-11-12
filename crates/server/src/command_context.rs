@@ -34,6 +34,7 @@ pub struct CommandContext {
     /// True while this instance plays as a grouped multiroom follower.
     pub multiroom_follower_active: Arc<AtomicBool>,
     pub state_changes_sender: Sender<StateChangeEvent>,
+    pub sleep_timer: crate::sleep_timer::SleepTimerHandle,
 }
 
 impl CommandContext {
@@ -50,6 +51,7 @@ impl CommandContext {
         config_store: ArcConfiguration,
         multiroom_follower_active: Arc<AtomicBool>,
         state_changes_sender: Sender<StateChangeEvent>,
+        sleep_timer: crate::sleep_timer::SleepTimerHandle,
     ) -> Self {
         Self {
             player_service,
@@ -63,6 +65,7 @@ impl CommandContext {
             config_store,
             multiroom_follower_active,
             state_changes_sender,
+            sleep_timer,
         }
     }
 

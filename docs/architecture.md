@@ -16,6 +16,7 @@ carries the per-file detail — this page is the map.
 | `crates/playback` | The audio engine: Symphonia decode loop, cpal output (`AudioOutput`), DSD path, VU, multiroom tee/sink |
 | `crates/metadata` | Library scanner, fjall repositories (songs/albums/stats/loudness), queue, playlists, radio metadata and saved radio stations, APE/DSF/DFF/SACD/Opus Symphonia plugins |
 | `crates/podcast` | Podcast subscriptions: directory search (iTunes / Podcast Index), RSS/Atom feed refresh (`feed-rs`), episode cache in fjall, per-episode resume position and played state |
+| `crates/scrobble` | Opt-in scrobbling to ListenBrainz and Last.fm: a pure state machine over player events (now playing, listened time, scrobble threshold), blocking `ureq` clients (Last.fm calls signed with the user's API secret), a per-service retry queue in fjall |
 | `crates/dsp` | Parametric EQ (biquads, CamillaDSP-derived) with a lock-free config handoff to the audio thread |
 | `crates/sync` | Multiroom leader/follower over iroh QUIC — see the dedicated doc |
 | `crates/hardware` | Volume-control devices (ALSA/PipeWire/software/firmware), USB front-panel link, LIRC remote, platform/sandbox detection with first-launch playback defaults |
@@ -23,7 +24,7 @@ carries the per-file detail — this page is the map.
 | `crates/desktop` | Tauri wrapper: embeds the backend in-process, webview UI, OS media keys |
 | `web-ui` | Dioxus web frontend (not covered here) |
 
-Dependency direction (roughly): `server → {sync, playback, metadata, podcast, hardware, config, dsp} → api_models`. `playback` depends on `metadata` (probe/codec registries, loudness) and `dsp`; `sync` depends on `playback` (tee, sink); `hardware` depends on `wire`. `podcast` depends only on `api_models` and `config`; the server adapts it to playback's `ResumePositionProvider` so the two never depend on each other.
+Dependency direction (roughly): `server → {sync, playback, metadata, podcast, hardware, config, dsp} → api_models`. `playback` depends on `metadata` (probe/codec registries, loudness) and `dsp`; `sync` depends on `playback` (tee, sink); `hardware` depends on `wire`. `podcast` depends only on `api_models` and `config`; the server adapts it to playback's `ResumePositionProvider` so the two never depend on each other. `scrobble` also depends only on `api_models` and `config`: it learns everything from the `StateChangeEvent` broadcast.
 
 ## Process Shape
 
@@ -31,7 +32,10 @@ One process, one tokio runtime, plus dedicated OS threads where blocking or
 latency demands it:
 
 - **tokio tasks**: axum HTTP/HTTPS servers, WebSocket fan-out, the two
-  command handlers, the multiroom sync service, USB/LIRC glue.
+  command handlers, the multiroom sync service, USB/LIRC glue, and the
+  scrobble service (an event task that only runs the state machine, and a
+  worker that makes the HTTP calls on the blocking pool, so a slow or
+  unreachable service never touches playback).
 - **Playback thread** (per play, `player_threads_priority`, never `Min` —
   `Min` starved audio on single-core devices): runs the decode loop in
   `symphonia.rs`.
@@ -129,6 +133,14 @@ web UI / desktop media keys / USB panel / IR remote
 - While the instance is a grouped multiroom follower, an `AtomicBool`
   (`multiroom_follower_active`) makes `player_commands` reject local
   transport commands.
+- The sleep timer (`server/src/sleep_timer.rs`) is one more task raced in
+  `run`'s `select!`: `PlayerCommand::SetSleepTimer`/`QuerySleepTimer` reach it
+  through a handle in `CommandContext`, it broadcasts `SleepTimerEvent`
+  (clients count down from `ends_at`), and when it fires it sends a normal
+  `PlayerCommand::Pause` into the user command channel; the optional
+  `sleep_timer_settings` steps then go to the `SystemCommand` channel
+  (`SetFirmwarePower(false)`, `PowerOff`) once the pause has landed. In
+  memory only.
 
 ## Audio Pipeline
 
@@ -281,12 +293,36 @@ concern:
 | `podcast_episodes` | `Episode` JSON keyed `{podcast_id}/{inverted publish ts}/{episode_id}` — a prefix scan is newest-first; carries `position_secs`/`played` |
 | `podcast_episode_index` | `id:{episode_id}` and `url:{audio_url}` → episode key, for lookups from playback events |
 | `multiroom` | The iroh endpoint secret key |
+| `scrobble_queue` | Scrobbles that could not be sent yet, keyed `{lb\|lfm}/{seq}` (oldest first per service, at most 1000 each); flushed after the next successful call and every minute with backoff |
 
 The settings blob round-trips **whole** through `GET/POST /api/settings`;
 there is no merge. A stale client posting an old schema drops newer sections
 — that is why every newer field has `#[serde(default)]` and serialized names
 are frozen (the `alsa_*` settings names predate cross-platform support and
 now configure cpal everywhere).
+
+Secrets do not leave the server: `GET /api/settings` masks the S3 secret
+keys and the scrobbling token, API secret and session key, and `POST`
+restores masked values from the stored settings. The Last.fm session key
+and user name are server-managed (set by the connect flow, cleared by
+disconnect or an invalid-session answer) and always kept from the stored
+settings on `POST`.
+
+### Scrobbling rules
+
+`crates/scrobble/src/machine.rs` decides from the event stream alone: a
+track starts with `CurrentSongEvent` + `PlaybackStateEvent(PLAYING)`
+(a lone `CurrentSongEvent` is a query or like re-broadcast). "Now playing"
+goes out on every start and resume; one scrobble per play once the listened
+time (sum of 1-2 s progress steps while playing, so seeks forward do not
+count) reaches half the track or 4 minutes, whichever is less; tracks of
+30 s or less never count. The same song starting again near 0 after its
+last play got past 5 s is a new play (repeat one, restart), otherwise a
+resume. Only library songs played from the queue with artist and title are
+reported: no radio, no podcast episodes (also when queued), nothing while
+the instance is a multiroom follower (`MultiroomGroupEvent` role, plus the
+`multiroom_follower_active` flag) or in browser playback mode (the server
+sees no progress there). Not started in demo mode.
 
 ## HTTP / WebSocket Server
 
@@ -296,6 +332,15 @@ now configure cpal everywhere).
 - `/api/settings` (whole-struct GET/POST + validation), `/api/artwork/<id>`,
   range-capable audio streaming for local-browser playback, and an optional
   HTTPS listener.
+- `/rest/*`: the Subsonic / OpenSubsonic API (`crates/server/src/subsonic/`)
+  for third-party music apps, over the same repositories as the browse API.
+  Always mounted, answers only while enabled with a password
+  (`SubsonicSettings`); single user, password or `md5(password + salt)`
+  token auth. Ids are type prefix + base64url of the library key. Library
+  work runs on blocking threads; `stream`/`download` send the original file
+  in full or by range (no transcoding, cue tracks as WAV, remote songs
+  redirected), merged after the global compression layer so audio is never
+  gzipped. See [Subsonic API](subsonic.md).
 - Audio-card enumeration is cached at startup: probing drivers (ASIO
   especially) can disrupt a live stream, so rescan only happens on explicit
   `?rescan=true`.

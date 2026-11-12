@@ -140,6 +140,7 @@ playback = { path = "../playback" }
 hardware = { path = "../hardware" }
 sync = { path = "../sync" }
 podcast = { path = "../podcast" }
+scrobble = { path = "../scrobble" }
 cpal.workspace = true
 
 #logging
@@ -163,12 +164,20 @@ mime_guess = "2"
 serde = { workspace = true, features = ["derive"] }
 percent-encoding = "2"
 fjall.workspace = true
+chrono.workspace = true
+# Subsonic API: form/query parameters with repeated names, token auth, ids.
+serde_urlencoded = "0.7"
+md-5 = "0.10"
+base64 = "0.22"
+rand = "0.10"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nix = { version = "0.31", features = ["mount", "user"] }
 
 [dev-dependencies]
 tempfile = "3"
+# paused clock for the sleep timer tests
+tokio = { workspace = true, features = ["test-util"] }
 
 # rust-embed only reads the UI folder from disk in debug builds, which cannot
 # work on a phone — embed at compile time for Android debug builds too.
