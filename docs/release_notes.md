@@ -1,5 +1,13 @@
 # Release Notes
 
+## v5.8.1 (2026-11-23)
+
+### Fixes
+
+- Radio favorites no longer depend on radio-browser.info. The Favorites tab used to load every station's details from radio-browser.info, so when that service was slow or unreachable from your network, favorites stayed empty or only the hand-added stations showed. They now show right away from the copy RSPlayer keeps on your server and play as usual; radio-browser.info only adds the format and tags when it answers. Favorites whose station was later removed from radio-browser.info no longer disappear either.
+- Countries, Languages, Tags and Search in the Radio tab now give up after 15 seconds and show "Couldn't reach radio-browser.info" instead of loading for minutes and then reporting "No stations found".
+- Station search and browsing now work for names with non-Latin letters or characters such as "&".
+
 ## v5.8.0 (2026-11-12)
 
 ### After updating: full library rescan recommended

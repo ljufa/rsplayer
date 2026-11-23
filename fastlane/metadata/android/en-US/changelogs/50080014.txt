@@ -1,0 +1,3 @@
+Favorite radio stations show and play even when the radio-browser.info station directory is slow or unreachable.
+
+Countries, Languages, Tags and Search show a message when radio-browser.info can't be reached, instead of loading forever. Searching for station names with non-Latin letters or "&" works correctly.

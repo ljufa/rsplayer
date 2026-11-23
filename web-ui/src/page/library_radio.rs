@@ -9,12 +9,19 @@ use api_models::playback_source::PlaybackSource;
 use api_models::radio::RadioStation;
 use dioxus::prelude::*;
 use gloo_net::http::Request;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use web_sys::WebSocket;
 
 use crate::{hooks::ws_send, state::AppState};
 
 const RADIO_BROWSER_URL: &str = "https://de2.api.radio-browser.info/json/";
+
+/// radio-browser requests are given up after this long, so an unreachable
+/// API shows an error instead of an endless skeleton.
+const RADIO_BROWSER_TIMEOUT_MS: u32 = 15_000;
+
+const RADIO_BROWSER_UNREACHABLE: &str =
+    "Couldn't reach radio-browser.info, the station directory. Check the internet connection or try again later.";
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Country {
@@ -59,6 +66,32 @@ impl Station {
             ..Default::default()
         }
     }
+
+    /// A favorite built from the details the server keeps, for when
+    /// radio-browser hasn't answered (yet). `None` for a hand-added station.
+    fn from_record(record: &RadioStation) -> Option<Self> {
+        Some(Self {
+            stationuuid: record.radio_browser_uuid.clone()?,
+            name: record.name.clone(),
+            url: record.url.clone(),
+            favicon: record.image_url.clone().unwrap_or_default(),
+            tags: String::new(),
+            language: String::new(),
+            votes: 0,
+            codec: String::new(),
+            bitrate: 0,
+        })
+    }
+
+    /// Second line of a station row: format details from radio-browser, or
+    /// the stream URL when only the server's copy is known.
+    fn subtitle(&self) -> String {
+        if self.codec.is_empty() && self.tags.is_empty() {
+            self.url.clone()
+        } else {
+            format!("{} {}kbps • {}", self.codec, self.bitrate, self.tags)
+        }
+    }
 }
 
 /// True when `url` is the station the player is currently tuned to.
@@ -100,6 +133,11 @@ pub fn LibraryRadioPage() -> Element {
     let mut search = use_signal(String::new);
     // `Some` while the add/edit dialog is open; an empty id means a new station.
     let mut editing: Signal<Option<RadioStation>> = use_signal(|| None);
+    // radio-browser details of favorites (codec, bitrate, tags), filled in
+    // when the API answers; the list itself doesn't depend on it.
+    let mut favorite_details: Signal<Vec<Station>> = use_signal(Vec::new);
+    // Set when the last radio-browser request failed or timed out.
+    let mut fetch_error = use_signal(|| false);
 
     // Query favorites on mount
     use_effect(move || {
@@ -109,29 +147,62 @@ pub fn LibraryRadioPage() -> Element {
         }
     });
 
-    // When favorite UUIDs arrive, fetch station details
+    // Favorites list: from the details the server keeps, so it shows (and
+    // plays) even when radio-browser.info is slow or unreachable. radio-browser
+    // details replace them once they arrive.
     use_effect(move || {
         let uuids = state.favorite_radio_stations.read().clone();
-        if !uuids.is_empty() && *filter.read() == FilterType::Favorites {
-            spawn(async move {
-                let fetched = fetch_stations_by_uuid(uuids).await;
-                // Favorites liked before the server kept station details:
-                // send them so Next/Prev can switch between all favorites.
-                let known = state.favorite_radio_station_records.peek().clone();
-                for st in fetched
-                    .iter()
-                    .filter(|st| !known.iter().any(|k| k.radio_browser_uuid.as_deref() == Some(st.stationuuid.as_str())))
-                {
-                    ws_send(&ws, &UserCommand::Metadata(MetadataCommand::LikeRadioStation(st.to_record())));
-                }
-                *stations.write() = fetched;
-                *loading.write() = false;
-                *showing_stations.write() = true;
-            });
-        } else if uuids.is_empty() && *filter.read() == FilterType::Favorites {
-            *loading.write() = false;
-            *showing_stations.write() = true;
+        let records = state.favorite_radio_station_records.read().clone();
+        let details = favorite_details.read().clone();
+        if *filter.read() != FilterType::Favorites {
+            return;
         }
+        let list: Vec<Station> = uuids
+            .iter()
+            .filter_map(|uuid| {
+                details.iter().find(|d| &d.stationuuid == uuid).cloned().or_else(|| {
+                    records
+                        .iter()
+                        .find(|r| r.radio_browser_uuid.as_ref() == Some(uuid))
+                        .and_then(Station::from_record)
+                })
+            })
+            .collect();
+        *stations.write() = list;
+        *loading.write() = false;
+        *showing_stations.write() = true;
+    });
+
+    // When favorite UUIDs arrive, ask radio-browser for their current details.
+    use_effect(move || {
+        let uuids = state.favorite_radio_stations.read().clone();
+        if uuids.is_empty() || *filter.read() != FilterType::Favorites {
+            return;
+        }
+        spawn(async move {
+            let Ok(fetched) = fetch_stations_by_uuid(&uuids).await else {
+                // Favorites still show from the server's copy; only say
+                // something when some of them can't be shown at all.
+                let known = state.favorite_radio_station_records.peek();
+                let missing = uuids
+                    .iter()
+                    .any(|u| !known.iter().any(|k| k.radio_browser_uuid.as_ref() == Some(u)));
+                if missing && *filter.peek() == FilterType::Favorites {
+                    fetch_error.set(true);
+                }
+                return;
+            };
+            // Favorites liked before the server kept station details:
+            // send them so Next/Prev can switch between all favorites.
+            let known = state.favorite_radio_station_records.peek().clone();
+            for st in fetched
+                .iter()
+                .filter(|st| !known.iter().any(|k| k.radio_browser_uuid.as_deref() == Some(st.stationuuid.as_str())))
+            {
+                ws_send(&ws, &UserCommand::Metadata(MetadataCommand::LikeRadioStation(st.to_record())));
+            }
+            favorite_details.set(fetched);
+        });
     });
 
     let mut change_filter = move |new_filter: FilterType| {
@@ -140,6 +211,7 @@ pub fn LibraryRadioPage() -> Element {
         *showing_stations.write() = false;
         *browse_items.write() = Vec::new();
         *stations.write() = Vec::new();
+        fetch_error.set(false);
         match new_filter {
             FilterType::Favorites => {
                 ws_send(&ws, &UserCommand::Metadata(MetadataCommand::QueryFavoriteRadioStations));
@@ -148,10 +220,13 @@ pub fn LibraryRadioPage() -> Element {
             FilterType::Country => {
                 spawn(async move {
                     let url = format!("{RADIO_BROWSER_URL}countries?limit=200&hidebroken=true");
-                    if let Ok(resp) = Request::get(&url).send().await {
-                        if let Ok(list) = resp.json::<Vec<Country>>().await {
-                            *browse_items.write() = list.into_iter().map(BrowseItem::Country).collect();
-                        }
+                    let result = get_json::<Vec<Country>>(&url).await;
+                    if *filter.peek() != new_filter {
+                        return;
+                    }
+                    match result {
+                        Ok(list) => *browse_items.write() = list.into_iter().map(BrowseItem::Country).collect(),
+                        Err(()) => fetch_error.set(true),
                     }
                     *loading.write() = false;
                 });
@@ -159,10 +234,13 @@ pub fn LibraryRadioPage() -> Element {
             FilterType::Language => {
                 spawn(async move {
                     let url = format!("{RADIO_BROWSER_URL}languages?limit=500");
-                    if let Ok(resp) = Request::get(&url).send().await {
-                        if let Ok(list) = resp.json::<Vec<Language>>().await {
-                            *browse_items.write() = list.into_iter().map(BrowseItem::Language).collect();
-                        }
+                    let result = get_json::<Vec<Language>>(&url).await;
+                    if *filter.peek() != new_filter {
+                        return;
+                    }
+                    match result {
+                        Ok(list) => *browse_items.write() = list.into_iter().map(BrowseItem::Language).collect(),
+                        Err(()) => fetch_error.set(true),
                     }
                     *loading.write() = false;
                 });
@@ -170,10 +248,13 @@ pub fn LibraryRadioPage() -> Element {
             FilterType::Tag => {
                 spawn(async move {
                     let url = format!("{RADIO_BROWSER_URL}tags?limit=500&order=stationcount&reverse=true&hidebroken=true");
-                    if let Ok(resp) = Request::get(&url).send().await {
-                        if let Ok(list) = resp.json::<Vec<Tag>>().await {
-                            *browse_items.write() = list.into_iter().map(BrowseItem::Tag).collect();
-                        }
+                    let result = get_json::<Vec<Tag>>(&url).await;
+                    if *filter.peek() != new_filter {
+                        return;
+                    }
+                    match result {
+                        Ok(list) => *browse_items.write() = list.into_iter().map(BrowseItem::Tag).collect(),
+                        Err(()) => fetch_error.set(true),
                     }
                     *loading.write() = false;
                 });
@@ -182,6 +263,22 @@ pub fn LibraryRadioPage() -> Element {
                 *loading.write() = false;
             }
         }
+    };
+
+    let mut run_search = move || {
+        let term = search();
+        fetch_error.set(false);
+        spawn(async move {
+            *loading.write() = true;
+            let result = search_stations_by_name(&term).await;
+            if *filter.peek() != FilterType::Search {
+                return;
+            }
+            fetch_error.set(result.is_err());
+            *stations.write() = result.unwrap_or_default();
+            *showing_stations.write() = true;
+            *loading.write() = false;
+        });
     };
 
     rsx! {
@@ -217,30 +314,14 @@ pub fn LibraryRadioPage() -> Element {
                         oninput: move |e| search.set(e.value()),
                         onkeydown: move |e| {
                             if e.key() == Key::Enter {
-                                let term = search();
-                                spawn(async move {
-                                    *loading.write() = true;
-                                    let fetched = search_stations_by_name(&term).await;
-                                    *stations.write() = fetched;
-                                    *showing_stations.write() = true;
-                                    *loading.write() = false;
-                                });
+                                run_search();
                             }
                         },
                     }
                     button {
                         class: "btn btn-sm btn-ghost",
                         title: "Search",
-                        onclick: move |_| {
-                            let term = search();
-                            spawn(async move {
-                                *loading.write() = true;
-                                let fetched = search_stations_by_name(&term).await;
-                                *stations.write() = fetched;
-                                *showing_stations.write() = true;
-                                *loading.write() = false;
-                            });
-                        },
+                        onclick: move |_| run_search(),
                         i { class: "material-icons text-base", "search" }
                     }
                     button {
@@ -284,6 +365,12 @@ pub fn LibraryRadioPage() -> Element {
             }
 
             // ── Content ────────────────────────────────────────────────────
+            if fetch_error() && !loading() {
+                div { class: "alert alert-warning m-3 py-2 text-sm",
+                    i { class: "material-icons text-base", "cloud_off" }
+                    span { "{RADIO_BROWSER_UNREACHABLE}" }
+                }
+            }
             if loading() && *filter.read() != FilterType::Favorites {
                 div { class: "flex flex-col gap-1 p-3",
                     {(0..8).map(|_| rsx! {
@@ -379,7 +466,7 @@ pub fn LibraryRadioPage() -> Element {
                                                         "{st.name}"
                                                     }
                                                     p { class: "text-xs text-base-content/50 truncate",
-                                                        "{st.codec} {st.bitrate}kbps • {st.tags}"
+                                                        "{st.subtitle()}"
                                                     }
                                                 }
                                             }
@@ -472,8 +559,9 @@ pub fn LibraryRadioPage() -> Element {
                                             *loading.write() = true;
                                             *showing_stations.write() = false;
                                             let item = item.clone();
+                                            let current = *filter.peek();
                                             spawn(async move {
-                                                let fetched = match &item {
+                                                let result = match &item {
                                                     BrowseItem::Country(c) => {
                                                         fetch_stations("bycountrycodeexact", &c.iso_3166_1).await
                                                     }
@@ -482,7 +570,11 @@ pub fn LibraryRadioPage() -> Element {
                                                     }
                                                     BrowseItem::Tag(t) => fetch_stations("bytagexact", &t.name).await,
                                                 };
-                                                *stations.write() = fetched;
+                                                if *filter.peek() != current {
+                                                    return;
+                                                }
+                                                fetch_error.set(result.is_err());
+                                                *stations.write() = result.unwrap_or_default();
                                                 *loading.write() = false;
                                                 *showing_stations.write() = true;
                                             });
@@ -683,26 +775,40 @@ fn CustomStationDialog(station: RadioStation, on_close: EventHandler) -> Element
     }
 }
 
-async fn fetch_stations_by_uuid(uuids: Vec<String>) -> Vec<Station> {
-    let url = format!("{RADIO_BROWSER_URL}stations/byuuid?uuids={}", uuids.join(","));
-    let Ok(resp) = Request::get(&url).send().await else {
-        return vec![];
-    };
-    resp.json::<Vec<Station>>().await.unwrap_or_default()
+/// GETs a radio-browser endpoint, giving up after [`RADIO_BROWSER_TIMEOUT_MS`].
+async fn get_json<T: DeserializeOwned>(url: &str) -> Result<T, ()> {
+    let controller = web_sys::AbortController::new().ok();
+    if let Some(c) = controller.clone() {
+        wasm_bindgen_futures::spawn_local(async move {
+            gloo_timers::future::TimeoutFuture::new(RADIO_BROWSER_TIMEOUT_MS).await;
+            c.abort();
+        });
+    }
+    let signal = controller.as_ref().map(web_sys::AbortController::signal);
+    let resp = Request::get(url).abort_signal(signal.as_ref()).send().await.map_err(|_| ())?;
+    if !resp.ok() {
+        return Err(());
+    }
+    resp.json::<T>().await.map_err(|_| ())
 }
 
-async fn fetch_stations(by: &str, value: &str) -> Vec<Station> {
-    let url = format!("{RADIO_BROWSER_URL}stations/{by}/{value}?limit=300&hidebroken=true&order=votes&reverse=true");
-    let Ok(resp) = Request::get(&url).send().await else {
-        return vec![];
-    };
-    resp.json::<Vec<Station>>().await.unwrap_or_default()
+fn encode(value: &str) -> String {
+    String::from(js_sys::encode_uri_component(value))
 }
 
-async fn search_stations_by_name(name: &str) -> Vec<Station> {
-    let url = format!("{RADIO_BROWSER_URL}stations/search?name={name}&limit=300&hidebroken=true");
-    let Ok(resp) = Request::get(&url).send().await else {
-        return vec![];
-    };
-    resp.json::<Vec<Station>>().await.unwrap_or_default()
+async fn fetch_stations_by_uuid(uuids: &[String]) -> Result<Vec<Station>, ()> {
+    get_json(&format!("{RADIO_BROWSER_URL}stations/byuuid?uuids={}", uuids.join(","))).await
+}
+
+async fn fetch_stations(by: &str, value: &str) -> Result<Vec<Station>, ()> {
+    let value = encode(value);
+    get_json(&format!(
+        "{RADIO_BROWSER_URL}stations/{by}/{value}?limit=300&hidebroken=true&order=votes&reverse=true"
+    ))
+    .await
+}
+
+async fn search_stations_by_name(name: &str) -> Result<Vec<Station>, ()> {
+    let name = encode(name);
+    get_json(&format!("{RADIO_BROWSER_URL}stations/search?name={name}&limit=300&hidebroken=true")).await
 }
